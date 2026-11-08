@@ -229,3 +229,30 @@ def test_the_skeleton_view_reaches_the_read_model(monkeypatch: pytest.MonkeyPatc
     assert client.get("/practice/knowledge-map").status_code == 200
     assert client.get("/practice/knowledge-map", params={"view": "everything"}).status_code == 422
     assert seen == ["skeleton", "full"]
+
+
+def test_the_year_group_on_the_student_s_profile_reaches_the_read_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The profile the authorization dependency already read; no second read (#310)."""
+    seen: list[Any] = []
+    monkeypatch.setattr(
+        route_authorization.user_repo,
+        "get_user",
+        lambda user_id, **_kwargs: {
+            "user_id": user_id,
+            "role": "student",
+            "account_status": "active",
+            "grade": "grade_9_secondary",
+        },
+    )
+    monkeypatch.setattr(
+        practice.knowledge_map_service,
+        "knowledge_map",
+        lambda _student, **kwargs: seen.append(kwargs.get("student_grade")) or {"stars": []},
+    )
+
+    response = _client({"sub": "student-1", "role": "student"}).get("/practice/knowledge-map")
+
+    assert response.status_code == 200, response.text
+    assert seen == ["grade_9_secondary"]

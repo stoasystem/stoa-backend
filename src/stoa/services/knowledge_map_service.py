@@ -35,6 +35,7 @@ from stoa.services import (
     curriculum_translations,
     knowledge_base_catalog,
     knowledge_mastery_service,
+    learning_profile_service,
 )
 from stoa.services.student_evidence import StudentEvidence
 
@@ -108,6 +109,79 @@ def _recommended_unit(
     return ""
 
 
+#: Where a year group sits in school, so a star's can be compared with the
+#: student's: its HarmoS year (`learning_profile_service`). A stage counts from
+#: its first year - a student who said only "lower secondary" starts where it
+#: starts - and upper secondary comes after the last year of compulsory school.
+SCHOOL_YEAR: dict[str, int] = {
+    **{
+        code: year
+        for code, year in learning_profile_service.GRADE_LEVEL_HARMOS_YEARS.items()
+        if year is not None
+    },
+    "grade_secondary_i": 9,
+    knowledge_base_catalog.UPPER_SECONDARY: 12,
+}
+
+
+def _school_year(code: object) -> int | None:
+    return SCHOOL_YEAR.get(str(code or "").strip())
+
+
+def _star_years(
+    units: Sequence[Mapping[str, Any]],
+    topics: Sequence[Mapping[str, Any]],
+    lessons: Sequence[Mapping[str, Any]],
+) -> dict[str, int]:
+    """The school year each star belongs to, where the curriculum says (#310).
+
+    A star's practice sets carry the year of the knowledge points in them, so a
+    star is the year its earliest set is: where a student meets it first. A
+    star none of whose sets says is its topic's year. One with neither has no
+    year, and is never picked for one.
+    """
+    years: dict[str, int] = {}
+    for lesson in lessons:
+        year = _school_year(lesson.get("gradeLevel"))
+        unit_id = str(lesson.get("unitId") or "")
+        if year is not None and unit_id:
+            years[unit_id] = min(year, years.get(unit_id, year))
+    topic_year = {str(topic.get("id") or ""): _school_year(topic.get("gradeLevel")) for topic in topics}
+    for unit in units:
+        unit_id = str(unit.get("id") or "")
+        year = topic_year.get(str(unit.get("topicId") or ""))
+        if unit_id and unit_id not in years and year is not None:
+            years[unit_id] = year
+    return years
+
+
+def _start_for_year(
+    stars: Sequence[Mapping[str, Any]],
+    *,
+    student_year: int | None,
+    star_years: Mapping[str, int],
+) -> Mapping[str, Any] | None:
+    """Where a student with nothing begun starts, by their year (#310).
+
+    The first star of their year in the course; with none, the first of the
+    latest year before theirs. Nothing when the student has no year or the
+    subject has no star at or below it. The star need not be on the frontier:
+    a prerequisite is advice, not a lock (ADR 0004).
+    """
+    if student_year is None:
+        return None
+    open_stars = [star for star in stars if star["state"] != "lit"]
+    reachable = [
+        star_years[star["unitId"]]
+        for star in open_stars
+        if star["unitId"] in star_years and star_years[star["unitId"]] <= student_year
+    ]
+    if not reachable:
+        return None
+    year = max(reachable)
+    return next(star for star in open_stars if star_years.get(star["unitId"]) == year)
+
+
 def _recommendation(
     stars: Sequence[dict[str, Any]],
     *,
@@ -116,6 +190,8 @@ def _recommendation(
     successors: Mapping[str, Sequence[str]],
     facts: Mapping[str, knowledge_mastery_service.LitFact],
     evidence: Mapping[str, str],
+    student_year: int | None = None,
+    star_years: Mapping[str, int] | None = None,
 ) -> tuple[dict[str, Any], str, str | None] | None:
     """The star one subject recommends, why, and after which lighting (#164).
 
@@ -129,10 +205,13 @@ def _recommendation(
        first; a backfilled lighting counts): its successor on the frontier
        that comes first in the course, else this subject's next frontier star
        after it, wrapping round: `after_lit`.
-    3. Else the first frontier star: `start`.
+    3. Else, for a student whose year group can be read, the first star of
+       that year in the course, else the first of the latest year before it,
+       on the frontier or not: `grade` (#310).
+       Else the first frontier star: `start`.
 
     The frontier is what is not lit and has every prerequisite lit; apart
-    from rule 1, only frontier stars are recommended.
+    from rules 1 and 3 by year, only frontier stars are recommended.
     """
     position = {star["unitId"]: index for index, star in enumerate(stars)}
     mine = [star for star in stars if subject_of(star) == subject_id]
@@ -188,6 +267,9 @@ def _recommendation(
         following = after(lit["unitId"])
         if following is not None:
             return following, "after_lit", lit["unitId"]
+    by_year = _start_for_year(mine, student_year=student_year, star_years=star_years or {})
+    if by_year is not None:
+        return by_id[by_year["unitId"]], "grade", None
     return frontier[0], "start", None
 
 
@@ -205,11 +287,14 @@ def build_map(
     locale: str = "de",
     star_quiz_retry_at: Mapping[str, str] | None = None,
     last_evidence_by_unit: Mapping[str, str] | None = None,
+    student_grade: str | None = None,
 ) -> dict[str, Any]:
     """One sky from facts already read. Pure; no I/O.
 
     ``last_evidence_by_unit`` is when the student last did something in each
     knowledge point (an answer, a finished lesson); the recommendation reads it.
+    ``student_grade`` is the year group on the student's profile, as stored;
+    where nothing is begun, the recommendation starts at that year.
     """
     facts = lit_facts or {}
     retry_at = star_quiz_retry_at or {}
@@ -321,6 +406,16 @@ def build_map(
     for unit in units:
         for before in unit.get("prerequisiteUnitIds") or ():
             successors.setdefault(str(before), []).append(str(unit.get("id") or ""))
+    student_year = _school_year(learning_profile_service.resolve_grade_code(student_grade))
+    star_years = (
+        _star_years(
+            units,
+            topics,
+            [item for item in catalog.get("lessons") or () if isinstance(item, Mapping)],
+        )
+        if student_year is not None
+        else {}
+    )
     for galaxy in galaxies:
         if not galaxy["enrolled"]:
             continue
@@ -331,6 +426,8 @@ def build_map(
             successors=successors,
             facts=facts,
             evidence=last_evidence_by_unit or {},
+            student_year=student_year,
+            star_years=star_years,
         )
         if picked is not None:
             star, reason, related = picked
@@ -445,8 +542,12 @@ def knowledge_map(
     *,
     subject_id: str | None = None,
     view: str = "full",
+    student_grade: str | None = None,
 ) -> dict[str, Any]:
-    """The whole sky for one student, with `subject_id` as the galaxy in focus."""
+    """The whole sky for one student, with `subject_id` as the galaxy in focus.
+
+    `student_grade` is the year group on the student's profile, as stored.
+    """
     catalog = evidence.content.catalog
     # Blank is absent, whether it arrived as no parameter at all or as one with
     # nothing in it; either way the first galaxy takes the focus as it always has.
@@ -478,6 +579,7 @@ def knowledge_map(
         lit_facts=_lit_facts(evidence, states),
         star_quiz_retry_at=evidence.star_quiz_retry_at,
         last_evidence_by_unit=_last_evidence_by_unit(evidence),
+        student_grade=student_grade,
         skill_states=(
             None if view == "skeleton" else knowledge_mastery_service.skill_states(evidence)
         ),

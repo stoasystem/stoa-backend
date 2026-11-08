@@ -25,7 +25,8 @@ from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import students
 from stoa.security import route_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services import ask_answer, learning_profile_service, message_catalog
+from stoa.main import RequestLocaleMiddleware
+from stoa.services import ask_answer, learning_profile_service, locale_service, message_catalog
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from scripts import backfill_student_grade_codes as backfill
@@ -193,12 +194,8 @@ def test_a_value_no_one_can_read_is_reported_as_such(stored):
 
 # ── The closed set at the door ───────────────────────────────────────────────
 
-def test_the_judgement_a_write_will_be_held_to_once_the_client_sends_codes():
-    """`normalize_grade` is the door for the next change; nothing calls it yet.
-
-    It is specified and tested now so the step that adds it to the route is a
-    one-line change, and so the set it judges against cannot quietly drift.
-    """
+def test_the_judgement_a_write_is_held_to():
+    """`normalize_grade`: one code exactly as offered, or nothing at all."""
     for code in learning_profile_service.GRADE_LEVEL_CODES:
         assert learning_profile_service.normalize_grade(code) == code
     for refused in ("Grade 6", "Sek1", "14", "6. Klasse", "grade_6", "GRADE_6_PRIMARY"):
@@ -254,9 +251,12 @@ def profile_client(monkeypatch):
 
     app = FastAPI()
     app.include_router(students.router, prefix="/students")
+    # The language the request asks for, read at the door as the deployed app does.
+    app.add_middleware(RequestLocaleMiddleware)
     app.dependency_overrides[get_actor] = _actor
     app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
-    return TestClient(app), writes
+    yield TestClient(app), writes
+    locale_service.set_request_locale(None)
 
 
 def test_every_code_is_accepted_by_the_profile_route(profile_client):
@@ -265,28 +265,62 @@ def test_every_code_is_accepted_by_the_profile_route(profile_client):
         response = client.patch("/students/me/profile", json={"grade": code})
         assert response.status_code == 200, code
         assert response.json()["grade"] == code
-    assert len(writes) == len(learning_profile_service.GRADE_LEVEL_CODES)
+    assert [write["expression_attribute_values"][":g"] for write in writes] == list(
+        learning_profile_service.GRADE_LEVEL_CODES
+    )
 
 
 @pytest.mark.parametrize(
-    "typed",
-    # Word for word what the live client's own hint asks the student to type,
-    # in each of its four languages.
-    ["6. Klasse", "Year 6", "6e année", "6ª classe", "Sek1", "14"],
+    "sent",
+    # Meant as codes - a client choosing from the list - and none is one.
+    ["grade_6", "grade_10_secondary", "GRADE_6_PRIMARY", "grade_secondary_ii", " grade_x "],
 )
-def test_the_text_the_live_client_asks_for_is_still_accepted(profile_client, typed):
-    """The closed set is not yet enforced at this door, and must not be.
+def test_a_code_the_list_does_not_offer_is_refused_and_nothing_is_written(
+    profile_client, sent
+):
+    client, writes = profile_client
+    response = client.patch(
+        "/students/me/profile", json={"grade": sent}, headers={"Accept-Language": "fr"}
+    )
 
-    The grade box on the web client is free text whose hint says 'Zum Beispiel
-    «6. Klasse»'. Refusing that here answers a student who did exactly as asked
-    with "not saved, try again" - a permanent failure worded as a retryable one
-    - every time, for as long as that client is the one deployed. The door
-    closes in the same change that gives the client a dropdown.
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["code"] == "profile_choice_unknown"
+    assert detail["fields"] == ["grade"]
+    assert detail["message"] == message_catalog.TEXT["error.profile_choice_unknown"]["fr"]
+    assert writes == []
+
+
+@pytest.mark.parametrize(
+    ("typed", "read_as"),
+    # Word for word what the live client's own hint asks the student to type,
+    # in each of its four languages, and what production already holds.
+    [
+        ("6. Klasse", "6. Klasse"),
+        ("Year 6", "Year 6"),
+        ("6e année", "6e année"),
+        ("6ª classe", "6ª classe"),
+        ("14", "14"),
+        ("Sek1", "grade_secondary_i"),
+        ("Grade 6", "grade_6_primary"),
+    ],
+)
+def test_during_the_transition_typed_text_is_still_stored_as_sent(
+    profile_client, typed, read_as
+):
+    """Until stoa-frontend#591's dropdown is deployed (#310).
+
+    The grade box on the web client still live is free text whose hint says
+    'Zum Beispiel «6. Klasse»'. Refusing that here would answer a student who
+    did exactly as asked with "not saved" for as long as that client is the
+    one deployed. So it is stored as sent; it is read back as the code it
+    means where one can be read from it, else as stored - in no list, so the
+    new client asks again. This test goes when the door closes.
     """
     client, writes = profile_client
     response = client.patch("/students/me/profile", json={"grade": typed})
     assert response.status_code == 200
-    assert response.json()["grade"] == typed
+    assert response.json()["grade"] == read_as
     assert [write["expression_attribute_values"][":g"] for write in writes] == [typed]
 
 
@@ -305,25 +339,75 @@ def test_what_that_door_lets_through_still_cannot_reach_the_model(typed):
 def test_a_student_who_has_not_said_may_still_save_their_profile(profile_client, blank):
     """#50: the grade is asked for later than the account is opened.
 
-    Stored as sent, whitespace included, because this step does not touch the
-    write. What matters downstream is that both reach the model as the same
-    "nobody said" sentence, which `resolve_grade_code` decides and the prompt
-    tests pin.
+    Whitespace and nothing are the same "not said", and are stored as one.
     """
     client, writes = profile_client
     response = client.patch("/students/me/profile", json={"grade": blank})
     assert response.status_code == 200
-    assert response.json()["grade"] == blank
-    assert [write["expression_attribute_values"][":g"] for write in writes] == [blank]
-    assert learning_profile_service.resolve_grade_code(blank) == ""
+    assert response.json()["grade"] == ""
+    assert [write["expression_attribute_values"][":g"] for write in writes] == [""]
 
 
-def test_a_stored_legacy_grade_is_still_readable(profile_client):
+def test_a_stored_legacy_grade_is_read_as_the_code_it_means(profile_client):
     """Rows written before the codes existed are read back, not 503'd."""
     client, _writes = profile_client
     response = client.get("/students/me/profile")
     assert response.status_code == 200
-    assert response.json()["grade"] == "Sek1"
+    assert response.json()["grade"] == "grade_secondary_i"
+
+
+# ── The list a client renders ────────────────────────────────────────────────
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_the_profile_carries_every_grade_code_in_school_order_named_in_the_reader_s_language(
+    profile_client, locale
+):
+    client, _writes = profile_client
+    for response in (
+        client.get("/students/me/profile", headers={"Accept-Language": locale}),
+        client.patch(
+            "/students/me/profile",
+            json={"grade": "grade_7_secondary"},
+            headers={"Accept-Language": locale},
+        ),
+    ):
+        assert response.status_code == 200
+        offered = response.json()["choices"]["grade"]
+        assert [item["code"] for item in offered] == list(
+            learning_profile_service.GRADE_LEVEL_CODES
+        )
+        assert [item["label"] for item in offered] == [
+            message_catalog.TEXT[f"choice.grade.{code}"][locale]
+            for code in learning_profile_service.GRADE_LEVEL_CODES
+        ]
+
+
+def test_every_list_chosen_field_is_named_in_all_four_languages():
+    """The whole declaration against the whole catalog, both ways."""
+    declared = {
+        f"choice.{field}.{code}"
+        for field, codes in learning_profile_service.PROFILE_CHOICES.items()
+        for code in codes
+    }
+    catalogued = {key for key in message_catalog.TEXT if key.startswith("choice.")}
+    assert catalogued == declared
+    for key in declared:
+        variants = message_catalog.TEXT[key]
+        assert set(variants) == set(LOCALES), key
+        assert all(variants[locale].strip() for locale in LOCALES), key
+        assert "ß" not in variants["de"], key
+
+
+def test_a_grade_choice_names_the_same_school_year_as_the_assistant_is_told():
+    """The dropdown and the prompt say one year, each in its own phrasing."""
+    for code, harmos in learning_profile_service.GRADE_LEVEL_HARMOS_YEARS.items():
+        choice = message_catalog.TEXT[f"choice.grade.{code}"]
+        told = message_catalog.TEXT[f"grade.{code}"]
+        for locale in ("de", "fr", "it"):
+            if harmos is not None:
+                assert choice[locale] == told[locale], (code, locale)
+        if harmos is not None:
+            assert f"Year {harmos - 2} " in choice["en"], code
 
 
 # ── What the model is told ───────────────────────────────────────────────────

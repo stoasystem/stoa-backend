@@ -60,11 +60,32 @@ logger = logging.getLogger(__name__)
 # Profile models
 # ---------------------------------------------------------------------------
 
+class ProfileChoice(BaseModel):
+    """One value a list-chosen profile field may take, named for the reader."""
+
+    code: str
+    label: str
+
+
+class ProfileChoices(BaseModel):
+    """What each list-chosen profile field may be set to, in the order offered.
+
+    The client renders these instead of keeping its own copy
+    (`learning_profile_service.PROFILE_CHOICES`); the write accepts a `code`
+    from the field's list, or "" for not said.
+    """
+
+    grade: list[ProfileChoice]
+
+
 class StudentProfileResponse(BaseModel):
     id: str
     userId: str
     name: str
     email: str
+    # The code the stored year group means, "" when none was said. A row
+    # holding text no code can be read from is sent back as stored: it is in
+    # no list, so a client treats it as not said and asks again.
     grade: str
     primarySubjects: list[str]
     schoolSystem: str | None = None
@@ -72,6 +93,7 @@ class StudentProfileResponse(BaseModel):
     guardianStatus: str
     createdAt: str
     updatedAt: str
+    choices: ProfileChoices
 
 
 class UpdateStudentProfileRequest(BaseModel):
@@ -144,18 +166,26 @@ def _guardian_status(profile: Mapping[str, object]) -> str:
     return "not_linked"
 
 
+def _profile_grade(profile: Mapping[str, object], correlation_id: str) -> str:
+    """The stored year group as the code it means; text nothing reads from, as stored."""
+    stored = _unset_or_text(profile, "grade", correlation_id)
+    code = learning_profile_service.resolve_grade_code(stored)
+    return stored if code is None else code
+
+
 def _student_profile_response(
     profile: Mapping[str, object], *, fallback_user_id: str, correlation_id: str, updated_at: str | None = None
 ) -> StudentProfileResponse:
     user_id = profile.get("user_id", fallback_user_id)
     if not isinstance(user_id, str):
         _invalid_stored_student_response(correlation_id, "user_id")
+    locale = locale_service.resolve_locale(dict(profile))
     return StudentProfileResponse(
         id=user_id,
         userId=user_id,
         name=_required_profile_text(profile, "name", correlation_id),
         email=_optional_profile_text(profile, "email", correlation_id) or "",
-        grade=_unset_or_text(profile, "grade", correlation_id),
+        grade=_profile_grade(profile, correlation_id),
         primarySubjects=_profile_subjects(profile, correlation_id),
         schoolSystem=_optional_profile_text(profile, "school_system", correlation_id),
         preferredAnswerLanguage=_optional_profile_text(
@@ -164,6 +194,7 @@ def _student_profile_response(
         guardianStatus=_guardian_status(profile),
         createdAt=_required_profile_text(profile, "created_at", correlation_id),
         updatedAt=updated_at or _required_profile_text(profile, "updated_at", correlation_id),
+        choices=ProfileChoices.model_validate(learning_profile_service.profile_choices(locale)),
     )
 
 
@@ -405,6 +436,33 @@ async def get_my_learning_history(
     return LearningHistoryResponse(items=items)
 
 
+def _grade_to_store(sent: str) -> str:
+    """The year group a profile write stores: a code from `choices.grade`, or "".
+
+    A value written as a code must be one: a client choosing from the list
+    that sends something else is refused with `profile_choice_unknown`.
+
+    **Transition (#310), until stoa-frontend#591 is deployed.** The web client
+    live today has a free-text grade box whose own hint asks for "6. Klasse" /
+    "Year 6" / "6e année" / "6ª classe"; refusing that would answer a student
+    who did as asked with "not saved" for as long as that client is the one
+    deployed. So text that was never meant as a code is still stored as sent,
+    and the readers hold it safe: the prompt names it unreadable
+    (`resolve_grade_code`) and the star map starts where it always has. Once
+    the dropdown is live, the branch below that stores it goes and every value
+    outside the list is refused.
+    """
+    try:
+        return learning_profile_service.normalize_grade(sent)
+    except ValueError:
+        if learning_profile_service.looks_like_grade_code(sent):
+            raise AccountViolation(
+                AccountErrorCode.PROFILE_CHOICE_UNKNOWN, fields=["grade"]
+            ) from None
+    logger.info("student_profile_grade_free_text_stored")
+    return sent
+
+
 @router.get("/me/profile", response_model=StudentProfileResponse)
 async def get_my_profile(
     authorized: AuthorizedResource = Depends(
@@ -442,18 +500,8 @@ async def update_my_profile(
     expr_values: dict = {":u": now}
 
     if body.grade is not None:
-        # Still stored as sent, on purpose. `learning_profile_service` now has
-        # the closed set and `normalize_grade` to judge a write against it, but
-        # refusing here today would break the client that is live: the grade box
-        # is a free-text field whose own hint tells the student to type
-        # "6. Klasse" / "Year 6" / "6e année" / "6ª classe", and every one of
-        # those would come back 422 as "not saved, try again" - a permanent
-        # failure dressed as a retryable one. The prompt is safe meanwhile
-        # without this door: anything the code set cannot account for is named
-        # to the model as unreadable rather than passed through. The door goes
-        # in once the client sends codes from a dropdown.
         update_expr_parts.append("grade = :g")
-        expr_values[":g"] = body.grade
+        expr_values[":g"] = _grade_to_store(body.grade)
 
     if body.primarySubjects is not None:
         update_expr_parts.append("primary_subjects = :s")
