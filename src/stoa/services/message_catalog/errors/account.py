@@ -353,48 +353,6 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Ce rapport est introuvable.",
         "it": "Questo rapporto non è stato trovato.",
     },
-    "error.relationship_status_invalid": {
-        "de": "Wähle einen anderen Status für die Verbindung.",
-        "en": "Choose a different relationship status.",
-        "fr": "Choisissez un autre statut pour la relation.",
-        "it": "Scegli un altro stato per la relazione.",
-    },
-    "error.relationship_status_conflict": {
-        "de": "Die Verbindung wurde inzwischen geändert. Lade die Seite neu und versuche es erneut.",
-        "en": "The relationship changed. Refresh and retry.",
-        "fr": "La relation a été modifiée entre-temps. Rechargez la page et réessayez.",
-        "it": "Nel frattempo la relazione è stata modificata. Ricarica la pagina e riprova.",
-    },
-    "error.relationship_status_temporarily_unavailable": {
-        "de": "Die Verbindung kann gerade nicht geändert werden. Versuche es später erneut.",
-        "en": "The relationship update is temporarily unavailable. Try again later.",
-        "fr": "La relation ne peut pas être modifiée pour le moment. Réessayez plus tard.",
-        "it": "Al momento non è possibile modificare la relazione. Riprova più tardi.",
-    },
-    "error.binding_repair_preview_changed": {
-        "de": "Die Verbindung hat sich seit der Vorschau geändert. Erstelle eine neue Vorschau.",
-        "en": "The relationship changed since the preview. Create a new preview.",
-        "fr": "La relation a changé depuis l'aperçu. Créez un nouvel aperçu.",
-        "it": "La relazione è cambiata dopo l'anteprima. Crea una nuova anteprima.",
-    },
-    "error.binding_repair_conflict": {
-        "de": "Die Reparatur kollidiert mit einer anderen Änderung. Erstelle eine neue Vorschau.",
-        "en": "The repair conflicts with another change. Create a new preview.",
-        "fr": "La réparation entre en conflit avec une autre modification. Créez un nouvel aperçu.",
-        "it": "La riparazione è in conflitto con un'altra modifica. Crea una nuova anteprima.",
-    },
-    "error.binding_repair_invalid": {
-        "de": "Diese Verbindung kann so nicht repariert werden.",
-        "en": "This relationship cannot be repaired this way.",
-        "fr": "Cette relation ne peut pas être réparée de cette manière.",
-        "it": "Questa relazione non può essere riparata in questo modo.",
-    },
-    "error.binding_repair_temporarily_unavailable": {
-        "de": "Die Reparatur ist gerade nicht möglich. Versuche es später erneut.",
-        "en": "The repair is temporarily unavailable. Try again later.",
-        "fr": "La réparation est momentanément indisponible. Réessayez plus tard.",
-        "it": "La riparazione non è momentaneamente disponibile. Riprova più tardi.",
-    },
     # ── Sign-up, recovery and one's own password ─────────────────────────────
     "error.public_authentication_unavailable": {
         "de": "Die Anmeldung ist gerade nicht verfügbar. Versuche es später erneut.",

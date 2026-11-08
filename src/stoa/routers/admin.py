@@ -179,16 +179,9 @@ CURRICULUM_VERSION_TARGET = AdminTargetProvider(
     "scalar", "body", ("versionId",), ("version_id",),
     reference_only=("reason", "expectedPublishedVersionId"),
 )
-PARENT_BINDING_TARGET = AdminTargetProvider(
+PARENT_LINK_TARGET = AdminTargetProvider(
     "scalar", "body", ("parent_id", "student_id"), ("parent_id", "student_id"),
-    reference_only=(
-        "relationship",
-        "reason",
-        "preview_id",
-        "expected_status",
-        "expected_version",
-        "status",
-    ),
+    reference_only=("reason",),
 )
 BULK_REPORT_TARGETS = AdminTargetProvider(
     "collection", "request",
@@ -505,6 +498,24 @@ class AdminParentLinkRequest(BaseModel):
     relationship: str = Field(default="child", min_length=1, max_length=40)
 
 
+class AdminParentLinkRevokeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    parent_id: str = Field(min_length=1, max_length=120)
+    student_id: str = Field(min_length=1, max_length=120)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class AdminParentLinkRevokeResponse(BaseModel):
+    """The link as it now stands: closed on both sides at `link_updated_at`."""
+
+    parent_id: str
+    student_id: str
+    relationship: str
+    status: str
+    link_updated_at: str
+
+
 class SubscriptionRequestResponse(BaseModel):
     requestId: str
     parentId: str
@@ -787,73 +798,6 @@ class SubscriptionRequestUpdateRequest(BaseModel):
 class SubscriptionRequestApplyRequest(BaseModel):
     admin_note: str | None = Field(default=None, max_length=500)
     effective_at: str | None = Field(default=None, max_length=80)
-
-
-class ParentStudentBindingResponse(BaseModel):
-    parent_id: str
-    student_id: str
-    relationship: str = "child"
-    status: str = "active"
-    source: str | None = None
-    updated_at: str | None = None
-
-
-class ParentStudentBindingListResponse(BaseModel):
-    items: list[ParentStudentBindingResponse]
-    count: int
-
-
-class ParentBindingRepairPreviewRequest(BaseModel):
-    parent_id: str = Field(..., min_length=1, max_length=200)
-    student_id: str = Field(..., min_length=1, max_length=200)
-    relationship: str = Field(default="child", min_length=1, max_length=50)
-    reason: str = Field(..., min_length=1, max_length=500)
-
-
-class ParentStudentBindingRepairRequest(ParentBindingRepairPreviewRequest):
-    preview_id: str = Field(..., min_length=64, max_length=64)
-
-
-class ParentBindingStatusTransitionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    parent_id: str = Field(..., min_length=1, max_length=200)
-    student_id: str = Field(..., min_length=1, max_length=200)
-    relationship: str = Field(default="child", min_length=1, max_length=50)
-    expected_status: Literal[
-        "active", "active_pending_verification", "inactive", "revoked"
-    ]
-    expected_version: int = Field(..., ge=1)
-    status: Literal["active", "active_pending_verification", "inactive", "revoked"]
-    reason: str = Field(..., min_length=1, max_length=500)
-
-
-class ParentBindingRepairObservation(BaseModel):
-    coordinate: str
-    version: int | None = None
-    digest: str
-
-
-class ParentBindingRepairPreview(BaseModel):
-    pair_id: str
-    preview_id: str
-    classification: user_repo.ParentBindingRepairClassification
-    proposed_action: str | None = None
-    observations: list[ParentBindingRepairObservation]
-
-
-class ParentBindingRepairApplyResponse(BaseModel):
-    disposition: user_repo.ParentBindingRepairApplyDisposition
-    pair_id: str
-    preview_id: str
-    classification: user_repo.ParentBindingRepairClassification
-    mutated: bool
-
-
-class ParentBindingStatusTransitionResponse(BaseModel):
-    disposition: user_repo.ParentBindingStatusDisposition
-    status: str
-    version: int
 
 
 class AccountVerificationSupportResponse(BaseModel):
@@ -2659,6 +2603,47 @@ def assign_parent_link(
     return link
 
 
+@router.post("/parent-links/revoke", response_model=AdminParentLinkRevokeResponse)
+@admin_target_provider(PARENT_LINK_TARGET)
+async def revoke_parent_link(
+    body: AdminParentLinkRevokeRequest,
+    user: dict = Depends(require_role("admin")),
+) -> AdminParentLinkRevokeResponse:
+    """End a parent-student relationship: both sides of its link in one write.
+
+    Only a link with an open side can be revoked. An account that is no longer
+    usable does not stop it - that is the relationship an administrator most
+    needs to close. Either side having moved since it was read refuses the
+    whole write and nothing changes (#208).
+    """
+    try:
+        closed = current_relationship.revoke(
+            body.parent_id,
+            body.student_id,
+            actor_id=str(user.get("user_id") or user.get("sub") or "admin"),
+            now=_now_iso(),
+        )
+    except parent_link_repo.ParentLinkConflict as exc:
+        raise parent_link_service.ParentLinkError("link_revoke_conflict") from exc
+    if closed is None:
+        raise parent_link_service.ParentLinkError("link_not_open")
+    _record_account_admin_event(
+        actor=user,
+        target_id=body.student_id,
+        event_type="parent_link_revoked",
+        action="revoke_parent_link",
+        reason_code=body.reason,
+        evidence_reference=f"parent-link:{body.parent_id}->{body.student_id}",
+    )
+    return AdminParentLinkRevokeResponse(
+        parent_id=closed.parent_id,
+        student_id=closed.student_id,
+        relationship=closed.relationship or "child",
+        status=closed.status or "",
+        link_updated_at=closed.version or "",
+    )
+
+
 @router.get("/subscriptions/requests", response_model=SubscriptionRequestListResponse)
 async def list_subscription_requests(
     limit: int = Query(default=50, ge=1, le=100),
@@ -3203,194 +3188,6 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
         teacher_sla=teacher_reply_service.aggregate_teacher_sla([*questions, *help_metrics]),
         counts_complete=users_complete and questions_complete,
     )
-
-
-def _binding_response(item: dict[str, Any]) -> ParentStudentBindingResponse:
-    return ParentStudentBindingResponse(
-        parent_id=item.get("parent_id", ""),
-        student_id=item.get("student_id", ""),
-        relationship=item.get("relationship", "child"),
-        status=item.get("status", "active"),
-        source=item.get("source"),
-        updated_at=item.get("updated_at"),
-    )
-
-
-def _binding_repair_preview_response(
-    preview: user_repo.ParentBindingRepairPreview,
-) -> ParentBindingRepairPreview:
-    return ParentBindingRepairPreview(
-        pair_id=preview.pair_id,
-        preview_id=preview.preview_id,
-        classification=preview.classification,
-        proposed_action=preview.proposed_action,
-        observations=[
-            ParentBindingRepairObservation(
-                coordinate=item.coordinate,
-                version=item.version,
-                digest=item.digest,
-            )
-            for item in preview.observations
-        ],
-    )
-
-
-def _binding_repair_apply_response(
-    result: user_repo.ParentBindingRepairApplyResult,
-) -> ParentBindingRepairApplyResponse:
-    return ParentBindingRepairApplyResponse(
-        disposition=result.disposition,
-        pair_id=result.preview.pair_id,
-        preview_id=result.preview.preview_id,
-        classification=result.preview.classification,
-        mutated=result.mutated,
-    )
-
-
-@router.get("/parent-bindings", response_model=ParentStudentBindingListResponse)
-async def list_parent_bindings(
-    parent_id: str = Query(..., min_length=1),
-    user: dict = Depends(require_role("admin")),
-):
-    """Inspect formal parent/student bindings for admin repair."""
-    items = [
-        _binding_response(item)
-        for item in user_repo.list_parent_student_bindings(parent_id)
-    ]
-    return ParentStudentBindingListResponse(items=items, count=len(items))
-
-
-@router.post(
-    "/parent-bindings/repair/preview", response_model=ParentBindingRepairPreview
-)
-@admin_target_provider(PARENT_BINDING_TARGET)
-async def preview_parent_binding_repair(
-    body: ParentBindingRepairPreviewRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Classify one explicit historical relationship pair without mutation."""
-    del user  # authorization and durable target audit complete before this body
-    preview = user_repo.preview_parent_binding_repair(
-        parent_id=body.parent_id,
-        student_id=body.student_id,
-        relationship=body.relationship,
-    )
-    return _binding_repair_preview_response(preview)
-
-
-@router.post("/parent-bindings/repair", response_model=ParentBindingRepairApplyResponse)
-@admin_target_provider(PARENT_BINDING_TARGET)
-async def repair_parent_binding(
-    body: ParentStudentBindingRepairRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Apply one unchanged repair preview through the atomic relationship writer."""
-    now = _now_iso()
-    result = user_repo.apply_parent_binding_repair(
-        parent_id=body.parent_id,
-        student_id=body.student_id,
-        relationship=body.relationship,
-        preview_id=body.preview_id,
-        actor=str(user.get("sub") or user.get("username") or "admin"),
-        created_at=now,
-    )
-    refusal = _BINDING_REPAIR_REFUSALS.get(result.disposition)
-    if refusal is not None:
-        raise AccountViolation(
-            refusal,
-            internal_detail=f"pair={result.preview.pair_id} mutated={result.mutated}",
-        )
-    return _binding_repair_apply_response(result)
-
-
-# A repair that did not apply is refused like any other command, by code.
-_BINDING_REPAIR_REFUSALS = {
-    user_repo.ParentBindingRepairApplyDisposition.SKIPPED_CHANGED: (
-        AccountErrorCode.BINDING_REPAIR_PREVIEW_CHANGED
-    ),
-    user_repo.ParentBindingRepairApplyDisposition.CONFLICT: (
-        AccountErrorCode.BINDING_REPAIR_CONFLICT
-    ),
-    user_repo.ParentBindingRepairApplyDisposition.SKIPPED_INVALID: (
-        AccountErrorCode.BINDING_REPAIR_INVALID
-    ),
-    user_repo.ParentBindingRepairApplyDisposition.RETRYABLE: (
-        AccountErrorCode.BINDING_REPAIR_TEMPORARILY_UNAVAILABLE
-    ),
-}
-@router.post(
-    "/parent-bindings/status",
-    response_model=ParentBindingStatusTransitionResponse,
-)
-@admin_target_provider(PARENT_BINDING_TARGET)
-async def transition_parent_binding_status(
-    body: ParentBindingStatusTransitionRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Perform one canonical-admin, expected-status/version lifecycle transition."""
-    context = user.get("_admin_authorization")
-    correlation_id = str(getattr(context, "correlation_id", "") or "")
-    if user.get("role") != "admin":
-        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id)
-    if body.status == body.expected_status:
-        raise AccountViolation(AccountErrorCode.RELATIONSHIP_STATUS_INVALID)
-    result = user_repo.transition_parent_student_relationship_status(
-        parent_id=body.parent_id,
-        student_id=body.student_id,
-        relationship=body.relationship,
-        expected_status=body.expected_status,
-        expected_version=body.expected_version,
-        status=body.status,
-        source="admin_lifecycle",
-        actor=str(user.get("sub") or user.get("user_id") or "admin"),
-        updated_at=_now_iso(),
-    )
-    if result.disposition is user_repo.ParentBindingStatusDisposition.CONFLICT:
-        raise AccountViolation(AccountErrorCode.RELATIONSHIP_STATUS_CONFLICT)
-    if result.disposition is user_repo.ParentBindingStatusDisposition.RETRYABLE:
-        raise AccountViolation(AccountErrorCode.RELATIONSHIP_STATUS_TEMPORARILY_UNAVAILABLE)
-    assert result.status is not None and result.version is not None
-    # Visibility is the union of the legacy binding and the parent-link table, so
-    # revoking only the legacy row would leave an administrator believing access was
-    # withdrawn while the link table still grants it.
-    if body.status != parent_link_repo.STATUS_ACTIVE and not _revoke_parent_link_side(
-        parent_id=body.parent_id,
-        student_id=body.student_id,
-        actor=user,
-    ):
-        raise AccountViolation(AccountErrorCode.RELATIONSHIP_STATUS_CONFLICT)
-    return ParentBindingStatusTransitionResponse(
-        disposition=result.disposition,
-        status=result.status,
-        version=result.version,
-    )
-
-
-def _revoke_parent_link_side(
-    *, parent_id: str, student_id: str, actor: Mapping[str, object]
-) -> bool:
-    """Retire an open parent-link pair, reporting whether visibility is now closed."""
-    try:
-        closed = current_relationship.revoke(
-            parent_id,
-            student_id,
-            actor_id=str(actor.get("user_id") or actor.get("sub") or "admin"),
-            now=_now_iso(),
-        )
-    except parent_link_repo.ParentLinkConflict:
-        return False
-    if closed is None:
-        return True
-    _record_account_admin_event(
-        actor=actor,
-        target_id=student_id,
-        event_type="parent_link_revoked",
-        action="revoke_parent_link",
-        evidence_reference=f"parent-link:{parent_id}->{student_id}",
-    )
-    return True
-
-
 
 
 @router.get("/reports/ops", response_model=ReportOperationListResponse)
