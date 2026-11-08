@@ -5,7 +5,7 @@ import logging
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, report_repo
 from stoa.services import (
     current_relationship,
@@ -156,7 +156,7 @@ def discover_linked_parent_student_pairs() -> list[dict[str, str]]:
     """Candidate pairs from the link rows; `eligible_parent_student_pairs` judges them."""
     return [
         {"parent_id": parent_id, "student_id": student_id}
-        for parent_id, student_id in current_relationship.candidate_pairs(table=get_table())
+        for parent_id, student_id in current_relationship.candidate_pairs(table=db_table.table())
     ]
 
 

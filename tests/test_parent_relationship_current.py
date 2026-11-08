@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 
 from fakes.dynamodb import FakeTable
 
+from stoa.db import table as db_table
 from stoa.config import Settings
 
 from stoa.db.repositories import account_deletion_repo, parent_link_repo, user_repo
@@ -264,7 +265,7 @@ def quiet_report_sources(monkeypatch: pytest.MonkeyPatch) -> None:
     # repository down a path a real table cannot take; an empty table is not
     # that, and the shared one is empty just as well.
     empty = FakeTable()
-    monkeypatch.setattr(report_service, "get_table", lambda: empty)
+    db_table.install(empty)
     monkeypatch.setattr(
         report_service.question_repo,
         "list_by_student",
@@ -326,7 +327,7 @@ def test_new_admin_assigned_link_is_discovered_for_weekly_reports(
 ) -> None:
     world.link(PARENT, STUDENT)
     rows = [dict(item) for item in world.table.items.values()]
-    monkeypatch.setattr(weekly_reports, "get_table", lambda: _discovery_table(rows))
+    db_table.install(_discovery_table(rows))
 
     assert weekly_reports.eligible_parent_student_pairs() == [
         {"parent_id": PARENT, "student_id": STUDENT}
@@ -339,7 +340,7 @@ def test_the_legacy_shape_is_never_discovered_for_weekly_reports(
     world.legacy_bind(PARENT, STUDENT)
     rows = [dict(item) for item in world.table.items.values()]
     rows.append(deepcopy(world.profiles[STUDENT]))
-    monkeypatch.setattr(weekly_reports, "get_table", lambda: _discovery_table(rows))
+    db_table.install(_discovery_table(rows))
 
     assert weekly_reports.discover_linked_parent_student_pairs() == []
     assert weekly_reports.eligible_parent_student_pairs() == []
@@ -395,7 +396,7 @@ def test_the_weekly_job_does_not_run_on_a_revoked_pair(
     # Revoked after the scan read its rows: still discovered, so what keeps the
     # job off it is the job's own judgement.
     world.revoke(PARENT, STUDENT)
-    monkeypatch.setattr(weekly_reports, "get_table", lambda: _discovery_table(rows))
+    db_table.install(_discovery_table(rows))
 
     weekly_reports.run_weekly_report_job({"week_start": "2026-06-01"})
 

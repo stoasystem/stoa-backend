@@ -6,7 +6,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from typing import Annotated, Any, Literal, Protocol, cast
+from itertools import islice
+from typing import Annotated, Any, Literal, cast
 from uuid import uuid4
 
 from boto3.dynamodb.conditions import Attr, Key
@@ -14,7 +15,7 @@ from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import Settings, get_settings
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 from stoa.db.repositories import (
     asked_knowledge_repo,
     checkout_command_repo,
@@ -65,10 +66,6 @@ from stoa.services.billing_errors import BillingErrorCode
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-class _DynamoQueryTable(Protocol):
-    def query(self, **kwargs: object) -> dict[str, object]: ...
 
 
 def _response_items(response: Mapping[str, object]) -> list[dict[str, Any]]:
@@ -860,6 +857,8 @@ def _is_current_week(value: Any) -> bool:
 
 # Index pages one child's conversation list may read before giving up.
 _CHILD_CONVERSATION_PAGE_BUDGET = 25
+# A read on GSI-StudentId continues from the index's key as well as the table's.
+_STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
 
 
 def _list_conversations_for_child(child_id: str, limit: int = 50) -> list[dict[str, Any]]:
@@ -870,29 +869,22 @@ def _list_conversations_for_child(child_id: str, limit: int = 50) -> list[dict[s
     on messages and usage events. A parent then sees a child who has asked
     nothing. Same shape as the two lists already fixed elsewhere.
     """
-    table = cast(_DynamoQueryTable, get_table())
+    table = db_table.table()
     conversations: list[dict[str, Any]] = []
-    last_key: dict[str, Any] | None = None
-    for _page in range(_CHILD_CONVERSATION_PAGE_BUDGET):
-        request: dict[str, Any] = {
-            "IndexName": "GSI-StudentId",
-            "KeyConditionExpression": Key("student_id").eq(child_id),
-            "FilterExpression": Attr("entity_type").eq("conversation"),
-            "Limit": limit,
-            "ScanIndexForward": False,
-        }
-        if last_key is not None:
-            request["ExclusiveStartKey"] = last_key
-        result = table.query(**request)
-        conversations.extend(_response_items(result))
+    reads = db_table.pages(
+        "query",
+        key=_STUDENT_INDEX_KEY,
+        table=table,
+        IndexName="GSI-StudentId",
+        KeyConditionExpression=Key("student_id").eq(child_id),
+        FilterExpression=Attr("entity_type").eq("conversation"),
+        Limit=limit,
+        ScanIndexForward=False,
+    )
+    for page in islice(reads, _CHILD_CONVERSATION_PAGE_BUDGET):
+        conversations.extend(page.items)
         if len(conversations) >= limit:
             break
-        raw_last_key = result.get("LastEvaluatedKey")
-        if raw_last_key is None:
-            break
-        if not isinstance(raw_last_key, dict) or not raw_last_key:
-            raise RuntimeError("child conversation pagination is malformed")
-        last_key = dict(raw_last_key)
     from stoa.services import help_requests
 
     # Whether a teacher was asked is the request's, not the conversation's (#189).
@@ -1702,7 +1694,7 @@ def admit_parent_link_request(requester_id: str, *, now: datetime | None = None,
     """
     moment = int((now or datetime.now(timezone.utc)).timestamp())
     window_start = moment - (moment % PARENT_LINK_REQUEST_WINDOW_SECONDS)
-    client = table if table is not None else get_table()
+    client = table if table is not None else db_table.table()
     try:
         response = client.update_item(
             Key={

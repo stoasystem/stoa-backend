@@ -84,7 +84,6 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeAccountTable:
         security_audit_repo,
         user_repo,
         auth,
-        parents,
     ):
         monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
     db_table.install(fake)

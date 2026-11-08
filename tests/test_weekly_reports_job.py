@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.jobs import weekly_reports
 
 
@@ -184,7 +185,7 @@ def test_discover_linked_parent_student_pairs_pages(monkeypatch):
             {"Items": [_parent_side_link("parent-2", "student-2")]},
         ]
     )
-    monkeypatch.setattr(weekly_reports, "get_table", lambda: table)
+    db_table.install(table)
 
     pairs = weekly_reports.discover_linked_parent_student_pairs()
 
@@ -235,7 +236,7 @@ def test_discover_linked_parent_student_pairs_ignores_binding_rows_and_profile_p
         },
     )
     link_rows.unlink("parent-2", "student-2")
-    monkeypatch.setattr(weekly_reports, "get_table", lambda: link_rows.table)
+    db_table.install(link_rows.table)
 
     pairs = weekly_reports.discover_linked_parent_student_pairs()
 

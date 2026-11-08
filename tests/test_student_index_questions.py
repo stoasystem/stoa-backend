@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
+from stoa.db import table as db_table
 from stoa.db.repositories import question_repo
 from stoa.routers import students
 
@@ -62,6 +63,7 @@ def _table(monkeypatch) -> FakeTable:
     for name, module in list(sys.modules.items()):
         if name.startswith("stoa.") and hasattr(module, "get_table"):
             monkeypatch.setattr(module, "get_table", lambda table=table: table)
+    db_table.install(table)
     return table
 
 

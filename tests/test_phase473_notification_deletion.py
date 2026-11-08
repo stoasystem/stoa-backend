@@ -437,7 +437,7 @@ def test_connection_update_keeps_the_generation_the_row_carries(
             operations = from_wire(TransactItems)
             transactions.append(operations)
 
-    monkeypatch.setattr(websocket_repo, "get_table", lambda: _Table())
+    db_table.install(_Table())
     updated = websocket_repo.update_connection(
         "connection-private", {"subscribed_channels": ["notifications"]}
     )

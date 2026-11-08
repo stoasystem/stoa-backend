@@ -14,6 +14,7 @@ from uuid import uuid4
 
 import boto3
 from stoa.config import settings
+from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
 from stoa.services import (
@@ -379,7 +380,7 @@ def resolve_legacy_delivery_owner(
     event: Mapping[str, Any], *, table: Any | None = None
 ) -> AuthoritativeDeliveryOwnership:
     """Resolve an old event only through its closed authoritative target family."""
-    target = table or notification_repo.get_table()
+    target = table or db_table.table()
     resolver = LEGACY_NOTIFICATION_OWNER_RESOLVERS.get(
         str(event.get("target_type") or "")
     )

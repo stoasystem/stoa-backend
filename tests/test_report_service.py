@@ -6,6 +6,7 @@ import pytest
 
 from fakes import student_evidence as fake_evidence
 from fakes.links import LinkRows
+from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.db.repositories import parent_link_repo
 from stoa.services import message_catalog, report_service
@@ -119,11 +120,7 @@ def _production_settings(**overrides) -> Settings:
 
 
 def patch_sources(monkeypatch, *, children=None, questions=None, progress=None, mistakes=None, conversations=None):
-    monkeypatch.setattr(
-        report_service,
-        "get_table",
-        lambda: FakeTable(children=children, conversations=conversations),
-    )
+    db_table.install(FakeTable(children=children, conversations=conversations))
     # `children` seeds the link rows the judge reads, not a profile scan: a
     # child listed with a non-active `parent_binding_status` stays unlinked,
     # which is the point of the defect these cover.

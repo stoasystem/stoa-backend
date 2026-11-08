@@ -116,7 +116,7 @@ def _install_service_boundary(
     completions: list[str],
 ) -> None:
     claim = _claim()
-    monkeypatch.setattr(notification_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(
         notification_repo,
         "register_delivery_intent",

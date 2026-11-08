@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from fakes import student_evidence as fake_evidence
+from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.db.repositories import report_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -232,6 +233,11 @@ def test_parent_child_authorization_outage_prevents_data_reads(monkeypatch):
     assert reads == []
 
 
+def _parent_week_key(pk: str) -> dict[str, str]:
+    """A continuation key of GSI-ParentId: the table's key and the index's."""
+    return {"PK": pk, "SK": "SUMMARY", "parent_id": "parent-local", "week_start": "2026-06-01"}
+
+
 def test_report_repo_list_reports_for_parent_queries_parent_gsi(monkeypatch):
     class FakeQueryTable:
         def __init__(self):
@@ -239,15 +245,15 @@ def test_report_repo_list_reports_for_parent_queries_parent_gsi(monkeypatch):
 
         def query(self, **kwargs):
             self.calls.append(kwargs)
-            return {"Items": [_report()], "LastEvaluatedKey": {"PK": "REPORT#1"}}
+            return {"Items": [_report()], "LastEvaluatedKey": _parent_week_key("REPORT#1")}
 
     table = FakeQueryTable()
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     result = report_repo.list_reports_for_parent(
         "parent-local",
         limit=7,
-        last_key={"PK": "REPORT#0"},
+        last_key=_parent_week_key("REPORT#0"),
     )
 
     assert result["Items"][0]["student_id"] == "child-1"
@@ -258,7 +264,7 @@ def test_report_repo_list_reports_for_parent_queries_parent_gsi(monkeypatch):
             "FilterExpression": table.calls[0]["FilterExpression"],
             "Limit": 7,
             "ScanIndexForward": False,
-            "ExclusiveStartKey": {"PK": "REPORT#0"},
+            "ExclusiveStartKey": _parent_week_key("REPORT#0"),
         }
     ]
 
@@ -335,7 +341,7 @@ def test_report_repo_put_report_audit_event_uses_conditional_append(monkeypatch)
             self.calls.append(kwargs)
 
     table = FakePutTable()
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     report_repo.put_report_audit_event(
         "report-1",
@@ -372,7 +378,7 @@ def test_report_repo_put_recovery_job_audit_event_uses_conditional_append(monkey
             self.calls.append(kwargs)
 
     table = FakePutTable()
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     report_repo.put_recovery_job_audit_event(
         "job-1",
@@ -444,7 +450,7 @@ def test_report_repo_put_recovery_job_persists_summary_and_targets(monkeypatch):
             self.calls.append(kwargs)
 
     table = FakePutTable()
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     report_repo.put_recovery_job(
         {
@@ -502,7 +508,7 @@ def test_report_repo_try_claim_report_resend_claims_failed_report(monkeypatch):
             self.calls.append(kwargs)
 
     table = FakeUpdateTable()
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     claimed = report_repo.try_claim_report_resend(
         "report-1",
@@ -524,7 +530,7 @@ def test_report_repo_try_claim_report_resend_returns_false_when_not_failed(monke
                 "UpdateItem",
             )
 
-    monkeypatch.setattr(report_repo, "get_table", lambda: FakeUpdateTable())
+    db_table.install(FakeUpdateTable())
 
     claimed = report_repo.try_claim_report_resend(
         "report-1",
@@ -542,10 +548,10 @@ def test_report_repo_list_reports_for_admin_uses_parent_gsi(monkeypatch):
 
         def query(self, **kwargs):
             self.calls.append(kwargs)
-            return {"Items": [_report()], "LastEvaluatedKey": {"PK": "REPORT#1"}}
+            return {"Items": [_report()], "LastEvaluatedKey": _parent_week_key("REPORT#1")}
 
     table = FakeQueryTable()
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     result = report_repo.list_reports_for_admin(
         parent_id="parent-local",
@@ -553,7 +559,7 @@ def test_report_repo_list_reports_for_admin_uses_parent_gsi(monkeypatch):
         week_start="2026-06-01",
         student_id="child-1",
         limit=9,
-        last_key={"PK": "REPORT#0", "SK": "SUMMARY"},
+        last_key=_parent_week_key("REPORT#0"),
     )
 
     assert result["Items"][0]["student_id"] == "child-1"
@@ -564,7 +570,7 @@ def test_report_repo_list_reports_for_admin_uses_parent_gsi(monkeypatch):
             "Limit": 9,
             "ScanIndexForward": False,
             "FilterExpression": table.calls[0]["FilterExpression"],
-            "ExclusiveStartKey": {"PK": "REPORT#0", "SK": "SUMMARY"},
+            "ExclusiveStartKey": _parent_week_key("REPORT#0"),
         }
     ]
 
@@ -576,10 +582,10 @@ def test_report_repo_list_reports_for_admin_uses_bounded_scan_without_parent(mon
 
         def scan(self, **kwargs):
             self.calls.append(kwargs)
-            return {"Items": [_report()], "LastEvaluatedKey": {"PK": "REPORT#1"}}
+            return {"Items": [_report()], "LastEvaluatedKey": {"PK": "REPORT#1", "SK": "SUMMARY"}}
 
     table = FakeScanTable()
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     result = report_repo.list_reports_for_admin(
         status="generation_failed",
@@ -608,7 +614,7 @@ def test_report_repo_update_report_status_updates_summary_item(monkeypatch):
             self.calls.append(kwargs)
 
     table = FakeUpdateTable()
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     report_repo.update_report_status(
         "report-1",
@@ -644,7 +650,7 @@ def test_report_repo_try_start_generation_retry_claims_failed_report(monkeypatch
             self.calls.append(kwargs)
 
     table = FakeUpdateTable()
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     claimed = report_repo.try_start_generation_retry(
         "report-1",
@@ -687,7 +693,7 @@ def test_report_repo_try_start_generation_retry_returns_false_when_claimed(monke
                 "UpdateItem",
             )
 
-    monkeypatch.setattr(report_repo, "get_table", lambda: FakeUpdateTable())
+    db_table.install(FakeUpdateTable())
 
     claimed = report_repo.try_start_generation_retry(
         "report-1",
@@ -707,7 +713,7 @@ def test_report_repo_try_claim_report_generation_uses_conditional_put(monkeypatc
             self.calls.append(kwargs)
 
     table = FakePutTable()
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     claimed = report_repo.try_claim_report_generation({"report_id": "report-1", "status": "generation_claimed"})
 
@@ -733,7 +739,7 @@ def test_report_repo_try_claim_report_generation_returns_false_on_existing(monke
                 "PutItem",
             )
 
-    monkeypatch.setattr(report_repo, "get_table", lambda: FakePutTable())
+    db_table.install(FakePutTable())
 
     claimed = report_repo.try_claim_report_generation({"report_id": "report-1"})
 
@@ -745,7 +751,7 @@ def test_report_repo_get_report_for_child_by_week_filters_same_week_siblings(mon
         def __init__(self):
             self.calls = []
             self.pages = [
-                {"Items": [{**_report("sibling"), "SK": "SUMMARY"}], "LastEvaluatedKey": {"PK": "REPORT#sibling"}},
+                {"Items": [{**_report("sibling"), "SK": "SUMMARY"}], "LastEvaluatedKey": _parent_week_key("REPORT#sibling")},
                 {"Items": [{**_report("child-1"), "SK": "SUMMARY"}]},
             ]
 
@@ -754,13 +760,13 @@ def test_report_repo_get_report_for_child_by_week_filters_same_week_siblings(mon
             return self.pages.pop(0)
 
     table = FakeQueryTable()
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     report = report_repo.get_report_for_child_by_week("parent-local", "child-1", "2026-06-01")
 
     assert report["student_id"] == "child-1"
     assert table.calls[0]["IndexName"] == "GSI-ParentId"
-    assert table.calls[1]["ExclusiveStartKey"] == {"PK": "REPORT#sibling"}
+    assert table.calls[1]["ExclusiveStartKey"] == _parent_week_key("REPORT#sibling")
 
 
 def test_report_repo_get_report_for_child_by_week_ignores_child_entities(monkeypatch):
