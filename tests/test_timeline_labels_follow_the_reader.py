@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from stoa.routers import parents
-from stoa.services import locale_service, message_catalog
+from stoa.services import locale_service, message_catalog, student_evidence
 
 
 def _in(locale: str, build) -> Any:
@@ -52,11 +52,13 @@ def test_every_timeline_label_is_written_in_the_reader_s_language() -> None:
         "activity.ai_conversation": lambda: parents._conversation_activity(
             {"conversation_id": "c1", "created_at": "2026-10-01T09:00:00+00:00"}
         ).title,
-        "activity.practice_lesson_completed": lambda: parents._practice_activity(
-            {"lesson_id": "l1", "completed_at": "2026-10-01T09:00:00+00:00"}, "practice"
+        "activity.practice_lesson_completed": lambda: parents._lesson_activity(
+            student_evidence.Completion(
+                lesson_id="l1", unit_id="", subject_id="", completed_at="2026-10-01T09:00:00+00:00"
+            )
         ).title,
-        "activity.practice_mistake_logged": lambda: parents._practice_activity(
-            {"challenge_id": "c1", "created_at": "2026-10-01T09:00:00+00:00"}, "mistake"
+        "activity.practice_mistake_logged": lambda: parents._mistake_activity(
+            {"challenge_id": "c1", "created_at": "2026-10-01T09:00:00+00:00"}
         ).title,
     }
 

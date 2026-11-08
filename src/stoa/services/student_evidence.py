@@ -2,9 +2,11 @@
 
 Every page that judges a student - the star map, the mastery behind it, the
 stars an Ask answer may name, the practice context, the lesson pages, the
-review page - asks the same few questions: which lessons are finished, which
-exercises were answered right, what went wrong, when they last worked, which
-stars are lit, what is due. Each used to read its own answer, so one star map
+review page, and around them the student's history, the parent pages, the
+weekly report and the adaptive memory - asks the same few questions: which
+lessons are finished, which exercises were answered right, what went wrong,
+when they last worked, which stars are lit, what is due. Each used to read its
+own answer, so one star map
 queried the same student partitions about seventeen times and some of those
 reads stopped at DynamoDB's first 1 MB page without saying so.
 
@@ -298,12 +300,24 @@ def _newest_first(attempt: Mapping[str, Any]) -> tuple[str, str]:
 
 @dataclass(frozen=True, slots=True)
 class Completion:
-    """One finished lesson."""
+    """One finished lesson.
+
+    `title` is the lesson title an older progress row kept beside it; rows
+    written now leave it empty and the reader looks the lesson up.
+    """
 
     lesson_id: str
     unit_id: str
     subject_id: str
     completed_at: str
+    topic_id: str = ""
+    title: str = ""
+
+
+def _within(raw: object, start: datetime, end: datetime) -> bool:
+    """Whether a stored moment falls in `[start, end)`; one that cannot be read does not."""
+    moment = _moment(raw)
+    return moment is not None and start <= moment < end
 
 
 # ── the value ──────────────────────────────────────────────────────────────
@@ -377,6 +391,8 @@ class StudentEvidence:
                     unit_id=str(row.get("unit_id") or ""),
                     subject_id=str(row.get("subject_id") or ""),
                     completed_at=str(row.get("completed_at") or ""),
+                    topic_id=str(row.get("topic_id") or ""),
+                    title=str(row.get("lesson_title") or ""),
                 )
                 for row in self._rows("progress")
                 if row.get("status") == "completed" and row.get("lesson_id")
@@ -392,15 +408,29 @@ class StudentEvidence:
             lambda: frozenset(item.lesson_id for item in self.completions),
         )
 
+    def completions_in(
+        self, subject_id: str | None, *, topic_id: str | None = None
+    ) -> tuple[Completion, ...]:
+        """The finished lessons of one subject, under any spelling of it, oldest first.
+
+        All subjects without one; with `topic_id`, only that topic's lessons.
+        """
+        return tuple(
+            item
+            for item in self.completions
+            if (not subject_id or practice_repo.same_subject(item.subject_id, subject_id))
+            and (topic_id is None or item.topic_id == topic_id)
+        )
+
     def completed_lesson_ids_in(self, subject_id: str | None) -> frozenset[str]:
         """The finished lessons of one subject, under any spelling of it; all without one."""
         if not subject_id:
             return self.completed_lesson_ids
-        return frozenset(
-            item.lesson_id
-            for item in self.completions
-            if practice_repo.same_subject(item.subject_id, subject_id)
-        )
+        return frozenset(item.lesson_id for item in self.completions_in(subject_id))
+
+    def completions_between(self, start: datetime, end: datetime) -> tuple[Completion, ...]:
+        """The lessons finished in `[start, end)`, oldest first: a week's, say."""
+        return tuple(item for item in self.completions if _within(item.completed_at, start, end))
 
     def lessons_completed_on(self, day: date) -> int:
         """How many lessons were finished on this Zurich day."""
@@ -463,6 +493,14 @@ class StudentEvidence:
                     reverse=True,
                 )
             ),
+        )
+
+    def mistakes_between(self, start: datetime, end: datetime) -> tuple[dict[str, Any], ...]:
+        """The wrong answers given in `[start, end)`, newest first."""
+        return tuple(
+            item
+            for item in self.mistakes
+            if _within(item.get("created_at") or item.get("createdAt"), start, end)
         )
 
     def mistakes_by_topic(self, subject_id: str | None = None) -> Counter[str]:

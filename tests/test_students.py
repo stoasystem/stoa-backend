@@ -6,6 +6,7 @@ from stoa.routers import students
 from stoa.security import route_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 from audit_helpers import MemoryAuthorizationAuditSink
+from fakes import student_evidence as fake_evidence
 from fakes.dynamodb import FakeTable
 from fakes.learning_session import seed_conversation, seed_message
 
@@ -145,7 +146,7 @@ def test_learning_history_reports_questions_and_conversations_only(monkeypatch):
         "list_by_student",
         lambda *_args, **_kwargs: {"Items": MIXED_STUDENT_INDEX_ROWS},
     )
-    monkeypatch.setattr(students.practice_repo, "get_progress", lambda *_args: [])
+    fake_evidence.install(monkeypatch)
 
     response = _client(_actor(CanonicalRole.STUDENT, "student-1")).get(
         "/students/me/learning-history"
@@ -259,18 +260,20 @@ def test_practice_history_names_the_lesson_not_its_topic(monkeypatch):
     monkeypatch.setattr(
         students.question_repo, "list_by_student", lambda *_a, **_k: {"Items": []}
     )
-    monkeypatch.setattr(
-        students.practice_repo,
-        "get_progress",
-        lambda *_a: [
-            {
-                "status": "completed",
-                "lesson_id": "brueche-l1",
-                "topic_id": "brueche",
-                "subject_id": "mathematics",
-                "completed_at": "2026-08-25T10:00:00+00:00",
-            }
-        ],
+    fake_evidence.install(
+        monkeypatch,
+        fake_evidence.evidence(
+            "student-1",
+            progress=[
+                {
+                    "status": "completed",
+                    "lesson_id": "brueche-l1",
+                    "topic_id": "brueche",
+                    "subject_id": "mathematics",
+                    "completed_at": "2026-08-25T10:00:00+00:00",
+                }
+            ],
+        ),
     )
     monkeypatch.setattr(
         students.practice_repo,

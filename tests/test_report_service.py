@@ -3,6 +3,7 @@ from datetime import date, datetime, timezone
 
 import pytest
 
+from fakes import student_evidence as fake_evidence
 from fakes.links import LinkRows
 from stoa.config import Settings
 from stoa.db.repositories import parent_link_repo
@@ -152,8 +153,14 @@ def patch_sources(monkeypatch, *, children=None, questions=None, progress=None, 
         "list_by_student",
         lambda student_id, limit=500, last_key=None: {"Items": questions or []},
     )
-    monkeypatch.setattr(report_service.practice_repo, "get_progress", lambda student_id: progress or [])
-    monkeypatch.setattr(report_service.practice_repo, "get_mistakes", lambda student_id: mistakes or [])
+    # Every student reads as these lessons and these wrong answers.
+    monkeypatch.setattr(
+        report_service.student_evidence,
+        "for_student",
+        lambda student_id, **_kwargs: fake_evidence.evidence(
+            student_id, progress=progress or [], attempts=mistakes or []
+        ),
+    )
 
 
 def test_report_week_window_accepts_iso_date():

@@ -1,4 +1,4 @@
-"""One student's evidence, read once per request (#214, #291).
+"""One student's evidence, read once per request (#214, #291, #292).
 
 The star map used to query the same student partitions about seventeen times
 for one sky, and several of those reads stopped at the first 1 MB page. These
@@ -23,7 +23,12 @@ from fakes.dynamodb import FakeTable
 from stoa.db.repositories import practice_repo, review_repo
 from stoa.routers import practice
 from stoa.security import route_authorization
-from stoa.services import curriculum_service, knowledge_mastery_service, star_map_candidates
+from stoa.services import (
+    adaptive_learning_service,
+    curriculum_service,
+    knowledge_mastery_service,
+    star_map_candidates,
+)
 from stoa.services import student_evidence
 
 STUDENT = "student-a"
@@ -274,3 +279,93 @@ def test_mistakes_come_newest_first() -> None:
     )
 
     assert [item["challenge_id"] for item in evidence.mistakes] == ["new", "mid", "old"]
+
+
+# ── the facts the outer readers need (#292) ───────────────────────────────
+
+
+def test_a_window_holds_what_happened_inside_it_and_nothing_else() -> None:
+    evidence = fake_evidence.evidence(
+        progress=[
+            {"lesson_id": "before", "status": "completed", "completed_at": "2026-05-31T23:59:59+00:00"},
+            {"lesson_id": "first", "status": "completed", "completed_at": "2026-06-01T00:00:00+00:00"},
+            {"lesson_id": "last", "status": "completed", "completed_at": "2026-06-07T23:59:59Z"},
+            {"lesson_id": "after", "status": "completed", "completed_at": "2026-06-08T00:00:00+00:00"},
+            {"lesson_id": "unread", "status": "completed", "completed_at": "not a time"},
+        ],
+        attempts=[
+            {"attempt_id": "a", "challenge_id": "in", "correct": False, "created_at": "2026-06-03T08:00:00Z"},
+            {"attempt_id": "b", "challenge_id": "out", "correct": False, "created_at": "2026-06-09T08:00:00Z"},
+            {"attempt_id": "c", "challenge_id": "right", "correct": True, "created_at": "2026-06-03T09:00:00Z"},
+        ],
+    )
+    week = (datetime(2026, 6, 1, tzinfo=UTC), datetime(2026, 6, 8, tzinfo=UTC))
+
+    assert [item.lesson_id for item in evidence.completions_between(*week)] == ["first", "last"]
+    assert [item["challenge_id"] for item in evidence.mistakes_between(*week)] == ["in"]
+
+
+def test_a_finished_lesson_keeps_its_topic_and_any_title_stored_with_it() -> None:
+    evidence = fake_evidence.evidence(
+        progress=[
+            {"lesson_id": "l1", "subject_id": "mathematics", "topic_id": "fractions",
+             "lesson_title": "Brüche", "status": "completed", "completed_at": MOMENT},
+            {"lesson_id": "l2", "subject_id": "math", "topic_id": "ratios",
+             "status": "completed", "completed_at": MOMENT},
+            {"lesson_id": "l3", "subject_id": "physics", "topic_id": "fractions",
+             "status": "completed", "completed_at": MOMENT},
+        ]
+    )
+
+    by_lesson = {item.lesson_id: item for item in evidence.completions}
+    assert (by_lesson["l1"].topic_id, by_lesson["l1"].title) == ("fractions", "Brüche")
+    assert by_lesson["l2"].title == ""
+    # Either spelling of the subject, then the topic.
+    assert [item.lesson_id for item in evidence.completions_in("math")] == ["l1", "l2"]
+    assert [item.lesson_id for item in evidence.completions_in("math", topic_id="fractions")] == ["l1"]
+    assert [item.lesson_id for item in evidence.completions_in(None, topic_id="fractions")] == ["l1", "l3"]
+
+
+def test_one_adaptive_memory_summary_reads_progress_once(monkeypatch) -> None:
+    """Each memory snapshot used to query `PROGRESS#` for itself, up to twenty a summary."""
+    topics = ("angles", "fractions", "ratios")
+    table = FakeTable()
+    table.seed(
+        *(
+            {"PK": f"PROGRESS#{STUDENT}", "SK": f"LESSON#{topic}-l1", "lesson_id": f"{topic}-l1",
+             "subject_id": "mathematics", "topic_id": topic, "status": "completed",
+             "completed_at": MOMENT}
+            for topic in topics
+        ),
+        *(
+            {"PK": f"ATTEMPTS#{STUDENT}", "SK": f"ATTEMPT#{topic}", "challenge_id": f"{topic}-c1",
+             "lesson_id": f"{topic}-l1", "subject_id": "math", "topic_id": topic, "correct": False,
+             "created_at": MOMENT}
+            for topic in topics
+        ),
+    )
+    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    service = adaptive_learning_service
+    monkeypatch.setattr(
+        service.question_repo, "list_questions_by_student", lambda *_a, **_k: {"Items": []}
+    )
+    monkeypatch.setattr(service.asked_knowledge_repo, "list_for_student", lambda *_a, **_k: [])
+    monkeypatch.setattr(service.adaptive_learning_repo, "list_memory_snapshots", lambda *_a, **_k: [])
+    monkeypatch.setattr(service.adaptive_learning_repo, "list_assignments", lambda *_a, **_k: [])
+    monkeypatch.setattr(service.curriculum_service, "list_exercises", lambda **_k: {"items": []})
+
+    summary = service.get_memory_summary(
+        student_id=STUDENT, user={"sub": STUDENT, "role": "student"}
+    )
+
+    assert _student_queries(table) == {"PROGRESS": 1, "ATTEMPTS": 1}
+    # The negative control: every snapshot did get its own topic's lessons.
+    snapshots = {item["topic_id"]: item for item in summary["memorySnapshots"]}
+    assert set(snapshots) == set(topics)
+    for topic in topics:
+        assert [item["lessonId"] for item in snapshots[topic]["recent_curriculum_progress"]] == [
+            f"{topic}-l1"
+        ]
+        assert [item["challengeId"] for item in snapshots[topic]["recent_exercise_attempts"]] == [
+            f"{topic}-c1"
+        ]
