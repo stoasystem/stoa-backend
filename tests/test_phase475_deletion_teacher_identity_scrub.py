@@ -10,6 +10,7 @@ import pytest
 
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import account_deletion_service
+from fakes.dynamodb import from_wire
 
 
 TEACHER_ID = "teacher-deleting"
@@ -109,7 +110,8 @@ class _TeacherDeletionTable:
             self.rows[(str(late["PK"]), str(late["SK"]))] = late
         return {"Items": [deepcopy(row) for row in self.rows.values()]}
 
-    def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        operations = from_wire(TransactItems)
         self.transactions.append(deepcopy(operations))
         assert len(operations) == 2
         fence = operations[0]["ConditionCheck"]

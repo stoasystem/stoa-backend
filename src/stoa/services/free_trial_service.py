@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Mapping
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, user_repo
 
@@ -122,15 +123,21 @@ def activate_student_free_trial(
                     "attribute_not_exists(#trial_schema_field)"
                 ),
             )
-            account_deletion_repo.transact(
+            db_table.transact(
                 [
                     account_deletion_repo.active_fence_condition(
                         student_id, generation
                     ),
                     operation,
-                ]
+                ],
+                # The table the fence above was read from.
+                table=account_deletion_repo.get_table(),
             )
-        except account_deletion_repo.AccountDeletionConflict:
+        except (
+            account_deletion_repo.AccountDeletionConflict,
+            db_table.WriteRefused,
+            db_table.TableUnavailable,
+        ):
             current = user_repo.get_user(student_id)
             replay = _persisted_state(current, observed_at=utc_now())
             if replay is not None:

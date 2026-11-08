@@ -6,8 +6,10 @@ from typing import Any
 import pytest
 from botocore.exceptions import ClientError
 
-from stoa.db.repositories import account_deletion_repo, notification_repo
+from stoa.db import table as db_table
+from stoa.db.repositories import notification_repo
 from stoa.services import notification_service
+from fakes.dynamodb import from_wire
 
 
 OWNER = "student-delivery-begin"
@@ -79,7 +81,8 @@ class _BeginTable:
             return {"Item": dict(self.fence)}
         return {"Item": dict(self.intent)}
 
-    def transact_account_deletion(self, _operations: list[dict[str, Any]]) -> None:
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        _operations = from_wire(TransactItems)
         if self.failure is not None:
             raise self.failure
         self.intent.update(
@@ -89,13 +92,17 @@ class _BeginTable:
         )
 
 
-def _wrapped(error: ClientError) -> account_deletion_repo.AccountDeletionConflict:
-    try:
-        raise account_deletion_repo.AccountDeletionConflict(
-            "redacted transaction failure"
-        ) from error
-    except account_deletion_repo.AccountDeletionConflict as exc:
-        return exc
+def _wrapped(error: ClientError) -> ClientError:
+    """What the table raises; the gateway reads it into its own outcome."""
+    return error
+
+
+def _refused(error: ClientError, operation_count: int = 2) -> db_table.WriteRefused:
+    """The gateway's reading of `error`, for calling the classifier directly."""
+    return db_table.WriteRefused(
+        str(error.response["Error"]["Code"]),
+        db_table.cancellation_reasons(error.response, operation_count),
+    )
 
 
 def _install_service_boundary(
@@ -237,11 +244,17 @@ def test_ordered_intent_condition_loss_is_retryable_and_never_mislabeled(
     "failure",
     [
         TimeoutError("private dependency timeout"),
-        _wrapped(_client_error("TransactionCanceledException", [])),
-        _wrapped(
+        _refused(_client_error("TransactionCanceledException", [])),
+        _refused(
             _client_error(
                 "TransactionCanceledException",
                 [{"Code": "ThrottlingError"}, {"Code": "None"}],
+            )
+        ),
+        _refused(
+            _client_error(
+                "TransactionCanceledException",
+                [{"Code": "ConditionalCheckFailed"}, {"Code": "SomethingNew"}],
             )
         ),
     ],

@@ -17,6 +17,7 @@ from typing import Any
 from botocore.exceptions import ClientError
 import pytest
 
+from stoa.db import table as db_table
 from stoa.db.repositories import capability_repo, security_audit_repo
 
 
@@ -372,7 +373,7 @@ def test_an_ordinary_grant_has_no_expiry(repo: dict[str, Any]) -> None:
 
 
 def test_the_grant_transaction_runs_on_the_verified_session() -> None:
-    # The store opens an ambient-credential client unless the table carries
+    # The gateway opens an ambient-credential client unless the table carries
     # its own transact_write_items; the session table does, bound to the
     # client made from the session the SSO guard verified.
     calls: list[dict[str, Any]] = []
@@ -387,10 +388,15 @@ def test_the_grant_transaction_runs_on_the_verified_session() -> None:
         meta = object()
 
     session_table = script.SessionTable(Resource(), Client())
-    assert capability_repo._transact_client(session_table) is session_table
     assert session_table.name == "stoa-main"
-    session_table.transact_write_items(TransactItems=[{"Put": {}}])
-    assert calls == [{"TransactItems": [{"Put": {}}]}]
+    db_table.transact([{"Put": {"Item": {"PK": "P", "SK": "S"}}}], table=session_table)
+    assert calls == [
+        {
+            "TransactItems": [
+                {"Put": {"Item": {"PK": {"S": "P"}, "SK": {"S": "S"}}, "TableName": "stoa-main"}}
+            ]
+        }
+    ]
 
 
 def _baseline(table: FakeTable, *, dry_run: bool = False) -> tuple[str, int]:

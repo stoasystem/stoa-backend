@@ -14,6 +14,8 @@ from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 import pytest
 
+from boto3.dynamodb.types import TypeSerializer
+
 from fakes.dynamodb import (
     DEFAULT_INDEXES,
     FakeTable,
@@ -21,9 +23,27 @@ from fakes.dynamodb import (
     apply_update_expression,
     as_stored,
 )
-from stoa.db.repositories.account_deletion_repo import AccountDeletionConflict
+from stoa.db import table as db_table
 from stoa.db.repositories.attachment_repo import AttachmentRepositoryConflict
 from test_index_keys_are_never_empty import INDEX_KEY_ATTRIBUTES
+
+
+def _wire(operations: list[dict]) -> list[dict]:
+    """Operations as the low-level client sends them: serialized, `None` and all.
+
+    For calling the double as the table itself. A repository never does this; it
+    goes through `db_table.transact`, which leaves `None` out first.
+    """
+    serialize = TypeSerializer().serialize
+    sent = []
+    for operation in operations:
+        ((kind, body),) = operation.items()
+        body = {**body, "TableName": "stoa-test"}
+        for field in ("Item", "Key", "ExpressionAttributeValues"):
+            if field in body:
+                body[field] = {name: serialize(value) for name, value in body[field].items()}
+        sent.append({kind: body})
+    return sent
 
 
 def _table_with_profiles(noise: int = 40, profiles: int = 3) -> FakeTable:
@@ -354,20 +374,26 @@ def test_a_transaction_that_fails_one_condition_writes_none_of_its_effects() -> 
 
     with pytest.raises(ClientError) as raised:
         table.transact_write_items(
-            [
-                {"Put": {"Item": {"PK": "USER#b", "SK": "PROFILE"}}},
-                {
-                    "ConditionCheck": {
-                        "Key": {"PK": "USER#a", "SK": "PROFILE"},
-                        "ConditionExpression": "#s = :sealed",
-                        "ExpressionAttributeNames": {"#s": "status"},
-                        "ExpressionAttributeValues": {":sealed": "sealed"},
-                    }
-                },
-            ]
+            TransactItems=_wire(
+                [
+                    {"Put": {"Item": {"PK": "USER#b", "SK": "PROFILE"}}},
+                    {
+                        "ConditionCheck": {
+                            "Key": {"PK": "USER#a", "SK": "PROFILE"},
+                            "ConditionExpression": "#s = :sealed",
+                            "ExpressionAttributeNames": {"#s": "status"},
+                            "ExpressionAttributeValues": {":sealed": "sealed"},
+                        }
+                    },
+                ]
+            )
         )
 
     assert raised.value.response["Error"]["Code"] == "TransactionCanceledException"
+    assert raised.value.response["CancellationReasons"] == [
+        {"Code": "None"},
+        {"Code": "ConditionalCheckFailed"},
+    ]
     assert ("USER#b", "PROFILE") not in table.rows
 
 
@@ -514,18 +540,17 @@ def test_update_item_refuses_to_set_an_index_key_to_an_empty_string() -> None:
     assert table.rows[("ROW", "META")]["parent_id"] == "p-1"
 
 
-def test_a_conversation_transaction_with_an_empty_index_key_is_refused_like_production() -> None:
+def test_a_transaction_with_an_empty_index_key_is_refused_like_production() -> None:
     """The 2026-09-24 shape: a Put in the conversation transaction carrying `parent_id=""`.
 
-    Production sends it through `account_deletion_repo.transact`, which reports the
-    ValidationException as an `AccountDeletionConflict`, and the two callers of this
-    seam report that as an `AttachmentRepositoryConflict("conditional_conflict")`.
-    The chain is kept so the refusal is still visible, and nothing lands.
+    The table refuses the request, not a condition: through the gateway that is
+    `TableUnavailable`, with the provider's ValidationException kept as its cause,
+    and nothing lands.
     """
     table = FakeTable()
 
-    with pytest.raises(AttachmentRepositoryConflict) as conflict:
-        table.transact_conversation_write(
+    with pytest.raises(db_table.TableUnavailable) as refused:
+        db_table.transact(
             [
                 {"Put": {"Item": {"PK": "CONV#1", "SK": "META", "status": "open"}}},
                 {
@@ -534,31 +559,25 @@ def test_a_conversation_transaction_with_an_empty_index_key_is_refused_like_prod
                         "ConditionExpression": "attribute_not_exists(PK)",
                     }
                 },
-            ]
+            ],
+            table=table,
         )
 
-    wrapped = conflict.value.__cause__
-    assert isinstance(wrapped, AccountDeletionConflict)
-    assert isinstance(wrapped.__cause__, ClientError)
-    _assert_refused_for_an_empty_index_key(pytest.ExceptionInfo.from_exception(wrapped.__cause__))
-    assert wrapped.__cause__.operation_name == "TransactWriteItems"
+    assert refused.value.code == "ValidationException"
+    cause = refused.value.__cause__
+    assert isinstance(cause, ClientError)
+    _assert_refused_for_an_empty_index_key(pytest.ExceptionInfo.from_exception(cause))
+    assert cause.operation_name == "TransactWriteItems"
     assert table.rows == {}
 
 
-def test_an_account_transaction_that_empties_an_index_key_is_refused_like_production() -> None:
-    """An Update inside the lifecycle transaction, judged on the row it would leave.
-
-    Production's `account_deletion_repo.transact` reports every ClientError as an
-    `AccountDeletionConflict` - a cancellation as the conditional kind, a
-    ValidationException as a dependency failure - and keeps the cause. So does
-    this seam, which is how a caller that answers every conflict the same way is
-    seen doing so here.
-    """
+def test_a_transaction_that_empties_an_index_key_is_refused_like_production() -> None:
+    """An Update inside a transaction, judged on the row it would leave."""
     table = FakeTable()
     table.seed({"PK": "USER#a", "SK": "PROFILE", "email": "a@stoa.test"})
 
-    with pytest.raises(AccountDeletionConflict, match="dependency unavailable") as conflict:
-        table.transact_account_deletion(
+    with pytest.raises(db_table.TableUnavailable) as refused:
+        db_table.transact(
             [
                 {"Put": {"Item": {"PK": "USER#a", "SK": "TOMBSTONE"}}},
                 {
@@ -568,10 +587,11 @@ def test_an_account_transaction_that_empties_an_index_key_is_refused_like_produc
                         "ExpressionAttributeValues": {":none": ""},
                     }
                 },
-            ]
+            ],
+            table=table,
         )
 
-    cause = conflict.value.__cause__
+    cause = refused.value.__cause__
     assert isinstance(cause, ClientError)
     _assert_refused_for_an_empty_index_key(pytest.ExceptionInfo.from_exception(cause))
     assert table.rows[("USER#a", "PROFILE")]["email"] == "a@stoa.test"
@@ -621,20 +641,21 @@ def test_an_absent_index_key_and_an_empty_ordinary_attribute_are_both_fine() -> 
         UpdateExpression="SET note = :none REMOVE student_id",
         ExpressionAttributeValues={":none": ""},
     )
-    table.transact_write_items([{"Put": {"Item": {"PK": "Z", "SK": "Y", "note": ""}}}])
+    table.transact_write_items(
+        TransactItems=_wire([{"Put": {"Item": {"PK": "Z", "SK": "Y", "note": ""}}}])
+    )
 
     assert table.rows[("X", "Y")] == {"PK": "X", "SK": "Y", "note": ""}
     assert table.rows[("Z", "Y")]["note"] == ""
 
 
-# -- rule 8: an index key written as None is a NULL, and each seam sends what its --
-# -- repository sends -----------------------------------------------------------
+# -- rule 8: an index key written as None is a NULL, and the gateway leaves it out -
 #
 # The seventh time: on 2026-07-09 the usage ledger's `put_item` carried
 # `parent_id: None`, the resource interface sent it as NULL, and the table refused
-# the type mismatch five times. The transaction serializers leave a Put's top-level
-# None out, so the same row goes through there. The double does both, each where
-# production does.
+# the type mismatch five times. The table gateway leaves `None` out of every item,
+# key and value map before a transaction is sent, so the same row goes through
+# there. The double does both, each where production does.
 
 
 def _assert_refused_for_a_null_index_key(raised: pytest.ExceptionInfo[ClientError]) -> None:
@@ -677,36 +698,24 @@ def test_seed_refuses_a_null_index_key() -> None:
     _assert_refused_for_a_null_index_key(raised)
 
 
-def test_the_low_level_transaction_refuses_a_null_index_key_it_is_given() -> None:
-    """Called as the table, it judges the item as sent - no repository rule applies."""
+def test_the_table_itself_refuses_a_null_index_key_it_is_sent() -> None:
+    """Called as the table, the double judges the item as sent: a NULL is refused."""
     table = FakeTable()
 
     with pytest.raises(ClientError) as raised:
-        table.transact_write_items([{"Put": {"Item": {"PK": "X", "SK": "Y", "parent_id": None}}}])
+        table.transact_write_items(
+            TransactItems=_wire([{"Put": {"Item": {"PK": "X", "SK": "Y", "parent_id": None}}}])
+        )
 
     _assert_refused_for_a_null_index_key(raised)
     assert table.rows == {}
 
 
-def test_the_low_level_transaction_refuses_a_null_index_key_in_the_keyword_shape_too() -> None:
-    """`TransactItems=` is also how `subscription_service._transact_write` calls, and its
-    serializer keeps None - so this entry must not drop it for anyone."""
+def test_the_gateway_leaves_a_top_level_none_out_and_keeps_a_nested_one() -> None:
+    """What every repository now sends: the row is stored sparse."""
     table = FakeTable()
 
-    with pytest.raises(ClientError) as raised:
-        table.transact_write_items(
-            TransactItems=[{"Put": {"Item": {"PK": "X", "SK": "Y", "student_id": None}}}]
-        )
-
-    assert "Type mismatch for Index Key student_id" in raised.value.response["Error"]["Message"]
-    assert table.rows == {}
-
-
-def test_the_attachment_seam_leaves_a_puts_top_level_none_out() -> None:
-    """`attachment_repo._serialize_transactions`: the item loses its None, nothing else does."""
-    table = FakeTable()
-
-    table.transact_attachment_write(
+    db_table.transact(
         [
             {
                 "Put": {
@@ -718,14 +727,15 @@ def test_the_attachment_seam_leaves_a_puts_top_level_none_out() -> None:
                     }
                 }
             }
-        ]
+        ],
+        table=table,
     )
 
     assert table.rows[("X", "Y")] == {"PK": "X", "SK": "Y", "metadata": {"subject": None}}
 
 
-def test_attachment_repo_classifies_the_seams_refusals_itself() -> None:
-    """Through the real entry: the seam hands the ClientError over, and
+def test_attachment_repo_classifies_the_gateways_refusals_itself() -> None:
+    """Through the real entry: the gateway hands its outcome over, and
     `attachment_repo.transact` sorts it as production does - a cancellation is a
     conditional conflict, an invalid request a dependency failure."""
     from stoa.db.repositories import attachment_repo
@@ -747,11 +757,11 @@ def test_attachment_repo_classifies_the_seams_refusals_itself() -> None:
     assert invalid.value.args == ("dependency_failure",)
 
 
-def test_attachment_repo_reads_the_seams_cancellation_reasons_per_operation() -> None:
+def test_attachment_repo_reads_the_cancellation_reasons_per_operation() -> None:
     """Described operations are classified by which one refused: a quota update
     that failed its condition is `quota_exceeded`, a message put that did is a
-    concealed resource conflict. A wrapper in the seam would make both
-    `retryable_dependency`."""
+    concealed resource conflict. Losing the per-operation reasons on the way
+    would make both `retryable_dependency`."""
     from stoa.db.repositories import attachment_repo
 
     Kind = attachment_repo.TransactionOperationKind
@@ -801,70 +811,37 @@ def test_attachment_repo_reads_the_seams_cancellation_reasons_per_operation() ->
     assert concealed.value.args == (Outcome.CONCEALED_RESOURCE_CONFLICT,)
 
 
-def test_attachment_repo_reaches_its_seam_and_stores_its_put_sparse() -> None:
-    """The real function reaches `transact_attachment_write`: what production would store."""
-    from stoa.db.repositories import attachment_repo
-
-    table = FakeTable()
-
-    attachment_repo.transact(
-        [{"Put": {"Item": {"PK": "X", "SK": "Y", "parent_id": None, "note": "kept"}}}],
-        table=table,
-    )
-
-    assert table.rows[("X", "Y")] == {"PK": "X", "SK": "Y", "note": "kept"}
-
-
-def test_the_raw_transaction_still_refuses_a_null_that_reaches_the_row() -> None:
-    """An expression value is sent as given, so an Update to None is a NULL on the row."""
+def test_the_table_itself_refuses_a_null_that_reaches_the_row() -> None:
+    """An expression value sent as NULL is a NULL on the row."""
     table = FakeTable()
     table.seed({"PK": "ROW", "SK": "META", "parent_id": "p-1"})
 
     with pytest.raises(ClientError) as raised:
         table.transact_write_items(
-            [
-                {
-                    "Update": {
-                        "Key": {"PK": "ROW", "SK": "META"},
-                        "UpdateExpression": "SET parent_id = :none",
-                        "ExpressionAttributeValues": {":none": None},
+            TransactItems=_wire(
+                [
+                    {
+                        "Update": {
+                            "Key": {"PK": "ROW", "SK": "META"},
+                            "UpdateExpression": "SET parent_id = :none",
+                            "ExpressionAttributeValues": {":none": None},
+                        }
                     }
-                }
-            ]
+                ]
+            )
         )
 
     _assert_refused_for_a_null_index_key(raised)
     assert table.rows[("ROW", "META")]["parent_id"] == "p-1"
 
 
-def test_the_account_transaction_leaves_none_out_like_account_deletion_repo() -> None:
-    """`_serialize_operation` drops None from the item, so the row is stored sparse."""
-    table = FakeTable()
-    table.seed_active_account("a")
-
-    table.transact_account_deletion(
-        [
-            {
-                "ConditionCheck": {
-                    "Key": {"PK": "USER#a", "SK": "ACCOUNT_FENCE"},
-                    "ConditionExpression": "generation = :g",
-                    "ExpressionAttributeValues": {":g": 1},
-                }
-            },
-            {"Put": {"Item": {"PK": "X", "SK": "Y", "parent_id": None, "note": "kept"}}},
-        ]
-    )
-
-    assert table.rows[("X", "Y")] == {"PK": "X", "SK": "Y", "note": "kept"}
-
-
-def test_the_account_transaction_refuses_an_expression_naming_a_dropped_value() -> None:
-    """`_serialize_operation` drops a None expression value but not the expression."""
+def test_the_gateway_refuses_an_expression_naming_a_dropped_value() -> None:
+    """The gateway drops a None expression value but not the expression naming it."""
     table = FakeTable()
     table.seed({"PK": "ROW", "SK": "META", "parent_id": "p-1"})
 
-    with pytest.raises(AccountDeletionConflict, match="dependency unavailable") as conflict:
-        table.transact_account_deletion(
+    with pytest.raises(db_table.TableUnavailable) as refused:
+        db_table.transact(
             [
                 {
                     "Update": {
@@ -873,46 +850,49 @@ def test_the_account_transaction_refuses_an_expression_naming_a_dropped_value() 
                         "ExpressionAttributeValues": {":none": None},
                     }
                 }
-            ]
+            ],
+            table=table,
         )
 
-    cause = conflict.value.__cause__
+    cause = refused.value.__cause__
     assert isinstance(cause, ClientError)
     assert cause.response["Error"]["Code"] == "ValidationException"
     assert "attribute value: :none" in cause.response["Error"]["Message"]
     assert table.rows[("ROW", "META")]["parent_id"] == "p-1"
 
 
-def test_the_account_transaction_reports_a_cancellation_as_a_conditional_conflict() -> None:
+def test_the_gateway_reports_a_cancellation_with_its_reason_per_operation() -> None:
     table = FakeTable()
+    table.seed_active_account("a")
     table.seed({"PK": "X", "SK": "Y"})
 
-    with pytest.raises(AccountDeletionConflict, match="conditional") as conflict:
-        table.transact_account_deletion(
+    with pytest.raises(db_table.WriteRefused) as refused:
+        db_table.transact(
             [
+                {
+                    "ConditionCheck": {
+                        "Key": {"PK": "USER#a", "SK": "ACCOUNT_FENCE"},
+                        "ConditionExpression": "generation = :g",
+                        "ExpressionAttributeValues": {":g": 1},
+                    }
+                },
                 {
                     "Put": {
                         "Item": {"PK": "X", "SK": "Y"},
                         "ConditionExpression": "attribute_not_exists(PK)",
                     }
-                }
-            ]
+                },
+            ],
+            table=table,
         )
 
-    cause = conflict.value.__cause__
-    assert isinstance(cause, ClientError)
-    assert cause.response["Error"]["Code"] == "TransactionCanceledException"
-
-
-def test_the_conversation_transaction_leaves_none_out_the_same_way() -> None:
-    """Production sends it through `account_deletion_repo.transact` too."""
-    table = FakeTable()
-
-    table.transact_conversation_write(
-        [{"Put": {"Item": {"PK": "CONV#1", "SK": "META", "parent_id": None, "status": "open"}}}]
-    )
-
-    assert table.rows[("CONV#1", "META")] == {"PK": "CONV#1", "SK": "META", "status": "open"}
+    assert refused.value.code == "TransactionCanceledException"
+    assert [reason.code for reason in refused.value.reasons] == [
+        "None",
+        "ConditionalCheckFailed",
+    ]
+    assert refused.value.failed_conditions == (1,)
+    assert isinstance(refused.value.__cause__, ClientError)
 
 
 def test_every_round_trip_is_counted() -> None:

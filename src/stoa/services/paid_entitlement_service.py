@@ -11,6 +11,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -261,7 +262,7 @@ def _persist_transition(
 ) -> PaidTransitionResult:
     operation = _transition_put(item, previous)
     try:
-        account_deletion_repo.transact([operation], table=table)
+        db_table.transact([operation], table=table)
     except Exception:
         replayed = _transition_item(
             table,
@@ -657,7 +658,7 @@ def apply_due_paid_transition(
     }
     operations.append(_transition_put(applied, previous))
     try:
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     except Exception:
         replayed = _transition_item(target, key)
         if (
@@ -1208,7 +1209,7 @@ def apply_paid_upgrade(
             }
         )
     try:
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     except Exception:
         try:
             replayed = [

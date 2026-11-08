@@ -15,6 +15,7 @@ from typing import Any
 
 from boto3.dynamodb.conditions import Key
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo, attachment_repo
 from stoa.db.repositories.attachment_repo import AttachmentRepositoryConflict
@@ -139,18 +140,15 @@ def _conversation_write(
         item=item, owner_id=owner_id, generation=generation, mode=mode
     )
     target = table or get_table()
-    hook = getattr(target, "transact_conversation_write", None)
-    if callable(hook):
-        hook(operations)
-    elif not hasattr(target, "meta") and hasattr(target, "put_item") and mode == "put":
+    if not db_table.transactional(target) and hasattr(target, "put_item") and mode == "put":
         # Narrow compatibility for inherited in-memory fakes. Production tables
         # always execute the two-item transaction above.
         put = attachment_repo._mapping(operations[1].get("Put"))
         attachment_repo._put_item(target, Item=attachment_repo._mapping(put.get("Item")))
     else:
         try:
-            account_deletion_repo.transact(operations, table=target)
-        except account_deletion_repo.AccountDeletionConflict as exc:
+            db_table.transact(operations, table=target)
+        except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
             raise AttachmentRepositoryConflict("conditional_conflict") from exc
     return attachment_repo._mapping(attachment_repo._mapping(operations[1].get("Put")).get("Item"))
 

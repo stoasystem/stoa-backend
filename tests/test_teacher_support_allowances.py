@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 
-from fakes.dynamodb import FakeTable, condition_holds
+from fakes.dynamodb import FakeTable, condition_holds, from_wire
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, parent_link_repo
 from stoa.routers import conversations, teachers
 from stoa.security.authorization import AuthorizedResource, ResourceRef, ResourceType
@@ -59,7 +60,7 @@ class AtomicSupportTable:
             self._counter_barrier.wait(timeout=3)
         return {"Item": item} if item is not None else {}
 
-    def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
         """Conditions first, then effects - including the ConditionCheck rows.
 
         This used to `continue` past every ConditionCheck, which meant the
@@ -67,6 +68,7 @@ class AtomicSupportTable:
         allowance version, the account fence - were never evaluated by any test
         using this double. Code that dropped them entirely stayed green.
         """
+        operations = from_wire(TransactItems)
         with self._lock:
             snapshot = deepcopy(self.items)
             for operation in operations:
@@ -274,7 +276,7 @@ def _case_committer(
             }
         }
         try:
-            account_deletion_repo.transact(
+            db_table.transact(
                 [
                     account_deletion_repo.active_fence_condition(beneficiary_id, 6),
                     *allowance_operations,
@@ -613,7 +615,7 @@ def test_conversation_plan_denial_runs_before_case_message_and_usage_effect(
         ),
     )
     monkeypatch.setattr(
-        account_deletion_repo,
+        db_table,
         "transact",
         lambda *_args, **_kwargs: pytest.fail("denied durable case ran"),
     )

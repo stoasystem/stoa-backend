@@ -11,6 +11,7 @@ import hashlib
 import json
 from typing import Any
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo, weekly_counter
 from stoa.models.allowance import (
@@ -290,7 +291,7 @@ def _put_replace(
 
 
 def _transact(operations: list[dict[str, Any]], *, table: object) -> None:
-    account_deletion_repo.transact(operations, table=table)
+    db_table.transact(operations, table=table)
 
 
 def _read_counter(

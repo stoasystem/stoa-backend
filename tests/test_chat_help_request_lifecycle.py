@@ -19,7 +19,7 @@ from fakes.learning_session import seed_conversation
 import pytest
 
 from actor_helpers import install_actor_overrides
-from stoa.db.repositories import account_deletion_repo
+from stoa.db import table as db_table
 from stoa.routers import teachers
 from stoa.services import help_requests
 from rule_violation_helpers import assert_violation
@@ -265,7 +265,7 @@ def test_an_offer_moved_on_between_the_check_and_the_write_is_refused(table, mon
     # Authorization saw a live offer; by the time the write lands the sweep
     # has re-offered the case. The write must be bound to the offer it checked.
     _dispatch_to(table, TEACHER)
-    real_transact = account_deletion_repo.transact
+    real_transact = db_table.transact
     moved = []
 
     def transact_after_a_redispatch(operations, *, table=None):
@@ -274,7 +274,8 @@ def test_an_offer_moved_on_between_the_check_and_the_write_is_refused(table, mon
             table.rows[HELP_KEY]["dispatch_id"] = "a-newer-offer"
         return real_transact(operations, table=table)
 
-    monkeypatch.setattr(account_deletion_repo, "transact", transact_after_a_redispatch)
+    monkeypatch.setattr(
+        db_table, "transact", transact_after_a_redispatch)
 
     response = _set_status(_client(), "in_progress")
 
@@ -371,7 +372,7 @@ def test_a_request_changed_between_read_and_write_is_refused(table, monkeypatch)
     # Any write to the request moves its version; a write decided on the
     # version before it is refused (#189).
     _dispatch_to(table, TEACHER)
-    real_transact = account_deletion_repo.transact
+    real_transact = db_table.transact
     bumped = []
 
     def transact_after_another_write(operations, *, table=None):
@@ -381,7 +382,8 @@ def test_a_request_changed_between_read_and_write_is_refused(table, monkeypatch)
             row["version"] = row["version"] + 1
         return real_transact(operations, table=table)
 
-    monkeypatch.setattr(account_deletion_repo, "transact", transact_after_another_write)
+    monkeypatch.setattr(
+        db_table, "transact", transact_after_another_write)
 
     assert _set_status(_client(), "in_progress").status_code == 409
     assert "teacher_id" not in _help(table)
@@ -604,7 +606,7 @@ def test_a_request_that_moves_during_the_scrub_is_retried_not_overwritten(table,
     # pass is retried, then completes.
     _dispatch_to(table, TEACHER)
     assert _reply(_client()).status_code in {200, 201}
-    real_transact = account_deletion_repo.transact
+    real_transact = db_table.transact
     moved = []
 
     def transact_after_the_request_moves(operations, *, table=None):
@@ -618,7 +620,8 @@ def test_a_request_that_moves_during_the_scrub_is_retried_not_overwritten(table,
             row.update(escalation_status="resolved", version=row["version"] + 1)
         return real_transact(operations, table=table)
 
-    monkeypatch.setattr(account_deletion_repo, "transact", transact_after_the_request_moves)
+    monkeypatch.setattr(
+        db_table, "transact", transact_after_the_request_moves)
 
     results = _delete_teacher(table)
 
@@ -633,7 +636,7 @@ def test_a_request_that_moves_during_the_scrub_is_retried_not_overwritten(table,
 
 def _race_once(monkeypatch, mutate) -> list:
     """Apply `mutate(table)` once, just before the scrub's transaction lands."""
-    real_transact = account_deletion_repo.transact
+    real_transact = db_table.transact
     fired = []
 
     def transact(operations, *, table=None):
@@ -647,7 +650,8 @@ def _race_once(monkeypatch, mutate) -> list:
             mutate(table)
         return real_transact(operations, table=table)
 
-    monkeypatch.setattr(account_deletion_repo, "transact", transact)
+    monkeypatch.setattr(
+        db_table, "transact", transact)
     return fired
 
 

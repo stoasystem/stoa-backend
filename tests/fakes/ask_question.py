@@ -93,10 +93,7 @@ def _no_memory_personalisation(stub_memory_summary) -> None:
 
 
 class _Table(FakeTable):
-    """The shared double, reached the way `attachment_repo.transact` calls it."""
-
-    def transact_write_items(self, operations=None, *, TransactItems=None) -> None:
-        super().transact_write_items(TransactItems if TransactItems is not None else operations)
+    """The shared double."""
 
 
 @pytest.fixture

@@ -10,6 +10,7 @@ import pytest
 
 from stoa.db.repositories import notification_repo, websocket_repo
 from stoa.services import account_deletion_service, notification_service
+from fakes.dynamodb import from_wire
 
 
 STUDENT_ID = "student-notification-delete"
@@ -422,7 +423,8 @@ def test_connection_update_keeps_the_generation_the_row_carries(
                 return {"Item": dict(connection)}
             return {}
 
-        def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            operations = from_wire(TransactItems)
             transactions.append(operations)
 
     monkeypatch.setattr(websocket_repo, "get_table", lambda: _Table())

@@ -8,6 +8,7 @@ from typing import Protocol, runtime_checkable
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table, omit_none_attributes
 from stoa.db.repositories import account_deletion_repo
 
@@ -104,10 +105,7 @@ def _response(value: object) -> UsageItem:
 
 
 def _atomic_table(table: object) -> bool:
-    return callable(getattr(table, "transact_account_deletion", None)) or bool(
-        getattr(getattr(table, "meta", None), "client", None)
-        and getattr(table, "name", None)
-    )
+    return db_table.transactional(table)
 
 
 def put_usage_event(
@@ -150,7 +148,7 @@ def put_usage_event(
                 raise
             return True
         try:
-            account_deletion_repo.transact(
+            db_table.transact(
                 [
                     account_deletion_repo.active_fence_condition(
                         owner_id, account_fence_generation
@@ -167,7 +165,11 @@ def put_usage_event(
                 table=target,
             )
             return True
-        except account_deletion_repo.AccountDeletionConflict:
+        except (
+            account_deletion_repo.AccountDeletionConflict,
+            db_table.WriteRefused,
+            db_table.TableUnavailable,
+        ):
             if _event_exists(target, event):
                 return False
             raise

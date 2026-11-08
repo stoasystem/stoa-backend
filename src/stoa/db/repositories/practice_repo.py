@@ -10,6 +10,7 @@ from typing import Any, Protocol, runtime_checkable
 import uuid
 
 from boto3.dynamodb.conditions import Attr, Key
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -194,9 +195,7 @@ class PracticePrivatePage:
 
 
 def _atomic_table(table: Any) -> bool:
-    return callable(getattr(table, "transact_account_deletion", None)) or bool(
-        getattr(getattr(table, "meta", None), "client", None) and getattr(table, "name", None)
-    )
+    return db_table.transactional(table)
 
 
 def _write_generation(owner_id: str, generation: int | None, table: Any) -> int:
@@ -612,7 +611,7 @@ def mark_lesson_completed(
         else None,
     )
     if _atomic_table(table):
-        account_deletion_repo.transact(operations, table=table)
+        db_table.transact(operations, table=table)
     else:
         _put_item(table, Item=operations[1]["Put"]["Item"])
     item.update(
@@ -703,7 +702,7 @@ def put_attempt(
         item=item, owner_id=student_id, generation=generation
     )
     if _atomic_table(table):
-        account_deletion_repo.transact(operations, table=table)
+        db_table.transact(operations, table=table)
     else:
         _put_item(
             table,
@@ -889,7 +888,7 @@ def scrub_practice_private_row(
     if callable(hook):
         hook(dict(item), tombstone, owner_id, generation)
     else:
-        account_deletion_repo.transact(
+        db_table.transact(
             [
                 account_deletion_repo.deletion_fence_condition(owner_id, generation),
                 {
@@ -1002,7 +1001,7 @@ def record_study_day(
         else None,
     )
     if _atomic_table(target):
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     else:
         _put_item(target, Item=operations[1]["Put"]["Item"])
     item.update(owner_id=student_id, account_fence_generation=generation)
@@ -1042,7 +1041,7 @@ def _activity_write(
         item=item, owner_id=student_id, generation=generation
     )
     if _atomic_table(target):
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     else:
         _put_item(
             target,
@@ -1139,7 +1138,7 @@ def acknowledge_lit_units(
         update = operations[1]["Update"]
         try:
             if _atomic_table(target):
-                account_deletion_repo.transact(operations, table=target)
+                db_table.transact(operations, table=target)
             else:
                 target.update_item(**update)
         except Exception:  # noqa: BLE001
@@ -1186,7 +1185,7 @@ def _quiz_write(
         item=item, owner_id=student_id, generation=generation
     )
     if _atomic_table(target):
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     else:
         _put_item(target, Item=operations[1]["Put"]["Item"])
     return dict(operations[1]["Put"]["Item"])
@@ -1294,7 +1293,7 @@ def update_quiz_paper(
     update["ExpressionAttributeValues"][":paper_answered_before"] = int(answered)
     try:
         if _atomic_table(target):
-            account_deletion_repo.transact(operations, table=target)
+            db_table.transact(operations, table=target)
         else:
             target.update_item(**update)
     except Exception as error:  # noqa: BLE001

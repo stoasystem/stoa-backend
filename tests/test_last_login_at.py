@@ -157,10 +157,10 @@ def test_a_failing_write_does_not_fail_the_sign_in(
 ) -> None:
     client, _app = signed_in_client
 
-    def unavailable(_operations: list[dict[str, Any]]) -> None:
+    def unavailable(**_kwargs: Any) -> None:
         raise RuntimeError("DynamoDB is unavailable")
 
-    monkeypatch.setattr(table, "transact_account_deletion", unavailable)
+    monkeypatch.setattr(table, "transact_write_items", unavailable)
 
     response = _sign_in(client)
 

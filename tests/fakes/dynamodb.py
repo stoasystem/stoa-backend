@@ -25,10 +25,11 @@ in production with the suite green.
 
 A seventh is the same key written as `None`. The resource interface sends it as the
 NULL type and the table refuses the type mismatch; on 2026-07-09 the usage ledger's
-`put_item` 503'd five times that way. The transaction serializers in the repositories
-leave a Put's top-level `None` attributes out instead, so the same row is accepted
-there - and the seams below apply each repository's rule, so a test sees what the
-table would.
+`put_item` 503'd five times that way. The table gateway (`stoa.db.table.transact`)
+leaves `None` out of every item, key and value map before a transaction is sent, so
+the same row is accepted there. Transactions reach this double the way they reach
+the real client - in wire format, through `transact_write_items` - so a test sees
+exactly what the table would be sent.
 
 `tests/test_fakes_dynamodb_fidelity.py` holds one test per rule below; those tests are
 what make this file load-bearing rather than merely well intentioned.
@@ -44,9 +45,9 @@ import threading
 import re
 from typing import Any, NamedTuple
 
+from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
-from stoa.db.dynamodb import omit_none_attributes
 
 
 class IndexSchema(NamedTuple):
@@ -154,41 +155,57 @@ def undefined_expression_value(expression: str, token: str) -> ClientError:
     )
 
 
-def as_attachment_transaction(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """What `attachment_repo._serialize_transactions` sends: a Put's top-level `None` left out.
+_deserializer = TypeDeserializer()
 
-    Keys and expression values are sent as they are, `None` included.
+
+def from_wire(transact_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """A wire-format transaction back in the repositories' own shape.
+
+    Values are decoded the way the resource interface decodes them (numbers come
+    back as `Decimal`), and `TableName` is dropped: there is one table.
     """
-    result = []
-    for operation in operations:
-        kind, body = next(iter(operation.items()))
-        if kind == "Put" and "Item" in body:
-            body = {**body, "Item": omit_none_attributes(body["Item"])}
-        result.append({kind: body})
-    return result
-
-
-def as_account_transaction(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """What `account_deletion_repo._serialize_operation` sends.
-
-    `None` is left out of the item, the key and the expression values alike - but the
-    expressions are sent untouched, so one that named a dropped value now names a
-    value that is not there, and the table refuses the request.
-    """
-    result = []
-    for operation in operations:
-        kind, body = next(iter(operation.items()))
-        body = dict(body)
+    operations = []
+    for entry in transact_items:
+        ((kind, body),) = entry.items()
+        decoded = {field: value for field, value in body.items() if field != "TableName"}
         for field in ("Item", "Key", "ExpressionAttributeValues"):
-            if field in body:
-                body[field] = omit_none_attributes(body[field])
-        sent = body.get("ExpressionAttributeValues") or {}
-        for expression in ("UpdateExpression", "ConditionExpression"):
-            for token in re.findall(r":[A-Za-z0-9_]+", str(body.get(expression) or "")):
-                if token not in sent:
-                    raise undefined_expression_value(expression, token)
-        result.append({kind: body})
-    return result
+            if field in decoded:
+                decoded[field] = {
+                    name: _deserializer.deserialize(value)
+                    for name, value in decoded[field].items()
+                }
+        operations.append({kind: decoded})
+    return operations
+
+
+def to_wire(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """`from_wire` the other way, for a test that hands decoded operations back on.
+
+    Nothing is left out: `None` goes as NULL, as the table would be sent it.
+    """
+    serialize = TypeSerializer().serialize
+    sent = []
+    for operation in operations:
+        ((kind, body),) = operation.items()
+        encoded = {**body, "TableName": "stoa-main"}
+        for field in ("Item", "Key", "ExpressionAttributeValues"):
+            if field in encoded:
+                encoded[field] = {name: serialize(value) for name, value in encoded[field].items()}
+        sent.append({kind: encoded})
+    return sent
+
+
+def _refuse_undefined_expression_values(kind: str, body: dict[str, Any]) -> None:
+    """An expression naming a value the request did not send is refused outright.
+
+    The gateway leaves a `None` value out, but sends the expression untouched, so an
+    expression that named a dropped value names one that is not there.
+    """
+    sent = body.get("ExpressionAttributeValues") or {}
+    for expression in ("UpdateExpression", "ConditionExpression"):
+        for token in re.findall(r":[A-Za-z0-9_]+", str(body.get(expression) or "")):
+            if token not in sent:
+                raise undefined_expression_value(expression, token)
 
 
 def as_stored(value: Any) -> Any:
@@ -842,8 +859,8 @@ class FakeTable:
     def seed_active_account(self, user_id: str, *, generation: int = 1) -> None:
         """The fence row every lifecycle transaction checks before it writes.
 
-        Fixtures did not need it while `transact_account_deletion` was missing
-        and the transaction never ran.
+        Fixtures did not need it while the double had no transaction entry and
+        the transaction never ran.
         """
         self.rows[(f"USER#{user_id}", "ACCOUNT_FENCE")] = as_stored(
             {
@@ -854,75 +871,12 @@ class FakeTable:
             }
         )
 
-    def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
-        """The seam `account_deletion_repo.transact` reaches for.
-
-        Without it that function falls through to a real boto3 client, which
-        under `--disable-socket` fails and is reported by most callers as an
-        ordinary conflict. Every lifecycle transaction in every test using this
-        double was being refused for a reason that had nothing to do with the
-        code under test.
-        """
-        from stoa.db.repositories import account_deletion_repo
-
-        # The production function serializes with `_serialize_operation` and reports
-        # every refusal as an `AccountDeletionConflict` - a cancellation as the
-        # conditional kind, anything else, a ValidationException included, as a
-        # dependency failure. The cause is kept, so a test can still see which.
-        try:
-            self.transact_write_items(as_account_transaction(operations))
-        except ClientError as exc:
-            if exc.response.get("Error", {}).get("Code") in {
-                "ConditionalCheckFailedException",
-                "TransactionCanceledException",
-            }:
-                raise account_deletion_repo.AccountDeletionConflict(
-                    "conditional account lifecycle conflict"
-                ) from exc
-            raise account_deletion_repo.AccountDeletionConflict(
-                "account lifecycle dependency unavailable"
-            ) from exc
-
-    def transact_conversation_write(self, operations: list[dict[str, Any]]) -> None:
-        """The seam `record_teacher_help_request` reaches for before it degrades.
-
-        Without this the double falls into a branch that writes the conversation
-        header and the message and **silently drops everything else in the
-        transaction** - the allowance fences, the admission receipt, the counter
-        and the queue row. Tests written against that branch assert on operations
-        that were never executed, which is the most complete form of the failure
-        this file exists to prevent.
-
-        Production sends these through `account_deletion_repo.transact` and
-        reports its `AccountDeletionConflict` as an
-        `AttachmentRepositoryConflict("conditional_conflict")`, so a caller that
-        answers every conflict the same way is seen doing so here too.
-        """
-        from stoa.db.repositories import account_deletion_repo, attachment_repo
-
-        try:
-            self.transact_account_deletion(operations)
-        except account_deletion_repo.AccountDeletionConflict as exc:
-            raise attachment_repo.AttachmentRepositoryConflict("conditional_conflict") from exc
-
-    def transact_attachment_write(self, operations: list[dict[str, Any]]) -> None:
-        """The seam `attachment_repo.transact` reaches for.
-
-        Only what `_serialize_transactions` does: a Put's top-level `None` is left
-        out, keys and expression values are sent as given. The table's ClientError
-        is raised as it is - `attachment_repo.transact` classifies it itself, by
-        error code and per-operation cancellation reason, and a wrapper here would
-        send every refusal down its generic branch instead.
-        """
-        self.transact_write_items(as_attachment_transaction(operations))
-
-    def transact_write_items(
-        self,
-        operations: list[dict[str, Any]] | None = None,
-        *,
-        TransactItems: list[dict[str, Any]] | None = None,  # noqa: N803
-    ) -> None:
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
         """All conditions, then all effects, under one lock.
+
+        Called the way the real low-level client is called: wire format, one
+        `TableName` per operation. `stoa.db.table.transact` is the only production
+        caller, so what arrives here is what production sends.
 
         The lock is the transaction: without it two callers can both pass their
         conditions before either writes, and a conditional claim the real store would
@@ -930,20 +884,13 @@ class FakeTable:
 
         A row that would be left with an index key of `""` or `None` makes the whole
         request invalid - a ValidationException, not a cancellation, so no caller can
-        take it for a condition race worth retrying - and nothing is written.
-
-        This is the table itself, in either call shape: what is given is what is
-        judged, a `None` index key included. A writer whose serializer leaves `None`
-        out has a seam above for that rule (`transact_attachment_write`,
-        `transact_account_deletion`); one whose serializer keeps it, such as
-        `subscription_service._transact_write`, reaches this entry directly and is
-        refused here as the table would refuse it.
+        take it for a condition race worth retrying - and nothing is written. So does
+        an expression that names a value the request did not send.
         """
-        if (operations is None) == (TransactItems is None):
-            raise TypeError("transact_write_items takes operations or TransactItems=")
-        if TransactItems is not None:
-            operations = TransactItems
-        assert operations is not None
+        operations = from_wire(TransactItems)
+        for operation in operations:
+            ((kind, body),) = operation.items()
+            _refuse_undefined_expression_values(kind, body)
         with self.lock:
             self._record("transact_write_items", {"operations": operations})
             staged: list[tuple[tuple[str, str], dict[str, Any] | None]] = []

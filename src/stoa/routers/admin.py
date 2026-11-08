@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import Response
 
+from stoa.db import table as db_table
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
 from stoa.deps import get_s3_client, legacy_user
@@ -2324,15 +2325,21 @@ def _require_password_change_at_next_sign_in(
     )
     try:
         fence = account_deletion_repo.require_active_account_fence(user_id)
-        account_deletion_repo.transact(
+        db_table.transact(
             [
                 account_deletion_repo.active_fence_condition(
                     user_id, int(fence.get("generation") or 0)
                 ),
                 operation,
-            ]
+            ],
+            # The table the fence above was read from.
+            table=account_deletion_repo.get_table(),
         )
-    except account_deletion_repo.AccountDeletionConflict as exc:
+    except (
+        account_deletion_repo.AccountDeletionConflict,
+        db_table.WriteRefused,
+        db_table.TableUnavailable,
+    ) as exc:
         raise AccountViolation(AccountErrorCode.ACCOUNT_PASSWORD_RESET_CONFLICT) from exc
 
 

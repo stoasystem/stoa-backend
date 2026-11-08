@@ -9,6 +9,7 @@ from typing import Protocol, runtime_checkable
 
 from botocore.exceptions import ClientError
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -117,7 +118,7 @@ def create_identity_binding(
             "created_at": created_at,
         }
         try:
-            account_deletion_repo.transact(
+            db_table.transact(
                 [
                     account_deletion_repo.active_fence_condition(
                         normalized_user_id, int(fence["generation"])
@@ -142,7 +143,11 @@ def create_identity_binding(
                 table=table,
             )
             return binding
-        except account_deletion_repo.AccountDeletionConflict as exc:
+        except (
+            account_deletion_repo.AccountDeletionConflict,
+            db_table.WriteRefused,
+            db_table.TableUnavailable,
+        ) as exc:
             existing = get_identity_binding(normalized_issuer, normalized_subject)
             if existing and existing.get("user_id") == normalized_user_id:
                 return existing

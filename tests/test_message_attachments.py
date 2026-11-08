@@ -32,7 +32,7 @@ from fakes.ask_question import CONV, STUDENT, _actor, _command_row, _commit
 from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
 from fakes.ask_question import _parser_in_process  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from fakes.dynamodb import FakeTable, transaction_canceled
+from fakes.dynamodb import FakeTable, transaction_canceled, from_wire, to_wire
 from fakes.rekognition import FakeRekognition
 from fakes.s3 import MultipartS3
 from stoa.config import FREE_STORAGE_BYTES, Settings
@@ -220,17 +220,18 @@ def _on_binding(
     The fault may change rows first, as another request would, or raise as the
     table would. It runs for the first `times` binding transactions (all, if `None`).
     """
-    write = table.transact_attachment_write
+    write = table.transact_write_items
     remaining = [times]
 
-    def faulty(operations: list[dict[str, Any]]) -> None:
+    def faulty(*, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        operations = from_wire(TransactItems)
         if _binds(operations) and (remaining[0] is None or remaining[0] > 0):
             if remaining[0] is not None:
                 remaining[0] -= 1
             fault(operations)
-        write(operations)
+        write(TransactItems=TransactItems)
 
-    monkeypatch.setattr(table, "transact_attachment_write", faulty)
+    monkeypatch.setattr(table, "transact_write_items", faulty)
 
 
 def _throttled(_operations: list[dict[str, Any]]) -> None:
@@ -579,11 +580,11 @@ def test_lost_transaction_retry_rebuilds_identical_attachment_and_association_ke
     """
     upload_id = _upload(s3, b"z" * 77, filename="lost.txt")
     used_before = _storage_used(table)
-    write = table.transact_attachment_write
+    write = table.transact_write_items
 
     def lose(operations: list[dict[str, Any]]) -> None:
         if applied:
-            write(operations)
+            write(TransactItems=to_wire(operations))
         _throttled(operations)
 
     _on_binding(monkeypatch, table, lose)

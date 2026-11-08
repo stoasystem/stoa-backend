@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.db.repositories import billing_fact_repo
 from stoa.models.billing import BillingPlanId
@@ -331,12 +332,6 @@ def test_relationship_race_cancels_command_billing_grants_and_versions(
             ),
         ),
     )
-    monkeypatch.setattr(
-        billing_fact_repo.account_deletion_repo,
-        "transact",
-        lambda operations, *, table: table.transact_write_items(TransactItems=operations),
-    )
-
     before = deepcopy(table.items)
     result = paid_entitlement_service.commit_paid_activation(
         request,
@@ -534,7 +529,7 @@ def test_upgrade_publishes_higher_versions_without_counter_or_storage_mutation(
     )
     captured: list[dict[str, Any]] = []
     monkeypatch.setattr(
-        paid_entitlement_service.account_deletion_repo,
+        db_table,
         "transact",
         lambda operations, *, table: captured.extend(deepcopy(operations)),
     )
@@ -598,7 +593,7 @@ def test_duplicate_upgrade_replays_one_grant_and_one_allowance_version(
         {("PAID_GRANT#parent-1", "BENEFICIARY#student-1"): upgraded}
     )
     monkeypatch.setattr(
-        paid_entitlement_service.account_deletion_repo,
+        db_table,
         "transact",
         lambda *_args, **_kwargs: pytest.fail("duplicate upgrade must not transact"),
     )

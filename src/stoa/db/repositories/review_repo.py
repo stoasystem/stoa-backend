@@ -15,8 +15,8 @@ from typing import Any
 
 from boto3.dynamodb.conditions import Key
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import account_deletion_repo
 from stoa.db.repositories.practice_repo import (
     _atomic_table,
     _get_item,
@@ -174,7 +174,7 @@ def save_card(
         else None,
     )
     if _atomic_table(target):
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     else:
         _put_item(target, Item=operations[1]["Put"]["Item"])
     item.update(owner_id=student_id, account_fence_generation=generation)

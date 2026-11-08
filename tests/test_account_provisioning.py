@@ -16,6 +16,7 @@ import time
 from typing import Any
 from uuid import uuid4
 
+from stoa.db import table as db_table
 from stoa.rule_violation import RuleViolation
 import pytest
 from botocore.exceptions import ClientError
@@ -128,29 +129,6 @@ class FakeAccountTable(FakeTable):
             self.email_gated.add(threading.get_ident())
         self.email_gate.wait(timeout=5)
 
-
-    def put_profile_with_fence(
-        self, profile: dict[str, Any], fence: dict[str, Any]
-    ) -> None:
-        for row in (profile, fence):
-            key = (str(row["PK"]), str(row["SK"]))
-            if key in self.rows:
-                raise account_deletion_repo.AccountDeletionConflict("profile exists")
-        for row in (profile, fence):
-            self.seed(row)
-
-    def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
-        """The repository's transaction, reported the way the repository reports it.
-
-        The shape and the all-or-nothing rule come from the shared double; only the
-        exception is this repository's own, so a caller that catches
-        `AccountDeletionConflict` still sees one.
-        """
-        try:
-            self.transact_write_items(operations)
-        except ClientError as error:
-            code = error.response["Error"]["Code"]
-            raise account_deletion_repo.AccountDeletionConflict(code) from error
 
     def profiles(self) -> list[dict[str, Any]]:
         return [deepcopy(row) for key, row in self.rows.items() if key[1] == "PROFILE"]
@@ -1318,14 +1296,15 @@ def test_建号事务恰好写下profile围栏与占位行(
 ) -> None:
     """Pinned against the claim quietly dropping out of the creation transaction."""
     committed: list[list[dict[str, Any]]] = []
-    original = account_deletion_repo.transact
+    original = db_table.transact
 
     def recording(operations: Any, *, table: Any = None) -> None:
         batch = list(operations)
         committed.append(deepcopy(batch))
         original(batch, table=table)
 
-    monkeypatch.setattr(account_deletion_repo, "transact", recording)
+    monkeypatch.setattr(
+        db_table, "transact", recording)
     issued = _invite(table, email="atomic@example.ch")
 
     with_claim = [
@@ -1385,14 +1364,15 @@ def test_邀请写下之后才失败_同一邮箱同角色仍可重开(
     monkeypatch.setattr(security_audit_repo, "append_event", flaky)
 
     committed: list[list[dict[str, Any]]] = []
-    original_transact = account_deletion_repo.transact
+    original_transact = db_table.transact
 
     def recording(operations: Any, *, table: Any = None) -> None:
         batch = list(operations)
         committed.append(deepcopy(batch))
         original_transact(batch, table=table)
 
-    monkeypatch.setattr(account_deletion_repo, "transact", recording)
+    monkeypatch.setattr(
+        db_table, "transact", recording)
 
     with pytest.raises(RuntimeError):
         _invite(table, email="late@example.ch")
@@ -1521,11 +1501,11 @@ def test_释放占位行的条件不接受别人的账号(table: FakeAccountTabl
     stranger = account_email_claim_repo.release_operation(
         email="owned@example.ch", role="student", account_id="not-the-owner"
     )
-    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
-        account_deletion_repo.transact([stranger], table=table)
+    with pytest.raises(db_table.WriteRefused):
+        db_table.transact([stranger], table=table)
     assert claim_key in table.rows
 
-    account_deletion_repo.transact(
+    db_table.transact(
         [
             account_email_claim_repo.release_operation(
                 email="owned@example.ch", role="student", account_id=owner

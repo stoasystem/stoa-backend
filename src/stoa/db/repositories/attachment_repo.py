@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import logging
-import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -15,6 +14,7 @@ from typing import Protocol, runtime_checkable
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 from stoa.db.dynamodb import get_table
 
@@ -59,8 +59,6 @@ class _BatchGetTable(Protocol):
 class _DynamoClient(Protocol):
     def batch_get_item(self, **kwargs: object) -> object: ...
 
-    def transact_write_items(self, **kwargs: object) -> object: ...
-
 
 class _DynamoMeta(Protocol):
     client: _DynamoClient
@@ -70,11 +68,6 @@ class _DynamoMeta(Protocol):
 class _DynamoTable(Protocol):
     name: str
     meta: _DynamoMeta
-
-
-@runtime_checkable
-class _HighLevelTransactionTable(Protocol):
-    def transact_write_items(self, **kwargs: object) -> object: ...
 
 
 def _mapping(value: object, *, category: str = "dependency_failure") -> AttachmentItem:
@@ -162,20 +155,6 @@ def _deserialize_attribute(value: object) -> object:
         raise AttachmentRepositoryConflict("dependency_failure") from None
 
 
-_IDENTIFIER = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}\b|\b[0-9a-fA-F]{16,}\b")
-
-
-def _safe_validation_message(exc: ClientError) -> str:
-    """The rule DynamoDB says was broken, with anything id-shaped taken out.
-
-    These messages name attributes and expression tokens, not the rows' values,
-    but a message is still the provider's words - so UUIDs and long hex runs
-    are replaced before it is written down, and the rest is bounded.
-    """
-    message = str(exc.response.get("Error", {}).get("Message") or "")
-    return _IDENTIFIER.sub("<id>", message)[:240]
-
-
 def _storage_quota_condition(limit_bytes: int, size: int) -> tuple[str, int]:
     """Ask "does this file still fit" in a dialect the provider actually has.
 
@@ -212,16 +191,27 @@ def _failure_cause() -> tuple[str, str]:
     cause = sys.exception()
     if cause is None:
         return "none", "raised"
-    response = getattr(cause, "response", None)
-    if isinstance(response, Mapping):
+    # The gateway's outcomes carry the provider's error as their cause.
+    provider = (
+        cause.__cause__
+        if isinstance(cause, (db_table.WriteRefused, db_table.TableUnavailable))
+        else cause
+    )
+    response = getattr(provider, "response", None)
+    if isinstance(provider, ClientError) and isinstance(response, Mapping):
         error = response.get("Error")
         if isinstance(error, Mapping):
             code = str(error.get("Code") or "unknown")
             # A validation failure means the request itself was wrong, and
             # which rule it broke is only ever in the provider's own words.
             if code == "ValidationException":
-                return type(cause).__name__, f"{code}: {_safe_validation_message(cause)}"
+                return (
+                    type(cause).__name__,
+                    f"{code}: {db_table.safe_validation_message(provider)}",
+                )
             return type(cause).__name__, code
+    if isinstance(cause, (db_table.WriteRefused, db_table.TableUnavailable)):
+        return type(cause).__name__, cause.code
     return type(cause).__name__, "-"
 
 
@@ -596,8 +586,8 @@ def scrub_conversation_private_row(
             },
         ]
         try:
-            account_deletion_repo.transact(operations, table=target)
-        except account_deletion_repo.AccountDeletionConflict as exc:
+            db_table.transact(operations, table=target)
+        except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
             raise AttachmentRepositoryConflict("conditional_conflict") from exc
     return tombstone
 
@@ -719,7 +709,7 @@ def get_attachments(
         raw_items: list[dict[str, object]] = []
         for _attempt in range(3):
             try:
-                response = _mapping(wire_format_client(target).batch_get_item(
+                response = _mapping(db_table.client().batch_get_item(
                     RequestItems={
                         target.name: {"Keys": pending, "ConsistentRead": True}
                     }
@@ -1559,35 +1549,6 @@ def build_finalize_deletion_transaction(
     ]
 
 
-def _transaction_shape(transact_items: list[AttachmentItem]) -> str:
-    """Describe a rejected transaction by shape alone: no values, no identifiers.
-
-    A DynamoDB `ValidationException` says the request itself was malformed, and
-    the three structural rules it enforces - one operation per item, at most a
-    hundred items, well-formed keys - are all answerable from the shape. Keys
-    are reduced to their prefix before the first `#`, so what is logged is
-    `Put:ATTACHMENT/META`, never whose attachment it is.
-    """
-    parts: list[str] = []
-    seen: set[tuple[str, str]] = set()
-    duplicates = 0
-    for entry in transact_items:
-        if not isinstance(entry, Mapping):
-            parts.append("?")
-            continue
-        for kind, body in entry.items():
-            if not isinstance(body, Mapping):
-                continue
-            key = body.get("Key") or body.get("Item") or {}
-            pk = str(key.get("PK", "")) if isinstance(key, Mapping) else ""
-            sk = str(key.get("SK", "")) if isinstance(key, Mapping) else ""
-            if (pk, sk) in seen:
-                duplicates += 1
-            seen.add((pk, sk))
-            parts.append(f"{kind}:{pk.split('#')[0] or '?'}/{sk.split('#')[0] or '?'}")
-    return f"items={len(transact_items)} duplicate_keys={duplicates} shape=[{' '.join(parts)}]"
-
-
 def transact(
     operations: list[dict[str, object]] | list[TransactionOperation],
     *,
@@ -1605,40 +1566,14 @@ def transact(
     described = bool(described_operations)
     if described and len(described_operations) != len(operations):
         raise AttachmentRepositoryConflict("dependency_failure")
-    hook = getattr(target, "transact_attachment_write", None)
     try:
-        if callable(hook):
-            # The seam a table double offers for this function's own rules; the
-            # low-level entry below is shared with writers that serialize
-            # differently.
-            hook(transact_items)
-        elif isinstance(target, _HighLevelTransactionTable):
-            target.transact_write_items(TransactItems=transact_items)
-        else:
-            if not isinstance(target, _DynamoTable):
-                raise AttachmentRepositoryConflict("dependency_failure")
-            wire_format_client(target).transact_write_items(
-                TransactItems=_serialize_transactions(transact_items, target.name)
-            )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ValidationException":
-            # The request was malformed, not refused: no retry fixes it and no
-            # condition explains it, so the shape is the only thing that can.
-            logger.error(
-                "attachment_transaction_rejected %s rule=%s",
-                _transaction_shape(transact_items),
-                _safe_validation_message(exc),
-            )
+        db_table.transact(transact_items, table=target)
+    except db_table.WriteRefused as exc:
         if described:
             raise AttachmentTransactionError(
-                _attachment_transaction_outcome(
-                    exc,
-                    described_operations,
-                )
+                _attachment_transaction_outcome(exc, described_operations)
             ) from None
-        if _conditional(exc):
-            raise AttachmentRepositoryConflict() from None
-        raise AttachmentRepositoryConflict("dependency_failure") from None
+        raise AttachmentRepositoryConflict() from None
     except Exception:
         if described:
             raise AttachmentTransactionError(
@@ -1648,41 +1583,30 @@ def transact(
 
 
 def _attachment_transaction_outcome(
-    exc: ClientError, operations: list[TransactionOperation]
+    refused: db_table.WriteRefused, operations: list[TransactionOperation]
 ) -> AttachmentTransactionOutcome:
-    """Classify from error code and ordered reason codes only.
+    """Classify from the table's per-operation reasons and the operations' kinds only.
 
     Provider messages, items, keys, and exception text intentionally never cross
     this function's boundary.
     """
-    error_code = exc.response.get("Error", {}).get("Code")
-    if error_code == "ConditionalCheckFailedException":
+    if refused.code == "ConditionalCheckFailedException":
         return AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT
-    if error_code != "TransactionCanceledException":
-        return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
-
-    reasons = exc.response.get("CancellationReasons")
-    if not isinstance(reasons, list) or len(reasons) != len(operations):
+    if not refused.reasons:
         return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
 
     conditional_kinds: list[TransactionOperationKind] = []
-    for operation, reason in zip(operations, reasons, strict=True):
-        if not isinstance(reason, dict):
-            return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
-        code = reason.get("Code")
-        if not isinstance(code, str):
-            return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
-        if code == "None":
+    for operation, reason in zip(operations, refused.reasons, strict=True):
+        if reason.kind is db_table.ReasonKind.NOT_THE_CAUSE:
             continue
-        if code == "ConditionalCheckFailed":
+        if reason.kind is db_table.ReasonKind.CONDITION_FAILED:
             conditional_kinds.append(operation.kind)
             continue
-        if code in {
-            "TransactionConflict",
-            "ProvisionedThroughputExceeded",
-            "ThrottlingError",
-        }:
-            return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
+        # Every other reason is answered "try again": a transaction conflict or
+        # a capacity limit passes, and for a reason that will not (`OTHER`:
+        # ValidationError, or a code nobody has named) the client still has
+        # nothing better to do. The gateway has logged that one as an error,
+        # which is where a request that can never succeed gets noticed (#271).
         return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
 
     if any(kind is not TransactionOperationKind.STORAGE_QUOTA_UPDATE for kind in conditional_kinds):
@@ -1697,58 +1621,3 @@ def _conditional(exc: ClientError) -> bool:
         "ConditionalCheckFailedException",
         "TransactionCanceledException",
     }
-
-
-def wire_format_client(target: object) -> object:
-    """Return a client that will not serialize these items a second time.
-
-    The resource table's own client carries request-transformation handlers, so
-    handing it items already in wire format turns every key into a map and the
-    request is rejected for not matching the schema. This was known and worked
-    around for writes while the read beside it kept the resource's client, so
-    reading a conversation that held an attachment answered 500 - unreachable
-    until the first attachment row in the table's history was written.
-    """
-    import boto3 as _boto3
-
-    meta = getattr(getattr(target, "meta", None), "client", None)
-    region_name = getattr(getattr(meta, "meta", None), "region_name", None)
-    return _boto3.client("dynamodb", region_name=region_name or "eu-central-2")
-
-
-def _serialize_transactions(
-    operations: list[dict[str, object]], table_name: str
-) -> list[dict[str, object]]:
-    serializer = TypeSerializer()
-    result: list[dict[str, object]] = []
-    for operation in operations:
-        operation_name, raw_value = next(iter(operation.items()))
-        value = _mapping(raw_value)
-        encoded: dict[str, object] = {"TableName": table_name}
-        if "Key" in value:
-            key_values = _mapping(value["Key"])
-            encoded["Key"] = {
-                key: serializer.serialize(item) for key, item in key_values.items()
-            }
-        if "Item" in value:
-            item_values = _mapping(value["Item"])
-            encoded["Item"] = {
-                key: serializer.serialize(item)
-                for key, item in item_values.items()
-                if item is not None
-            }
-        for key in (
-            "UpdateExpression",
-            "ConditionExpression",
-            "ExpressionAttributeNames",
-        ):
-            if key in value:
-                encoded[key] = value[key]
-        if "ExpressionAttributeValues" in value:
-            attribute_values = _mapping(value["ExpressionAttributeValues"])
-            encoded["ExpressionAttributeValues"] = {
-                key: serializer.serialize(item)
-                for key, item in attribute_values.items()
-            }
-        result.append({operation_name: encoded})
-    return result

@@ -8,6 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table, scan_every_page, stored_int
 from stoa.db.repositories import account_deletion_repo
 
@@ -184,10 +185,7 @@ def _generation(owner_id: str, generation: object, table: object) -> int:
     supplied = stored_int(generation)
     if supplied is not None and supplied > 0:
         return supplied
-    atomic = callable(getattr(table, "transact_account_deletion", None)) or bool(
-        getattr(getattr(table, "meta", None), "client", None)
-        and getattr(table, "name", None)
-    )
+    atomic = db_table.transactional(table)
     if atomic:
         return int(account_deletion_repo.require_active_account_fence(owner_id, table=table)["generation"])
     return 1
@@ -209,7 +207,7 @@ def put_connection(item: ConnectionItem) -> ConnectionItem:
         "owner_id": owner_id,
         "account_fence_generation": generation,
     }
-    account_deletion_repo.transact(
+    db_table.transact(
         build_connection_write_transaction(
             item=stored, owner_id=owner_id, generation=generation, mode="put"
         ),
@@ -236,7 +234,7 @@ def update_connection(
     target = get_table()
     owner_id = str(existing.get("owner_id") or existing.get("user_id") or "")
     generation = _generation(owner_id, existing.get("account_fence_generation"), target)
-    account_deletion_repo.transact(
+    db_table.transact(
         build_connection_write_transaction(
             item=existing,
             owner_id=owner_id,
@@ -328,7 +326,7 @@ def revoke_account_connection(
     if callable(hook):
         hook(dict(item), owner_id, generation)
         return
-    account_deletion_repo.transact(
+    db_table.transact(
         [
             account_deletion_repo.deletion_fence_condition(owner_id, generation),
             {

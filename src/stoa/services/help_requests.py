@@ -38,6 +38,7 @@ from typing import Any, cast
 
 from boto3.dynamodb.conditions import Attr, Key
 
+from stoa.db import table as db_table
 from stoa.config import settings
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo, weekly_counter
@@ -616,7 +617,7 @@ def ask(
 
     def persist_case(allowance_operations: tuple[dict[str, Any], ...]) -> bool:
         try:
-            account_deletion_repo.transact([*rows, *allowance_operations], table=store)
+            db_table.transact([*rows, *allowance_operations], table=store)
         except Exception:  # noqa: BLE001 - every refusal means something moved
             return False
         return True
@@ -908,7 +909,7 @@ def _end(
 
         def persist(refund_operations: tuple[dict[str, Any], ...]) -> bool:
             try:
-                account_deletion_repo.transact([*rows, *refund_operations], table=store)
+                db_table.transact([*rows, *refund_operations], table=store)
             except Exception:  # noqa: BLE001 - every refusal means something moved
                 return False
             return True
@@ -1511,7 +1512,7 @@ def _write(
     )
     operations.extend(extra)
     try:
-        account_deletion_repo.transact(operations, table=table)
+        db_table.transact(operations, table=table)
     except Exception as exc:  # noqa: BLE001 - every refusal means the request moved on
         raise HelpRequestConflict("help request changed before the write") from exc
     written = {key_: value for key_, value in record.items() if key_ not in remove or key_ in changes}

@@ -41,6 +41,7 @@ from fakes.ask_question import PRIVATE_CONVERSATION as CONVERSATION_ID
 from fakes.ask_question import _private_message as _message
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from fakes.dynamodb import from_wire
 from stoa.db.repositories import attachment_repo
 from stoa.services import learning_session
 from stoa.services.ask_question import _store as ask_question_store
@@ -100,6 +101,8 @@ class _ClaimTable:
         return {}
 
     def transact_write_items(self, *, TransactItems):  # noqa: N803
+
+        TransactItems = from_wire(TransactItems)  # noqa: N806
         self.transactions.append(TransactItems)
         if self.transact_error is not None:
             raise self.transact_error
@@ -242,6 +245,8 @@ class _CompletionTable:
         self.calls = 0
 
     def transact_write_items(self, *, TransactItems):  # noqa: N803
+
+        TransactItems = from_wire(TransactItems)  # noqa: N806
         self.calls += 1
         if self.commit_then_raise:
             update = next(
@@ -294,6 +299,8 @@ class _RejectTable:
         self.command = _message_command(counter_value=3)
 
     def transact_write_items(self, *, TransactItems):  # noqa: N803
+
+        TransactItems = from_wire(TransactItems)  # noqa: N806
         self.transactions.append(TransactItems)
         return {}
 
@@ -525,7 +532,9 @@ class _LeaseTable:
     def get_item(self, **_kwargs):
         return {"Item": dict(self.command)}
 
-    def transact_write_items(self, *, TransactItems):
+    def transact_write_items(self, *, TransactItems):  # noqa: N803
+
+        TransactItems = from_wire(TransactItems)  # noqa: N806
         assert TransactItems[0]["ConditionCheck"]["Key"] == {
             "PK": "USER#student-1",
             "SK": "ACCOUNT_FENCE",

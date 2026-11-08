@@ -30,6 +30,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, security_audit_repo, user_repo
 from stoa.security.identity import AccountStatus
@@ -202,7 +203,7 @@ def transition(
     )
     try:
         fence = account_deletion_repo.require_active_account_fence(user_id)
-        account_deletion_repo.transact(
+        db_table.transact(
             [
                 account_deletion_repo.active_fence_condition(
                     user_id, int(fence.get("generation") or 0)
@@ -211,9 +212,15 @@ def transition(
                 *survivor,
                 security_audit_repo.append_event_operation(user_id, event),
                 *also,
-            ]
+            ],
+            # The table the fence above was read from.
+            table=account_deletion_repo.get_table(),
         )
-    except account_deletion_repo.AccountDeletionConflict as exc:
+    except (
+        account_deletion_repo.AccountDeletionConflict,
+        db_table.WriteRefused,
+        db_table.TableUnavailable,
+    ) as exc:
         raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_TRANSITION_CONFLICT) from exc
     return event
 

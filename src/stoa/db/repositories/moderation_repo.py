@@ -7,6 +7,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table, scan_every_page, stored_int
 from stoa.db.repositories import account_deletion_repo
 
@@ -348,7 +349,7 @@ def scrub_moderation_row(
     account_deletion_repo.require_deletion_account_fence(
         user_id, generation, table=target
     )
-    account_deletion_repo.transact(
+    db_table.transact(
         [
             account_deletion_repo.deletion_fence_condition(user_id, generation),
             {
@@ -406,7 +407,7 @@ def put_case(
                 }
             }
         )
-    account_deletion_repo.transact(operations, table=target)
+    db_table.transact(operations, table=target)
     return summary
 
 
@@ -427,7 +428,7 @@ def put_event(
         student_id, generation, table=target
     )
     persisted = _event_item(case_id, event, summary=summary)
-    account_deletion_repo.transact(
+    db_table.transact(
         [
             account_deletion_repo.active_fence_condition(student_id, generation),
             {
@@ -525,7 +526,7 @@ def update_case(
     values = {f":{key}": value for key, value in attrs.items()}
     values.update({":owner": student_id, ":generation": generation})
     expression = "SET " + ", ".join(f"#{key} = :{key}" for key in attrs)
-    account_deletion_repo.transact(
+    db_table.transact(
         [
             account_deletion_repo.active_fence_condition(student_id, generation),
             {

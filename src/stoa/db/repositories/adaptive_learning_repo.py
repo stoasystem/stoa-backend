@@ -8,6 +8,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Attr, Key
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 
@@ -145,10 +146,7 @@ def _scan(table: object, **kwargs: object) -> dict[str, Any]:
 
 
 def _atomic_table(table: Any) -> bool:
-    return callable(getattr(table, "transact_account_deletion", None)) or bool(
-        getattr(getattr(table, "meta", None), "client", None)
-        and getattr(table, "name", None)
-    )
+    return db_table.transactional(table)
 
 
 def _generation(item: Mapping[str, Any], table: Any) -> tuple[str, int]:
@@ -263,7 +261,7 @@ def put_memory_snapshot(item: dict[str, Any]) -> None:
         else None,
     )
     if _atomic_table(table):
-        account_deletion_repo.transact(operations, table=table)
+        db_table.transact(operations, table=table)
     else:
         _put_item(table, Item=operations[-1]["Put"]["Item"])
     item.update(owner_id=owner, account_fence_generation=generation)
@@ -296,7 +294,7 @@ def put_assignment(item: dict[str, Any]) -> None:
         item=stored, owner_id=owner, generation=generation
     )
     if _atomic_table(table):
-        account_deletion_repo.transact(operations, table=table)
+        db_table.transact(operations, table=table)
     else:
         _put_item(table, Item=operations[-1]["Put"]["Item"])
     item.update(owner_id=owner, account_fence_generation=generation)
@@ -316,15 +314,22 @@ def put_assignment_if_absent(item: dict[str, Any]) -> tuple[dict[str, Any], bool
     )
     try:
         if _atomic_table(table):
-            account_deletion_repo.transact(operations, table=table)
+            db_table.transact(operations, table=table)
         else:
             _put_item(
                 table,
                 Item=operations[-1]["Put"]["Item"],
                 ConditionExpression=Attr("PK").not_exists(),
             )
-    except (ClientError, account_deletion_repo.AccountDeletionConflict) as exc:
-        if isinstance(exc, account_deletion_repo.AccountDeletionConflict) or exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+    except (
+        ClientError,
+        account_deletion_repo.AccountDeletionConflict,
+        db_table.WriteRefused,
+        db_table.TableUnavailable,
+    ) as exc:
+        if not isinstance(exc, ClientError) or exc.response.get("Error", {}).get(
+            "Code"
+        ) == "ConditionalCheckFailedException":
             existing = get_assignment(str(item["assignment_id"]))
             return existing or item, False
         raise
@@ -385,11 +390,18 @@ def update_assignment(
                 mutation["ConditionExpression"] += " AND #expected_status=:expected_status"
                 mutation["ExpressionAttributeNames"]["#expected_status"] = "status"
                 mutation["ExpressionAttributeValues"][":expected_status"] = expected_status
-            account_deletion_repo.transact(operations, table=table)
+            db_table.transact(operations, table=table)
             return get_assignment(assignment_id) or {**existing, **updates}
         resp = _update_item(table, **kwargs)
-    except (ClientError, account_deletion_repo.AccountDeletionConflict) as exc:
-        if isinstance(exc, account_deletion_repo.AccountDeletionConflict) or exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+    except (
+        ClientError,
+        account_deletion_repo.AccountDeletionConflict,
+        db_table.WriteRefused,
+        db_table.TableUnavailable,
+    ) as exc:
+        if not isinstance(exc, ClientError) or exc.response.get("Error", {}).get(
+            "Code"
+        ) == "ConditionalCheckFailedException":
             return get_assignment(assignment_id)
         raise
     return resp.get("Attributes")
@@ -498,7 +510,7 @@ def scrub_adaptive_private_row(
     if callable(hook):
         hook(dict(item), tombstone, owner_id, generation)
     else:
-        account_deletion_repo.transact(
+        db_table.transact(
             [
                 account_deletion_repo.deletion_fence_condition(owner_id, generation),
                 {

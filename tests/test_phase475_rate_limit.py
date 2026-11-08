@@ -6,14 +6,16 @@ from datetime import datetime, timezone
 import hashlib
 import threading
 from collections.abc import Mapping
-from typing import TypeGuard
+from typing import Any, TypeGuard
 
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import rate_limit
 from stoa.services.rate_limit_errors import RateLimitErrorCode, RateLimitViolation
 from dynamodb_expression_assertions import (
     assert_expression_placeholders_closed,
 )
+from fakes.dynamodb import from_wire
 
 
 PERIOD = "2026-07-21"
@@ -37,9 +39,11 @@ def _required_mapping(value: object) -> Mapping[str, object]:
 
 
 def _required_int(value: object) -> int:
-    if type(value) is not int:
+    # The table hands numbers back as Decimal; a whole one is an exact integer.
+    exact = stored_int(value)
+    if exact is None:
         raise AssertionError("expected an exact integer DynamoDB value")
-    return value
+    return exact
 
 
 class _RateTable:
@@ -90,7 +94,8 @@ class _RateTable:
             self._initial_counter_barrier.wait(timeout=2)
         return {"Item": item} if item is not None else {}
 
-    def transact_account_deletion(self, operations):
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        operations = from_wire(TransactItems)
         copied = [dict(operation) for operation in operations]
         for operation in copied:
             assert_expression_placeholders_closed(operation)

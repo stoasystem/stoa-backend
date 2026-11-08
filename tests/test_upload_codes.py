@@ -101,10 +101,7 @@ def _conversation(table: FakeTable, conversation_id: str, student_id: str) -> No
 
 
 class _Table(FakeTable):
-    """The shared double, reached the way `attachment_repo.transact` calls it."""
-
-    def transact_write_items(self, operations=None, *, TransactItems=None) -> None:
-        super().transact_write_items(TransactItems if TransactItems is not None else operations)
+    """The shared double."""
 
 
 class _Clock:

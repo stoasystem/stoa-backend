@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from stoa.db.repositories import account_deletion_repo, user_repo
+from fakes.dynamodb import from_wire
 
 
 class _ProfileRaceTable:
@@ -60,7 +61,8 @@ class _ProfileRaceTable:
             item = self.items.get((Key["PK"], Key["SK"]))
             return {"Item": deepcopy(item)} if item is not None else {}
 
-    def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        operations = from_wire(TransactItems)
         copied = deepcopy(operations)
         kind = "scrub" if len(copied) == 3 else "writer"
         with self.lock:
@@ -231,7 +233,8 @@ def test_unrelated_profile_cas_loss_is_bounded_and_typed_retryable(
                 }
             }
 
-        def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            operations = from_wire(TransactItems)
             self.attempts += 1
             self.operations.append(deepcopy(operations))
             raise account_deletion_repo.AccountDeletionConflict("injected CAS loss")

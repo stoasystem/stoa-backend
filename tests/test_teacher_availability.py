@@ -3,6 +3,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from stoa.db import table as db_table
 from stoa.routers import conversations, teachers
 from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import teacher_dispatch_service
@@ -500,7 +501,7 @@ def test_a_pause_that_lands_between_read_and_write_is_kept(monkeypatch):
     # the version race, and the retry must see the pause rather than undo it.
     _availability_table(monkeypatch, subjects=["physics"], dispatch_availability="available")
     key = (f"USER#{_TEACHER}", "PROFILE")
-    real_transact = account_deletion_repo.transact
+    real_transact = db_table.transact
     raced = []
 
     def transact_after_a_concurrent_pause(operations, *, table=None):
@@ -511,7 +512,8 @@ def test_a_pause_that_lands_between_read_and_write_is_kept(monkeypatch):
             row["version"] = row["version"] + 1
         return real_transact(operations, table=table)
 
-    monkeypatch.setattr(account_deletion_repo, "transact", transact_after_a_concurrent_pause)
+    monkeypatch.setattr(
+        db_table, "transact", transact_after_a_concurrent_pause)
 
     saved = _save(_teacher_client())
 

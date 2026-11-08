@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from fakes.dynamodb import as_stored as _as_stored
+from fakes.dynamodb import as_stored as _as_stored, from_wire
 
 from stoa.db.repositories import moderation_repo
 from stoa.models.moderation import (
@@ -203,7 +203,8 @@ def test_moderation_repository_case_and_event_writes_share_exact_fence() -> None
                 return {"Item": _summary()}
             return {}
 
-        def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            operations = from_wire(TransactItems)
             transactions.append(operations)
 
     table = _Table()

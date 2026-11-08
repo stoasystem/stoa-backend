@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 
 from fakes.dynamodb import FakeTable
+from stoa.db import table as db_table
 from stoa.db.repositories import weekly_counter
 from stoa.db.repositories.weekly_counter import CASES, TOKENS, CounterConflict, CounterUnavailable
 from stoa.models.allowance import MAX_EXACT_COUNT
@@ -26,7 +27,7 @@ WEEK = weekly_counter.zurich_week(NOW)
 
 
 def _commit(table: FakeTable, operation: dict[str, Any]) -> None:
-    table.transact_write_items(TransactItems=[operation])
+    db_table.transact([operation], table=table)
 
 
 def _seeded(table: FakeTable, kind=TOKENS, scope: str = "student-1", **counts: int) -> weekly_counter.Counter:

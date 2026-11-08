@@ -9,6 +9,7 @@ from threading import Lock
 import pytest
 from fakes.dynamodb import as_stored as _as_stored
 
+from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import entitlement_service, free_trial_service
@@ -100,7 +101,7 @@ def _install_store(
         store.require_active_fence,
     )
     monkeypatch.setattr(
-        free_trial_service.account_deletion_repo,
+        db_table,
         "transact",
         store.transact,
     )

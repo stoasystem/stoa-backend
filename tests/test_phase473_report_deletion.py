@@ -9,6 +9,7 @@ import pytest
 
 from stoa.db.repositories import report_repo
 from stoa.services import account_deletion_service
+from fakes.dynamodb import from_wire
 
 
 STUDENT_ID = "student-report-delete"
@@ -85,7 +86,8 @@ def test_object_intent_is_owner_partitioned_and_fenced_before_provider() -> None
     captured: list[list[dict[str, Any]]] = []
 
     class _Table:
-        def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            operations = from_wire(TransactItems)
             captured.append(operations)
 
     body = b'{"private":"report"}'

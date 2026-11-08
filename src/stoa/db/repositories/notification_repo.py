@@ -13,6 +13,7 @@ from uuid import uuid4
 from boto3.dynamodb.conditions import Attr, ConditionBase
 from botocore.exceptions import ClientError
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table, scan_every_page, stored_int
 from stoa.db.repositories import account_deletion_repo
 
@@ -447,7 +448,7 @@ def _intent_claim(item: Mapping[str, object]) -> DeliveryIntentClaim:
 
 
 def _delivery_conditional_loss(exc: Exception) -> bool:
-    if isinstance(exc, account_deletion_repo.AccountDeletionConflict):
+    if isinstance(exc, (account_deletion_repo.AccountDeletionConflict, db_table.WriteRefused)):
         return True
     if not isinstance(exc, ClientError):
         return False
@@ -455,18 +456,6 @@ def _delivery_conditional_loss(exc: Exception) -> bool:
         "ConditionalCheckFailedException",
         "TransactionCanceledException",
     }
-
-
-def _delivery_client_error(exc: Exception) -> ClientError | None:
-    """Return a wrapped provider error without trusting exception messages."""
-    current: BaseException | None = exc
-    seen: set[int] = set()
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        if isinstance(current, ClientError):
-            return current
-        current = current.__cause__ or current.__context__
-    return None
 
 
 def _strong_delivery_intent(
@@ -531,29 +520,16 @@ def classify_delivery_transaction_failure(
     if begun_claim is not None:
         return DeliveryBeginResult(DeliveryBeginDisposition.BEGUN, begun_claim)
 
-    provider_error = _delivery_client_error(exc)
-    if provider_error is None:
+    # Only the table's own per-operation reasons say which condition lost; the
+    # gateway has already read and sorted them.
+    if (
+        not isinstance(exc, db_table.WriteRefused)
+        or exc.code != "TransactionCanceledException"
+        or len(exc.reasons) != operation_count
+        or exc.causes - {db_table.ReasonKind.CONDITION_FAILED}
+    ):
         return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
-    error_code = str(provider_error.response.get("Error", {}).get("Code") or "")
-    if error_code != "TransactionCanceledException":
-        return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
-    reasons = provider_error.response.get("CancellationReasons")
-    if not isinstance(reasons, list) or len(reasons) != operation_count:
-        return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
-
-    conditional_indexes: list[int] = []
-    for index, reason in enumerate(reasons):
-        if not isinstance(reason, Mapping):
-            return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
-        code = reason.get("Code")
-        if not isinstance(code, str):
-            return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
-        if code == "None":
-            continue
-        if code == "ConditionalCheckFailed":
-            conditional_indexes.append(index)
-            continue
-        return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
+    conditional_indexes = list(exc.failed_conditions)
 
     if fence_operation_index is not None and fence_operation_index in conditional_indexes:
         if scope.kind != "private_owner":
@@ -683,10 +659,7 @@ def _generation(owner_id: str, generation: object, table: object) -> int:
     supplied = stored_int(generation)
     if supplied is not None and supplied > 0:
         return supplied
-    atomic = callable(getattr(table, "transact_account_deletion", None)) or bool(
-        getattr(getattr(table, "meta", None), "client", None)
-        and getattr(table, "name", None)
-    )
+    atomic = db_table.transactional(table)
     if atomic:
         return int(account_deletion_repo.require_active_account_fence(owner_id, table=table)["generation"])
     # Lightweight unit fakes cannot model the permanent fence; transaction
@@ -706,7 +679,7 @@ def _persist_private(
         raise account_deletion_repo.AccountDeletionConflict("notification owner is required")
     generation = _generation(owner_id, item.get("account_fence_generation"), target)
     stored = {**item, "owner_id": owner_id, "account_fence_generation": generation}
-    account_deletion_repo.transact(
+    db_table.transact(
         build_notification_write_transaction(
             item=stored,
             owner_id=owner_id,
@@ -1032,7 +1005,7 @@ def put_payment_expiry_reminder(
         persisted = hook(stored)
         return stored if persisted is None else _dependency_mapping(persisted)
     try:
-        account_deletion_repo.transact(
+        db_table.transact(
             build_notification_write_transaction(
                 item=stored,
                 owner_id=parent_id,
@@ -1068,7 +1041,7 @@ def _update_payment_expiry_reminder(
     generation = _generation(
         parent_id, current.get("account_fence_generation"), target
     )
-    account_deletion_repo.transact(
+    db_table.transact(
         build_notification_write_transaction(
             item=current,
             owner_id=parent_id,
@@ -1177,7 +1150,7 @@ def register_delivery_intent(
         persisted = hook(item)
         return item if not persisted else _dependency_mapping(persisted)
     if scope.kind == "private_owner":
-        account_deletion_repo.transact(
+        db_table.transact(
             build_notification_write_transaction(
                 item=item,
                 owner_id=str(scope.owner_id),
@@ -1461,7 +1434,7 @@ def begin_delivery_effect(
     update: NotificationItem = {"Update": update_details}
     operations = [*event_checks, update]
     try:
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     except Exception as exc:
         return classify_delivery_transaction_failure(
             exc,
@@ -1769,7 +1742,7 @@ def _replace_notification_owner_tombstone(
     if callable(hook):
         hook(dict(item), tombstone, owner_id, generation)
         return
-    account_deletion_repo.transact(
+    db_table.transact(
         [
             account_deletion_repo.deletion_fence_condition(owner_id, generation),
             {
@@ -1861,7 +1834,7 @@ def scrub_notification_identity_references(
         values[":identity"] = owner_id
         update += " REMOVE actor_id"
 
-    account_deletion_repo.transact(
+    db_table.transact(
         [
             account_deletion_repo.deletion_fence_condition(owner_id, generation),
             {

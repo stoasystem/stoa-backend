@@ -12,6 +12,7 @@ from datetime import timezone
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 from stoa.models.billing import CheckoutCommandState, CheckoutIntent
@@ -573,7 +574,7 @@ def register_checkout_command(
         ],
     ]
     try:
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     except Exception:
         return _classify_registration_replay(
             table=target,
@@ -745,7 +746,7 @@ def claim_provider_create(
         operation,
     ]
     try:
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     except Exception:
         try:
             refreshed = _strong_command(command_id, table=target)
@@ -885,7 +886,7 @@ def attach_provider_session(
         operation,
     ]
     try:
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     except Exception:
         try:
             refreshed = _strong_command(claim.command_id, table=target)
@@ -1008,7 +1009,7 @@ def mark_provider_outcome_unknown(
         operation,
     ]
     try:
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     except Exception:
         try:
             refreshed = _strong_command(claim.command_id, table=target)
@@ -1115,7 +1116,7 @@ def release_open_guard_for_terminal_command(
         },
     ]
     try:
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     except Exception:
         try:
             guard = _strong_get(target, _open_guard_key(parent_id))
@@ -1241,7 +1242,7 @@ def claim_session_expiration(
         operation,
     ]
     try:
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     except Exception:
         try:
             refreshed = _strong_command(command_id, table=target)
@@ -1394,7 +1395,7 @@ def record_session_expiration(
         operation,
     ]
     try:
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     except Exception:
         try:
             refreshed = _strong_command(command_id, table=target)
@@ -1693,7 +1694,7 @@ def supersede_checkout_command(
         },
     ]
     try:
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     except Exception:
         return _classify_supersession_replay(
             table=target,

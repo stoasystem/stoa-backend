@@ -19,6 +19,7 @@ from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import AccountStatus, resolve_actor
 from stoa.security.tokens import VerifiedAccessToken
 from stoa.services import help_requests, learning_session
+from fakes.dynamodb import from_wire
 
 
 STUDENT_ID = "student-delete-1"
@@ -286,7 +287,8 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation(mo
             # The student's fence, which the reply's rows are stamped from.
             return {"Item": {"status": "active", "generation": 4}}
 
-        def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            operations = from_wire(TransactItems)
             help_ops.extend(operations)
 
     monkeypatch.setattr(help_requests.notification_service, "emit_teacher_help_reply", lambda **_kwargs: None)

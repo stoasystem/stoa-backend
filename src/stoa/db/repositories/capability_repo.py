@@ -11,36 +11,12 @@ from typing import Literal, NotRequired, Protocol, TypedDict, runtime_checkable
 import logging
 
 from boto3.dynamodb.conditions import Key
-from boto3.dynamodb.types import TypeSerializer
-from botocore.exceptions import ClientError
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
 logger = logging.getLogger(__name__)
-
-
-def _transact_client(table: object) -> object:
-    """A low-level client of its own, never the resource's.
-
-    The resource registers request transformations on its `meta.client`, and
-    items already serialized for `transact_write_items` come back out of them
-    mangled: every condition check answers `ValidationError`, so no conditional
-    capability write has ever reached a real table. In-memory doubles expose a
-    `transact_write_items` of their own and never touch this path, which is why
-    the suite stayed green. `account_deletion_repo.transact` avoids the same
-    trap and says so in a comment; this is that comment made load-bearing.
-    """
-    hook = getattr(table, "transact_write_items", None)
-    if callable(hook):
-        return table
-    import boto3 as _boto3
-
-    region = getattr(
-        getattr(getattr(table, "meta", None), "client", None), "meta", None
-    )
-    region_name = getattr(region, "region_name", None) or "eu-central-2"
-    return _boto3.client("dynamodb", region_name=region_name)
 
 
 TEACHER_IDENTITY_REVIEWER = "teacher_identity_reviewer"
@@ -160,22 +136,6 @@ class _CapabilityTransactionApplier(Protocol):
     def apply_capability_transaction(
         self, operations: list[_CapabilityOperation]
     ) -> None: ...
-
-
-class _DynamoTransactionClient(Protocol):
-    def transact_write_items(
-        self, *, TransactItems: list[dict[str, object]]
-    ) -> object: ...
-
-
-class _DynamoMeta(Protocol):
-    client: _DynamoTransactionClient
-
-
-@runtime_checkable
-class _DynamoCapabilityTable(Protocol):
-    name: str
-    meta: _DynamoMeta
 
 
 def _scope_key(scope: str) -> str:
@@ -686,76 +646,54 @@ def _get(table: object, key: Mapping[str, str]) -> CapabilityItem | None:
 
 def _apply(table: object, operations: list[_CapabilityOperation]) -> None:
     """Apply one atomic transaction; fakes may expose the same high-level contract."""
-    try:
-        if isinstance(table, _CapabilityTransactionApplier):
-            table.apply_capability_transaction(operations)
-            return
-        if not isinstance(table, _DynamoCapabilityTable):
-            raise RuntimeError("capability repository transaction is unavailable")
-        serializer = TypeSerializer()
-        table_name = table.name
-        transact_items: list[dict[str, object]] = []
-        for operation in operations:
-            if operation["kind"] == "condition":
-                condition_names: dict[str, str] = {}
-                condition_values: dict[str, object] = {}
-                clauses: list[str] = []
-                for index, (field, value) in enumerate(operation["expected"].items()):
-                    condition_names[f"#n{index}"] = field
-                    condition_values[f":v{index}"] = serializer.serialize(value)
-                    clauses.append(f"#n{index} = :v{index}")
-                transact_items.append(
-                    {
-                        "ConditionCheck": {
-                            "TableName": table_name,
-                            "Key": {
-                                key: serializer.serialize(value)
-                                for key, value in operation["key"].items()
-                            },
-                            "ConditionExpression": " AND ".join(clauses),
-                            "ExpressionAttributeNames": condition_names,
-                            "ExpressionAttributeValues": condition_values,
-                        }
+    if isinstance(table, _CapabilityTransactionApplier):
+        table.apply_capability_transaction(operations)
+        return
+    transact_items: list[dict[str, object]] = []
+    for operation in operations:
+        if operation["kind"] == "condition":
+            condition_names: dict[str, str] = {}
+            condition_values: dict[str, object] = {}
+            clauses: list[str] = []
+            for index, (field, value) in enumerate(operation["expected"].items()):
+                condition_names[f"#n{index}"] = field
+                condition_values[f":v{index}"] = value
+                clauses.append(f"#n{index} = :v{index}")
+            transact_items.append(
+                {
+                    "ConditionCheck": {
+                        "Key": dict(operation["key"]),
+                        "ConditionExpression": " AND ".join(clauses),
+                        "ExpressionAttributeNames": condition_names,
+                        "ExpressionAttributeValues": condition_values,
                     }
-                )
-                continue
-            item = operation["item"]
-            put_names: dict[str, str] = {}
-            put_values: dict[str, object] = {}
-            condition = operation.get("condition")
-            if condition == "absent":
-                expression = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
-            else:
-                clauses = []
-                for index, (field, value) in enumerate(operation.get("expected", {}).items()):
-                    put_names[f"#n{index}"] = field
-                    put_values[f":v{index}"] = serializer.serialize(value)
-                    clauses.append(f"#n{index} = :v{index}")
-                expression = " AND ".join(clauses)
-            put: dict[str, object] = {
-                "TableName": table_name,
-                "Item": {key: serializer.serialize(value) for key, value in item.items() if value is not None},
-                "ConditionExpression": expression,
-            }
-            if put_names:
-                put["ExpressionAttributeNames"] = put_names
-                put["ExpressionAttributeValues"] = put_values
-            transact_items.append({"Put": put})
-        _transact_client(table).transact_write_items(TransactItems=transact_items)
-    except ClientError as exc:
-        # DynamoDB names the item that refused, and dropping it leaves a caller
-        # with a conflict it cannot act on: every cause reads the same.
-        reasons = exc.response.get("CancellationReasons") or []
-        if reasons:
-            logger.warning(
-                "Capability transaction refused: %s",
-                [f"{index}:{reason.get('Code')}" for index, reason in enumerate(reasons)],
+                }
             )
-        if exc.response.get("Error", {}).get("Code") in {
-            "ConditionalCheckFailedException", "TransactionCanceledException"
-        }:
-            raise CapabilityVersionConflict("conditional capability transaction failed") from exc
-        raise
+            continue
+        put_names: dict[str, str] = {}
+        put_values: dict[str, object] = {}
+        condition = operation.get("condition")
+        if condition == "absent":
+            expression = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+        else:
+            clauses = []
+            for index, (field, value) in enumerate(operation.get("expected", {}).items()):
+                put_names[f"#n{index}"] = field
+                put_values[f":v{index}"] = value
+                clauses.append(f"#n{index} = :v{index}")
+            expression = " AND ".join(clauses)
+        put: dict[str, object] = {
+            "Item": dict(operation["item"]),
+            "ConditionExpression": expression,
+        }
+        if put_names:
+            put["ExpressionAttributeNames"] = put_names
+            put["ExpressionAttributeValues"] = put_values
+        transact_items.append({"Put": put})
+    try:
+        db_table.transact(transact_items, table=table)
+    except db_table.WriteRefused as exc:
+        raise CapabilityVersionConflict("conditional capability transaction failed") from exc
 
 
 def _parse_time(value: object) -> datetime | None:

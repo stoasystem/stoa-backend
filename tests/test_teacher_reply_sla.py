@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from fakes.dynamodb import FakeTable
+from stoa.db import table as db_table
 from stoa.routers import admin, teachers
 from stoa.services import help_requests
 from actor_helpers import install_actor_overrides
@@ -115,7 +116,7 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
         lambda user_id, generation=None, *, table=None: {"status": "active", "generation": 4},
     )
     monkeypatch.setattr(
-        help_requests.account_deletion_repo,
+        db_table,
         "transact",
         lambda operations, *, table=None: captured.extend(operations),
     )

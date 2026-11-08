@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from fakes.dynamodb import as_stored as _as_stored
+from fakes.dynamodb import as_stored as _as_stored, from_wire
 
 from stoa.db.repositories import account_deletion_repo, notification_repo, websocket_repo
 from stoa.services import account_deletion_service
@@ -92,7 +92,8 @@ class _NotificationTable:
             self.rows[(str(late["PK"]), str(late["SK"]))] = late
         return {"Items": [deepcopy(row) for row in self.rows.values()]}
 
-    def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        operations = from_wire(TransactItems)
         self.transactions.append(deepcopy(operations))
         assert operations[0].get("ConditionCheck") is not None
         update = operations[1]["Update"]

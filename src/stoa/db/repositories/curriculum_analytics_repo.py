@@ -8,6 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, ConditionBase
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -115,9 +116,7 @@ def _positive_int(value: object, *, field: str) -> int:
 
 
 def _atomic_table(table: object) -> bool:
-    return callable(getattr(table, "transact_account_deletion", None)) or bool(
-        getattr(getattr(table, "meta", None), "client", None) and getattr(table, "name", None)
-    )
+    return db_table.transactional(table)
 
 
 def _generation(student_id: str, supplied: int | None, table: object) -> int:
@@ -233,7 +232,7 @@ def record_student_signal(
         student_id=student_id, generation=generation, item=item
     )
     if _atomic_table(target):
-        account_deletion_repo.transact(operations, table=target)
+        db_table.transact(operations, table=target)
     else:
         # Compatibility for focused unit fakes; production always uses one transaction.
         first_put = _mapping(operations[1].get("Put"))
@@ -452,8 +451,8 @@ def reconcile_curriculum_signal(
         },
     ]
     try:
-        account_deletion_repo.transact(operations, table=target)
-    except account_deletion_repo.AccountDeletionConflict:
+        db_table.transact(operations, table=target)
+    except (db_table.WriteRefused, db_table.TableUnavailable):
         if isinstance(target, _GetTable):
             existing = _get_item(target, Key=operation_key, ConsistentRead=True).get("Item")
             if isinstance(existing, Mapping) and existing.get("status") == "complete":

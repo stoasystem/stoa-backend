@@ -6,6 +6,7 @@ from typing import Any, Mapping
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.config import FREE_STORAGE_BYTES, PAID_STORAGE_BYTES
 from stoa.models.billing import BillingPlanId
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
@@ -80,7 +81,7 @@ def _install_atomic_transact(
 
     table_ref = table
     monkeypatch.setattr(
-        paid_entitlement_service.account_deletion_repo,
+        db_table,
         "transact",
         transact,
     )
@@ -325,7 +326,7 @@ def test_failed_upgrade_leaves_prior_grant_and_aggregates_byte_identical(
     table = _AtomicTable(items)
     before = deepcopy(table.items)
     monkeypatch.setattr(
-        paid_entitlement_service.account_deletion_repo,
+        db_table,
         "transact",
         lambda *_args, **_kwargs: pytest.fail("invalid upgrade must not transact"),
     )

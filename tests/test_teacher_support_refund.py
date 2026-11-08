@@ -20,6 +20,7 @@ from typing import Any
 from fakes.dynamodb import FakeTable
 import pytest
 
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, weekly_counter
 from stoa.services import teacher_support_allowance_service as service
 
@@ -61,7 +62,7 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
 def _commit(table: FakeTable, case_id: str, extra: list[dict[str, Any]] | None = None):
     def commit(operations: tuple[dict[str, Any], ...]) -> bool:
         try:
-            account_deletion_repo.transact(
+            db_table.transact(
                 [
                     account_deletion_repo.active_fence_condition(STUDENT, FENCE),
                     *operations,
@@ -90,7 +91,7 @@ def _admit(table: FakeTable, case_id: str, *, at: datetime = NOW):
 def _refund(table: FakeTable, case_id: str, *, at: datetime = NOW, persist=None):
     def commit(operations: tuple[dict[str, Any], ...]) -> bool:
         try:
-            account_deletion_repo.transact(list(operations), table=table)
+            db_table.transact(list(operations), table=table)
         except account_deletion_repo.AccountDeletionConflict:
             return False
         return True
@@ -193,7 +194,7 @@ def test_the_callers_writes_commit_with_the_refund_or_not_at_all(table: FakeTabl
 
     def commit(operations: tuple[dict[str, Any], ...]) -> bool:
         try:
-            account_deletion_repo.transact([*operations, refusing], table=table)
+            db_table.transact([*operations, refusing], table=table)
         except account_deletion_repo.AccountDeletionConflict:
             return False
         return True
@@ -217,7 +218,7 @@ def test_the_caller_is_still_given_one_write_to_commit_its_own_rows(
 
     def commit(operations: tuple[dict[str, Any], ...]) -> bool:
         seen.append(operations)
-        account_deletion_repo.transact(list(operations), table=table)
+        db_table.transact(list(operations), table=table)
         return True
 
     case_id = "conv-missing" if state == "missing" else "conv-1"
@@ -242,7 +243,7 @@ def test_a_counter_moved_by_an_admission_is_not_overwritten(
             # Another request is admitted after the refund read the counter.
             _admit(table, "conv-2")
         try:
-            account_deletion_repo.transact(list(operations), table=table)
+            db_table.transact(list(operations), table=table)
         except account_deletion_repo.AccountDeletionConflict:
             return False
         return True
@@ -266,7 +267,7 @@ def test_two_refunds_racing_give_back_one_case(table: FakeTable) -> None:
             raced = True
             assert _refund(table, "conv-1").disposition is Refund.REFUNDED
         try:
-            account_deletion_repo.transact(list(operations), table=table)
+            db_table.transact(list(operations), table=table)
         except account_deletion_repo.AccountDeletionConflict:
             return False
         return True

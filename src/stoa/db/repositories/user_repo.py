@@ -11,6 +11,7 @@ import re
 from typing import Any, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 from stoa.db.dynamodb import get_table
 
@@ -108,25 +109,12 @@ def _profile_created_at(item: Mapping[str, object]) -> str:
     raise ValueError("malformed user profile timestamp")
 
 
-class _CapturedLifecycleTransaction:
-    """Table stand-in that records the operations a lifecycle write would commit.
-
-    It exists so this module never rebuilds the profile and fence rows itself: the
-    repository that owns their shape builds them, and they are handed on unchanged to
-    a wider commit. A second copy of that shape here is the one way the fence and the
-    profile could ever drift apart.
-    """
-
-    def __init__(self) -> None:
-        self.operations: list[TransactionOperation] = []
-
-    def transact_account_deletion(self, operations: list[TransactionOperation]) -> None:
-        self.operations = list(operations)
-
-
 def put_user(item: Mapping[str, object]) -> None:
-    account_deletion_repo.materialize_profile_with_fence(
-        dict(item), now_iso=_profile_created_at(item), table=get_table()
+    db_table.transact(
+        account_deletion_repo.materialize_profile_with_fence(
+            dict(item), now_iso=_profile_created_at(item)
+        ),
+        table=get_table(),
     )
 
 
@@ -140,14 +128,14 @@ def put_user_with_email_claim(
     anything if it is decided in the same commit as the row it protects. Either the
     pair is taken and the profile exists, or neither happened.
     """
-    capture = _CapturedLifecycleTransaction()
-    account_deletion_repo.materialize_profile_with_fence(
-        dict(item), now_iso=_profile_created_at(item), table=capture
-    )
-    if not capture.operations:
-        raise ValueError("profile materialization produced no operations")
-    account_deletion_repo.transact(
-        [*capture.operations, claim_operation], table=get_table()
+    db_table.transact(
+        [
+            *account_deletion_repo.materialize_profile_with_fence(
+                dict(item), now_iso=_profile_created_at(item)
+            ),
+            claim_operation,
+        ],
+        table=get_table(),
     )
 
 
@@ -431,7 +419,7 @@ def record_sign_in(
     profile write can. The fence condition is what keeps an account that has
     begun deletion from being written to.
     """
-    account_deletion_repo.transact(
+    db_table.transact(
         [
             account_deletion_repo.active_fence_condition(user_id),
             profile_update_operation(
@@ -660,7 +648,7 @@ def update_profile_fields_versioned(
             values = dict(expression_attribute_values)
             if values_from_profile is not None:
                 values.update(values_from_profile(profile))
-            account_deletion_repo.transact(
+            db_table.transact(
                 build_profile_update_transaction(
                     user_id,
                     update_expression=update_expression,
@@ -671,7 +659,11 @@ def update_profile_fields_versioned(
                 ),
                 table=table,
             )
-        except account_deletion_repo.AccountDeletionConflict:
+        except (
+            account_deletion_repo.AccountDeletionConflict,
+            db_table.WriteRefused,
+            db_table.TableUnavailable,
+        ):
             continue
         current = get_user(user_id)
         if current is None:
