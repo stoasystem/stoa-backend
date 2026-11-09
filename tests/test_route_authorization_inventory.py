@@ -38,13 +38,15 @@ class _PolicyDependency(Protocol):
 
 REAL_NESTED_IDENTIFIER_ROUTES = {
     ("POST", "/questions/{question_id}/reports"): ("question_id",),
-    ("GET", "/students/me/profile"): ("student_id",),
-    ("PATCH", "/students/me/profile"): ("student_id",),
+    # The Actor's own routes take no student id: before #348 the dependency's
+    # `student_id` parameter leaked onto them as an ignored query parameter.
+    ("GET", "/students/me/profile"): (),
+    ("PATCH", "/students/me/profile"): (),
     ("GET", "/students/{student_id}/summary"): ("student_id",),
     ("GET", "/students/{student_id}/learning-profile"): ("student_id",),
     ("GET", "/students/{student_id}/questions"): ("student_id",),
-    ("GET", "/adaptive/students/me/memory"): ("student_id",),
-    ("GET", "/adaptive/students/me/assignments"): ("student_id",),
+    ("GET", "/adaptive/students/me/memory"): (),
+    ("GET", "/adaptive/students/me/assignments"): (),
 }
 
 

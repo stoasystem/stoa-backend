@@ -385,7 +385,11 @@ def test_direct_sink_rejects_duplicate_material_before_any_table_access(monkeypa
 
 
 def test_all_production_authorization_call_sites_use_recording_gateway():
-    roots = [Path("src/stoa/security/route_authorization.py"), *Path("src/stoa/routers").glob("*.py")]
+    roots = [
+        Path("src/stoa/security/route_authorization.py"),
+        Path("src/stoa/security/declared_authorization.py"),
+        *Path("src/stoa/routers").glob("*.py"),
+    ]
     missing = []
     for path in roots:
         tree = ast.parse(path.read_text())
