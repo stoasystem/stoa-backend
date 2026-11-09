@@ -305,9 +305,7 @@ def test_every_practice_preview_route_recursively_omits_answer_canaries(monkeypa
     client = TestClient(app)
 
     responses = [
-        client.get("/practice/overview"),
         client.get("/practice/math/topic-1/roadmap"),
-        client.get("/practice/math/topic-1/path"),
         client.get("/practice/lessons/lesson-1"),
     ]
     for response in responses:

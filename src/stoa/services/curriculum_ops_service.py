@@ -12,6 +12,7 @@ from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.services import (
     answer_judging,
     curriculum_analytics_service,
+    curriculum_service,
     curriculum_translations,
     exercise_localization,
 )
@@ -813,7 +814,7 @@ def _attribution_issues(lesson: dict[str, Any]) -> list[dict[str, Any]]:
     issues = []
     if str(unit.get("topic_id") or "") != str(lesson.get("topic_id") or ""):
         issues.append(_validation_issue("topic_id", Issue.of(IssueCode.TOPIC_NOT_THE_UNITS)))
-    if not practice_repo.same_subject(unit.get("subject_id", ""), lesson.get("subject_id", "")):
+    if not curriculum_service.same_subject(unit.get("subject_id", ""), lesson.get("subject_id", "")):
         issues.append(_validation_issue("subject_id", Issue.of(IssueCode.SUBJECT_NOT_THE_UNITS)))
     return issues
 

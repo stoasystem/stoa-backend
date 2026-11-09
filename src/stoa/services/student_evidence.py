@@ -418,7 +418,7 @@ class StudentEvidence:
         return tuple(
             item
             for item in self.completions
-            if (not subject_id or practice_repo.same_subject(item.subject_id, subject_id))
+            if (not subject_id or curriculum_service.same_subject(item.subject_id, subject_id))
             and (topic_id is None or item.topic_id == topic_id)
         )
 
@@ -451,7 +451,7 @@ class StudentEvidence:
         return self._once(
             "subjects_taken",
             lambda: frozenset(
-                practice_repo.normal_subject_id(row.get("subject_id"))
+                curriculum_service.subject_key(row.get("subject_id"))
                 for row in self._rows("progress")
                 if row.get("subject_id")
             ),
@@ -509,7 +509,7 @@ class StudentEvidence:
             str(item.get("topic_id"))
             for item in self.mistakes
             if item.get("topic_id")
-            and (not subject_id or practice_repo.same_subject(item.get("subject_id", ""), subject_id))
+            and (not subject_id or curriculum_service.same_subject(item.get("subject_id", ""), subject_id))
         )
 
     @property

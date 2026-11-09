@@ -15,7 +15,8 @@ from datetime import datetime, timezone
 from typing import Any, Protocol, cast
 
 from stoa.db import table as db_table
-from stoa.db.repositories import account_deletion_repo, practice_repo, user_repo
+from stoa.db.repositories import account_deletion_repo, user_repo
+from stoa.services import curriculum_service
 
 # Logged for each request nobody could be offered that has waited past the
 # alert limit (#88). stoa-infra's metric filter matches this exact string, and
@@ -210,7 +211,7 @@ def parse_timestamp(value: Any) -> datetime | None:
 def _normalize_teacher_profile(profile: dict[str, Any]) -> dict[str, Any]:
     # Canonical ids, so `math` and the stored `mathematics` are one subject.
     subjects = [
-        practice_repo.normal_subject_id(subject)
+        curriculum_service.subject_key(subject)
         for subject in user_repo.stored_teacher_subjects(profile)
     ]
     availability = str(
@@ -286,7 +287,7 @@ def _refusal_reason(question: dict[str, Any], teacher: dict[str, Any], previous:
         return standing
     if teacher["teacherId"] in previous:
         return {"refusalCode": "previously_timed_out", "refusalReason": "Teacher already timed out or declined this request."}
-    subject = practice_repo.normal_subject_id(question.get("subject") or "")
+    subject = curriculum_service.subject_key(question.get("subject") or "")
     if teacher["subjects"] and subject not in teacher["subjects"]:
         return {"refusalCode": "subject_mismatch", "refusalReason": "Teacher subject capability does not match the question."}
     if not teacher["subjects"]:

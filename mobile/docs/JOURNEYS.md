@@ -2,8 +2,8 @@
 
 ## Student
 
-- Dashboard reads `/students/me/profile`, `/practice/overview`, and `/notifications`.
-- Practice reads `/practice/overview`, `/practice/curriculum/catalog`, `/practice/curriculum/progress`, and `/practice/curriculum/lessons/{lessonId}`.
+- Dashboard reads `/students/me/profile`, `/practice/curriculum/progress`, and `/notifications`.
+- Practice reads `/practice/curriculum/catalog`, `/practice/curriculum/progress`, and `/practice/curriculum/lessons/{lessonId}`.
 - Question submission posts to `/questions` and remains online-only.
 - Teacher escalation posts to `/questions/{questionId}/request-teacher` or `/practice/teacher-help` and remains online-only.
 - Learning history reads `/students/{studentId}/questions`.

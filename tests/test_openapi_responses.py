@@ -190,7 +190,7 @@ def test_bearer_operations_declare_the_shared_401():
     ("path", "method"),
     [
         ("/adaptive/students/me/memory", "get"),
-        ("/practice/subjects", "get"),
+        ("/practice/curriculum/catalog", "get"),
         ("/auth/me", "get"),
         ("/teacher-applications/activation/consume", "post"),
     ],

@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from stoa.services import (
     ai_service,
+    curriculum_service,
     knowledge_map_service,
     learning_profile_service,
     locale_service,
@@ -56,6 +57,12 @@ UNREADABLE_GRADE = (
     "an unrecorded year group (the profile holds no year group this platform "
     "recognises; pitch it at lower secondary school)"
 )
+
+# A conversation stored, before subjects were checked (#354), with a subject
+# the platform does not teach: answered as school work in general, never as
+# mathematics, and the stored text is not put in the prompt.
+NO_SUBJECT = "the school subjects the student is learning"
+NO_SUBJECT_CONTEXT = "No particular subject was chosen for this conversation."
 
 SYSTEM_PROMPT = """You are a controlled educational AI assistant for STOA, a Swiss after-school \
 learning platform. You ONLY answer questions related to {subject}. The student is in {grade}: \
@@ -642,10 +649,12 @@ def _reply(
     """Build the prompt and ask the model."""
     language = asker.locale
     safe_content = ai_service.sanitise_input(asked.content, correlation_id=call.correlation_id)
-    normalized_subject = learning_profile_service.normalize_subject(asker.subject)
+    subject = curriculum_service.subject_id(asker.subject)
     system_prompt = SYSTEM_PROMPT.format(
-        subject=normalized_subject,
-        subject_context=learning_profile_service.subject_prompt_context(normalized_subject),
+        subject=subject or NO_SUBJECT,
+        subject_context=(
+            learning_profile_service.subject_prompt_context(subject) if subject else NO_SUBJECT_CONTEXT
+        ),
         grade=grade_for_prompt(asker.grade, language),
         language=language,
         language_name=ai_service.language_name(language),

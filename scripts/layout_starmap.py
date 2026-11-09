@@ -54,7 +54,7 @@ from itertools import combinations
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from stoa.db.repositories import curriculum_ops_repo, practice_repo  # noqa: E402
+from stoa.db.repositories import curriculum_ops_repo  # noqa: E402
 from stoa.services import curriculum_service, practice_projection_service  # noqa: E402
 
 
@@ -253,10 +253,10 @@ def _prerequisites(subject_id: str, units: Sequence[Mapping[str, object]]) -> di
 def collect(subject_id: str) -> SubjectInput:
     """Read one subject's topics, units and skills, dropping the dark units."""
     rows = curriculum_ops_repo.list_practice_rows()
-    wanted = practice_repo.normal_subject_id(subject_id)
+    wanted = curriculum_service.subject_key(subject_id)
 
     def mine(row: Mapping[str, object]) -> bool:
-        return practice_repo.normal_subject_id(row.get("subject_id", "")) == wanted
+        return curriculum_service.subject_key(row.get("subject_id", "")) == wanted
 
     subject_rows = [r for r in rows if str(r.get("SK", "")).startswith("SUBJECT#") and mine(r)]
     if not subject_rows:

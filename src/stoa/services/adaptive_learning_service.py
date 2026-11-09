@@ -1967,10 +1967,7 @@ def _parse_time(value: str) -> datetime | None:
 
 
 def _safe_subject(subject: Any) -> str:
-    try:
-        return learning_profile_service.normalize_subject(str(subject or "math"))
-    except ValueError:
-        return "math"
+    return curriculum_service.counted_subject(subject)
 
 
 def _actor_id(user: dict[str, Any]) -> str:

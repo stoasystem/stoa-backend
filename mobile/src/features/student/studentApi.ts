@@ -13,7 +13,7 @@ export type StudentProfile = {
 
 export type StudentDashboardSummary = {
   profile: StudentProfile;
-  practiceOverview: unknown;
+  practiceProgress: unknown;
   notifications: unknown;
 };
 
@@ -25,8 +25,6 @@ export type PracticeTeacherHelpInput = {
 
 export const createStudentApi = (api: MobileApiClient) => ({
   getProfile: () => api<StudentProfile>({ path: "/students/me/profile" }),
-
-  getPracticeOverview: () => api<unknown>({ path: "/practice/overview" }),
 
   getCurriculumCatalog: () => api<unknown>({ path: "/practice/curriculum/catalog" }),
 
@@ -49,14 +47,14 @@ export const createStudentApi = (api: MobileApiClient) => ({
 
   getDashboardSummary: async (): Promise<StudentDashboardSummary> => {
     const profile = await api<StudentProfile>({ path: "/students/me/profile" });
-    const [practiceOverview, notifications] = await Promise.all([
-      api<unknown>({ path: "/practice/overview" }),
+    const [practiceProgress, notifications] = await Promise.all([
+      api<unknown>({ path: "/practice/curriculum/progress" }),
       api<unknown>({ path: "/notifications" })
     ]);
 
     return {
       profile,
-      practiceOverview,
+      practiceProgress,
       notifications
     };
   }

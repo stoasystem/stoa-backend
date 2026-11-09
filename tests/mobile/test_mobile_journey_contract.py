@@ -17,10 +17,11 @@ def test_student_api_uses_real_backend_endpoints() -> None:
     # Retired in #148: questions are asked in a learning conversation.
     assert 'path: "/questions"' not in source
     assert "/request-teacher" not in source
+    # Retired in #354: the curriculum progress and catalog say what it said.
+    assert "/practice/overview" not in source
 
     for endpoint in [
         "/students/me/profile",
-        "/practice/overview",
         "/practice/curriculum/catalog",
         "/practice/curriculum/progress",
         "/practice/curriculum/lessons/",

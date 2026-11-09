@@ -1925,37 +1925,11 @@
         "retryable": false
       }
     },
-    "no_lessons_available": {
-      "action": null,
-      "domain": "practice",
-      "http_status": 404,
-      "message_key": "error.no_lessons_available",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
     "no_teacher_reply_to_report": {
       "action": null,
       "domain": "moderation",
       "http_status": 400,
       "message_key": "error.no_teacher_reply_to_report",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "no_topics_found": {
-      "action": null,
-      "domain": "practice",
-      "http_status": 404,
-      "message_key": "error.no_topics_found",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -3121,7 +3095,9 @@
       "domain": "practice",
       "http_status": 422,
       "message_key": "error.subject_unknown",
-      "public_fields": [],
+      "public_fields": [
+        "fields"
+      ],
       "retry": {
         "idempotent_only": false,
         "max_attempts": 0,

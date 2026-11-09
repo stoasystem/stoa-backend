@@ -1,6 +1,9 @@
-"""Curriculum catalog projections built from existing practice content."""
+"""Curriculum catalog projections built from existing practice content, and
+the one entry point for subject ids (#354): the alias table, the supported
+subjects, and how a subject is read, compared and refused."""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from decimal import Decimal
 from typing import Any
 
@@ -8,8 +11,108 @@ from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.services import practice_projection_service
 from stoa.services import curriculum_translations
 from stoa.services.curriculum_translations import translated_title
+from stoa.services.practice_errors import PracticeErrorCode, PracticeViolation
 
-SUPPORTED_SUBJECTS = {"math", "physics", "german", "english"}
+# ── Subject ids ───────────────────────────────────────────────────────────
+#
+# The one place a subject id is read (#317, #354). `math` is canonical: every
+# response, profile and conversation says it. The content rows keep the key
+# they were seeded with (`mathematics`), and the progress and answer rows copy
+# it, so stored values are normalised when read rather than migrated.
+
+# Every subject the platform teaches, with its rollout mark and how the answer
+# model is told to treat it.
+SUPPORTED_SUBJECTS: dict[str, dict[str, str]] = {
+    "math": {
+        "label": "Mathematics",
+        "rollout_state": "active",
+        "prompt_focus": "Use step-by-step mathematical reasoning and keep the student doing the thinking.",
+    },
+    "physics": {
+        "label": "Physics",
+        "rollout_state": "foundation",
+        "prompt_focus": "Explain concepts with simple physical intuition, units, and step-by-step reasoning.",
+    },
+    "german": {
+        "label": "German",
+        "rollout_state": "foundation",
+        "prompt_focus": "Treat this as language learning: correct, explain grammar or wording, and give examples.",
+    },
+    "english": {
+        "label": "English",
+        "rollout_state": "foundation",
+        "prompt_focus": "Treat this as language learning: correct, explain grammar or wording, and give examples.",
+    },
+}
+
+# Other spellings of a supported subject, lowercased. Matched after trimming
+# and lowercasing, so `Mathematik` and ` MATHEMATICS ` are found here too.
+_SUBJECT_ALIASES = {
+    "mathematics": "math",
+    "mathematik": "math",
+    "physik": "physics",
+    "deutsch": "german",
+    "englisch": "english",
+}
+
+
+def subject_id(value: object) -> str | None:
+    """The canonical id of a subject the platform teaches, else None.
+
+    Nothing unknown is guessed: `chemistry`, a blank or a number is None, not
+    `math`. A caller that has to have a subject refuses (`require_subject`);
+    one that only compares uses `subject_key`.
+    """
+    if not isinstance(value, str):
+        return None
+    text = value.strip().lower()
+    text = _SUBJECT_ALIASES.get(text, text)
+    return text if text in SUPPORTED_SUBJECTS else None
+
+
+def subject_key(value: object) -> str:
+    """What two subject values are compared by: the canonical id when known,
+    else the stored text trimmed and lowercased, so an unknown value still
+    matches only itself."""
+    return subject_id(value) or str(value if value is not None else "").strip().lower()
+
+
+def readable_subject(stored: object) -> str:
+    """A stored subject as a client reads it back: the canonical id, else the
+    stored text unchanged, so a value written before writes were checked can
+    still be seen and corrected."""
+    return subject_id(stored) or str(stored if stored is not None else "")
+
+
+def counted_subject(stored: object) -> str:
+    """The subject a stored record is counted under in learning aggregates:
+    the canonical id, with no subject and an unknown one counted as math.
+
+    Only for tallies over old records (weak topics, activity, memory), where a
+    record has to land in some bucket and math is the subject the platform
+    teaches in full. Nothing a client writes and no prompt goes through here.
+    """
+    return subject_id(stored) or "math"
+
+
+def same_subject(stored: object, requested: object) -> bool:
+    return subject_key(stored) == subject_key(requested)
+
+
+def require_subject(value: object, *, field: str) -> str:
+    """The canonical id of a subject a client is writing; anything else is
+    refused with `subject_unknown`, naming the request field."""
+    canonical = subject_id(value)
+    if canonical is None:
+        raise PracticeViolation(PracticeErrorCode.SUBJECT_UNKNOWN, fields=[field])
+    return canonical
+
+
+def require_subjects(values: Iterable[object], *, field: str) -> list[str]:
+    """Each subject of a list a client is writing, canonical and each once."""
+    return list(dict.fromkeys(require_subject(value, field=field) for value in values))
+
+
 VISIBLE_STATES = {"active"}
 PREVIEW_ROLES = {"admin", "teacher"}
 
@@ -27,7 +130,7 @@ def list_catalog(
         for subject in sorted(practice_repo.get_subjects(), key=lambda item: _as_int(item.get("order", 0)))
         if _subject_matches(subject, subject_id, grade_level)
         and _matches_state(subject, rollout_state, include_preview)
-        and _normal_subject_id(subject.get("subject_id", "")) in SUPPORTED_SUBJECTS
+        and subject_key(subject.get("subject_id", "")) in SUPPORTED_SUBJECTS
     ]
     topics = [
         _build_topic(topic, locale)
@@ -36,7 +139,7 @@ def list_catalog(
     ]
     units = [
         _build_unit(unit, locale)
-        for unit in sorted(_all_units(topics), key=lambda item: (_normal_subject_id(item.get("subject_id", "")), item.get("topic_id", ""), _as_int(item.get("order", 0))))
+        for unit in sorted(_all_units(topics), key=lambda item: (subject_key(item.get("subject_id", "")), item.get("topic_id", ""), _as_int(item.get("order", 0))))
         if _matches_state(unit, rollout_state, include_preview)
     ]
     lessons = [
@@ -102,7 +205,7 @@ def skill_unit_ids(*, subject_id: str | None = None) -> dict[str, str]:
     """
     found: dict[str, str] = {}
     for subject, skills in curriculum_translations.SKILL_UNITS.items():
-        if subject_id and _normal_subject_id(subject) != _normal_subject_id(subject_id):
+        if subject_id and subject_key(subject) != subject_key(subject_id):
             continue
         for skill_id, unit_id in skills.items():
             if found.get(skill_id, unit_id) != unit_id:
@@ -116,12 +219,12 @@ def list_skills(*, subject_id: str | None = None, locale: str = "de") -> dict[st
     items = [
         {
             "id": skill_id,
-            "subjectId": _normal_subject_id(subject),
+            "subjectId": subject_key(subject),
             "unitId": unit_id,
             "name": curriculum_translations.skill_title(skill_id, locale),
         }
         for subject, skills in curriculum_translations.SKILL_UNITS.items()
-        if not subject_id or _normal_subject_id(subject) == _normal_subject_id(subject_id)
+        if not subject_id or subject_key(subject) == subject_key(subject_id)
         for skill_id, unit_id in skills.items()
     ]
     return {"items": items, "count": len(items)}
@@ -166,7 +269,7 @@ def _active_exercises_for_lesson(lesson_id: str, include_preview: bool) -> list[
 def _build_subject(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
     name = raw.get("name", raw["subject_id"].title())
     return {
-        "id": _normal_subject_id(raw["subject_id"]),
+        "id": subject_key(raw["subject_id"]),
         "name": translated_title(raw["subject_id"], name, locale),
         "description": raw.get("description", ""),
         "gradeLevels": raw.get("grade_levels", []),
@@ -180,7 +283,7 @@ def _build_topic(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
     title = raw.get("title", raw["topic_id"])
     return {
         "id": raw["topic_id"],
-        "subjectId": _normal_subject_id(raw["subject_id"]),
+        "subjectId": subject_key(raw["subject_id"]),
         "gradeLevel": raw.get("grade_level", raw.get("grade_band", "")),
         "title": translated_title(raw["topic_id"], title, locale),
         "description": raw.get("description", ""),
@@ -212,7 +315,7 @@ def _build_unit(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
     title = raw.get("title", raw["unit_id"])
     return {
         "id": raw["unit_id"],
-        "subjectId": _normal_subject_id(raw["subject_id"]),
+        "subjectId": subject_key(raw["subject_id"]),
         "gradeLevel": raw.get("grade_level", raw.get("grade_band", "")),
         "topicId": raw["topic_id"],
         "title": translated_title(raw["unit_id"], title, locale),
@@ -233,11 +336,11 @@ def _prerequisite_unit_ids(raw: dict[str, Any]) -> list[str]:
 
 def get_prerequisites(subject_id: str) -> dict[str, list[str]]:
     """The unit prerequisite graph of one subject, one entry per unit of that subject."""
-    subject = _normal_subject_id(subject_id)
+    subject = subject_key(subject_id)
     return {
         str(unit.get("unit_id") or ""): _prerequisite_unit_ids(unit)
         for unit in curriculum_ops_repo.list_practice_units()
-        if _normal_subject_id(str(unit.get("subject_id") or "")) == subject
+        if subject_key(str(unit.get("subject_id") or "")) == subject
         and str(unit.get("unit_id") or "")
     }
 
@@ -246,7 +349,7 @@ def _build_lesson(raw: dict[str, Any], *, exercise_count: int, locale: str = "de
     title = raw.get("title", raw["lesson_id"])
     return {
         "id": raw["lesson_id"],
-        "subjectId": _normal_subject_id(raw["subject_id"]),
+        "subjectId": subject_key(raw["subject_id"]),
         "gradeLevel": raw.get("grade_level", raw.get("grade_band", "")),
         "unitId": raw.get("unit_id", ""),
         "topicId": raw["topic_id"],
@@ -279,19 +382,19 @@ def _build_exercise(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _subject_matches(raw: dict[str, Any], subject_id: str | None, grade_level: str | None) -> bool:
-    if subject_id and _normal_subject_id(raw.get("subject_id", "")) != _normal_subject_id(subject_id):
+    if subject_id and subject_key(raw.get("subject_id", "")) != subject_key(subject_id):
         return False
     return _grade_matches(raw, grade_level)
 
 
 def _topic_matches(raw: dict[str, Any], subject_id: str | None, grade_level: str | None) -> bool:
-    if subject_id and _normal_subject_id(raw.get("subject_id", "")) != _normal_subject_id(subject_id):
+    if subject_id and subject_key(raw.get("subject_id", "")) != subject_key(subject_id):
         return False
     return _grade_matches(raw, grade_level)
 
 
 def _lesson_matches(raw: dict[str, Any], subject_id: str | None, grade_level: str | None) -> bool:
-    if subject_id and _normal_subject_id(raw.get("subject_id", "")) != _normal_subject_id(subject_id):
+    if subject_id and subject_key(raw.get("subject_id", "")) != subject_key(subject_id):
         return False
     return _grade_matches(raw, grade_level)
 
@@ -301,6 +404,12 @@ def _grade_matches(raw: dict[str, Any], grade_level: str | None) -> bool:
         return True
     grade_values = raw.get("grade_levels") or [raw.get("grade_level", raw.get("grade_band", ""))]
     return grade_level in grade_values
+
+
+def visible_to_students(raw: dict[str, Any]) -> bool:
+    """Whether the student catalog shows this subject, topic, unit or lesson row:
+    not archived, not in preview."""
+    return _is_visible(raw, include_preview=False)
 
 
 def _is_visible(raw: dict[str, Any], include_preview: bool) -> bool:
@@ -326,16 +435,12 @@ def _content_state(raw: dict[str, Any]) -> str:
 
 
 def _subject_language(subject_id: str) -> str:
-    subject = _normal_subject_id(subject_id)
+    subject = subject_key(subject_id)
     if subject == "german":
         return "de"
     if subject == "english":
         return "en"
     return "neutral"
-
-
-def _normal_subject_id(subject_id: str) -> str:
-    return practice_repo.normal_subject_id(subject_id)
 
 
 def _as_int(value: Any, default: int = 0) -> int:

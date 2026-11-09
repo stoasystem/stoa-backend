@@ -33,6 +33,7 @@ from stoa.services import (
     ai_service,
     ask_answer,
     attachment_service,
+    curriculum_service,
     learning_profile_service,
     locale_service,
     runtime_budget_service,
@@ -193,13 +194,17 @@ _AI_INVOCATION_DEADLINE_SECONDS = 90
 # Kept back from the Lambda's remaining time to store the answer and respond.
 _AI_PERSIST_RESERVE_SECONDS = 4
 
-_SUBJECT_ALIASES = {
-    "Mathematics": "math", "Mathematik": "math", "math": "math",
-    "Physics": "physics", "Physik": "physics", "physics": "physics",
-    "German": "german", "Deutsch": "german", "german": "german",
-    "English": "english", "english": "english",
-    "French": "french", "Französisch": "french", "french": "french",
-}
+
+def _answer_subject(stored: object) -> str:
+    """The subject an answer is generated for: the canonical id, read through
+    the one subject entry point (#354).
+
+    A conversation's subject is checked when it is opened; one stored before
+    that, naming a subject the platform does not teach, is "" - answered as no
+    particular subject - never guessed as math, and its text never reaches
+    the prompt.
+    """
+    return curriculum_service.subject_id(stored) or ""
 
 _MAX_MEMORY_TOPICS = 8
 
@@ -216,7 +221,7 @@ def _memory_context_for_student(student_id: str, actor: Actor, subject: str) -> 
         memory_summary = adaptive_learning_service.get_memory_summary(
             student_id=student_id,
             user=actor_projection(actor),
-            subject=_SUBJECT_ALIASES.get(subject, "math"),
+            subject=_answer_subject(subject),
             persist=False,
         )
         labels: list[str] = []
@@ -518,7 +523,7 @@ def _resolve_generation_context(
     return {
         "schema_version": "generation-context.v1",
         "locale": _student_locale(student_id),
-        "subject": _SUBJECT_ALIASES.get(subject, "math"),
+        "subject": _answer_subject(subject),
         "grade": grade,
         "memory_context": _memory_context_for_student(student_id, actor, subject),
         "practice_context": practice_context,
@@ -545,7 +550,7 @@ def _generation_context_without_request(
     return {
         "schema_version": "generation-context.v1",
         "locale": locale_service.effective_locale(profile),
-        "subject": _SUBJECT_ALIASES.get(str(conversation.get("subject") or ""), "math"),
+        "subject": _answer_subject(conversation.get("subject")),
         "grade": conversation_grade(conversation),
         "memory_context": None,
         "practice_context": None,

@@ -6,7 +6,6 @@ Student progress is stored under PK=PROGRESS#{user_id}.
 """
 import logging
 from collections.abc import Mapping
-from decimal import Decimal
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, status
@@ -115,12 +114,8 @@ _authorized_attempt_read = authorized(
     kind=ATTEMPT,
 )
 
-#: Wrong answers the dashboard shows, newest first.
-OVERVIEW_RECENT_MISTAKES = 5
 #: Wrong answers `/mistakes` sends, newest first.
 MISTAKES_PAGE = 20
-#: Weak topics the dashboard names, most mistakes first.
-OVERVIEW_WEAK_TOPICS = 3
 
 
 class PracticeHintRequest(BaseModel):
@@ -174,18 +169,6 @@ async def _authorized_hint_challenge_update(
     )
 
 
-def _as_int(val: Any, default: int = 0) -> int:
-    """Convert DynamoDB Decimal or any numeric to plain int."""
-    if val is None:
-        return default
-    if isinstance(val, Decimal):
-        return int(val)
-    return int(val)
-
-
-def _string_field(item: Mapping[str, object], field: str, default: str = "") -> str:
-    value = item.get(field)
-    return value if isinstance(value, str) else default
 
 
 def _optional_string_field(
@@ -230,20 +213,6 @@ def _actor_locale(actor: Actor) -> str:
     return locale_service.reader_locale(actor.user_id)
 
 
-def _build_unit(raw: dict, lessons: list[dict], locale: str = "de") -> dict:
-    return {
-        "id": raw["unit_id"],
-        "subjectId": raw["subject_id"],
-        "gradeLevel": raw.get("grade_level", ""),
-        "topicId": raw["topic_id"],
-        "title": translated_title(raw["unit_id"], raw["title"], locale),
-        "description": raw.get("description", ""),
-        "order": raw.get("order", 1),
-        "status": "available",
-        "lessons": lessons,
-    }
-
-
 def _actor_projection(actor: Actor) -> dict[str, object]:
     return {
         "sub": actor.user_id,
@@ -273,148 +242,6 @@ def _resolve_curriculum_student_id(user: dict, requested_student_id: str | None)
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
-
-@router.get("/subjects")
-async def list_subjects(_actor: Actor = Depends(_catalog_access)):
-    locale = _actor_locale(_actor)
-    subjects = practice_repo.get_subjects()
-    items = []
-    for s in sorted(subjects, key=lambda x: x.get("order", 0)):
-        items.append({
-            "id": s["subject_id"],
-            "name": translated_title(s["subject_id"], s["name"], locale),
-            "description": s.get("description", ""),
-            "gradeLevels": s.get("grade_levels", []),
-            "progress": 0,
-            "accent": s.get("accent", "blue"),
-        })
-    return {"items": items}
-
-
-@router.get("/overview")
-async def get_overview(actor: Actor = Depends(_practice_read)):
-    """Return a full practice overview for the student dashboard."""
-    locale = _actor_locale(actor)
-    evidence = student_evidence.for_student(actor.user_id, locale=locale)
-    completed_ids = evidence.completed_lesson_ids
-
-    # The streak counts Zurich days, so "today" must mean the same day here.
-    completed_today = evidence.lessons_completed_on(evidence.today)
-    daily_target = 3
-
-    # -- Subjects --
-    subjects_raw = practice_repo.get_subjects()
-    all_topics_raw = practice_repo.get_topics()
-    all_lessons = practice_repo.get_lessons()
-
-    # Per-topic progress
-    topic_progress: dict[str, dict] = {}
-    for t in all_topics_raw:
-        tid = t["topic_id"]
-        t_lessons = [lesson for lesson in all_lessons if lesson.get("topic_id") == tid]
-        done = sum(1 for lesson in t_lessons if lesson["lesson_id"] in completed_ids)
-        pct = int(done / len(t_lessons) * 100) if t_lessons else 0
-        current = next(
-            (lesson["lesson_id"] for lesson in sorted(t_lessons, key=lambda x: x.get("order", 0))
-             if lesson["lesson_id"] not in completed_ids),
-            t_lessons[-1]["lesson_id"] if t_lessons else None,
-        )
-        topic_progress[tid] = {"pct": pct, "current_lesson_id": current}
-
-    subjects_out = []
-    for s in sorted(subjects_raw, key=lambda x: _as_int(x.get("order", 0))):
-        subjects_out.append({
-            "id": s["subject_id"],
-            "name": translated_title(s["subject_id"], s["name"], locale),
-            "description": s.get("description", ""),
-            "gradeLevels": s.get("grade_levels", []),
-            "progress": int(
-                sum(topic_progress[t["topic_id"]]["pct"]
-                    for t in all_topics_raw if t.get("subject_id") == s["subject_id"])
-                / max(sum(1 for t in all_topics_raw if t.get("subject_id") == s["subject_id"]), 1)
-            ),
-            "accent": s.get("accent", "burgundy"),
-        })
-
-    topics_out = []
-    for t in sorted(all_topics_raw, key=lambda x: _as_int(x.get("order", 0))):
-        tp = topic_progress.get(t["topic_id"], {})
-        topics_out.append({
-            "id": t["topic_id"],
-            "subjectId": t["subject_id"],
-            "gradeLevel": t.get("grade_level", ""),
-            "title": translated_title(t["topic_id"], t["title"], locale),
-            "description": t.get("description", ""),
-            "order": _as_int(t.get("order", 0)),
-            "status": "available",
-            "progress": tp.get("pct", 0),
-            "currentLessonId": tp.get("current_lesson_id"),
-        })
-
-    # -- Recommended lesson --
-    recommended_raw = None
-    for lesson in sorted(all_lessons, key=lambda x: (x.get("topic_id", ""), x.get("order", 0))):
-        if lesson["lesson_id"] not in completed_ids:
-            recommended_raw = lesson
-            break
-    if not recommended_raw:
-        recommended_raw = all_lessons[0] if all_lessons else None
-    if not recommended_raw:
-        raise PracticeViolation(_P.NO_LESSONS_AVAILABLE)
-
-    challenges: list[Mapping[str, Any]] = [
-        practice_projection_service.build_challenge_preview(c, locale)
-        for c in practice_repo.get_challenges(recommended_raw["lesson_id"])
-    ]
-    recommended = practice_projection_service.build_lesson_preview(recommended_raw, challenges,
-                                _lesson_status(recommended_raw["lesson_id"], completed_ids,
-                                               topic_progress.get(recommended_raw.get("topic_id", ""), {}).get("current_lesson_id")),
-                                locale=locale)
-
-    # -- Mistakes --
-    recent_mistakes = []
-    for m in evidence.mistakes[:OVERVIEW_RECENT_MISTAKES]:
-        recent_mistakes.append({
-            "id": m.get("mistake_id", m.get("challenge_id", "")),
-            "challengeId": m.get("challenge_id", ""),
-            "lessonId": m.get("lesson_id", ""),
-            "topic": m.get("topic_id", ""),
-            "subject": m.get("subject_id", ""),
-            "prompt": m.get("prompt", ""),
-            "studentAnswer": m.get("student_answer", ""),
-            "reviewedAt": None,
-        })
-
-    # Weak topics: the topics with the most mistakes.
-    weak_topics = [
-        {
-            "id": tid,
-            "subject": "mathematics",
-            "topic": translated_title(
-                tid,
-                next((t["title"] for t in all_topics_raw if t["topic_id"] == tid), tid),
-                locale,
-            ),
-            "note": f"{count} incorrect answer{'s' if count != 1 else ''}",
-        }
-        for tid, count in evidence.mistakes_by_topic().most_common(OVERVIEW_WEAK_TOPICS)
-    ]
-
-    return {
-        "subjects": subjects_out,
-        "topics": topics_out,
-        "recommendedLesson": recommended,
-        "dailyGoal": {
-            "completed": completed_today,
-            "target": daily_target,
-            "label": f"{completed_today}/{daily_target} lessons today",
-        },
-        "studyStreak": evidence.study_streak,
-        "progressPoints": len(completed_ids) * 10,
-        "recentMistakes": recent_mistakes,
-        "weakTopics": weak_topics,
-    }
-
 
 @router.get("/curriculum/catalog")
 async def get_curriculum_catalog(
@@ -504,11 +331,11 @@ async def get_curriculum_progress(
     mistakes = [
         item
         for item in evidence.mistakes
-        if not subject_id or practice_repo.same_subject(item.get("subject_id", ""), subject_id)
+        if not subject_id or curriculum_service.same_subject(item.get("subject_id", ""), subject_id)
     ]
     return {
         "studentId": resolved_student_id,
-        "subjectId": subject_id,
+        "subjectId": curriculum_service.subject_key(subject_id) if subject_id else subject_id,
         "completedLessons": len(completed),
         "completedLessonIds": [
             item.lesson_id for item in evidence.completions if item.lesson_id in completed
@@ -769,20 +596,37 @@ async def get_roadmap(
     topic_id: str,
     actor: Actor = Depends(_practice_read),
 ):
-    """Return the lesson roadmap for a topic."""
+    """Return the lesson roadmap for a topic.
+
+    What the student catalog shows, nothing more (#354): a topic, unit or
+    lesson that is archived or still in preview is left out, as
+    `curriculum_service.list_catalog` leaves it out. The subject is answered
+    as its canonical id, however it was spelled in the path.
+    """
     locale = _actor_locale(actor)
     topic = practice_repo.get_topic(topic_id)
-    if not topic or not practice_repo.same_subject(topic.get("subject_id", ""), subject_id):
+    if (
+        not topic
+        or not curriculum_service.same_subject(topic.get("subject_id", ""), subject_id)
+        or not curriculum_service.visible_to_students(topic)
+    ):
         raise PracticeViolation(_P.TOPIC_NOT_FOUND)
+    subject = curriculum_service.subject_key(subject_id)
 
-    completed_ids = student_evidence.for_student(actor.user_id).completed_lesson_ids_in(subject_id)
+    completed_ids = student_evidence.for_student(actor.user_id).completed_lesson_ids_in(subject)
 
     units_raw = sorted(
-        practice_repo.get_units(topic_id), key=lambda x: x.get("order", 0)
+        (unit for unit in practice_repo.get_units(topic_id) if curriculum_service.visible_to_students(unit)),
+        key=lambda x: x.get("order", 0),
     )
+    unit_ids = {unit["unit_id"] for unit in units_raw}
     # Find the current lesson (first non-completed)
     all_lessons = sorted(
-        practice_repo.get_lessons(topic_id=topic_id),
+        (
+            lesson
+            for lesson in practice_repo.get_lessons(topic_id=topic_id)
+            if lesson.get("unit_id") in unit_ids and curriculum_service.visible_to_students(lesson)
+        ),
         key=lambda x: (x.get("unit_id", ""), x.get("order", 0)),
     )
     current_lesson_id = next(
@@ -804,7 +648,7 @@ async def get_roadmap(
                 "order": lesson.get("order", 1),
                 "status": st,
                 "estimatedMinutes": lesson.get("estimated_minutes", 10),
-                "subjectId": subject_id,
+                "subjectId": subject,
                 "gradeLevel": lesson.get("grade_level", ""),
                 "topicId": topic_id,
                 "unitId": lesson.get("unit_id", ""),
@@ -819,12 +663,12 @@ async def get_roadmap(
         })
 
     return {
-        "subjectId": subject_id,
+        "subjectId": subject,
         "topicId": topic_id,
         "gradeLevel": topic.get("grade_level", ""),
         "topic": {
             "id": topic["topic_id"],
-            "subjectId": subject_id,
+            "subjectId": subject,
             "gradeLevel": topic.get("grade_level", ""),
             "title": translated_title(topic["topic_id"], topic["title"], locale),
             "description": topic.get("description", ""),
@@ -834,65 +678,6 @@ async def get_roadmap(
         "progress": progress_pct,
         "currentLessonId": current_lesson_id,
         "units": roadmap_units,
-    }
-
-
-@router.get("/{subject_id}/{topic_id}/path")
-async def get_path(
-    subject_id: str,
-    topic_id: str | None = None,
-    actor: Actor = Depends(_practice_read),
-):
-    """Return the practice path (units + lessons) for a subject/topic."""
-    locale = _actor_locale(actor)
-    topics: list[dict]
-    if topic_id:
-        topic = practice_repo.get_topic(topic_id)
-        topics = [topic] if topic is not None else []
-    else:
-        topics = practice_repo.get_topics(subject_id)
-
-    if not topics:
-        raise PracticeViolation(_P.NO_TOPICS_FOUND)
-
-    completed_ids = student_evidence.for_student(actor.user_id).completed_lesson_ids_in(subject_id)
-
-    selected_topic_id = _string_field(topics[0], "topic_id")
-    all_lessons = sorted(
-        practice_repo.get_lessons(topic_id=selected_topic_id if topic_id else None),
-        key=lambda x: (x.get("topic_id", ""), x.get("unit_id", ""), x.get("order", 0)),
-    )
-    current_lesson_id = next(
-        (lesson["lesson_id"] for lesson in all_lessons if lesson["lesson_id"] not in completed_ids),
-        all_lessons[-1]["lesson_id"] if all_lessons else None,
-    )
-
-    units_raw = sorted(
-        practice_repo.get_units(selected_topic_id) if topic_id
-        else [], key=lambda x: x.get("order", 0)
-    )
-
-    path_units = []
-    for unit_raw in units_raw:
-        unit_lessons_raw = [lesson for lesson in all_lessons if lesson.get("unit_id") == unit_raw["unit_id"]]
-        unit_lessons = []
-        for lesson in unit_lessons_raw:
-            challenges: list[Mapping[str, Any]] = [
-                practice_projection_service.build_challenge_preview(c, locale)
-                for c in practice_repo.get_challenges(lesson["lesson_id"])
-            ]
-            st = _lesson_status(lesson["lesson_id"], completed_ids, current_lesson_id)
-            unit_lessons.append(
-                practice_projection_service.build_lesson_preview(lesson, challenges, st, locale=locale)
-            )
-        path_units.append(_build_unit(unit_raw, unit_lessons, locale))
-
-    return {
-        "subjectId": subject_id,
-        "gradeLevel": topics[0].get("grade_level", "") if topics else "",
-        "topicId": topics[0]["topic_id"] if topics else "",
-        "topicTitle": translated_title(topics[0]["topic_id"], topics[0]["title"], locale) if topics else "",
-        "units": path_units,
     }
 
 
