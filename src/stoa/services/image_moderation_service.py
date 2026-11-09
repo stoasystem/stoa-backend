@@ -21,14 +21,16 @@ from dataclasses import dataclass
 from io import BytesIO
 import logging
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from botocore.exceptions import ClientError
-from PIL import Image
 
 from stoa.config import Settings
 from stoa.security.attachment_errors import AttachmentErrorCode
 from stoa.services.file_validation_service import ValidationFailure
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +193,10 @@ def _rendition(data: bytes, width: int, height: int) -> bytes:
     """
     if len(data) <= REKOGNITION_MAX_IMAGE_BYTES and min(width, height) >= REKOGNITION_MIN_EDGE:
         return data
+    # Pillow is imported only for the uploads that need a new rendition, not
+    # on every Lambda cold start (#306).
+    from PIL import Image
+
     try:
         with Image.open(BytesIO(data)) as image:
             image.load()
@@ -219,6 +225,8 @@ def _rendition_size(width: int, height: int, long_edge: int) -> tuple[int, int]:
 
 def _flatten(image: Image.Image) -> Image.Image:
     """RGB for JPEG; transparency is laid on white, as a viewer would show it."""
+    from PIL import Image
+
     if image.mode in {"RGBA", "LA"} or (image.mode == "P" and "transparency" in image.info):
         rgba = image.convert("RGBA")
         canvas = Image.new("RGB", rgba.size, (255, 255, 255))

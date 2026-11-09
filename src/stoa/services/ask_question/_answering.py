@@ -45,7 +45,7 @@ from stoa.services.ask_question._replay import (
     _conversation_repository_call,
     _stored_student_message,
 )
-from stoa.services.ask_question.errors import AskQuestionErrorCode, parse_error_code
+from stoa.services.ask_question_errors import AskQuestionErrorCode, parse_error_code
 from stoa.services.ask_question.models import (
     ChatMessage,
     GenerationProgressResponse,

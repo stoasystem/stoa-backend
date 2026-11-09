@@ -39,7 +39,7 @@ from stoa.routers import conversations
 from stoa.services import ai_service, allowance_service, entitlement_service
 from stoa.services.ask_question import _admission, _answering
 from stoa.services.ask_question._admission import AdmissionError, UsageEvidence
-from stoa.services.ask_question.errors import AskQuestionErrorCode
+from stoa.services.ask_question_errors import AskQuestionErrorCode
 
 
 class MockBedrockProvider:
