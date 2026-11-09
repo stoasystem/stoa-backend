@@ -1,6 +1,5 @@
 """Public non-privileged teacher candidacy and guarded lifecycle endpoints."""
 
-from functools import lru_cache
 from typing import Any
 
 import boto3
@@ -61,7 +60,6 @@ class TeacherActivationClaimRequest(BaseModel):
     password: str = Field(min_length=12, max_length=256)
 
 
-@lru_cache(maxsize=1)
 def get_teacher_identity_provider(settings: Settings = Depends(get_settings)) -> Any:
     return boto3.client("cognito-idp", region_name=settings.aws_region)
 
