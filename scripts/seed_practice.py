@@ -990,7 +990,7 @@ RETIRED_BUILDERS = (_retired_textaufgaben_data,)
 # subjects; the subject list shows a subject whether or not it has lessons.
 #
 # The stars' prerequisites, drawn from the upstream edges between knowledge
-# points, are always written with them: the unit rows are the only source the
+# points, are written by both options: the unit rows are the only source the
 # runtime reads (stoa-backend#317). A prerequisite no longer locks a star
 # (stoa-backend#125); it only decides which unlit prerequisites a star reports
 # and where the map recommends starting.

@@ -105,6 +105,10 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
    against the deployed vocabulary.
 10. **Seed the stars:** `uv run python scripts/seed_practice.py --knowledge-base` writes the
     stars and nebulae in preview: hidden from students, there for the drafts to name.
+    The stars' rows carry their prerequisites, drawn from the upstream edges between
+    knowledge points with every cycle left out; the rows are the only place the runtime
+    reads prerequisites (stoa-backend#317), and a prerequisite locks nothing
+    (stoa-backend#125).
     Run it with `--dry-run` first: that prints the seed hash and writes nothing.
 11. **Dry run and apply** each manifest through `POST /admin/curriculum/migrations/dry-run`
     and `.../apply`. Every practice set becomes a draft; nothing is published.
@@ -131,10 +135,6 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
     sets are skipped, and a set left in review or approved continues from there.
 13. **Go live:** `seed_practice.py --knowledge-base-live` writes the stars and nebulae
     active, and the English and physics subjects with them.
-14. **Prerequisites:** both seed options write the stars' prerequisites, drawn from the
-    upstream edges between knowledge points with every cycle left out; the unit rows
-    are the only place the runtime reads them (stoa-backend#317). A prerequisite no
-    longer locks a star (stoa-backend#125).
 
 ### Running the seed again
 

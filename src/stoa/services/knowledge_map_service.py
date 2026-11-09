@@ -675,8 +675,13 @@ def neighbourhood(
 
 def _prerequisites_of(unit_id: str, units: Mapping[str, Mapping[str, Any]]) -> list[str]:
     """What a star needs, from its unit row - shown, never locking."""
-    stated = [str(item) for item in units[unit_id].get("prerequisiteUnitIds") or () if item]
-    return [item for item in dict.fromkeys(stated) if item in units and item != unit_id]
+    stated = units[unit_id].get("prerequisiteUnitIds")
+    if not isinstance(stated, list | tuple):
+        return []
+    return [
+        item for item in dict.fromkeys(str(entry or "") for entry in stated)
+        if item and item in units and item != unit_id
+    ]
 
 
 def _focus(

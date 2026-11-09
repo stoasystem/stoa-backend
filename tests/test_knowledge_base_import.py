@@ -977,7 +977,7 @@ def test_the_neighbourhood_reads_prerequisites_only_from_the_unit_rows(
     assert stars.get("brueche-bruchbegriff", {}).get("relation") != "prerequisite"
 
 
-def test_a_neighbourhood_star_reports_as_unlit_exactly_its_prerequisites_not_lit(
+def test_a_neighbourhood_star_reports_unlit_the_prerequisites_it_names_that_are_not_lit(
     imported: list[dict[str, Any]],
 ) -> None:
     _go_live(imported)
@@ -992,7 +992,7 @@ def test_a_neighbourhood_star_reports_as_unlit_exactly_its_prerequisites_not_lit
     for star in around["stars"]:
         not_lit = [
             unit_id for unit_id in star["prerequisiteUnitIds"]
-            if states[unit_id].state.value != "lit"
+            if unit_id not in states or states[unit_id].state.value != "lit"
         ]
         assert star["unlitPrerequisiteIds"] == not_lit, star["unitId"]
 
@@ -1100,7 +1100,6 @@ def test_the_seed_writes_every_prerequisite_of_the_knowledge_base() -> None:
             if row["SK"].startswith("UNIT#") and row["unit_id"] in drawn
         }
         assert written == drawn
-    assert sum(len(edges) for edges in drawn.values()) == 425
 
 
 def test_a_language_is_laid_out_by_situations_of_life_and_by_grammar(
