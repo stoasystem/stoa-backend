@@ -96,8 +96,10 @@ These are what keep an existing map from jumping when content changes.
    discarded, the layout is recomputed in full, `layout_version` goes up, and the
    reason is written to `starmap_layout.relayout_reason`.
 
-Re-run the script after a curriculum change; the result belongs in the seed and
-migration checklist.
+Re-run the script after a curriculum change that adds stars; the result belongs
+in the seed and migration checklist. Re-running `scripts/seed_practice.py` alone
+does not move anything: the seed updates only the fields it owns and never writes
+the position fields above (stoa-backend#352).
 
 ## Running it
 

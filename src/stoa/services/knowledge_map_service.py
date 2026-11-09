@@ -4,12 +4,12 @@ Serves `GET /practice/knowledge-map` (stoasystem/stoa-frontend#48 draws it).
 A subject is a galaxy, a topic is a nebula, a unit is a star, and each star
 carries the learning state `knowledge_mastery_service` judges it to be in.
 
-Two things are deliberately absent rather than faked:
-
-* **Prerequisites** are `[]` until stoa-backend#56 stores them. With no edge,
-  nothing locks, which is what stoa-frontend#9 point 7 asks for.
-* **Skills** are `[]` until stoa-backend#58 fills the vocabulary. The 60
-  exercises on the platform today carry none.
+* **Prerequisites** are the unit rows' `prerequisite_unit_ids`, which only the
+  seed writes. Since stoa-backend#125 they lock nothing; they decide which
+  prerequisites a star reports unlit and where the map recommends starting. The
+  view around one star still adds the knowledge base's own edges
+  (`_prerequisites_of`) until stoa-backend#317 makes the rows the only source.
+* **Skills** are the skill points each star's exercises train (stoa-backend#58).
 
 Coordinates are computed here, deterministically from the identifiers, so the
 same sky comes back in the same arrangement on every request and for every

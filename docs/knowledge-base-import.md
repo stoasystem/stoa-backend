@@ -105,6 +105,7 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
    against the deployed vocabulary.
 10. **Seed the stars:** `uv run python scripts/seed_practice.py --knowledge-base` writes the
     stars and nebulae in preview: hidden from students, there for the drafts to name.
+    Run it with `--dry-run` first: that prints the seed hash and writes nothing.
 11. **Dry run and apply** each manifest through `POST /admin/curriculum/migrations/dry-run`
     and `.../apply`. Every practice set becomes a draft; nothing is published.
 12. **Review** the drafts in the curriculum workflow. The licence permission is in
@@ -130,6 +131,24 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
     sets are skipped, and a set left in review or approved continues from there.
 13. **Go live:** `seed_practice.py --knowledge-base-live` writes the stars and nebulae
     active, and the English and physics subjects with them.
-14. **Prerequisites:** once stoa-backend#125 stops prerequisites from locking a star, add
+14. **Prerequisites:** a prerequisite no longer locks a star (stoa-backend#125); add
     `--knowledge-base-prerequisites` to write the stars' prerequisites, drawn from the
     upstream edges between knowledge points with every cycle left out.
+
+### Running the seed again
+
+`seed_practice.py` updates its rows field by field instead of replacing them: it
+SETs the fields it owns (`SEED_OWNED_FIELDS`), REMOVEs the owned fields a row no
+longer has a value for, and leaves every other field alone. The star map positions
+`scripts/layout_starmap.py` writes onto the same subject, topic and unit rows are
+among those, so a re-run keeps the map where it was and needs no new layout; only
+stars the run adds need `layout_starmap.py --apply`. The seed is the only writer of
+the curriculum structure and its prerequisites - there is no admin route that edits
+them - so a change goes into the repository and is seeded.
+
+When every row is written, the seed records `seed_hash` (sha256 over every field it
+owns, rows sorted by key), `seeded_at`, the `git_commit` it ran from and `git_dirty`
+(uncommitted changes), with the knowledge base flags it ran with, in the row
+`PK=PRACTICE, SK=CURRICULUM_SEED`. `--dry-run` prints the hash it would record, and
+`--print-hash` prints only that hash, needing no AWS access: run it with the same
+flags to check whether the table still holds what the repository seeds.

@@ -441,38 +441,6 @@ def list_practice_units() -> list[CurriculumItem]:
     )
 
 
-def set_unit_prerequisites(
-    *,
-    unit_id: str,
-    prerequisite_unit_ids: list[str],
-    actor_id: str,
-    updated_at: str,
-) -> CurriculumItem:
-    """Replace one unit's prerequisite list; the unit itself is never created here."""
-    table = db_table.table()
-    resp = _update_item(
-        table,
-        Key={"PK": "PRACTICE", "SK": f"UNIT#{unit_id}"},
-        UpdateExpression=(
-            "SET #prerequisite_unit_ids = :prerequisite_unit_ids, "
-            "#updated_by = :updated_by, #updated_at = :updated_at"
-        ),
-        ConditionExpression="attribute_exists(SK)",
-        ExpressionAttributeNames={
-            "#prerequisite_unit_ids": "prerequisite_unit_ids",
-            "#updated_by": "updated_by",
-            "#updated_at": "updated_at",
-        },
-        ExpressionAttributeValues={
-            ":prerequisite_unit_ids": list(prerequisite_unit_ids),
-            ":updated_by": actor_id,
-            ":updated_at": updated_at,
-        },
-        ReturnValues="ALL_NEW",
-    )
-    return _mapping(resp.get("Attributes", {}))
-
-
 def append_audit_event(public_id: str, event: CurriculumItem) -> None:
     table = db_table.table()
     _put_item(

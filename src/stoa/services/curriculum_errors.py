@@ -21,7 +21,6 @@ from stoa.security.errors import SecurityClientAction
 class CurriculumErrorCode(StrEnum):
     CURRICULUM_CAPABILITY_REQUIRED = "curriculum_capability_required"
     CURRICULUM_VERSION_NOT_FOUND = "curriculum_version_not_found"
-    CURRICULUM_UNIT_NOT_FOUND = "curriculum_unit_not_found"
     VALIDATION_FAILED = "validation_failed"
     DRAFT_NOT_EDITABLE = "draft_not_editable"
     NOT_REVIEWABLE = "not_reviewable"
@@ -51,7 +50,6 @@ _NAMES_FIELDS = frozenset({"fields"})
 CURRICULUM_ERROR_REGISTRY: dict[CurriculumErrorCode, RuleContract] = {
     CurriculumErrorCode.CURRICULUM_CAPABILITY_REQUIRED: RuleContract(403),
     CurriculumErrorCode.CURRICULUM_VERSION_NOT_FOUND: RuleContract(404),
-    CurriculumErrorCode.CURRICULUM_UNIT_NOT_FOUND: RuleContract(404),
     CurriculumErrorCode.VALIDATION_FAILED: RuleContract(
         422, action=_CORRECT_INPUT, public_fields=_NAMES_FIELDS
     ),
