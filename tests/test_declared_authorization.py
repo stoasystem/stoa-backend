@@ -575,3 +575,20 @@ def test_the_parent_account_routes_ask_the_policy_and_record_it(actor, status, a
 
     assert TestClient(app).get("/parents/me/thing").status_code == status
     assert _results(sink) == audit
+
+
+class _SinkFailingOnAllow(MemoryAuthorizationAuditSink):
+    def persist_authorization_decision(self, **values):
+        if values["result"] == "allowed":
+            raise RuntimeError("audit-outage-canary")
+        return super().persist_authorization_decision(**values)
+
+
+def test_an_allow_that_cannot_be_recorded_is_refused_without_a_second_record(loads):
+    sink = _SinkFailingOnAllow()
+    response = TestClient(_app(PARENT, sink), raise_server_exceptions=False).get(
+        "/students/student-1/thing"
+    )
+
+    assert response.status_code == 503
+    assert _results(sink) == []

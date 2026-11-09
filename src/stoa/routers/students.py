@@ -516,7 +516,10 @@ async def get_my_profile(
 ):
     """Return the current student's learning profile."""
     user_id = actor.user_id
+    # Read again after the authorization read: `SELF` hands over the Actor.
     profile = user_repo.get_user(user_id)
+    if not profile:
+        raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
     return _student_profile_response(
         profile,
         fallback_user_id=user_id,

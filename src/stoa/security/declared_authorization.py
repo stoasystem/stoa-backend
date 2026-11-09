@@ -67,7 +67,7 @@ from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
-    _valid_loaded_curriculum_answer,
+    valid_loaded_curriculum_answer,
     get_authorization_fact_repository,
     get_authorization_policy,
 )
@@ -256,7 +256,7 @@ def _practice_item_loader(read: Callable[[str, Actor], Mapping[str, object] | No
 
 async def _load_curriculum_answer(challenge_id: str, _actor: Actor) -> AuthorizedResource | None:
     item = practice_repo.get_challenge(challenge_id)
-    if not _valid_loaded_curriculum_answer(item, challenge_id):
+    if not valid_loaded_curriculum_answer(item, challenge_id):
         return None
     assert item is not None
     return AuthorizedResource(
@@ -395,6 +395,24 @@ def _hiding_purpose(
     return declaration.purpose_for(actor.role) or declaration.purposes[0][1]
 
 
+class _FactsReached:
+    """The context's fact repository, noting whether the facts were read.
+
+    Once they are, the policy decides and `record_authorization_decision`
+    records that decision itself; a failure after that point is the audit
+    sink's, and must not add a second, contradicting record.
+    """
+
+    def __init__(self, facts: AuthorizationFactRepository) -> None:
+        self._facts = facts
+        self.reached = False
+
+    async def facts_for(self, *args: Any) -> Any:
+        facts = await self._facts.facts_for(*args)
+        self.reached = True
+        return facts
+
+
 async def _decide(
     actor: Actor,
     resource_id: str,
@@ -404,21 +422,25 @@ async def _decide(
     load: Callable[[str], Awaitable[AuthorizedResource | None]],
     context: AuthorizationContext,
 ) -> AuthorizedResource:
+    facts = _FactsReached(context.facts)
     try:
         return await authorize_and_resolve(
             actor=actor,
             resource_id=resource_id,
             spec=AuthorizationSpec(resource_type, action, purpose, load),
-            fact_repository=context.facts,
+            fact_repository=facts,
             correlation_id=context.correlation_id,
             audit_sink=context.audit_sink,
             policy=context.policy,
         )
     except SecurityDecisionError as error:
-        if error.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE:
-            # The loader, the fact store or the audit sink failed: record that
-            # the request was refused for it. A refusal that cannot be recorded
-            # stays a refusal (`record_authorization_decision`).
+        if (
+            error.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE
+            and not facts.reached
+        ):
+            # The loader or the fact store failed before any decision: record
+            # that the request was refused for it. A refusal that cannot be
+            # recorded stays a refusal (`record_authorization_decision`).
             await _refuse(
                 actor,
                 ResourceRef(resource_type, resource_id, resource_id),
