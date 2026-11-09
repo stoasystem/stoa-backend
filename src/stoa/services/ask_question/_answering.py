@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 from typing import Any, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-import boto3
-
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import settings
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
@@ -1211,7 +1211,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         attachment_images: tuple[ai_service.PromptImage, ...] = ()
         if prepared:
             s3 = _conversation_repository_call(
-                lambda: boto3.client("s3", region_name=settings.aws_region)
+                lambda: aws.client(Kind.S3)
             )
             context_result = _conversation_repository_call(
                 lambda: attachment_service.extract_message_attachment_context(

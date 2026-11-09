@@ -10,6 +10,8 @@ import json
 import pytest
 
 from fakes.s3 import MultipartS3
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings
 from stoa.services import security_audit_retention as retention
 
@@ -259,7 +261,7 @@ def test_the_job_clamps_the_batch_it_is_asked_for(monkeypatch):
         return retention.AuditArchiveSummary(storage="disabled")
 
     monkeypatch.setattr(job.security_audit_retention, "archive_due_events", spy)
-    monkeypatch.setattr(job.boto3, "client", lambda *args, **kwargs: object())
+    aws.install({Kind.S3: object()})
 
     assert job.handler({"limit": 10_000}, None)["storage"] == "disabled"
     job.handler({"limit": 0}, None)

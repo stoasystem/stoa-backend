@@ -17,8 +17,8 @@ from collections.abc import Mapping
 from typing import Any, TypeGuard
 from uuid import uuid4
 
-import boto3
-
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import settings
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import report_repo
@@ -392,7 +392,7 @@ def _create_job(
 
 def invoke_weekly_report_job(job_id: str, *, job_type: str = RESEND_JOB_TYPE) -> dict[str, Any]:
     payload = {"job": _worker_event_name(job_type), "job_id": job_id}
-    client = boto3.client("lambda", region_name=settings.aws_region)
+    client = aws.client(Kind.LAMBDA)
     response = client.invoke(
         FunctionName=settings.weekly_report_function_name,
         InvocationType="Event",

@@ -25,6 +25,8 @@ from fakes.ask_question import (
     _run_message_command,
 )
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from stoa import aws
+from stoa.aws import Kind
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services import ai_service, ask_question
 from stoa.services.ask_question import _admission
@@ -52,7 +54,7 @@ def _invoke(
     table = AtomicAllowanceTable()
     provider = _Provider(text=text, stop_reason=stop_reason)
     _patch_allowance_table(monkeypatch, table)
-    monkeypatch.setattr(ai_service.boto3, "client", lambda *_a, **_k: provider)
+    aws.install({Kind.BEDROCK_RUNTIME: provider})
     command = _command()
     client = _admission.meter(command).model()
     kwargs: dict[str, Any] = {

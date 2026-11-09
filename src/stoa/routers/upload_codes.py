@@ -14,13 +14,10 @@ Its paths sit under their own prefix rather than `/files`, whose
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
-from stoa.deps import (
-    get_actor,
-    get_image_moderation_client,
-    get_s3_client,
-    get_s3_presign_client,
-)
+from stoa.deps import get_actor
 from stoa.models.upload_code import (
     UploadCodeCompleteRequest,
     UploadCodeCompleteResponse,
@@ -116,7 +113,6 @@ async def preview_upload_code_photo(
     code_id: str,
     authorized: AuthorizedResource = Depends(_conversation_read),
     actor: Actor = Depends(get_actor),
-    s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
@@ -126,7 +122,7 @@ async def preview_upload_code_photo(
     and lets the student choose to send it; it never attaches a ready upload alone.
     """
     prepared = upload_code_service.preview_upload(
-        authorized.ref.resource_id, code_id, actor, s3=s3, settings=settings
+        authorized.ref.resource_id, code_id, actor, s3=aws.client(Kind.S3), settings=settings
     )
     return StreamingResponse(
         prepared.iter_bytes(),
@@ -187,13 +183,12 @@ async def read_unbound_upload_code(
 async def preview_unbound_upload_code_photo(
     upload_id: str,
     actor: Actor = Depends(_reserved_upload_preview),
-    s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """The photo the phone put in, once it has passed, for the student to confirm."""
     prepared = upload_code_service.preview_unbound_upload(
-        upload_id, actor, s3=s3, settings=settings
+        upload_id, actor, s3=aws.client(Kind.S3), settings=settings
     )
     return StreamingResponse(
         prepared.iter_bytes(),
@@ -213,13 +208,12 @@ async def preview_unbound_upload_code_photo(
 async def redeem_upload_code(
     body: UploadCodeRedeemRequest,
     request: Request,
-    s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Spend a code on one image upload into the conversation it was made in."""
     return upload_code_service.redeem_code(
-        body, source_digest=_source_digest(request), s3=s3, settings=settings
+        body, source_digest=_source_digest(request), s3=aws.client(Kind.S3), settings=settings
     )
 
 
@@ -232,7 +226,6 @@ async def sign_upload_code_part(
     part_number: int,
     body: UploadCodePartRequest,
     request: Request,
-    signer=Depends(get_s3_presign_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
@@ -241,7 +234,7 @@ async def sign_upload_code_part(
         part_number,
         body,
         source_digest=_source_digest(request),
-        signer=signer,
+        signer=aws.client(Kind.S3_PRESIGN),
         settings=settings,
     )
 
@@ -254,8 +247,6 @@ async def sign_upload_code_part(
 async def complete_upload_code(
     body: UploadCodeCompleteRequest,
     request: Request,
-    s3=Depends(get_s3_client),
-    moderation=Depends(get_image_moderation_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
@@ -263,7 +254,7 @@ async def complete_upload_code(
     return upload_code_service.complete(
         body,
         source_digest=_source_digest(request),
-        s3=s3,
+        s3=aws.client(Kind.S3),
         settings=settings,
-        moderation=moderation,
+        moderation=aws.client(Kind.REKOGNITION_MODERATION),
     )

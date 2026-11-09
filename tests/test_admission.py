@@ -34,6 +34,8 @@ from fakes.ask_question import (
 )
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db.repositories import allowance_repo
 from stoa.routers import conversations
 from stoa.services import ai_service, allowance_service, entitlement_service
@@ -107,7 +109,7 @@ def _use(
     provider: MockBedrockProvider,
 ) -> None:
     _patch_allowance_table(monkeypatch, table)
-    monkeypatch.setattr(ai_service.boto3, "client", lambda *_a, **_k: provider)
+    aws.install({Kind.BEDROCK_RUNTIME: provider})
 
 
 def _ask(metered: _admission.MeteredModel) -> ai_service.AIProviderResult[dict[str, object]]:

@@ -12,7 +12,8 @@ from typing import Any, Callable, Mapping
 from urllib import request
 from uuid import uuid4
 
-import boto3
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import settings
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
@@ -1922,7 +1923,7 @@ def _record_event_attempts(event_ids: list[str], metadata_key: str, attempt: dic
 
 
 def _send_email_digest_provider(payload: dict[str, Any]) -> dict[str, Any]:
-    ses = boto3.client("ses", region_name=settings.aws_region)
+    ses = aws.client(Kind.SES)
     response = ses.send_email(
         Source=settings.notification_email_sender,
         Destination={"ToAddresses": [payload["recipientEmail"]]},

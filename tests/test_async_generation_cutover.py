@@ -38,6 +38,8 @@ from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fi
 from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from stoa import aws
+from stoa.aws import Kind
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.services import ai_service
@@ -261,24 +263,19 @@ def test_a_named_worker_is_invoked_asynchronously_at_its_alias(
             calls.append(kwargs)
             return {"StatusCode": 202}
 
-    clients: list[dict[str, Any]] = []
-
-    def client(service: str, **kwargs: Any) -> _Lambda:
-        clients.append({"service": service, **kwargs})
-        return _Lambda()
-
-    monkeypatch.setattr(dispatch.boto3, "client", client)
+    aws.install({Kind.LAMBDA_GENERATION: _Lambda()})
 
     response = _send(_client(), "k")
 
     assert response.status_code == 202, response.text
     assert model.calls == []
     [call] = calls
-    assert clients[0]["service"] == "lambda"
+    [built] = aws.requests()
+    assert (built.kind, built.service) == (Kind.LAMBDA_GENERATION, "lambda")
     assert call["FunctionName"] == WORKER_ALIAS
     # Bounded well inside the request's 29 seconds; a slow invoke leaves the
     # command to the sweep rather than the student to a gateway timeout.
-    config = clients[0]["config"]
+    config = built.config
     assert config.connect_timeout <= 2
     assert config.read_timeout <= 3
     assert config.retries["max_attempts"] <= 1

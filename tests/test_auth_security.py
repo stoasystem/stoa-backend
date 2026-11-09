@@ -16,6 +16,8 @@ from security.conftest import (
     InMemorySecurityRepository,
     RepositoryUnavailable,
 )
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
 from stoa.deps import (
     get_actor,
@@ -317,7 +319,7 @@ def test_t472_01_sec001_public_registration_rejects_privilege_without_mutation(
 ):
     """Red until Plan 03: exercise the reachable API and both mutation boundaries."""
     database_mutations = []
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake_cognito)
+    aws.install({Kind.COGNITO: fake_cognito})
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda _email: None)
     monkeypatch.setattr(auth.user_repo, "put_user", database_mutations.append)
     app = FastAPI()
@@ -358,7 +360,7 @@ def test_t472_01_registration_rejects_extra_or_nested_role_selectors_before_call
     payload_patch, monkeypatch, fake_cognito
 ):
     repository_calls = []
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake_cognito)
+    aws.install({Kind.COGNITO: fake_cognito})
     monkeypatch.setattr(auth.user_repo, "put_user", repository_calls.append)
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
@@ -389,7 +391,7 @@ def test_t472_01_confirmation_rejects_non_public_registration_commands_without_m
     role, monkeypatch, fake_cognito
 ):
     repository_mutations = []
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake_cognito)
+    aws.install({Kind.COGNITO: fake_cognito})
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
@@ -638,7 +640,7 @@ def test_logout_revokes_existing_token_at_protected_backend_route(
 ):
     keyset, _ = rsa_jwks_keysets
     repository = _DynamoShapedIdentityRepository(keyset.issuer, "subject-1")
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake_cognito)
+    aws.install({Kind.COGNITO: fake_cognito})
     client = TestClient(_logout_app(keyset, repository))
 
     now = int(datetime.now(timezone.utc).timestamp())
@@ -666,7 +668,7 @@ def test_logout_leaves_a_later_legitimate_sign_in_usable(
     """Negative control: the cut-off must not outlive the session it ended."""
     keyset, _ = rsa_jwks_keysets
     repository = _DynamoShapedIdentityRepository(keyset.issuer, "subject-1")
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake_cognito)
+    aws.install({Kind.COGNITO: fake_cognito})
     client = TestClient(_logout_app(keyset, repository))
 
     now = int(datetime.now(timezone.utc).timestamp())
@@ -688,7 +690,7 @@ def test_logout_does_not_record_a_cut_off_for_an_unverifiable_token(
 ):
     keyset, other = rsa_jwks_keysets
     repository = _DynamoShapedIdentityRepository(keyset.issuer, "subject-1")
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake_cognito)
+    aws.install({Kind.COGNITO: fake_cognito})
     client = TestClient(_logout_app(keyset, repository))
 
     forged = _signed_token(other, issued_at=int(datetime.now(timezone.utc).timestamp()))

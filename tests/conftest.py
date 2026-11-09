@@ -154,6 +154,23 @@ def _fresh_gateway_clients():
         clear()
 
 
+@pytest.fixture(autouse=True)
+def _no_aws_clients():
+    """Every test starts with no AWS client installed (#358).
+
+    `stoa.aws.client` is the one place a client is built, and in a test it hands
+    out only what the test put there with `stoa.aws.install`: asking for any
+    other kind raises `NotInstalled` rather than reaching AWS. A test that wants
+    real botocore clients (moto, Stubber, a presigned URL) calls
+    `stoa.aws.install(None)`.
+    """
+    from stoa import aws
+
+    aws.reset_for_test()
+    yield
+    aws.reset_for_test()
+
+
 @pytest.fixture
 def link_rows(fake_table):
     """Link rows the relationship judge reads, served as the link table (#208).

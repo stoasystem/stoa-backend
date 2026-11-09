@@ -27,13 +27,10 @@ import pytest
 from actor_helpers import install_actor_overrides
 from fakes.rekognition import FakeRekognition
 from fakes.s3 import MultipartS3
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings
-from stoa.deps import (
-    get_image_moderation_client,
-    get_s3_client,
-    get_s3_presign_client,
-    get_settings,
-)
+from stoa.deps import get_settings
 from stoa.routers import conversations, files, teachers
 from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import attachment_service
@@ -78,9 +75,11 @@ class _Api:
         app.include_router(teachers.router, prefix="/teachers")
         app.include_router(files.router, prefix="/files")
         app.include_router(conversations.router, prefix="/conversations")
-        app.dependency_overrides[get_s3_client] = lambda: self.s3
-        app.dependency_overrides[get_s3_presign_client] = lambda: self.s3
-        app.dependency_overrides[get_image_moderation_client] = lambda: self.moderation
+        aws.install({
+            Kind.S3: self.s3,
+            Kind.S3_PRESIGN: self.s3,
+            Kind.REKOGNITION_MODERATION: self.moderation,
+        })
         app.dependency_overrides[get_settings] = lambda: Settings(s3_images_bucket=BUCKET)
         install_actor_overrides(app, {"sub": user_id, "role": role})
         # The helper's fact stand-in grants a teacher whatever they ask for; who

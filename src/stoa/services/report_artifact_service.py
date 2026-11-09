@@ -7,8 +7,8 @@ import re
 from typing import Any
 from uuid import uuid4
 
-import boto3
-
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import settings
 from stoa.db.repositories import account_deletion_repo, report_repo
 
@@ -70,11 +70,9 @@ def write_report_artifacts(
     keys: ReportArtifactKeys,
     json_artifact: dict[str, Any],
     html_artifact: str,
-    *,
-    s3_client: Any | None = None,
 ) -> None:
     """Write JSON then HTML report artifacts to the private reports bucket."""
-    s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
+    s3 = aws.client(Kind.S3)
     bucket = settings.report_artifacts_bucket
     s3.put_object(
         Bucket=bucket,
@@ -106,11 +104,10 @@ def write_fenced_report_artifacts(
     generation: int,
     report_id: str,
     operation_id: str | None = None,
-    s3_client: Any | None = None,
     table: Any | None = None,
 ) -> dict[str, dict[str, str]]:
     """Write exact versioned artifacts only through durable owner intents."""
-    s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
+    s3 = aws.client(Kind.S3)
     bucket = settings.report_artifacts_bucket
     operation = operation_id or uuid4().hex
     now_iso = datetime.now(UTC).isoformat()
@@ -165,18 +162,18 @@ def write_fenced_report_artifacts(
     return coordinates
 
 
-def delete_report_artifacts(keys: ReportArtifactKeys, *, s3_client: Any | None = None) -> None:
+def delete_report_artifacts(keys: ReportArtifactKeys) -> None:
     """Best-effort delete both JSON and HTML artifacts from the private reports bucket."""
-    s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
+    s3 = aws.client(Kind.S3)
     bucket = settings.report_artifacts_bucket
     for key in (keys.json_key, keys.html_key):
         _delete_report_artifact(bucket, key, s3_client=s3)
 
 
-def get_report_json(s3_key: str, *, s3_client: Any | None = None) -> dict[str, Any]:
+def get_report_json(s3_key: str) -> dict[str, Any]:
     """Read and decode a JSON report artifact from the private reports bucket."""
     key = _validate_json_artifact_key(s3_key)
-    s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
+    s3 = aws.client(Kind.S3)
     response = s3.get_object(Bucket=settings.report_artifacts_bucket, Key=key)
     body = response["Body"].read()
     if isinstance(body, bytes):
@@ -187,10 +184,10 @@ def get_report_json(s3_key: str, *, s3_client: Any | None = None) -> dict[str, A
     return artifact
 
 
-def get_report_html(s3_key: str, *, s3_client: Any | None = None) -> str:
+def get_report_html(s3_key: str) -> str:
     """Read and decode an HTML report artifact from the private reports bucket."""
     key = _validate_html_artifact_key(s3_key)
-    s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
+    s3 = aws.client(Kind.S3)
     response = s3.get_object(Bucket=settings.report_artifacts_bucket, Key=key)
     body = response["Body"].read()
     if isinstance(body, bytes):
@@ -200,8 +197,6 @@ def get_report_html(s3_key: str, *, s3_client: Any | None = None) -> str:
 
 def run_report_artifact_s3_smoke(
     event: dict[str, Any] | None = None,
-    *,
-    s3_client: Any | None = None,
 ) -> dict[str, Any]:
     """Write and read a deterministic private JSON artifact for Lambda smoke verification."""
     event = event or {}
@@ -212,7 +207,7 @@ def run_report_artifact_s3_smoke(
         week_start,
     )
     bucket = settings.report_artifacts_bucket
-    s3 = s3_client or boto3.client("s3", region_name=settings.aws_region)
+    s3 = aws.client(Kind.S3)
     body = {
         "marker": REPORT_ARTIFACT_SMOKE_MARKER,
         "key": keys.json_key,
@@ -225,7 +220,7 @@ def run_report_artifact_s3_smoke(
         Body=json.dumps(body, separators=(",", ":"), ensure_ascii=False).encode(),
         ContentType=REPORT_JSON_CONTENT_TYPE,
     )
-    readback = get_report_json(keys.json_key, s3_client=s3)
+    readback = get_report_json(keys.json_key)
     readback_ok = (
         readback.get("marker") == REPORT_ARTIFACT_SMOKE_MARKER
         and readback.get("key") == keys.json_key

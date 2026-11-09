@@ -8,8 +8,9 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 from urllib.parse import urlparse
 
-import boto3
 from botocore.exceptions import ClientError
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import settings
 from stoa.db.repositories import notification_repo, websocket_repo
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
@@ -462,11 +463,7 @@ def _connection_evidence_ref(connection_id: str) -> str:
 
 
 def _post_to_connection(endpoint_url: str, connection_id: str, envelope: dict[str, Any]) -> None:
-    client = boto3.client(
-        "apigatewaymanagementapi",
-        region_name=settings.aws_region,
-        endpoint_url=endpoint_url,
-    )
+    client = aws.client(Kind.WEBSOCKET_MANAGEMENT, endpoint_url=endpoint_url)
     client.post_to_connection(
         ConnectionId=connection_id,
         Data=json.dumps(envelope, separators=(",", ":")).encode("utf-8"),

@@ -1,10 +1,11 @@
-"""FastAPI dependency injection — DB client, auth, AWS clients."""
+"""FastAPI dependency injection — auth, the actor and the authorization audit sink.
+
+AWS clients come from `stoa.aws.client` (#358), not from here.
+"""
 from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-import boto3
-from botocore.config import Config
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -34,74 +35,6 @@ from stoa.security.tokens import VerifiedAccessToken, verify_access_token
 from stoa.services.account_deletion_service import DeletionReceipt, begin_or_replay_deletion
 
 security = HTTPBearer()
-
-
-@lru_cache
-def get_dynamodb():
-    settings = get_settings()
-    return boto3.resource("dynamodb", region_name=settings.aws_region)
-
-
-@lru_cache
-def get_s3_client():
-    settings = get_settings()
-    return boto3.client("s3", region_name=settings.aws_region)
-
-
-@lru_cache
-def get_s3_presign_client():
-    """The client that signs URLs a browser uses on the images bucket itself.
-
-    Left to its defaults botocore signs for the global `s3.amazonaws.com` host,
-    which redirects a request for a Zurich bucket, and a browser does not follow a
-    redirected cross-origin PUT. Virtual-hosted addressing in the configured
-    region signs for the bucket's regional host.
-    """
-    settings = get_settings()
-    return boto3.client(
-        "s3",
-        region_name=settings.aws_region,
-        config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}),
-    )
-
-
-@lru_cache
-def get_bedrock_client():
-    settings = get_settings()
-    return boto3.client("bedrock-runtime", region_name=settings.aws_region)
-
-
-@lru_cache
-def get_rekognition_client():
-    settings = get_settings()
-    return boto3.client("rekognition", region_name=settings.aws_region)
-
-
-@lru_cache
-def get_image_moderation_client():
-    """Rekognition in the moderation region, not the API's own (ADR-010).
-
-    The API Gateway and the Lambda both stop at 29 s, and completion also reads
-    and writes S3. Two attempts of at most 2 s connect and 5 s read, plus standard
-    mode's backoff, stay near 17 s, so a slow or throttled Rekognition ends as our
-    retryable 503 with Retry-After rather than the gateway's bare 504.
-    """
-    settings = get_settings()
-    return boto3.client(
-        "rekognition",
-        region_name=settings.image_moderation_region,
-        config=Config(
-            connect_timeout=2,
-            read_timeout=5,
-            retries={"mode": "standard", "total_max_attempts": 2},
-        ),
-    )
-
-
-@lru_cache
-def get_sqs_client():
-    settings = get_settings()
-    return boto3.client("sqs", region_name=settings.aws_region)
 
 
 @lru_cache(maxsize=1)

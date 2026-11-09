@@ -4,13 +4,14 @@ import hashlib
 import logging
 from typing import Any
 
-import boto3
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from stoa.db import table as db_table
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import identity_repo, user_repo
 from stoa.deps import (
@@ -252,10 +253,6 @@ def _public_client_id(settings: Settings) -> str:
     if not cid:
         raise AccountViolation(AccountErrorCode.PUBLIC_AUTHENTICATION_UNAVAILABLE)
     return cid
-
-
-def _get_cognito(settings: Settings):
-    return boto3.client("cognito-idp", region_name=settings.aws_region)
 
 
 async def _verified_sign_in(
@@ -507,7 +504,7 @@ async def login(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Authenticate through the single public client without caller-selected privilege."""
-    cognito = _get_cognito(settings)
+    cognito = aws.client(Kind.COGNITO)
     client_id = _public_client_id(settings)
 
     try:
@@ -597,7 +594,7 @@ async def resend_email_verification(
         )
 
     _approved_public_registration_role(profile)
-    cognito = _get_cognito(settings)
+    cognito = aws.client(Kind.COGNITO)
     client_id = _public_client_id(settings)
     try:
         resp = cognito.resend_confirmation_code(ClientId=client_id, Username=body.email)
@@ -708,7 +705,7 @@ async def confirm_email_verification(
             accountActivationStatus=state["accountActivationStatus"],
             resendAllowed=False,
         )
-    cognito = _get_cognito(settings)
+    cognito = aws.client(Kind.COGNITO)
     client_id = _public_client_id(settings)
     already_confirmed = False
     try:
@@ -967,7 +964,7 @@ async def request_password_change(
 ):
     """Prove the current password, then mail a single-use code to the account."""
     user_id, email = _password_change_actor(current_user)
-    cognito = _get_cognito(settings)
+    cognito = aws.client(Kind.COGNITO)
     try:
         cognito.initiate_auth(
             AuthFlow="USER_PASSWORD_AUTH",
@@ -1011,7 +1008,7 @@ async def confirm_password_change(
     except password_change_code_service.PasswordChangeCodeRejected as exc:
         raise _password_change_verification_failed() from exc
 
-    cognito = _get_cognito(settings)
+    cognito = aws.client(Kind.COGNITO)
     try:
         cognito.change_password(
             AccessToken=credentials.credentials,
@@ -1046,7 +1043,7 @@ async def refresh(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Exchange a refresh token for fresh tokens."""
-    cognito = _get_cognito(settings)
+    cognito = aws.client(Kind.COGNITO)
     client_id = _public_client_id(settings)
 
     try:
@@ -1151,7 +1148,7 @@ async def logout(
                 internal_detail=type(exc).__name__,
             ) from exc
 
-    cognito = _get_cognito(settings)
+    cognito = aws.client(Kind.COGNITO)
     try:
         if verified is not None and verified.origin_jti:
             await _revoke_sign_in_at_provider(
@@ -1196,7 +1193,7 @@ class InvitationClaimRequest(BaseModel):
 
 def get_account_identity_provider(settings: Settings = Depends(get_settings)) -> Any:
     return CognitoTeacherIdentityProvider(
-        boto3.client("cognito-idp", region_name=settings.aws_region),
+        aws.client(Kind.COGNITO),
         user_pool_id=settings.cognito_user_pool_id,
     )
 

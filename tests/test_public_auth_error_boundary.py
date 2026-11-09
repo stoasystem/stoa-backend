@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 import pytest
 from types import SimpleNamespace
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
 from stoa.routers import auth
 from stoa.security.errors import SecurityErrorCode
@@ -149,7 +151,7 @@ def test_every_public_auth_endpoint_redacts_unknown_provider_canary(
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
     }
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: _FailingCognito(provider_method))
+    aws.install({Kind.COGNITO: _FailingCognito(provider_method)})
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda _email: profile)
     monkeypatch.setattr(
         auth.public_identity_service,

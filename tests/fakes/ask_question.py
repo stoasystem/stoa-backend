@@ -36,6 +36,8 @@ from fakes.admission import seed_plan
 from fakes.bedrock import FakeBedrock
 from fakes.dynamodb import FakeTable
 from fakes.learning_session import patch_session_table, seed_conversation
+from stoa import aws
+from stoa.aws import Kind
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
@@ -50,7 +52,7 @@ from stoa.services import (
     star_map_candidates,
     student_evidence,
 )
-from stoa.services.ask_question import _admission, _answering, _store, dispatch
+from stoa.services.ask_question import _admission, _store, dispatch
 from stoa.services.ask_question.models import SendMessageRequest, message_request_fingerprint
 from stoa.services.document_extraction_service import (
     DocumentExtractionFailure,
@@ -203,7 +205,7 @@ def model(monkeypatch: pytest.MonkeyPatch) -> FakeBedrock:
     """The Bedrock runtime the answer is asked of, behind the real allowance client."""
     model = FakeBedrock(answer=ANSWER)
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    monkeypatch.setattr(_answering.ai_service.boto3, "client", lambda *_a, **_k: model)
+    aws.install({Kind.BEDROCK_RUNTIME: model})
     return model
 
 
@@ -610,7 +612,7 @@ def _run_message_command(
     allowance = AtomicAllowanceTable()
     provider = _Provider(text=text, stop_reason=stop_reason)
     _patch_allowance_table(monkeypatch, allowance)
-    monkeypatch.setattr(_answering.ai_service.boto3, "client", lambda *_a, **_k: provider)
+    aws.install({Kind.BEDROCK_RUNTIME: provider})
     monkeypatch.setattr(dispatch, "override", dispatch.in_process)
     try:
         outcome: Any = _submit(key)
@@ -940,7 +942,7 @@ class _Bedrock:
 def bedrock(table, monkeypatch: pytest.MonkeyPatch) -> _Bedrock:
     provider = _Bedrock()
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    monkeypatch.setattr(_answering.ai_service.boto3, "client", lambda *_a, **_k: provider)
+    aws.install({Kind.BEDROCK_RUNTIME: provider})
     return provider
 
 
@@ -1007,8 +1009,7 @@ class _Bucket:
 def bucket(model: FakeBedrock, monkeypatch: pytest.MonkeyPatch) -> _Bucket:
     """The private bucket uploads are read from; the model is still `model`."""
     bucket = _Bucket()
-    clients = {"s3": bucket, "bedrock-runtime": model}
-    monkeypatch.setattr(_answering.boto3, "client", lambda name, *_a, **_k: clients[name])
+    aws.install({Kind.S3: bucket, Kind.BEDROCK_RUNTIME: model})
     return bucket
 
 

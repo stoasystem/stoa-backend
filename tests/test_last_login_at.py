@@ -27,10 +27,11 @@ from test_account_admin_endpoints import (
     table as table,  # a fixture: the tests below take it by name
 )
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
 from stoa.db.repositories.identity_repo import DynamoIdentityRepository
 from stoa.deps import get_identity_repository, get_jwks_key_provider
-from stoa.routers import auth
 from stoa.security.jwks import JwksKeyProvider
 
 
@@ -91,7 +92,7 @@ def signed_in_client(table: AccountAdminTable, rsa_jwks_keysets, monkeypatch):
     table.rows[(f"USER#{USER_ID}", "PROFILE")].update(
         registration_command="admin_assignment", registration_role="student"
     )
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: _Provider(_token(keyset)))
+    aws.install({Kind.COGNITO: _Provider(_token(keyset))})
     app = _app(_admin_user())
     app.dependency_overrides[get_settings] = lambda: Settings(
         aws_region="eu-central-2",

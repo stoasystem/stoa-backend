@@ -24,9 +24,11 @@ from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import IMAGE_MAX_BYTES, Settings, get_settings
-from stoa.deps import get_actor, get_image_moderation_client, get_s3_client, get_s3_presign_client
+from stoa.deps import get_actor
 from stoa.routers import files
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from fakes.dynamodb import FakeTable
@@ -67,9 +69,11 @@ class _Api:
         app = FastAPI()
         app.include_router(files.router, prefix="/files")
         app.dependency_overrides[get_actor] = _actor
-        app.dependency_overrides[get_s3_client] = lambda: s3
-        app.dependency_overrides[get_s3_presign_client] = lambda: s3
-        app.dependency_overrides[get_image_moderation_client] = lambda: FakeRekognition()
+        aws.install({
+            Kind.S3: s3,
+            Kind.S3_PRESIGN: s3,
+            Kind.REKOGNITION_MODERATION: FakeRekognition(),
+        })
         app.dependency_overrides[get_settings] = lambda: Settings(s3_images_bucket=BUCKET)
         self.client = TestClient(app)
         self.request_sizes: list[int] = []
@@ -204,10 +208,9 @@ def test_the_production_signer_uses_the_regional_endpoint_and_signs_the_part(mon
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "not-a-secret")
     monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", "/nonexistent")
     monkeypatch.setenv("AWS_CONFIG_FILE", "/nonexistent")
-    # The client is cached and holds the credentials it was built with.
-    get_s3_presign_client.cache_clear()
-    signer = get_s3_presign_client()
-    get_s3_presign_client.cache_clear()
+    # Real clients, built from these credentials (the fixture installs nothing).
+    aws.install(None)
+    signer = aws.client(Kind.S3_PRESIGN)
     region = get_settings().aws_region
 
     url = signer.generate_presigned_url(

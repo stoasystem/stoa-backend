@@ -12,8 +12,8 @@ from decimal import Decimal
 import hashlib
 import secrets
 
-import boto3
-
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import settings
 from stoa.services import locale_service
@@ -390,10 +390,10 @@ def _template(locale: str | None) -> tuple[str, str]:
     return _EMAIL_TEMPLATES.get(resolved, _EMAIL_TEMPLATES[locale_service.DEFAULT_LOCALE])
 
 
-def send_code_email(recipient: str, code: str, *, locale: str | None = None, ses_client=None) -> None:
+def send_code_email(recipient: str, code: str, *, locale: str | None = None) -> None:
     """Deliver the code to the account's own mailbox and nowhere else."""
 
-    ses = ses_client or boto3.client("ses", region_name=settings.aws_region)
+    ses = aws.client(Kind.SES)
     minutes = CODE_TTL_SECONDS // 60
     subject, body = _template(locale)
     ses.send_email(
@@ -413,7 +413,6 @@ def issue(
     locale: str | None = None,
     now: datetime | None = None,
     table=None,
-    ses_client=None,
 ) -> IssuedCode:
     """Admit, mint, deliver and only then store one code for the account.
 
@@ -433,7 +432,7 @@ def issue(
     admit_send(owner, now=pinned, table=table)
     code = generate_code()
     try:
-        send_code_email(recipient, code, locale=locale, ses_client=ses_client)
+        send_code_email(recipient, code, locale=locale)
     except Exception:
         release_send(owner, moment, table=table)
         # `from None`: the provider error names the recipient, and nothing that

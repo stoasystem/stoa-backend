@@ -5,6 +5,8 @@ import pytest
 from types import SimpleNamespace
 
 from rule_violation_helpers import assert_violation
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
 from stoa.routers import admin, auth
 from actor_helpers import install_actor_overrides
@@ -194,7 +196,7 @@ def test_confirm_email_verification_activates_profile(monkeypatch):
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
     })
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    aws.install({Kind.COGNITO: fake})
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
     monkeypatch.setattr(
         auth.user_repo,
@@ -222,7 +224,7 @@ def test_login_blocks_unconfirmed_cognito_user(monkeypatch):
         def initiate_auth(self, **kwargs):
             raise _client_error("UserNotConfirmedException")
 
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: UnconfirmedCognito())
+    aws.install({Kind.COGNITO: UnconfirmedCognito()})
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
@@ -255,7 +257,7 @@ def test_login_does_not_repair_local_pending_state_after_cognito_auth_succeeds(m
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
     })
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    aws.install({Kind.COGNITO: fake})
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
     monkeypatch.setattr(
         auth.user_repo,
@@ -275,7 +277,7 @@ def test_login_does_not_repair_local_pending_state_after_cognito_auth_succeeds(m
 
 def test_login_allows_verified_profile(monkeypatch):
     fake = FakeCognito()
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    aws.install({Kind.COGNITO: fake})
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
@@ -300,7 +302,7 @@ def test_login_allows_verified_profile(monkeypatch):
 
 def test_resend_email_verification_is_idempotent_during_cooldown(monkeypatch):
     fake = FakeCognito()
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    aws.install({Kind.COGNITO: fake})
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
@@ -334,7 +336,7 @@ def test_resend_email_verification_records_provider_delivery(monkeypatch):
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
     })
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    aws.install({Kind.COGNITO: fake})
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
     monkeypatch.setattr(
         auth.user_repo,
@@ -356,7 +358,7 @@ def test_resend_email_verification_records_provider_delivery(monkeypatch):
 def test_resend_missing_command_is_bounded_and_mutation_free(monkeypatch):
     fake = FakeCognito()
     profile_reads = []
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    aws.install({Kind.COGNITO: fake})
     monkeypatch.setattr(
         auth.public_identity_service,
         "require_public_identity_command",
@@ -404,7 +406,7 @@ def test_resend_uses_command_user_and_never_email_index(monkeypatch):
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
     })
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    aws.install({Kind.COGNITO: fake})
     monkeypatch.setattr(
         auth.public_identity_service,
         "require_public_identity_command",
@@ -450,7 +452,7 @@ def test_resend_email_verification_repairs_local_state_when_cognito_already_conf
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
     })
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: AlreadyConfirmedCognito())
+    aws.install({Kind.COGNITO: AlreadyConfirmedCognito()})
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
     monkeypatch.setattr(
         auth.user_repo,
@@ -505,7 +507,7 @@ def test_already_confirmed_resend_reconciles_exact_command_subject(monkeypatch):
         "email_verification_required": False,
     }
     reconciliations = []
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    aws.install({Kind.COGNITO: fake})
     monkeypatch.setattr(
         auth.public_identity_service,
         "require_public_identity_command",
@@ -545,7 +547,7 @@ def test_already_confirmed_resend_reconciles_exact_command_subject(monkeypatch):
 
 def test_resend_command_dependency_failure_does_not_touch_provider(monkeypatch):
     fake = FakeCognito()
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    aws.install({Kind.COGNITO: fake})
     monkeypatch.setattr(
         auth.public_identity_service,
         "require_public_identity_command",
@@ -576,7 +578,7 @@ def test_confirm_email_verification_marks_expired_code(monkeypatch):
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
     })
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: ExpiredCognito())
+    aws.install({Kind.COGNITO: ExpiredCognito()})
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
     monkeypatch.setattr(
         auth.user_repo,
@@ -603,7 +605,7 @@ def test_confirm_email_verification_is_idempotent_for_locally_verified_profile(m
         "email_verification_status": "verified",
         "email_verification_required": False,
     })
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    aws.install({Kind.COGNITO: fake})
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
 
     response = _auth_client().post(
@@ -630,7 +632,7 @@ def test_confirm_email_verification_repairs_local_state_when_cognito_already_con
         "email_verification_status": "pending_verification",
         "email_verification_required": True,
     })
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: AlreadyConfirmedCognito())
+    aws.install({Kind.COGNITO: AlreadyConfirmedCognito()})
     monkeypatch.setattr(auth.user_repo, "get_user_by_email", lambda email: profile)
     monkeypatch.setattr(
         auth.user_repo,
@@ -654,7 +656,7 @@ def test_confirm_email_verification_normalizes_wrong_code(monkeypatch):
         def confirm_sign_up(self, **kwargs):
             raise _client_error("CodeMismatchException")
 
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: WrongCodeCognito())
+    aws.install({Kind.COGNITO: WrongCodeCognito()})
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
@@ -681,7 +683,7 @@ def test_confirm_email_verification_normalizes_rate_limit(monkeypatch):
         def confirm_sign_up(self, **kwargs):
             raise _client_error("TooManyRequestsException")
 
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: LimitedCognito())
+    aws.install({Kind.COGNITO: LimitedCognito()})
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
@@ -708,7 +710,7 @@ def test_login_disabled_account_returns_support_safe_error(monkeypatch):
         def initiate_auth(self, **kwargs):
             raise _client_error("UserDisabledException")
 
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: DisabledCognito())
+    aws.install({Kind.COGNITO: DisabledCognito()})
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",
@@ -735,7 +737,7 @@ def test_resend_disabled_account_returns_support_safe_error(monkeypatch):
         def resend_confirmation_code(self, **kwargs):
             raise _client_error("UserDisabledException")
 
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: DisabledCognito())
+    aws.install({Kind.COGNITO: DisabledCognito()})
     monkeypatch.setattr(
         auth.user_repo,
         "get_user_by_email",

@@ -3,6 +3,8 @@ from datetime import date
 
 import pytest
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.services import report_artifact_service
 
 
@@ -85,11 +87,11 @@ def test_write_report_artifacts_uses_private_bucket_content_types_and_no_acl(mon
     )
     s3 = FakeS3Client()
 
+    aws.install({Kind.S3: s3})
     report_artifact_service.write_report_artifacts(
         keys,
         {"report": {"id": "report-1"}},
         "<html>Report</html>",
-        s3_client=s3,
     )
 
     assert [put["Key"] for put in s3.puts] == [keys.json_key, keys.html_key]
@@ -113,11 +115,11 @@ def test_write_report_artifacts_cleans_json_partial_when_html_write_fails(monkey
     s3 = FakeS3Client(fail_put_key=keys.html_key)
 
     with pytest.raises(RuntimeError, match="put failed"):
+        aws.install({Kind.S3: s3})
         report_artifact_service.write_report_artifacts(
             keys,
             {"report": {"id": "report-1"}},
             "<html>Report</html>",
-            s3_client=s3,
         )
 
     assert [put["Key"] for put in s3.puts] == [keys.json_key]
@@ -135,11 +137,11 @@ def test_write_report_artifacts_preserves_html_failure_when_partial_cleanup_fail
     s3 = FakeS3Client(fail_put_key=keys.html_key, fail_delete=True)
 
     with pytest.raises(RuntimeError, match="put failed"):
+        aws.install({Kind.S3: s3})
         report_artifact_service.write_report_artifacts(
             keys,
             {"report": {"id": "report-1"}},
             "<html>Report</html>",
-            s3_client=s3,
         )
 
     assert [put["Key"] for put in s3.puts] == [keys.json_key]
@@ -149,9 +151,9 @@ def test_get_report_json_reads_and_decodes_private_artifact(monkeypatch):
     monkeypatch.setattr(report_artifact_service.settings, "s3_reports_bucket", "reports-bucket")
     s3 = FakeS3Client(read_body=b'{"report":{"id":"report-1"}}')
 
+    aws.install({Kind.S3: s3})
     artifact = report_artifact_service.get_report_json(
         "weekly-reports/parent-1/student-1/2026-06-01/report.json",
-        s3_client=s3,
     )
 
     assert artifact == {"report": {"id": "report-1"}}
@@ -172,9 +174,9 @@ def test_run_report_artifact_s3_smoke_writes_and_reads_private_json(monkeypatch)
     monkeypatch.setattr(report_artifact_service.settings, "s3_reports_bucket", "reports-bucket")
     s3 = FakeS3Client()
 
+    aws.install({Kind.S3: s3})
     result = report_artifact_service.run_report_artifact_s3_smoke(
         {"week_start": "2026-06-01"},
-        s3_client=s3,
     )
 
     expected_key = "weekly-reports/smoke-parent/smoke-student/2026-06-01/report.json"
@@ -203,9 +205,9 @@ def test_run_report_artifact_s3_smoke_reports_cleanup_failure(monkeypatch):
     monkeypatch.setattr(report_artifact_service.settings, "s3_reports_bucket", "reports-bucket")
     s3 = FakeS3Client(fail_delete=True)
 
+    aws.install({Kind.S3: s3})
     result = report_artifact_service.run_report_artifact_s3_smoke(
         {"week_start": "2026-06-01"},
-        s3_client=s3,
     )
 
     assert result["status"] == "failed"

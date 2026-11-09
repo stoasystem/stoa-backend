@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
 from stoa.main import app
 from stoa.models import error as error_models
@@ -262,7 +264,7 @@ def _declared_401_model(path: str):
     ],
 )
 def test_sign_in_operations_declare_the_provider_refusal_they_send(monkeypatch, path, payload, code):
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: _Cognito("NotAuthorizedException"))
+    aws.install({Kind.COGNITO: _Cognito("NotAuthorizedException")})
 
     response = _auth_client().post(path, json=payload)
 
@@ -281,7 +283,7 @@ def test_sign_in_operations_declare_the_provider_refusal_they_send(monkeypatch, 
 def test_sign_in_operations_declare_the_refused_issued_token(monkeypatch, path, payload):
     # The provider accepted, but the token it issued does not verify here: the
     # route answers with the security body inside `detail`.
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: _Cognito())
+    aws.install({Kind.COGNITO: _Cognito()})
 
     async def _refuse(*_args, **_kwargs):
         raise SecurityDecisionError(SecurityErrorCode.TOKEN_EXPIRED)

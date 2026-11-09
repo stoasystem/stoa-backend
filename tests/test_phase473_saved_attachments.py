@@ -12,9 +12,11 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 import pytest
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import attachment_repo
-from stoa.deps import get_actor, get_s3_client
+from stoa.deps import get_actor
 from stoa.models import attachment as attachment_models
 from stoa.routers import files
 from stoa.rule_violation import render_message
@@ -414,7 +416,7 @@ def _client(
     app = FastAPI()
     app.include_router(files.router, prefix="/files")
     app.dependency_overrides[get_actor] = lambda: actor or _actor()
-    app.dependency_overrides[get_s3_client] = lambda: s3 if s3 is not None else object()
+    aws.install({Kind.S3: s3 if s3 is not None else object()})
     app.dependency_overrides[get_settings] = lambda: Settings(
         s3_images_bucket=PRIVATE_CANARIES[0]
     )

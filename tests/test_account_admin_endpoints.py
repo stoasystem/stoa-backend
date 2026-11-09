@@ -15,6 +15,8 @@ from fastapi.testclient import TestClient
 from actor_helpers import install_actor_overrides
 from test_account_provisioning import FakeAccountTable, RecordingProvider
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import (
@@ -1399,7 +1401,7 @@ class RecordingSes:
 @pytest.fixture
 def ses(monkeypatch: pytest.MonkeyPatch) -> RecordingSes:
     client = RecordingSes()
-    monkeypatch.setattr(notify_service.boto3, "client", lambda *_a, **_k: client)
+    aws.install({Kind.SES: client})
     return client
 
 
@@ -1456,7 +1458,7 @@ def test_发信失败不谎称已送达_账号仍然建成(
     table: AccountAdminTable, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     failing = RecordingSes(failure=RuntimeError("ses rejected"))
-    monkeypatch.setattr(notify_service.boto3, "client", lambda *_a, **_k: failing)
+    aws.install({Kind.SES: failing})
     client = TestClient(_app(_admin_user()))
 
     response = client.post(

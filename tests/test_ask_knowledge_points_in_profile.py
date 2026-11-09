@@ -30,6 +30,8 @@ from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
 from audit_helpers import MemoryAuthorizationAuditSink
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.db.repositories import (
     asked_knowledge_repo,
@@ -469,6 +471,8 @@ def test_deleting_the_account_scrubs_the_record(world, bedrock, star_map) -> Non
     fence = world.rows[tuple(account_deletion_repo.account_fence_key(STUDENT).values())]
     fence["status"] = "deletion_pending"
 
+    # The branch takes an S3 client up front; these messages carry no attachments.
+    aws.install({Kind.S3: object()})
     previous: dict[str, Any] = {}
     for _ in range(4):
         result = account_deletion_service._conversation_messages_branch(

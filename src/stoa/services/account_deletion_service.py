@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 from uuid import uuid4
 
-import boto3
-
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import get_settings
 from stoa.db.dynamodb import stored_int
@@ -610,7 +610,7 @@ def _identity_cross_account_branch(
 
 def _revoke_provider_identity(user_id: str, generation: int, username: str) -> None:
     settings = get_settings()
-    provider = boto3.client("cognito-idp", region_name=settings.aws_region)
+    provider = aws.client(Kind.COGNITO)
     account_deletion_repo.require_deletion_account_fence(user_id, generation)
     try:
         provider.admin_user_global_sign_out(
@@ -714,7 +714,7 @@ def _attachments_branch(
         str(command["user_id"]),
         account_fence_generation=int(command["generation"]),
         cursors=previous.get("cursor") if isinstance(previous, Mapping) else None,
-        s3=boto3.client("s3", region_name=settings.aws_region),
+        s3=aws.client(Kind.S3),
         settings=settings,
     )
     quiescent = bool(result.quiescent)
@@ -783,7 +783,7 @@ def _moderation_support_branch(
                 # A refused image goes before the case that points to it (#139);
                 # if it cannot, the case keeps its coordinates for the next pass.
                 settings = get_settings()
-                s3 = s3 or boto3.client("s3", region_name=settings.aws_region)
+                s3 = s3 or aws.client(Kind.S3)
                 moderation_service.delete_case_image(item, s3=s3, settings=settings)
             moderation_repo.scrub_moderation_row(
                 item,
@@ -912,7 +912,7 @@ def _report_artifacts_branch(
     page = report_repo.scan_report_private_rows(
         str(command["user_id"]), cursor=cursor, maximum_pages=1
     )
-    s3 = boto3.client("s3", region_name=get_settings().aws_region)
+    s3 = aws.client(Kind.S3)
     bucket = get_settings().report_artifacts_bucket
     debt: dict[str, int] = {}
     processed = 0
@@ -995,7 +995,7 @@ def _conversation_messages_branch(
     processed = 0
     now_iso = datetime.now(UTC).isoformat()
     settings = get_settings()
-    s3 = boto3.client("s3", region_name=settings.aws_region)
+    s3 = aws.client(Kind.S3)
     released_conversations: set[str] = set()
     for item in page.items:
         identity = f"{item.get('PK')}|{item.get('SK')}"

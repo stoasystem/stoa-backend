@@ -4,13 +4,10 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
-from stoa.deps import (
-    get_actor,
-    get_image_moderation_client,
-    get_s3_client,
-    get_s3_presign_client,
-)
+from stoa.deps import get_actor
 from stoa.models.attachment import (
     CompleteUploadRequest,
     CompleteUploadResponse,
@@ -115,12 +112,11 @@ async def get_saved_attachment(
 @router.get("/attachments/{attachment_id}/content")
 async def download_saved_attachment(
     loaded: AuthorizedResource = Depends(_attachment_read),
-    s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     prepared = prepare_saved_attachment_download(
-        dict(loaded.value), s3=s3, settings=settings
+        dict(loaded.value), s3=aws.client(Kind.S3), settings=settings
     )
     return StreamingResponse(
         prepared.iter_bytes(),
@@ -137,12 +133,11 @@ async def download_saved_attachment(
 )
 async def remove_saved_attachment(
     loaded: AuthorizedResource = Depends(_attachment_delete),
-    s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     return delete_saved_attachment(
-        dict(loaded.value), s3=s3, settings=settings
+        dict(loaded.value), s3=aws.client(Kind.S3), settings=settings
     )
 
 
@@ -150,11 +145,10 @@ async def remove_saved_attachment(
 async def create_owned_upload_intent(
     body: UploadIntentRequest,
     actor: Actor = Depends(_upload_intent_actor),
-    s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
-    return uploads.start(body, actor, s3=s3, settings=settings)
+    return uploads.start(body, actor, s3=aws.client(Kind.S3), settings=settings)
 
 
 @router.post("/{upload_id}/parts/{part_number}", response_model=UploadPartUrlResponse)
@@ -163,7 +157,6 @@ async def sign_owned_upload_part(
     part_number: int,
     body: UploadPartUrlRequest,
     actor: Actor = Depends(_upload_part_actor),
-    signer=Depends(get_s3_presign_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
@@ -173,7 +166,7 @@ async def sign_owned_upload_part(
         part_number,
         body,
         actor,
-        signer=signer,
+        signer=aws.client(Kind.S3_PRESIGN),
         settings=settings,
     )
 
@@ -183,8 +176,6 @@ async def complete_owned_upload(
     upload_id: str,
     body: CompleteUploadRequest,
     actor: Actor = Depends(_upload_complete_actor),
-    s3=Depends(get_s3_client),
-    moderation=Depends(get_image_moderation_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
@@ -192,7 +183,7 @@ async def complete_owned_upload(
         upload_id,
         body.part_count,
         actor,
-        s3=s3,
+        s3=aws.client(Kind.S3),
         settings=settings,
-        moderation=moderation,
+        moderation=aws.client(Kind.REKOGNITION_MODERATION),
     )

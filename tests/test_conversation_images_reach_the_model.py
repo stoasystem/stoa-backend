@@ -33,9 +33,10 @@ from fakes.ask_question import bucket as bucket  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.bedrock import FakeBedrock
+from stoa import aws
+from stoa.aws import Kind
 from stoa.jobs import conversation_generation
 from stoa.services import attachment_service
-from stoa.services.ask_question import _answering
 from fakes.ask_question import AtomicAllowanceTable
 
 MODEL_ANSWER = {
@@ -403,8 +404,7 @@ def test_the_image_is_in_the_body_that_is_counted_and_the_body_that_is_sent(
     """No stand-in for the answer: the real allowance client admits the request
     by counting it with the provider, then sends that same body."""
     bedrock = _Bedrock()
-    clients = {"s3": bucket, "bedrock-runtime": bedrock}
-    monkeypatch.setattr(_answering.boto3, "client", lambda name, *_a, **_k: clients[name])
+    aws.install({Kind.S3: bucket, Kind.BEDROCK_RUNTIME: bedrock})
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
     data = _image("JPEG")
     _upload(table, bucket, "upload-image", data, filename="a.jpg", media_type="image/jpeg")

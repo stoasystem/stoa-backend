@@ -4,19 +4,22 @@ Both were an ``lru_cache`` over their ``Settings`` argument. A ``Settings`` is n
 hashable, so every request that reached either getter answered 500 before its
 handler ran: teacher activation, provisioning an admin, changing an admin's
 status. The deny paths were tested; the allow paths never were. These cases let
-FastAPI resolve the getters themselves and replace only ``boto3.client``.
+FastAPI resolve the getters themselves; only the cognito-idp client is a double,
+installed in ``stoa.aws`` (#358), which builds and reuses the real one.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
-import boto3
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import get_settings
 from stoa.deps import get_actor, get_authorization_audit_sink, get_verified_token
 from stoa.routers import admin, teacher_applications
@@ -29,16 +32,10 @@ class _Cognito:
 
 
 @pytest.fixture
-def cognito_clients(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
-    built: list[dict[str, Any]] = []
-
-    def client(service_name: str, **kwargs: Any) -> _Cognito:
-        assert service_name == "cognito-idp"
-        built.append(kwargs)
-        return _Cognito()
-
-    monkeypatch.setattr(boto3, "client", client)
-    return built
+def cognito_clients() -> Callable[[], list[aws.Request]]:
+    """What the getters asked `stoa.aws` for; each request gets a `_Cognito`."""
+    aws.install({Kind.COGNITO: _Cognito()})
+    return aws.requests
 
 
 def _identity_manager() -> Actor:
@@ -94,7 +91,9 @@ def test_teacher_activation_resolves_its_identity_provider(monkeypatch, cognito_
         assert response.json() == {"status": "activated"}
         assert isinstance(seen["provider"], _Cognito)
     assert seen["verified_email"] == "teacher@stoa.test"
-    assert cognito_clients == [{"region_name": get_settings().aws_region}] * 2
+    assert [(r.kind, r.region) for r in cognito_clients()] == [
+        (Kind.COGNITO, get_settings().aws_region)
+    ] * 2
 
 
 def test_provisioning_an_admin_resolves_its_identity_provider(monkeypatch, cognito_clients):
@@ -120,7 +119,9 @@ def test_provisioning_an_admin_resolves_its_identity_provider(monkeypatch, cogni
     assert response.status_code == 200, response.text
     assert response.json() == {"status": "provisioned"}
     assert isinstance(seen["provider"], _Cognito)
-    assert cognito_clients == [{"region_name": get_settings().aws_region}]
+    assert [(r.kind, r.region) for r in cognito_clients()] == [
+        (Kind.COGNITO, get_settings().aws_region)
+    ]
 
 
 def test_changing_an_admins_status_resolves_its_identity_provider(monkeypatch, cognito_clients):
@@ -146,4 +147,6 @@ def test_changing_an_admins_status_resolves_its_identity_provider(monkeypatch, c
     assert response.json() == {"status": "suspended"}
     assert seen["target_id"] == "target-1"
     assert isinstance(seen["provider"], _Cognito)
-    assert cognito_clients == [{"region_name": get_settings().aws_region}]
+    assert [(r.kind, r.region) for r in cognito_clients()] == [
+        (Kind.COGNITO, get_settings().aws_region)
+    ]

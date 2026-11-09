@@ -180,20 +180,16 @@ def test_the_real_table_is_sent_on_the_gateways_own_client(monkeypatch) -> None:
 
 
 def test_the_client_is_built_once_in_the_configured_region(monkeypatch) -> None:
-    built: list[dict[str, Any]] = []
-
-    def fake_client(service: str, **kwargs: Any) -> object:
-        built.append({"service": service, **kwargs})
-        return object()
-
-    monkeypatch.setattr(db_table.boto3, "client", fake_client)
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
     db_table.client.cache_clear()
     try:
         first = db_table.client()
         assert db_table.client() is first
     finally:
         db_table.client.cache_clear()
-    assert built == [{"service": "dynamodb", "region_name": settings.aws_region}]
+    assert first.meta.service_model.service_name == "dynamodb"
+    assert first.meta.region_name == settings.aws_region
 
 
 def test_something_with_no_transaction_entry_is_unavailable() -> None:

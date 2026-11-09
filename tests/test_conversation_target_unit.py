@@ -42,6 +42,8 @@ from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fi
 from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from stoa import aws
+from stoa.aws import Kind
 from stoa.jobs import conversation_generation
 from stoa.services import (
     curriculum_service,
@@ -49,7 +51,6 @@ from stoa.services import (
     star_map_candidates,
     student_evidence,
 )
-from stoa.services.ask_question import _answering
 from fakes.ask_question import AtomicAllowanceTable
 
 _READ_THE_MAP = star_map_candidates.for_student
@@ -339,7 +340,7 @@ def test_the_target_comes_through_the_real_model_path(
     """The model is told the rule, and a Chinese wish reaches it beside the map."""
     provider = _CapturingBedrockClient(_answer(_ref("funktionen-ableitung")))
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    monkeypatch.setattr(_answering.ai_service.boto3, "client", lambda *_a, **_k: provider)
+    aws.install({Kind.BEDROCK_RUNTIME: provider})
     client = _client()
 
     response = _send(client, "key-1", language="de", content=WANT_TO_PRACTISE)
