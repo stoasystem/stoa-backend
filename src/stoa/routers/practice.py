@@ -14,20 +14,29 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import settings
 from stoa.db.repositories import practice_repo
-from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
-from stoa.deps import get_actor, get_authorization_audit_sink
+from stoa.deps import get_actor
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
-    AuthorizationSpec,
     AuthorizedResource,
-    CurrentAuthorizationFactRepository,
     ResourceRef,
     ResourceType,
-    authorize_and_resolve,
+)
+from stoa.security.declared_authorization import (
+    ATTEMPT,
+    CHALLENGE,
+    LESSON,
+    SELF,
+    AuthorizationContext,
+    authorize_loaded,
+    authorized,
+    get_authorization_context,
+    loaded_declaration,
+    path,
+    query,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
-from stoa.security.identity import Actor
+from stoa.security.identity import Actor, CanonicalRole
 from stoa.models.practice import (
     PracticeAnswerSubmission,
     PracticeAttemptResult,
@@ -38,14 +47,10 @@ from stoa.models.practice import (
     PracticeHintResponse,
     PrivilegedPracticeAnswer,
 )
-from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     STUDENT_CONTENT_READ,
-    authorized_student_dependency,
-    authorized_curriculum_answer_dependency,
-    get_authorization_fact_repository,
+    STUDENT_SELF,
     safe_public_dependency,
-    student_actor_dependency,
 )
 from stoa.services import (
     answer_recording,
@@ -67,14 +72,48 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 _catalog_access = safe_public_dependency(ResourceType.PRACTICE)
-_practice_read = student_actor_dependency(ResourceType.PRACTICE, AuthorizationAction.READ)
-_practice_update = student_actor_dependency(ResourceType.PRACTICE, AuthorizationAction.UPDATE)
-_practice_progress = authorized_student_dependency(
-    action=AuthorizationAction.READ,
-    purposes=STUDENT_CONTENT_READ,
-    query_alias="studentId",
+_practice_read = authorized(ResourceType.PRACTICE, AuthorizationAction.READ, SELF, STUDENT_SELF)
+_practice_update = authorized(
+    ResourceType.PRACTICE, AuthorizationAction.UPDATE, SELF, STUDENT_SELF
 )
-_curriculum_answer_read = authorized_curriculum_answer_dependency()
+_practice_progress = authorized(
+    ResourceType.STUDENT,
+    AuthorizationAction.READ,
+    query("studentId", student_defaults_to_self=True),
+    STUDENT_CONTENT_READ,
+)
+# Every role reads under the one narrow purpose; the policy grants it to
+# assigned teachers and admins only.
+_curriculum_answer_read = authorized(
+    ResourceType.CURRICULUM_ANSWER,
+    AuthorizationAction.READ,
+    path("challenge_id"),
+    {role: AuthorizationPurpose.CURRICULUM_ANSWER_READ for role in CanonicalRole},
+)
+_authorized_lesson_read = authorized(
+    ResourceType.PRACTICE, AuthorizationAction.READ, path("lesson_id"), STUDENT_SELF, kind=LESSON
+)
+_authorized_lesson_update = authorized(
+    ResourceType.PRACTICE,
+    AuthorizationAction.UPDATE,
+    path("lesson_id"),
+    STUDENT_SELF,
+    kind=LESSON,
+)
+_authorized_challenge_update = authorized(
+    ResourceType.PRACTICE,
+    AuthorizationAction.UPDATE,
+    path("challenge_id"),
+    STUDENT_SELF,
+    kind=CHALLENGE,
+)
+_authorized_attempt_read = authorized(
+    ResourceType.PRACTICE,
+    AuthorizationAction.READ,
+    path("attempt_id"),
+    STUDENT_SELF,
+    kind=ATTEMPT,
+)
 
 #: Wrong answers the dashboard shows, newest first.
 OVERVIEW_RECENT_MISTAKES = 5
@@ -118,190 +157,21 @@ class LessonCompletionRequest(BaseModel):
     )
 
 
-async def _authorize_practice_item(
-    *,
-    actor: Actor,
-    facts: CurrentAuthorizationFactRepository,
-    correlation_id: str,
-    audit_sink: AuthorizationAuditSink,
-    item_id: str,
-    item: dict | None,
-    action: AuthorizationAction,
-) -> AuthorizedResource:
-    async def resolve(_resource_id: str):
-        if not item:
-            return None
-        return AuthorizedResource(
-            ResourceRef(ResourceType.PRACTICE, item_id, actor.user_id),
-            item,
-        )
-
-    spec = AuthorizationSpec(
-        ResourceType.PRACTICE,
-        action,
-        AuthorizationPurpose.SELF_SERVICE,
-        resolve,
-    )
-    return await authorize_and_resolve(
-        actor=actor,
-        resource_id=item_id,
-        spec=spec,
-        fact_repository=facts,
-        correlation_id=correlation_id,
-        audit_sink=audit_sink,
-    )
-
-
-def _practice_item_specs(action: AuthorizationAction, resolver):
-    return (
-        AuthorizationSpec(
-            ResourceType.PRACTICE,
-            action,
-            AuthorizationPurpose.SELF_SERVICE,
-            resolver,
-        ),
-    )
-
-
-async def _authorized_lesson_read(
-    lesson_id: str,
-    actor: Actor = Depends(get_actor),
-    facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
-    correlation_id: str = Depends(get_request_correlation_id),
-    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
-) -> AuthorizedResource:
-    return await _authorize_practice_item(
-        actor=actor,
-        facts=facts,
-        correlation_id=correlation_id,
-        audit_sink=audit_sink,
-        item_id=lesson_id,
-        item=practice_repo.get_lesson(lesson_id),
-        action=AuthorizationAction.READ,
-    )
-
-
-async def _authorized_lesson_update(
-    lesson_id: str,
-    actor: Actor = Depends(get_actor),
-    facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
-    correlation_id: str = Depends(get_request_correlation_id),
-    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
-) -> AuthorizedResource:
-    return await _authorize_practice_item(
-        actor=actor,
-        facts=facts,
-        correlation_id=correlation_id,
-        audit_sink=audit_sink,
-        item_id=lesson_id,
-        item=practice_repo.get_lesson(lesson_id),
-        action=AuthorizationAction.UPDATE,
-    )
-
-
-async def _authorized_challenge_update(
-    challenge_id: str,
-    actor: Actor = Depends(get_actor),
-    facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
-    correlation_id: str = Depends(get_request_correlation_id),
-    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
-) -> AuthorizedResource:
-    return await _authorize_practice_item(
-        actor=actor,
-        facts=facts,
-        correlation_id=correlation_id,
-        audit_sink=audit_sink,
-        item_id=challenge_id,
-        item=practice_repo.get_challenge(challenge_id),
-        action=AuthorizationAction.UPDATE,
-    )
-
-
-async def _authorized_attempt_read(
-    attempt_id: str,
-    actor: Actor = Depends(get_actor),
-    facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
-    correlation_id: str = Depends(get_request_correlation_id),
-    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
-) -> AuthorizedResource:
-    return await _authorize_practice_item(
-        actor=actor,
-        facts=facts,
-        correlation_id=correlation_id,
-        audit_sink=audit_sink,
-        item_id=attempt_id,
-        item=practice_repo.get_attempt(actor.user_id, attempt_id),
-        action=AuthorizationAction.READ,
-    )
-
-
-async def _authorized_body_challenge_update(
-    body: dict,
-    actor: Actor = Depends(get_actor),
-    facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
-    correlation_id: str = Depends(get_request_correlation_id),
-    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
-) -> AuthorizedResource:
-    challenge_id = str(body.get("challengeId") or "").strip()
-    return await _authorize_practice_item(
-        actor=actor,
-        facts=facts,
-        correlation_id=correlation_id,
-        audit_sink=audit_sink,
-        item_id=challenge_id,
-        item=practice_repo.get_challenge(challenge_id) if challenge_id else None,
-        action=AuthorizationAction.UPDATE,
-    )
-
-
+@loaded_declaration(ResourceType.PRACTICE, AuthorizationAction.UPDATE, STUDENT_SELF)
 async def _authorized_hint_challenge_update(
     body: PracticeHintRequest,
     actor: Actor = Depends(get_actor),
-    facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
-    correlation_id: str = Depends(get_request_correlation_id),
-    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
+    context: AuthorizationContext = Depends(get_authorization_context),
 ) -> AuthorizedResource:
-    return await _authorize_practice_item(
-        actor=actor,
-        facts=facts,
-        correlation_id=correlation_id,
-        audit_sink=audit_sink,
-        item_id=body.challenge_id,
-        item=practice_repo.get_challenge(body.challenge_id),
-        action=AuthorizationAction.UPDATE,
+    """The challenge a hint is asked for: its id is in the body, so load, then decide."""
+    return await authorize_loaded(
+        actor,
+        ResourceRef(ResourceType.PRACTICE, body.challenge_id, actor.user_id),
+        practice_repo.get_challenge(body.challenge_id),
+        AuthorizationAction.UPDATE,
+        STUDENT_SELF,
+        context,
     )
-
-
-async def _lesson_metadata_resolver(resource_id: str):
-    return practice_repo.get_lesson(resource_id)
-
-
-async def _challenge_metadata_resolver(resource_id: str):
-    return practice_repo.get_challenge(resource_id)
-
-
-async def _attempt_metadata_resolver(resource_id: str):
-    return {"attempt_id": resource_id}
-
-
-_authorized_lesson_read.authorization_specs = _practice_item_specs(  # type: ignore[attr-defined]
-    AuthorizationAction.READ, _lesson_metadata_resolver
-)
-_authorized_lesson_update.authorization_specs = _practice_item_specs(  # type: ignore[attr-defined]
-    AuthorizationAction.UPDATE, _lesson_metadata_resolver
-)
-_authorized_challenge_update.authorization_specs = _practice_item_specs(  # type: ignore[attr-defined]
-    AuthorizationAction.UPDATE, _challenge_metadata_resolver
-)
-_authorized_body_challenge_update.authorization_specs = _practice_item_specs(  # type: ignore[attr-defined]
-    AuthorizationAction.UPDATE, _challenge_metadata_resolver
-)
-_authorized_hint_challenge_update.authorization_specs = _practice_item_specs(  # type: ignore[attr-defined]
-    AuthorizationAction.UPDATE, _challenge_metadata_resolver
-)
-_authorized_attempt_read.authorization_specs = _practice_item_specs(  # type: ignore[attr-defined]
-    AuthorizationAction.READ, _attempt_metadata_resolver
-)
 
 
 def _as_int(val: Any, default: int = 0) -> int:

@@ -589,6 +589,15 @@ class AuthorizationPolicy:
                 and actor.role in {CanonicalRole.TEACHER, CanonicalRole.ADMIN}
             ):
                 allowed = True
+            elif (
+                # A parent's own account: their children list, billing and
+                # link requests (#348; only the role was checked before).
+                purpose is AuthorizationPurpose.SELF_SERVICE
+                and resource.resource_type is ResourceType.PARENT_BINDING
+                and resource.owner_id == actor.user_id
+                and actor.role is CanonicalRole.PARENT
+            ):
+                allowed = True
             elif purpose in {
                 AuthorizationPurpose.TEACHER_DISPATCH,
                 AuthorizationPurpose.AI_TEACHER_TOOLS,

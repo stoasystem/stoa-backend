@@ -26,6 +26,12 @@ from pydantic import BaseModel
 from stoa.models.error import RuleViolationResponse, UnauthenticatedResponse
 from stoa.security.admin_authorization import AdminRoutePolicy, AdminTargetProvider
 from stoa.security.authorization import AuthorizationSpec, ResourceType
+from stoa.security.declared_authorization import (
+    AuthorizationDeclaration,
+    PathSource,
+    QuerySource,
+    declaration_of,
+)
 
 
 RouteAccess = Literal["public", "authenticated-global"]
@@ -60,6 +66,7 @@ class RouteInventoryItem:
     authorization_specs: tuple[InventorySpec, ...]
     sensitive: bool
     admin_target: dict[str, object] | None = None
+    service_entry: str | None = None
 
     @property
     def authorization_spec(self) -> InventorySpec | None:
@@ -77,6 +84,8 @@ class RouteInventoryItem:
         }
         if self.admin_target is not None:
             projection["adminTarget"] = self.admin_target
+        if self.service_entry is not None:
+            projection["serviceEnforced"] = self.service_entry
         return projection
 
 
@@ -252,6 +261,30 @@ def _inventory_spec(
     )
 
 
+def _declared_inventory_specs(declaration: AuthorizationDeclaration) -> list[InventorySpec]:
+    return [
+        InventorySpec(
+            declaration.resource_type.value,
+            declaration.action.value,
+            purpose.value,
+            declaration.capability,
+        )
+        for _role, purpose in declaration.purposes
+    ]
+
+
+def _service_entry(route: APIRoute) -> str | None:
+    entries = {
+        declaration.service_entry
+        for dependant in _walk_dependants(route.dependant)
+        if (declaration := declaration_of(dependant.call)) is not None
+        and declaration.service_entry is not None
+    }
+    if len(entries) > 1:
+        raise ValueError("a route names more than one enforcing service entry")
+    return next(iter(entries), None)
+
+
 def _admin_inventory_spec(policy: AdminRoutePolicy) -> InventorySpec:
     return InventorySpec(
         policy.resource_type.value,
@@ -272,6 +305,7 @@ def _classify_route(route: APIRoute, method: str) -> tuple[str, tuple[InventoryS
     specs: list[InventorySpec] = []
     admin_policies: list[AdminRoutePolicy] = []
     safe_public = False
+    service_enforced = False
     for dependant in _walk_dependants(route.dependant):
         call = dependant.call
         safe_public = safe_public or bool(getattr(call, "safe_public", False))
@@ -279,6 +313,10 @@ def _classify_route(route: APIRoute, method: str) -> tuple[str, tuple[InventoryS
         specs.extend(
             _inventory_spec(spec, capability) for spec in getattr(call, "authorization_specs", ())
         )
+        declaration = declaration_of(call)
+        if declaration is not None:
+            specs.extend(_declared_inventory_specs(declaration))
+            service_enforced = service_enforced or declaration.service_entry is not None
         classifier = getattr(call, "admin_policy_classifier", None)
         if classifier is not None:
             admin_policies.append(classifier(method, route.path))
@@ -295,7 +333,12 @@ def _classify_route(route: APIRoute, method: str) -> tuple[str, tuple[InventoryS
         specs.append(_admin_inventory_spec(admin_policies[0]))
         classification = "admin-capability"
     elif specs:
-        classification = "safe-public" if safe_public else "authorized"
+        if safe_public:
+            classification = "safe-public"
+        elif service_enforced:
+            classification = "service-enforced"
+        else:
+            classification = "authorized"
     else:
         if not isinstance(marker, ExplicitRouteClassification):
             raise ValueError(
@@ -448,10 +491,37 @@ def _validate_spec_compatibility(item: RouteInventoryItem) -> str | None:
     return None
 
 
+def _validate_declared_sources(route: APIRoute) -> str | None:
+    """A declared id source must name a parameter the route really has (#348)."""
+    path_names = set(route.param_convertors)
+    query_names = {
+        str(field.alias or field.name)
+        for dependant in _walk_dependants(route.dependant)
+        for field in dependant.query_params
+    }
+    for dependant in _walk_dependants(route.dependant):
+        declaration = declaration_of(dependant.call)
+        if declaration is None:
+            continue
+        source = declaration.source
+        if isinstance(source, PathSource) and source.name not in path_names:
+            return f"declared path identifier {source.name} is not a parameter of the route path"
+        # FastAPI itself refuses to register a query source named like a path
+        # parameter ("Cannot use `Query` for path param").
+        if isinstance(source, QuerySource) and source.name not in query_names:
+            return f"declared query identifier {source.name} is not a query parameter of the route"
+    return None
+
+
 def _validate_identifier_policy(
     item: RouteInventoryItem,
     marker: ExplicitRouteClassification | None,
+    route: APIRoute | None = None,
 ) -> str | None:
+    if route is not None:
+        declared = _validate_declared_sources(route)
+        if declared:
+            return declared
     normalized = {_normalized_identifier(value) for value in item.identifiers}
     if marker is not None:
         reason = _validate_explicit_declaration(item, marker)
@@ -513,6 +583,7 @@ def inventory_application(app: FastAPI) -> tuple[RouteInventoryItem, ...]:
                     classification not in {"public", "safe-public"}
                     and bool(identifiers or specs or classification == "admin-capability"),
                     target_projection,
+                    _service_entry(route),
                 )
             )
     return tuple(sorted(items, key=lambda item: (item.method, item.path)))
@@ -523,7 +594,9 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
     for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
-        endpoint_metadata = getattr(route.endpoint, "authorization_specs", ())
+        endpoint_metadata = getattr(route.endpoint, "authorization_specs", ()) or getattr(
+            route.endpoint, "authorization_declaration", None
+        )
         graph_calls = {dependant.call for dependant in _walk_dependants(route.dependant)}
         if endpoint_metadata and route.endpoint not in graph_calls - {route.dependant.call}:
             failures.append(
@@ -545,6 +618,7 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
                     classification not in {"public", "safe-public"}
                     and bool(identifiers or specs or classification == "admin-capability"),
                     _target_projection(provider),
+                    _service_entry(route),
                 )
                 if classification == "admin-capability":
                     policy = next(
@@ -576,7 +650,7 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
                                 "evidence-only field is promoted as an authorization target"
                             )
                 marker = getattr(route.endpoint, "stoa_route_classification", None)
-                reason = _validate_identifier_policy(item, marker)
+                reason = _validate_identifier_policy(item, marker, route)
                 if reason:
                     failures.append(InventoryFailure(method, route.path, reason))
             except (KeyError, TypeError, ValueError) as error:
@@ -640,6 +714,8 @@ def install_authorization_openapi(app: FastAPI) -> None:
             }
             if item.admin_target is not None:
                 extension["adminTarget"] = item.admin_target
+            if item.service_entry is not None:
+                extension["serviceEnforced"] = item.service_entry
             operation["x-stoa-authorization"] = extension
         app.openapi_schema = schema
         return schema

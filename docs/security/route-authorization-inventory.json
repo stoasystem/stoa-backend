@@ -119,9 +119,7 @@
     ],
     "classification": "authorized",
     "family": "adaptive",
-    "identifiers": [
-      "student_id"
-    ],
+    "identifiers": [],
     "method": "GET",
     "path": "/adaptive/students/me/assignments",
     "sensitive": true
@@ -137,9 +135,7 @@
     ],
     "classification": "authorized",
     "family": "adaptive",
-    "identifiers": [
-      "student_id"
-    ],
+    "identifiers": [],
     "method": "GET",
     "path": "/adaptive/students/me/memory",
     "sensitive": true
@@ -1748,9 +1744,7 @@
     ],
     "classification": "authorized",
     "family": "students",
-    "identifiers": [
-      "student_id"
-    ],
+    "identifiers": [],
     "method": "GET",
     "path": "/students/me/entitlement",
     "sensitive": true
@@ -1766,9 +1760,7 @@
     ],
     "classification": "authorized",
     "family": "students",
-    "identifiers": [
-      "student_id"
-    ],
+    "identifiers": [],
     "method": "GET",
     "path": "/students/me/learning-history",
     "sensitive": true
@@ -1800,9 +1792,7 @@
     ],
     "classification": "authorized",
     "family": "students",
-    "identifiers": [
-      "student_id"
-    ],
+    "identifiers": [],
     "method": "GET",
     "path": "/students/me/profile",
     "sensitive": true
@@ -2321,9 +2311,7 @@
     ],
     "classification": "authorized",
     "family": "students",
-    "identifiers": [
-      "student_id"
-    ],
+    "identifiers": [],
     "method": "PATCH",
     "path": "/students/me/profile",
     "sensitive": true

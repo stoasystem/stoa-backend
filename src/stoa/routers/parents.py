@@ -24,8 +24,7 @@ from stoa.db.repositories import (
     report_repo,
     user_repo,
 )
-from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
-from stoa.deps import get_actor, get_authorization_audit_sink
+from stoa.deps import get_actor
 from stoa.models.allowance import ZURICH
 from stoa.models.billing import PurchasablePlanId
 from stoa.models.user import SubscriptionTier
@@ -36,17 +35,12 @@ from stoa.rule_violation import RuleViolation
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
-    AuthorizationSpec,
     AuthorizedResource,
-    CurrentAuthorizationFactRepository,
-    ResourceRef,
     ResourceType,
-    authorize_and_resolve,
 )
+from stoa.security.declared_authorization import SELF, authorized, path
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole
-from stoa.security.route_authorization import get_authorization_fact_repository
-from stoa.security.request_correlation import get_request_correlation_id
 from stoa.services import (
     account_numbering_service,
     account_operations_service,
@@ -526,29 +520,18 @@ class ParentAccountOperationsResponse(BaseModel):
     supportState: dict[str, Any] = Field(default_factory=dict)
 
 
-def _parent_account_dependency(action: AuthorizationAction):
-    async def resolve(resource_id: str):
-        return {"student_id": resource_id}
-
-    async def dependency(actor: Actor = Depends(get_actor)) -> Actor:
-        if actor.role is not CanonicalRole.PARENT:
-            raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
-        return actor
-
-    dependency.authorization_specs = (  # type: ignore[attr-defined]
-        AuthorizationSpec(
-            ResourceType.PARENT_BINDING,
-            action,
-            AuthorizationPurpose.SELF_SERVICE,
-            resolve,
-        ),
-    )
-    return dependency
-
-
-_parent_account_read = _parent_account_dependency(AuthorizationAction.READ)
-_parent_account_create = _parent_account_dependency(AuthorizationAction.CREATE)
-_parent_account_update = _parent_account_dependency(AuthorizationAction.UPDATE)
+# A parent's own account (children, billing, link requests): asked of the
+# policy and recorded, not only a role check (#348).
+_PARENT_SELF = {CanonicalRole.PARENT: AuthorizationPurpose.SELF_SERVICE}
+_parent_account_read = authorized(
+    ResourceType.PARENT_BINDING, AuthorizationAction.READ, SELF, _PARENT_SELF
+)
+_parent_account_create = authorized(
+    ResourceType.PARENT_BINDING, AuthorizationAction.CREATE, SELF, _PARENT_SELF
+)
+_parent_account_update = authorized(
+    ResourceType.PARENT_BINDING, AuthorizationAction.UPDATE, SELF, _PARENT_SELF
+)
 
 
 def _provider_value(value: object, key: str) -> object:
@@ -769,49 +752,11 @@ def _parent_checkout_status(
     )
 
 
-async def _parent_child_read(
-    child_id: str,
-    actor: Actor = Depends(get_actor),
-    facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
-    correlation_id: str = Depends(get_request_correlation_id),
-    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
-) -> AuthorizedResource:
-    async def resolve(resource_id: str):
-        profile = user_repo.get_user(resource_id)
-        if not profile or profile.get("role") not in {None, "student"}:
-            return None
-        return AuthorizedResource(
-            ResourceRef(ResourceType.STUDENT, resource_id, resource_id),
-            profile,
-        )
-
-    spec = AuthorizationSpec(
-        ResourceType.STUDENT,
-        AuthorizationAction.READ,
-        AuthorizationPurpose.PARENT_OVERSIGHT,
-        resolve,
-    )
-    return await authorize_and_resolve(
-        actor=actor,
-        resource_id=child_id,
-        spec=spec,
-        fact_repository=facts,
-        correlation_id=correlation_id,
-        audit_sink=audit_sink,
-    )
-
-
-async def _parent_child_metadata_resolver(resource_id: str):
-    return user_repo.get_user(resource_id)
-
-
-_parent_child_read.authorization_specs = (  # type: ignore[attr-defined]
-    AuthorizationSpec(
-        ResourceType.STUDENT,
-        AuthorizationAction.READ,
-        AuthorizationPurpose.PARENT_OVERSIGHT,
-        _parent_child_metadata_resolver,
-    ),
+_parent_child_read = authorized(
+    ResourceType.STUDENT,
+    AuthorizationAction.READ,
+    path("child_id"),
+    {CanonicalRole.PARENT: AuthorizationPurpose.PARENT_OVERSIGHT},
 )
 
 

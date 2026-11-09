@@ -8,26 +8,26 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from stoa.db.repositories import adaptive_learning_repo, user_repo
-from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
-from stoa.deps import get_actor, get_authorization_audit_sink
+from stoa.db.repositories import user_repo
+from stoa.deps import get_actor
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
-    AuthorizationSpec,
     AuthorizedResource,
-    CurrentAuthorizationFactRepository,
     ResourceRef,
     ResourceType,
-    authorize_and_resolve,
 )
-from stoa.security.errors import SecurityDecisionError
+from stoa.security.declared_authorization import (
+    ASSIGNMENT,
+    SELF,
+    AuthorizationContext,
+    authorize_loaded,
+    authorized,
+    get_authorization_context,
+    loaded_declaration,
+    path,
+)
 from stoa.security.identity import Actor, CanonicalRole
-from stoa.security.request_correlation import get_request_correlation_id
-from stoa.security.route_authorization import (
-    get_authorization_fact_repository,
-    authorized_student_resource_dependency,
-)
 from stoa.services import adaptive_learning_service
 from stoa.services.adaptive_learning_service import actor_projection
 
@@ -248,158 +248,66 @@ _ASSIGNMENT_OPERATOR_UPDATE = {
     CanonicalRole.ADMIN: AuthorizationPurpose.LEARNING_ASSIGNMENT,
 }
 
-_my_adaptive_read = authorized_student_resource_dependency(
-    resource_type=ResourceType.ADAPTIVE_PROFILE,
-    action=AuthorizationAction.READ,
-    purposes={CanonicalRole.STUDENT: AuthorizationPurpose.SELF_SERVICE},
-    self_route=True,
+_PROFILE = ResourceType.ADAPTIVE_PROFILE
+_STUDENT_ID = path("student_id")
+_my_adaptive_read = authorized(
+    _PROFILE,
+    AuthorizationAction.READ,
+    SELF,
+    {CanonicalRole.STUDENT: AuthorizationPurpose.SELF_SERVICE},
 )
-_adaptive_read = authorized_student_resource_dependency(
-    resource_type=ResourceType.ADAPTIVE_PROFILE,
-    action=AuthorizationAction.READ,
-    purposes=_ADAPTIVE_READ,
+_adaptive_read = authorized(_PROFILE, AuthorizationAction.READ, _STUDENT_ID, _ADAPTIVE_READ)
+_adaptive_refresh = authorized(
+    _PROFILE, AuthorizationAction.UPDATE, _STUDENT_ID, _ADAPTIVE_REFRESH
 )
-_adaptive_refresh = authorized_student_resource_dependency(
-    resource_type=ResourceType.ADAPTIVE_PROFILE,
-    action=AuthorizationAction.UPDATE,
-    purposes=_ADAPTIVE_REFRESH,
+_automation_preview = authorized(
+    _PROFILE, AuthorizationAction.READ, _STUDENT_ID, _AUTOMATION_PREVIEW
 )
-_automation_preview = authorized_student_resource_dependency(
-    resource_type=ResourceType.ADAPTIVE_PROFILE,
-    action=AuthorizationAction.READ,
-    purposes=_AUTOMATION_PREVIEW,
+_automation_execute = authorized(
+    _PROFILE, AuthorizationAction.CREATE, _STUDENT_ID, _AUTOMATION_EXECUTE
 )
-_automation_execute = authorized_student_resource_dependency(
-    resource_type=ResourceType.ADAPTIVE_PROFILE,
-    action=AuthorizationAction.CREATE,
-    purposes=_AUTOMATION_EXECUTE,
-)
-_parent_progress = authorized_student_resource_dependency(
-    resource_type=ResourceType.ADAPTIVE_PROFILE,
-    action=AuthorizationAction.READ,
-    purposes={CanonicalRole.PARENT: AuthorizationPurpose.PARENT_OVERSIGHT},
+_parent_progress = authorized(
+    _PROFILE,
+    AuthorizationAction.READ,
+    _STUDENT_ID,
+    {CanonicalRole.PARENT: AuthorizationPurpose.PARENT_OVERSIGHT},
 )
 
-
-async def _authorize_loaded_resource(
-    *,
-    actor: Actor,
-    facts: CurrentAuthorizationFactRepository,
-    correlation_id: str,
-    audit_sink: AuthorizationAuditSink,
-    resource_type: ResourceType,
-    resource_id: str,
-    student_id: str,
-    value: dict | None,
-    action: AuthorizationAction,
-    purposes: dict[CanonicalRole, AuthorizationPurpose],
-) -> AuthorizedResource:
-    purpose = purposes.get(actor.role)
-    if purpose is None:
-        from stoa.security.errors import SecurityErrorCode
-
-        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
-
-    async def resolve(_resource_id: str):
-        if not value:
-            return None
-        return AuthorizedResource(
-            ResourceRef(resource_type, resource_id, student_id),
-            value,
-        )
-
-    spec = AuthorizationSpec(resource_type, action, purpose, resolve)
-    return await authorize_and_resolve(
-        actor=actor,
-        resource_id=resource_id,
-        spec=spec,
-        fact_repository=facts,
-        correlation_id=correlation_id,
-        audit_sink=audit_sink,
-    )
-
-
-def _assignment_dependency(
-    action: AuthorizationAction,
-    purposes: dict[CanonicalRole, AuthorizationPurpose],
-):
-    async def dependency(
-        assignment_id: str,
-        actor: Actor = Depends(get_actor),
-        facts: CurrentAuthorizationFactRepository = Depends(
-            get_authorization_fact_repository
-        ),
-        correlation_id: str = Depends(get_request_correlation_id),
-        audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
-    ) -> AuthorizedResource:
-        item = adaptive_learning_repo.get_assignment(assignment_id)
-        return await _authorize_loaded_resource(
-            actor=actor,
-            facts=facts,
-            correlation_id=correlation_id,
-            audit_sink=audit_sink,
-            resource_type=ResourceType.ADAPTIVE_PROFILE,
-            resource_id=assignment_id,
-            student_id=str((item or {}).get("student_id") or ""),
-            value=item,
-            action=action,
-            purposes=purposes,
-        )
-
-    async def metadata_resolver(resource_id: str):
-        return adaptive_learning_repo.get_assignment(resource_id)
-
-    dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
-        AuthorizationSpec(ResourceType.ADAPTIVE_PROFILE, action, purpose, metadata_resolver)
-        for purpose in purposes.values()
-    )
-    return dependency
-
-
-_assignment_read = _assignment_dependency(AuthorizationAction.READ, _ASSIGNMENT_READ)
-_assignment_student_update = _assignment_dependency(
-    AuthorizationAction.UPDATE, _ASSIGNMENT_STUDENT_UPDATE
+_ASSIGNMENT_ID = path("assignment_id")
+_assignment_read = authorized(
+    _PROFILE, AuthorizationAction.READ, _ASSIGNMENT_ID, _ASSIGNMENT_READ, kind=ASSIGNMENT
 )
-_assignment_operator_update = _assignment_dependency(
-    AuthorizationAction.UPDATE, _ASSIGNMENT_OPERATOR_UPDATE
+_assignment_student_update = authorized(
+    _PROFILE,
+    AuthorizationAction.UPDATE,
+    _ASSIGNMENT_ID,
+    _ASSIGNMENT_STUDENT_UPDATE,
+    kind=ASSIGNMENT,
+)
+_assignment_operator_update = authorized(
+    _PROFILE,
+    AuthorizationAction.UPDATE,
+    _ASSIGNMENT_ID,
+    _ASSIGNMENT_OPERATOR_UPDATE,
+    kind=ASSIGNMENT,
 )
 
 
+@loaded_declaration(_PROFILE, AuthorizationAction.ASSIGN, _ASSIGNMENT_OPERATOR_UPDATE)
 async def _authorized_assignment_create(
     body: AssignmentCreateRequest,
     actor: Actor = Depends(get_actor),
-    facts: CurrentAuthorizationFactRepository = Depends(get_authorization_fact_repository),
-    correlation_id: str = Depends(get_request_correlation_id),
-    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
+    context: AuthorizationContext = Depends(get_authorization_context),
 ) -> AuthorizedResource:
-    student = user_repo.get_user(body.student_id)
-    return await _authorize_loaded_resource(
-        actor=actor,
-        facts=facts,
-        correlation_id=correlation_id,
-        audit_sink=audit_sink,
-        resource_type=ResourceType.ADAPTIVE_PROFILE,
-        resource_id=body.student_id,
-        student_id=body.student_id,
-        value=student,
-        action=AuthorizationAction.ASSIGN,
-        purposes=_ASSIGNMENT_OPERATOR_UPDATE,
-    )
-
-
-async def _student_metadata_resolver(resource_id: str):
-    return user_repo.get_user(resource_id)
-
-
-_authorized_assignment_create.authorization_specs = tuple(  # type: ignore[attr-defined]
-    AuthorizationSpec(
-        ResourceType.ADAPTIVE_PROFILE,
+    """The student an assignment is for: named in the body, so load, then decide."""
+    return await authorize_loaded(
+        actor,
+        ResourceRef(_PROFILE, body.student_id, body.student_id),
+        user_repo.get_user(body.student_id),
         AuthorizationAction.ASSIGN,
-        purpose,
-        _student_metadata_resolver,
+        _ASSIGNMENT_OPERATOR_UPDATE,
+        context,
     )
-    for purpose in _ASSIGNMENT_OPERATOR_UPDATE.values()
-)
 
 
 @router.get(
@@ -409,12 +317,11 @@ _authorized_assignment_create.authorization_specs = tuple(  # type: ignore[attr-
 )
 async def get_my_memory(
     subject: str | None = Query(default=None),
-    actor: Actor = Depends(get_actor),
-    authorized_student: AuthorizedResource = Depends(_my_adaptive_read),
+    actor: Actor = Depends(_my_adaptive_read),
 ):
     """Student-facing adaptive memory and next-practice recommendations."""
     return adaptive_learning_service.get_memory_summary(
-        student_id=authorized_student.ref.student_id,
+        student_id=actor.user_id,
         user=actor_projection(actor),
         subject=subject,
     )
@@ -423,12 +330,11 @@ async def get_my_memory(
 @router.get("/students/me/assignments")
 async def list_my_assignments(
     status: str | None = Query(default=None),
-    actor: Actor = Depends(get_actor),
-    authorized_student: AuthorizedResource = Depends(_my_adaptive_read),
+    actor: Actor = Depends(_my_adaptive_read),
 ):
     """Student-facing reviewed assignments."""
     return adaptive_learning_service.list_assignments(
-        student_id=authorized_student.ref.student_id,
+        student_id=actor.user_id,
         user=actor_projection(actor),
         status=status,
     )

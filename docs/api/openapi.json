@@ -15388,15 +15388,8 @@
             "name": "student_id",
             "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
+              "title": "Student Id",
+              "type": "string"
             }
           }
         ],
@@ -15485,22 +15478,6 @@
               ],
               "title": "Status"
             }
-          },
-          {
-            "in": "query",
-            "name": "student_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
-            }
           }
         ],
         "responses": {
@@ -15562,9 +15539,7 @@
             }
           ],
           "classification": "authorized",
-          "identifiers": [
-            "student_id"
-          ]
+          "identifiers": []
         }
       }
     },
@@ -15587,22 +15562,6 @@
                 }
               ],
               "title": "Subject"
-            }
-          },
-          {
-            "in": "query",
-            "name": "student_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
             }
           }
         ],
@@ -15667,9 +15626,7 @@
             }
           ],
           "classification": "authorized",
-          "identifiers": [
-            "student_id"
-          ]
+          "identifiers": []
         }
       }
     },
@@ -15683,15 +15640,8 @@
             "name": "student_id",
             "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
+              "title": "Student Id",
+              "type": "string"
             }
           }
         ],
@@ -15780,15 +15730,8 @@
             "name": "student_id",
             "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
+              "title": "Student Id",
+              "type": "string"
             }
           }
         ],
@@ -15884,15 +15827,8 @@
             "name": "student_id",
             "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
+              "title": "Student Id",
+              "type": "string"
             }
           },
           {
@@ -16009,15 +15945,8 @@
             "name": "student_id",
             "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
+              "title": "Student Id",
+              "type": "string"
             }
           },
           {
@@ -16126,15 +16055,8 @@
             "name": "student_id",
             "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
+              "title": "Student Id",
+              "type": "string"
             }
           },
           {
@@ -16231,15 +16153,8 @@
             "name": "student_id",
             "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
+              "title": "Student Id",
+              "type": "string"
             }
           },
           {
@@ -32433,24 +32348,6 @@
       "get": {
         "description": "Tell a student which plan covers them and what it allows today.\n\nTheir plan is decided by a parent's billing, which only a parent may read,\nso a student had no way to learn their own limits.",
         "operationId": "get_my_entitlement_students_me_entitlement_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "student_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -32471,16 +32368,6 @@
               }
             },
             "description": "No usable bearer token"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
           },
           "default": {
             "content": {
@@ -32512,9 +32399,7 @@
             }
           ],
           "classification": "authorized",
-          "identifiers": [
-            "student_id"
-          ]
+          "identifiers": []
         }
       }
     },
@@ -32522,24 +32407,6 @@
       "get": {
         "description": "Return the student's own questions and practice lessons, newest first.",
         "operationId": "get_my_learning_history_students_me_learning_history_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "student_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -32560,16 +32427,6 @@
               }
             },
             "description": "No usable bearer token"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
           },
           "default": {
             "content": {
@@ -32601,9 +32458,7 @@
             }
           ],
           "classification": "authorized",
-          "identifiers": [
-            "student_id"
-          ]
+          "identifiers": []
         }
       }
     },
@@ -32910,24 +32765,6 @@
       "get": {
         "description": "Return the current student's learning profile.",
         "operationId": "get_my_profile_students_me_profile_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "student_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -32948,16 +32785,6 @@
               }
             },
             "description": "No usable bearer token"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
           },
           "default": {
             "content": {
@@ -32989,32 +32816,12 @@
             }
           ],
           "classification": "authorized",
-          "identifiers": [
-            "student_id"
-          ]
+          "identifiers": []
         }
       },
       "patch": {
         "description": "Update the current student's learning profile.",
         "operationId": "update_my_profile_students_me_profile_patch",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "student_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -33086,9 +32893,7 @@
             }
           ],
           "classification": "authorized",
-          "identifiers": [
-            "student_id"
-          ]
+          "identifiers": []
         }
       }
     },
@@ -33102,15 +32907,8 @@
             "name": "student_id",
             "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
+              "title": "Student Id",
+              "type": "string"
             }
           }
         ],
@@ -33209,15 +33007,8 @@
             "name": "student_id",
             "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
+              "title": "Student Id",
+              "type": "string"
             }
           },
           {
@@ -33344,15 +33135,8 @@
             "name": "student_id",
             "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Student Id"
+              "title": "Student Id",
+              "type": "string"
             }
           }
         ],

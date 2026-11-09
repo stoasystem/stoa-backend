@@ -24,12 +24,8 @@ from stoa.security.authorization import (
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.request_correlation import get_request_correlation_id
-from stoa.security.route_authorization import (
-    STUDENT_CONTENT_READ,
-    STUDENT_SELF,
-    authorized_student_dependency,
-    student_actor_dependency,
-)
+from stoa.security.declared_authorization import SELF, authorized, path
+from stoa.security.route_authorization import STUDENT_CONTENT_READ, STUDENT_SELF
 from stoa.config import settings
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
 from stoa.services import (
@@ -408,16 +404,36 @@ def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
 
 
 # ---------------------------------------------------------------------------
+# Authorization declarations (#348)
+# ---------------------------------------------------------------------------
+
+_own_account_read = authorized(
+    ResourceType.STUDENT, AuthorizationAction.READ, SELF, STUDENT_SELF
+)
+_own_account_update = authorized(
+    ResourceType.STUDENT, AuthorizationAction.UPDATE, SELF, STUDENT_SELF
+)
+_student_content_read = authorized(
+    ResourceType.STUDENT, AuthorizationAction.READ, path("student_id"), STUDENT_CONTENT_READ
+)
+_own_parent_links_read = authorized(
+    ResourceType.PARENT_BINDING, AuthorizationAction.READ, SELF, STUDENT_SELF
+)
+_own_parent_links_update = authorized(
+    ResourceType.PARENT_BINDING, AuthorizationAction.UPDATE, SELF, STUDENT_SELF
+)
+_own_parent_links_create = authorized(
+    ResourceType.PARENT_BINDING, AuthorizationAction.CREATE, SELF, STUDENT_SELF
+)
+
+
+# ---------------------------------------------------------------------------
 # Profile endpoints
 # ---------------------------------------------------------------------------
 
 @router.get("/me/entitlement", response_model=StudentEntitlementResponse)
 async def get_my_entitlement(
-    authorized: AuthorizedResource = Depends(
-        authorized_student_dependency(
-            action=AuthorizationAction.READ, purposes=STUDENT_SELF, self_route=True
-        )
-    ),
+    actor: Actor = Depends(_own_account_read),
 ):
     """Tell a student which plan covers them and what it allows today.
 
@@ -425,9 +441,9 @@ async def get_my_entitlement(
     so a student had no way to learn their own limits.
     """
     entitlement = entitlement_service.resolve_student_entitlement(
-        authorized.ref.student_id,
+        actor.user_id,
         settings=settings,
-        student_profile=dict(authorized.value or {}),
+        student_profile=dict(user_repo.get_user(actor.user_id) or {}),
     )
     limits = entitlement.get("limits") or {}
     period = entitlement.get("usagePeriod") or {}
@@ -451,14 +467,10 @@ async def get_my_entitlement(
 
 @router.get("/me/learning-history", response_model=LearningHistoryResponse)
 async def get_my_learning_history(
-    authorized: AuthorizedResource = Depends(
-        authorized_student_dependency(
-            action=AuthorizationAction.READ, purposes=STUDENT_SELF, self_route=True
-        )
-    ),
+    actor: Actor = Depends(_own_account_read),
 ):
     """Return the student's own questions and practice lessons, newest first."""
-    student_id = authorized.ref.student_id
+    student_id = actor.user_id
     items = _question_history_items(student_id) + _practice_history_items(student_id)
     items.sort(key=lambda item: item.createdAt, reverse=True)
     return LearningHistoryResponse(items=items)
@@ -499,16 +511,15 @@ def _answer_style_to_store(sent: str) -> str:
 
 @router.get("/me/profile", response_model=StudentProfileResponse)
 async def get_my_profile(
-    authorized: AuthorizedResource = Depends(
-        authorized_student_dependency(
-            action=AuthorizationAction.READ, purposes=STUDENT_SELF, self_route=True
-        )
-    ),
+    actor: Actor = Depends(_own_account_read),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Return the current student's learning profile."""
-    user_id = authorized.ref.student_id
-    profile = authorized.value
+    user_id = actor.user_id
+    # Read again after the authorization read: `SELF` hands over the Actor.
+    profile = user_repo.get_user(user_id)
+    if not profile:
+        raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
     return _student_profile_response(
         profile,
         fallback_user_id=user_id,
@@ -519,15 +530,11 @@ async def get_my_profile(
 @router.patch("/me/profile", response_model=StudentProfileResponse)
 async def update_my_profile(
     body: UpdateStudentProfileRequest,
-    authorized: AuthorizedResource = Depends(
-        authorized_student_dependency(
-            action=AuthorizationAction.UPDATE, purposes=STUDENT_SELF, self_route=True
-        )
-    ),
+    actor: Actor = Depends(_own_account_update),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Update the current student's learning profile."""
-    user_id = authorized.ref.student_id
+    user_id = actor.user_id
 
     now = datetime.now(timezone.utc).isoformat()
     update_expr_parts = ["updated_at = :u"]
@@ -664,11 +671,7 @@ class LearningProfileResponse(BaseModel):
 
 @router.get("/{student_id}/summary", response_model=SummaryResponse)
 async def get_summary(
-    authorized: AuthorizedResource = Depends(
-        authorized_student_dependency(
-            action=AuthorizationAction.READ, purposes=STUDENT_CONTENT_READ
-        )
-    ),
+    authorized: AuthorizedResource = Depends(_student_content_read),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Return aggregated learning stats for a student (student, parent, admin)."""
@@ -716,11 +719,7 @@ async def get_summary(
 
 @router.get("/{student_id}/learning-profile", response_model=LearningProfileResponse)
 async def get_learning_profile(
-    authorized: AuthorizedResource = Depends(
-        authorized_student_dependency(
-            action=AuthorizationAction.READ, purposes=STUDENT_CONTENT_READ
-        )
-    ),
+    authorized: AuthorizedResource = Depends(_student_content_read),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Return subject-level activity and topic seeds for a student."""
@@ -741,11 +740,7 @@ async def get_learning_profile(
 
 @router.get("/{student_id}/questions", response_model=QuestionListResponse)
 async def list_questions(
-    authorized: AuthorizedResource = Depends(
-        authorized_student_dependency(
-            action=AuthorizationAction.READ, purposes=STUDENT_CONTENT_READ
-        )
-    ),
+    authorized: AuthorizedResource = Depends(_student_content_read),
     limit: int = Query(default=20, ge=1, le=100),
     next_token: Optional[str] = Query(default=None),
     correlation_id: str = Depends(get_request_correlation_id),
@@ -815,9 +810,7 @@ def _parent_request_item(link: Mapping[str, object]) -> ParentRequestItem:
 
 @router.get("/me/parent-requests", response_model=ParentRequestListResponse)
 async def list_my_parent_requests(
-    actor: Actor = Depends(
-        student_actor_dependency(ResourceType.PARENT_BINDING, AuthorizationAction.READ)
-    ),
+    actor: Actor = Depends(_own_parent_links_read),
 ) -> ParentRequestListResponse:
     """Link requests awaiting this student's answer; pending grants no visibility."""
     return ParentRequestListResponse(
@@ -831,9 +824,7 @@ async def list_my_parent_requests(
 @router.post("/me/parent-requests/{parent_id}/confirm", response_model=ParentRequestItem)
 async def confirm_my_parent_request(
     parent_id: str,
-    actor: Actor = Depends(
-        student_actor_dependency(ResourceType.PARENT_BINDING, AuthorizationAction.UPDATE)
-    ),
+    actor: Actor = Depends(_own_parent_links_update),
 ) -> ParentRequestItem:
     """Only the side that did not ask can turn a request into visibility."""
     link = parent_link_service.confirm_link(
@@ -845,9 +836,7 @@ async def confirm_my_parent_request(
 @router.post("/me/parent-requests/{parent_id}/reject", response_model=ParentRequestItem)
 async def reject_my_parent_request(
     parent_id: str,
-    actor: Actor = Depends(
-        student_actor_dependency(ResourceType.PARENT_BINDING, AuthorizationAction.UPDATE)
-    ),
+    actor: Actor = Depends(_own_parent_links_update),
 ) -> ParentRequestItem:
     link = parent_link_service.reject_link(
         parent_id=parent_id, student_id=actor.user_id, actor_id=actor.user_id
@@ -858,9 +847,7 @@ async def reject_my_parent_request(
 @router.post("/me/parent-requests", response_model=ParentRequestItem)
 async def request_parent_link(
     body: ParentRequestCommand,
-    actor: Actor = Depends(
-        student_actor_dependency(ResourceType.PARENT_BINDING, AuthorizationAction.CREATE)
-    ),
+    actor: Actor = Depends(_own_parent_links_create),
 ) -> ParentRequestItem:
     """Propose a link by parent number. It stops at `pending` and grants nothing."""
     admit_parent_link_request(actor.user_id)

@@ -302,7 +302,7 @@ def authorized_curriculum_answer_dependency():
 
     async def resolve(challenge_id: str):
         item = practice_repo.get_challenge(challenge_id)
-        if not _valid_loaded_curriculum_answer(item, challenge_id):
+        if not valid_loaded_curriculum_answer(item, challenge_id):
             return None
         assert item is not None
         return AuthorizedResource(
@@ -355,7 +355,7 @@ def authorized_curriculum_answer_dependency():
     return dependency
 
 
-def _valid_loaded_curriculum_answer(
+def valid_loaded_curriculum_answer(
     item: Mapping[str, object] | None, challenge_id: str
 ) -> bool:
     """Validate direct-resolver identity and exact authorization coordinates."""
