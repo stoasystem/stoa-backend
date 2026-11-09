@@ -277,6 +277,10 @@ def test_translations_and_feedback_are_carried_in_the_platform_form() -> None:
         ({"zh": _french()}, "translations.zh"),
         ({"fr": _french(prompt=" ")}, "translations.fr"),
         ({"fr": _french(correct_answer="")}, "translations.fr"),
+        (["fr"], "translations"),
+        ({"fr": "Calcule 3/4 de 24."}, "translations.fr"),
+        ({"fr": _french(figure="<svg/>")}, "translations.fr carries figure"),
+        ({"fr": _french(options=["18", "24"])}, "translations.fr carries options"),
         (
             {"fr": _french(incorrect_feedback="x" * 501)},
             "translations.fr.incorrect_feedback is 501 characters",

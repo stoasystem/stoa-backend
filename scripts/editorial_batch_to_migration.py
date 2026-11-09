@@ -24,8 +24,9 @@ are left out on purpose: a student hint is a reviewed template, not free text.
 An exercise may carry `correct_feedback`, `incorrect_feedback` and `translations`
 (locale -> prompt, explanation, correct_answer, accepted_answers and the two
 feedbacks, the platform's own field names). They are carried as the platform
-stores them; a translation the migration would refuse skips the exercise with the
-reason, and an editorial `translation_review` note stays behind.
+stores them; a translation the migration would refuse, or one that carries a choice
+or a figure, skips the exercise with the reason, and an editorial
+`translation_review` note stays behind.
 
     uv run python scripts/editorial_batch_to_migration.py BATCH.json \\
         --manifest manifest.json --report report.json
@@ -54,6 +55,10 @@ MAX_TEXT = 2000
 MAX_ID = 200
 #: What the curriculum keeps of one feedback text (curriculum_ops_service cuts the rest).
 MAX_FEEDBACK = 500
+#: The editorial feedback fields and their manifest names.
+FEEDBACK_FIELDS = {"correct_feedback": "correctFeedback", "incorrect_feedback": "incorrectFeedback"}
+#: Translation fields of a choice or a figure; the conversion carries neither.
+TRANSLATION_NOT_SHOWN = ("options", "figure", "option_figures")
 #: A knowledge card with more exercises than this becomes several lessons of
 #: near-equal size, easiest first. A 26-exercise lesson reads as a test.
 MAX_EXERCISES_PER_LESSON = 8
@@ -183,10 +188,24 @@ def _length_problem(fields: Mapping[str, str], limits: Mapping[str, int]) -> str
     return None
 
 
-def _translation_problem(translations: dict[str, dict[str, Any]], canonical: str) -> str | None:
-    """What the migration's validation would refuse in an exercise's translations."""
+def _translation_problem(
+    raw: object, translations: Mapping[str, Mapping[str, Any]], canonical: str
+) -> str | None:
+    """What the migration would refuse in an exercise's translations, or the conversion
+    would lose: a locale that is not a mapping is dropped by normalizing, so the raw
+    shape is checked first, and a choice or a figure a text exercise does not show."""
+    if raw in (None, {}):
+        return None
+    if not isinstance(raw, Mapping) or not all(isinstance(text, Mapping) for text in raw.values()):
+        checked: object = raw
+    else:
+        checked = translations
+        for locale, text in translations.items():
+            shown_elsewhere = [name for name in TRANSLATION_NOT_SHOWN if name in text]
+            if shown_elsewhere:
+                return f"translations.{locale} carries {', '.join(shown_elsewhere)}, which a text exercise does not show"
     issues = exercise_localization.translation_issues(
-        {"correct_answer": canonical, "translations": translations}, max_text=MAX_TEXT
+        {"correct_answer": canonical, "translations": checked}, max_text=MAX_TEXT
     )
     if not issues:
         return None
@@ -195,24 +214,14 @@ def _translation_problem(translations: dict[str, dict[str, Any]], canonical: str
 
 
 def _feedback_problem(
-    exercise: Mapping[str, Any], translations: Mapping[str, Mapping[str, Any]]
+    feedback: Mapping[str, str], translations: Mapping[str, Mapping[str, Any]]
 ) -> str | None:
     """Feedback the platform would cut at its limit; cut text is never carried."""
-    texts = {
-        name: str(exercise.get(name) or "").strip()
-        for name in ("correct_feedback", "incorrect_feedback")
-    }
+    texts = dict(feedback)
     for locale, text in translations.items():
-        for name in ("correct_feedback", "incorrect_feedback"):
+        for name in FEEDBACK_FIELDS:
             texts[f"translations.{locale}.{name}"] = str(text.get(name) or "")
-    return next(
-        (
-            f"{name} is {len(text)} characters, the limit is {MAX_FEEDBACK}"
-            for name, text in texts.items()
-            if len(text) > MAX_FEEDBACK
-        ),
-        None,
-    )
+    return _length_problem(texts, dict.fromkeys(texts, MAX_FEEDBACK))
 
 
 def _split(lesson: dict[str, Any], max_exercises: int) -> list[dict[str, Any]]:
@@ -331,10 +340,11 @@ def convert(
         if problem is None and not fields["explanation"]:
             problem = "no solution steps to explain the answer"
         translations = exercise_localization.normalize_translations(exercise.get("translations"))
-        if problem is None and translations:
-            problem = _translation_problem(translations, canonical)
+        feedback = {name: str(exercise.get(name) or "").strip() for name in FEEDBACK_FIELDS}
         if problem is None:
-            problem = _feedback_problem(exercise, translations)
+            problem = _translation_problem(exercise.get("translations"), translations, canonical)
+        if problem is None:
+            problem = _feedback_problem(feedback, translations)
         if problem is not None:
             row["status"] = "skipped"
             row["reason"] = problem
@@ -383,13 +393,9 @@ def convert(
         }
         if accepted:
             exercise_payload["acceptedAnswers"] = accepted
-        for source_field, target in (
-            ("correct_feedback", "correctFeedback"),
-            ("incorrect_feedback", "incorrectFeedback"),
-        ):
-            text = str(exercise.get(source_field) or "").strip()
+        for name, text in feedback.items():
             if text:
-                exercise_payload[target] = text
+                exercise_payload[FEEDBACK_FIELDS[name]] = text
         if translations:
             exercise_payload["translations"] = translations
         lesson["exercises"].append(exercise_payload)
