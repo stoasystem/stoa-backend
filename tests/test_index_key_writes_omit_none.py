@@ -33,7 +33,7 @@ from fakes.dynamodb import FakeTable, from_wire
 from fakes.learning_session import patch_session_table, seed_conversation
 from stoa.db import table as db_table
 from stoa.config import Settings
-from stoa.db.repositories import account_deletion_repo, curriculum_ops_repo, usage_ledger_repo
+from stoa.db.repositories import account_deletion_repo, usage_ledger_repo
 from stoa.models.billing import BillingPlanId
 from stoa.routers import conversations
 from stoa.services import learning_session
@@ -61,7 +61,7 @@ def test_a_help_request_for_a_student_with_no_parent_is_stored_without_the_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = FakeTable()
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     recorded = usage_ledger_service.record_usage_event(
         student_id="student-1",
@@ -86,7 +86,7 @@ def test_a_fenced_private_event_is_stored_without_its_none_and_replays_as_a_dupl
 ) -> None:
     table = FakeTable()
     table.seed_active_account("student-1")
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     def record() -> str:
         return str(
@@ -111,7 +111,7 @@ def test_a_curriculum_draft_is_stored_without_a_review_state(
 ) -> None:
     table = FakeTable()
     table.seed({"PK": "PRACTICE", "SK": f"UNIT#{DRAFT_UNIT['unit_id']}", **DRAFT_UNIT})
-    monkeypatch.setattr(curriculum_ops_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     created = curriculum_ops_service.create_lesson_draft(
         _draft_payload(), _operator_user(curriculum_ops_service.AUTHOR_CAPABILITY)
@@ -239,9 +239,8 @@ def test_a_repeat_conversation_help_request_after_a_failed_ledger_write_records_
         now=NOW,
         status="active",
     )
-    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    db_table.install(table)
     patch_session_table(monkeypatch, table)
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
     service = conversations.teacher_support_allowance_service
     monkeypatch.setattr(
         service,
@@ -324,9 +323,8 @@ def _conversation_replay_scaffold(
         now=NOW,
         status="active",
     )
-    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    db_table.install(table)
     patch_session_table(monkeypatch, table)
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
     monkeypatch.setattr(learning_session, "read", lambda _conv_id: dict(row))
     service = conversations.teacher_support_allowance_service
 

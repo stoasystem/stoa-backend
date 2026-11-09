@@ -20,7 +20,7 @@ from actor_helpers import install_actor_overrides
 from rule_violation_helpers import assert_violation
 from fakes.dynamodb import FakeTable
 from scripts import seed_practice
-from stoa.db.repositories import curriculum_ops_repo, practice_repo
+from stoa.db import table as db_table
 from stoa.routers import admin
 from stoa.services import curriculum_ops_service, curriculum_service
 from stoa.services.curriculum_errors import CurriculumErrorCode
@@ -146,8 +146,7 @@ def _content_table(monkeypatch: pytest.MonkeyPatch, *extra: dict[str, Any]) -> F
         *[{"PK": "PRACTICE", "SK": f"LESSON#{item['lesson_id']}", **item} for item in LESSONS],
         *extra,
     )
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
-    monkeypatch.setattr(curriculum_ops_repo, "get_table", lambda: table)
+    db_table.install(table)
     return table
 
 

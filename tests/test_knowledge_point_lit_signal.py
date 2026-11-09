@@ -23,7 +23,7 @@ from boto3.dynamodb.conditions import Key
 
 from fakes.dynamodb import FakeTable
 
-from stoa.db.repositories import practice_repo, review_repo
+from stoa.db import table as db_table
 from stoa.services import curriculum_service, student_evidence
 from stoa.services import knowledge_map_service as km
 from stoa.services import knowledge_mastery_service as mastery
@@ -66,8 +66,7 @@ class Sky:
             "u1": judged("u1", mastery.LearningState.READY),
             "u2": judged("u2", mastery.LearningState.READY),
         }
-        monkeypatch.setattr(practice_repo, "get_table", lambda: self.table)
-        monkeypatch.setattr(review_repo, "get_table", lambda: self.table)
+        db_table.install(self.table)
         monkeypatch.setattr(curriculum_service, "list_catalog", lambda **_k: CATALOG)
         monkeypatch.setattr(
             km.knowledge_mastery_service,

@@ -14,7 +14,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any, Protocol, cast
 
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, practice_repo, user_repo
 
 # Logged for each request nobody could be offered that has waited past the
@@ -35,7 +35,7 @@ class _ScanTable(Protocol):
 
 def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
     """Return teacher/admin profiles usable by the dispatch planner."""
-    table = cast(_ScanTable, get_table())
+    table = cast(_ScanTable, db_table.table())
 
     def eligible_profile(profile: dict[str, Any]) -> dict[str, Any] | None:
         teacher_id = str(profile.get("user_id") or "")
@@ -307,33 +307,32 @@ def _scan_filtered_items(
         return []
     items: list[dict[str, Any]] = []
     last_evaluated_key: dict[str, object] | None = None
-    while len(items) < limit:
-        scan_kwargs: dict[str, object] = {
-            "FilterExpression": filter_expression,
-            "ExpressionAttributeValues": expression_attribute_values,
-            "Limit": limit - len(items),
-        }
-        if last_evaluated_key is not None:
-            scan_kwargs["ExclusiveStartKey"] = last_evaluated_key
-        result = cast(dict[str, Any], table.scan(**scan_kwargs))
-        page = result.get("Items", [])
-        if isinstance(page, list):
-            for item in page:
-                if not isinstance(item, dict):
-                    continue
-                accepted = accept_item(dict(item))
+    reads = db_table.pages(
+        "scan",
+        table=table,
+        FilterExpression=filter_expression,
+        ExpressionAttributeValues=expression_attribute_values,
+        Limit=limit,
+    )
+    try:
+        for page in reads:
+            for item in page.items:
+                accepted = accept_item(item)
                 if accepted is not None:
                     items.append(accepted)
                 if len(items) >= limit:
                     break
-        next_key = result.get("LastEvaluatedKey")
-        if (
-            not isinstance(next_key, dict)
-            or not next_key
-            or next_key == last_evaluated_key
-        ):
-            break
-        last_evaluated_key = dict(next_key)
+            if (
+                len(items) >= limit
+                or page.last_key is None
+                or page.last_key == last_evaluated_key
+            ):
+                break
+            last_evaluated_key = page.last_key
+    except db_table.TableUnavailable as exc:
+        # A page the table did not answer in shape ends the walk with what is in hand.
+        if not exc.code.startswith("malformed"):
+            raise
     return items[:limit]
 
 

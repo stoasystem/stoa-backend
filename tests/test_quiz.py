@@ -26,7 +26,8 @@ from fastapi.testclient import TestClient
 from fakes.dynamodb import FakeTable
 from rule_violation_helpers import assert_violation
 
-from stoa.db.repositories import practice_repo, review_repo, usage_ledger_repo
+from stoa.db import table as db_table
+from stoa.db.repositories import practice_repo, usage_ledger_repo
 from stoa.deps import get_actor
 from stoa.routers import practice
 from stoa.security.authorization import AuthorizationFacts
@@ -144,9 +145,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
     exercises["c-0"] = _exercise("c-0", "l0")
     state = World(table, exercises, [], [], set())
 
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
-    monkeypatch.setattr(review_repo, "get_table", lambda: table)
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(
         practice_repo,
         "get_challenge",

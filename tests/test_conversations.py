@@ -100,7 +100,7 @@ def _with_help_request(monkeypatch, **fields):
                 **fields,
             }
         )
-    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    db_table.install(table)
     patch_session_table(monkeypatch, table)
     _owned_conversation(monkeypatch)
     return table
@@ -170,11 +170,8 @@ def test_conversation_teacher_help_records_support_visible_usage(monkeypatch):
         ),
     )
 
-    from stoa.services import teacher_dispatch_service
-
     table = _escalation_table()
-    for module in (conversations, teacher_dispatch_service):
-        monkeypatch.setattr(module, "get_table", lambda table=table: table)
+    db_table.install(table)
     monkeypatch.setattr(
         learning_session,
         "read",
@@ -273,7 +270,7 @@ def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch
         ),
     )
     table = _escalation_table()
-    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    db_table.install(table)
     patch_session_table(monkeypatch, table)
     monkeypatch.setattr(
         learning_session,
@@ -313,7 +310,7 @@ def test_a_refused_teacher_help_admission_names_its_code(monkeypatch, dispositio
         ),
     )
     table = _escalation_table()
-    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    db_table.install(table)
     patch_session_table(monkeypatch, table)
     monkeypatch.setattr(
         learning_session,
@@ -1536,7 +1533,7 @@ def _student_index_rows(*, messages: int, conversations_count: int, student_id="
 def test_conversation_list_reaches_matching_row_after_filtered_gsi_page(monkeypatch):
     """Pages spent on messages must not be reported as an empty history."""
     table = _PagedIndexTable(_student_index_rows(messages=120, conversations_count=5))
-    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    db_table.install(table)
     patch_session_table(monkeypatch, table)
 
     response = _client(conversations.router).get("/conversations")
@@ -1557,7 +1554,7 @@ def test_conversation_list_reaches_matching_row_after_filtered_gsi_page(monkeypa
 
 def test_conversation_list_reads_one_page_at_normal_volume_without_repeats(monkeypatch):
     table = _PagedIndexTable(_student_index_rows(messages=20, conversations_count=5))
-    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    db_table.install(table)
     patch_session_table(monkeypatch, table)
 
     response = _client(conversations.router).get("/conversations")
@@ -1573,7 +1570,7 @@ def test_conversation_list_reads_one_page_at_normal_volume_without_repeats(monke
 def test_conversation_list_reports_an_exhausted_page_budget_as_truncated(monkeypatch):
     """A heavy history is bounded, and the caller is told it was cut short."""
     table = _PagedIndexTable(_student_index_rows(messages=400, conversations_count=2))
-    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    db_table.install(table)
     patch_session_table(monkeypatch, table)
 
     page = conversations._list_conversations("student-1", page_budget=2)
@@ -1585,7 +1582,7 @@ def test_conversation_list_reports_an_exhausted_page_budget_as_truncated(monkeyp
 
 def test_conversation_list_stops_at_the_result_limit_and_says_so(monkeypatch):
     table = _PagedIndexTable(_student_index_rows(messages=0, conversations_count=250))
-    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    db_table.install(table)
     patch_session_table(monkeypatch, table)
 
     page = conversations._list_conversations("student-1")
@@ -1787,18 +1784,8 @@ def _conversation(table, conversation_id: str) -> None:
 
 def _escalate(monkeypatch, table, conversation_id: str = "conv-1"):
     """Run the real route against the real admission service and one real table."""
-    from stoa.routers import teachers
     from stoa.services import teacher_support_allowance_service as allowance_service
 
-    from stoa.services import teacher_dispatch_service
-
-    for module in (
-        conversations,
-        allowance_service,
-        teachers,
-        teacher_dispatch_service,
-    ):
-        monkeypatch.setattr(module, "get_table", lambda table=table: table)
     db_table.install(table)
     monkeypatch.setattr(
         allowance_service.paid_entitlement_service,

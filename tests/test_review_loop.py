@@ -10,6 +10,7 @@ from decimal import Decimal
 from fakes import student_evidence as fake_evidence
 from fakes.dynamodb import FakeTable
 
+from stoa.db import table as db_table
 from stoa.db.repositories import review_repo
 from stoa.services import review_scheduler, review_service, student_evidence
 
@@ -32,7 +33,7 @@ def use_table(monkeypatch) -> FakeTable:
     # Every card write is a lifecycle transaction fenced on this row. The
     # double used not to run those transactions at all, so no fixture needed it.
     table.seed_active_account("student-1")
-    monkeypatch.setattr(review_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(review_repo, "_write_generation", lambda *a, **k: 1)
     return table
 
@@ -193,7 +194,7 @@ def test_answering_counts_towards_the_streak(monkeypatch):
     from stoa.db.repositories import practice_repo
 
     table = use_table(monkeypatch)
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(practice_repo, "_write_generation", lambda *a, **k: 1)
 
     review_service.record_answer(
@@ -211,7 +212,7 @@ def test_a_day_is_recorded_once_however_many_questions(monkeypatch):
     from stoa.db.repositories import practice_repo
 
     table = use_table(monkeypatch)
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(practice_repo, "_write_generation", lambda *a, **k: 1)
 
     for index in range(3):

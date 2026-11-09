@@ -14,6 +14,7 @@ from typing import Any
 
 from fakes.dynamodb import FakeTable
 
+from stoa.db import table as db_table
 from stoa.db.repositories import review_repo
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.services import (
@@ -39,7 +40,7 @@ CATALOG = {"subjects": [], "topics": [], "units": [], "lessons": LESSONS}
 def use_table(monkeypatch) -> FakeTable:
     table = FakeTable()
     table.seed_active_account(STUDENT)
-    monkeypatch.setattr(review_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(review_repo, "_write_generation", lambda *a, **k: 1)
     monkeypatch.setattr(curriculum_service, "list_catalog", lambda **kwargs: CATALOG)
     return table

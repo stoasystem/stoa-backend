@@ -35,27 +35,6 @@ RULES = {
 }
 
 ALLOWED: dict[str, dict[str, set[str]]] = {
-    "learning and practice": {
-        "db/repositories/adaptive_learning_repo.py": {"get_table", "paging", "conditional_check"},
-        "db/repositories/ai_teacher_tools_repo.py": {"get_table", "paging"},
-        "db/repositories/allowance_repo.py": {"get_table", "paging"},
-        "db/repositories/asked_knowledge_repo.py": {"get_table", "paging"},
-        "db/repositories/curriculum_analytics_repo.py": {"get_table", "paging"},
-        "db/repositories/curriculum_ops_repo.py": {"get_table", "paging", "conditional_check"},
-        "db/repositories/practice_repo.py": {"get_table", "paging"},
-        "db/repositories/question_repo.py": {"get_table", "paging"},
-        "db/repositories/review_repo.py": {"get_table"},
-        "db/repositories/usage_ledger_repo.py": {"get_table", "paging", "conditional_check"},
-        "routers/conversations.py": {"get_table", "paging"},
-        "routers/students.py": {"get_table"},
-        "routers/teachers.py": {"get_table"},
-        "services/ask_question/_answering.py": {"get_table"},
-        "services/ask_question/_store.py": {"get_table", "paging"},
-        "services/help_requests.py": {"get_table", "paging"},
-        "services/learning_session/_store.py": {"get_table", "paging"},
-        "services/teacher_dispatch_service.py": {"get_table", "paging"},
-        "services/teacher_support_allowance_service.py": {"get_table", "conditional_check"},
-    },
     "payments, frozen (stays until payments resume)": {
         "services/subscription_service.py": {"get_table", "paging", "conditional_check"},
     },

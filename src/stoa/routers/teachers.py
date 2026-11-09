@@ -16,7 +16,7 @@ from stoa.db.repositories import (
     attachment_repo,
     user_repo,
 )
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink, get_s3_client
 from stoa.models.attachment import AttachmentSummary, ReplyImageReference
@@ -129,7 +129,7 @@ def _resolve_help_request(request_id: str) -> TeacherItem | None:
 
     A request's id is its conversation's (#189), so this is one strong read.
     """
-    record = help_requests.get(request_id, table=get_table())
+    record = help_requests.get(request_id, table=db_table.table())
     return _teacher_mapping(record) if record else None
 
 
@@ -140,7 +140,7 @@ async def _current_help_requests(
     audit_sink: AuthorizationAuditSink,
 ) -> list[TeacherItem]:
     current: list[TeacherItem] = []
-    for record in help_requests.list_all(table=get_table()):
+    for record in help_requests.list_all(table=db_table.table()):
         conv = _teacher_mapping(record)
         try:
             await authorize_teacher_loaded_resource(
@@ -1061,7 +1061,7 @@ async def get_help_request(
     ),
 ):
     """Get full detail of a specific help request including conversation messages."""
-    table = get_table()
+    table = db_table.table()
 
     view = help_requests.teacher_view(authorized.value)
 
@@ -1188,7 +1188,7 @@ async def update_help_request(
         target=body.status,
         now=_now(),
         resolution_note=body.resolutionNote,
-        table=get_table(),
+        table=db_table.table(),
     )
     view = help_requests.teacher_view(written)
     return _help_request_summary(view, student_name=_get_student_name(view.student_id))
@@ -1230,6 +1230,6 @@ async def add_note(
         format=reply_fields["teacher_response_format"],
         images=reply_images,
         now=_now(),
-        table=get_table(),
+        table=db_table.table(),
     )
     return _note_out(written, written.attachments)

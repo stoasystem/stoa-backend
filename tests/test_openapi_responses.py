@@ -321,6 +321,7 @@ def test_creating_a_conversation_declares_the_identity_refusal_made_before_it(
     from pydantic import TypeAdapter, ValidationError
 
     from stoa.deps import get_identity_repository, get_verified_token
+    from stoa.db import table as db_table
     from stoa.routers import conversations
     from stoa.security.tokens import VerifiedAccessToken
 
@@ -335,7 +336,15 @@ def test_creating_a_conversation_declares_the_identity_refusal_made_before_it(
             return None
 
     created: list[bool] = []
-    monkeypatch.setattr(conversations, "get_table", lambda: created.append(True))
+
+    class _UntouchedTable:
+        """Notes any use: the request must be refused before the table is asked."""
+
+        def __getattr__(self, name: str) -> object:
+            created.append(True)
+            raise AttributeError(name)
+
+    db_table.install(_UntouchedTable())
     route_app = FastAPI()
     route_app.include_router(conversations.router, prefix="/conversations")
     route_app.dependency_overrides[get_verified_token] = lambda: VerifiedAccessToken(

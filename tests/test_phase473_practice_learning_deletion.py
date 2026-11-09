@@ -379,8 +379,7 @@ def test_learning_row_updates_keep_the_generation_the_row_carries(
             operations = from_wire(TransactItems)
             transactions.append(operations)
 
-    monkeypatch.setattr(adaptive_learning_repo, "get_table", lambda: _Table())
-    monkeypatch.setattr(ai_teacher_tools_repo, "get_table", lambda: _Table())
+    db_table.install(_Table())
 
     adaptive_learning_repo.update_assignment(
         "assignment-private", {"status": "in_progress"}

@@ -12,6 +12,7 @@ import json
 import logging
 from collections.abc import Mapping
 from datetime import datetime, timezone
+from itertools import islice
 from typing import Any, Literal, NamedTuple, cast
 
 from boto3.dynamodb.conditions import Attr, Key
@@ -22,7 +23,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from stoa.db import table as db_table
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import (
     account_deletion_repo,
     practice_repo,
@@ -83,7 +83,6 @@ from stoa.services.ask_question.models import (
     message_request_fingerprint,
 )
 from stoa.services.learning_session import (
-    DynamoConversationTable,
     active_conversation_generation,
     conversation_grade,
     conversation_response_items,
@@ -126,6 +125,8 @@ def _now() -> str:
 # List budget: at most 25 index pages and 200 conversations per request.
 _CONVERSATION_LIST_LIMIT = 200
 _CONVERSATION_LIST_PAGE_BUDGET = 25
+# A read on GSI-StudentId continues from the index's key as well as the table's.
+_STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
 
 
 class ConversationListPage(NamedTuple):
@@ -151,27 +152,27 @@ def _list_conversations(
     means a truncated answer is the most recent conversations, and the caller is
     told it was truncated.
     """
-    table = cast(DynamoConversationTable, get_table())
+    reads = db_table.pages(
+        "query",
+        key=_STUDENT_INDEX_KEY,
+        table=db_table.table(),
+        IndexName="GSI-StudentId",
+        KeyConditionExpression=Key("student_id").eq(student_id),
+        FilterExpression=Attr("entity_type").eq("conversation"),
+        ScanIndexForward=False,
+    )
     items: list[dict] = []
-    cursor: object = None
-    for _page in range(page_budget):
-        request: dict[str, object] = {
-            "IndexName": "GSI-StudentId",
-            "KeyConditionExpression": Key("student_id").eq(student_id),
-            "FilterExpression": Attr("entity_type").eq("conversation"),
-            "ScanIndexForward": False,
-        }
-        if cursor is not None:
-            request["ExclusiveStartKey"] = cursor
-        resp = table.query(**request)
-        items.extend(conversation_response_items(resp))
-        cursor = resp.get("LastEvaluatedKey")
-        if cursor is None:
-            return ConversationListPage(items[:limit], len(items) > limit)
-        if not isinstance(cursor, dict) or not cursor:
-            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-        if len(items) >= limit:
-            return ConversationListPage(items[:limit], True)
+    try:
+        for page in islice(reads, page_budget):
+            items.extend(conversation_response_items({"Items": page.items}))
+            if page.last_key is None:
+                return ConversationListPage(items[:limit], len(items) > limit)
+            if len(items) >= limit:
+                return ConversationListPage(items[:limit], True)
+    except db_table.TableUnavailable as exc:
+        if exc.code.startswith("malformed"):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+        raise
     return ConversationListPage(items[:limit], True)
 
 
@@ -900,7 +901,7 @@ async def request_teacher_help(
             ),
             request_correlation_id=request_id,
             created_at=escalated_at,
-            account_fence_generation=active_conversation_generation(student_id, get_table()),
+            account_fence_generation=active_conversation_generation(student_id, db_table.table()),
             metadata={
                 "conversation_id": body.conversationId,
                 "request_id": request_id,
@@ -918,7 +919,7 @@ async def request_teacher_help(
             message=body.message,
             system_message=_teacher_help_system_message(body.message, student_locale),
             now=now,
-            table=get_table(),
+            table=db_table.table(),
         )
     except (
         help_requests.HelpRequestUnavailable,
@@ -998,7 +999,7 @@ async def withdraw_teacher_help_request(
     in the same conversation is not possible afterwards; a new chat is.
     """
     withdrawn = help_requests.withdraw(
-        authorized.ref.resource_id, student_id=authorized.ref.student_id, table=get_table()
+        authorized.ref.resource_id, student_id=authorized.ref.student_id, table=db_table.table()
     )
     return _teacher_help_response(withdrawn, fallback_created_at="")
 
@@ -1027,7 +1028,7 @@ async def get_teacher_help_status(
     ),
 ):
     """Report where a student's request stands, for the waiting indicator."""
-    record = help_requests.get(authorized.ref.resource_id, table=get_table())
+    record = help_requests.get(authorized.ref.resource_id, table=db_table.table())
     if record is None:
         raise help_requests.HelpRequestViolation(
             help_requests.HelpRequestErrorCode.TEACHER_HELP_NOT_REQUESTED

@@ -23,7 +23,7 @@ import pytest
 
 from fakes.dynamodb import FakeTable
 from scripts import seed_practice
-from stoa.db.repositories import practice_repo
+from stoa.db import table as db_table
 from stoa.services import curriculum_service, practice_projection_service
 
 
@@ -51,7 +51,7 @@ def _seed_rows() -> list[dict[str, Any]]:
 def _seeded_table(monkeypatch: pytest.MonkeyPatch, *extra: dict[str, Any]) -> FakeTable:
     table = FakeTable()
     table.seed(*_seed_rows(), *extra)
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
     return table
 
 

@@ -23,7 +23,6 @@ import pytest
 
 from actor_helpers import install_actor_overrides
 from fakes.learning_session import seed_message
-from stoa.db import table as db_table
 from stoa.deps import get_s3_client
 from stoa.routers import files, teachers
 from stoa.security.route_authorization import get_authorization_fact_repository
@@ -373,14 +372,17 @@ class _BatchReads:
         ]
         return {"Responses": {self.name: rows}, "UnprocessedKeys": {}}
 
-    # The account and identity repositories read through the same gateway (#327)
-    # and check their table's protocol statically, where a forwarded method does
-    # not count.
-    def get_item(self, **kwargs: Any) -> Any:
-        return self.table.get_item(**kwargs)
 
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.table, name)
+def _serve_batch_reads(monkeypatch, table, *, fail: bool = False) -> _BatchReads:
+    """Have `table` itself answer BatchGetItem as `_BatchReads` does.
+
+    The table stays the gateway's table, so every other read - the teachers a
+    request is dispatched to, their fences - is answered by it as before.
+    """
+    reads = _BatchReads(table, fail=fail)
+    monkeypatch.setattr(table, "name", reads.name, raising=False)
+    monkeypatch.setattr(table, "batch_get_item", reads.batch_get_item, raising=False)
+    return reads
 
 
 def _detail_messages(client: TestClient) -> dict[str, dict[str, Any]]:
@@ -397,7 +399,7 @@ def test_the_detail_opens_without_attachments_when_they_cannot_be_read(
     # must not keep the teacher out of the request.
 
     if failure == "store_fails":
-        db_table.install(_BatchReads(sent_image, fail=True))
+        _serve_batch_reads(monkeypatch, sent_image, fail=True)
     else:
         del sent_image.rows[(f"ATTACHMENT#{ATTACHMENT}", "META")]
     _dispatch_to(sent_image, TEACHER)
@@ -422,8 +424,7 @@ def test_the_detail_names_more_attachments_than_one_batch_read_holds(
     sent_image.rows[(f"CONV#{CONV}", "MSG#msg-text")][
         "attachment_ids"
     ] = many
-    reads = _BatchReads(sent_image)
-    db_table.install(reads)
+    reads = _serve_batch_reads(monkeypatch, sent_image)
     _dispatch_to(sent_image, TEACHER)
 
     messages = _detail_messages(_client(TEACHER))

@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from stoa.db import table as db_table
 from stoa.models.practice import (
     PracticeAttemptResult,
     PracticeChallengePreview,
@@ -154,7 +155,7 @@ def test_attempt_repository_records_correct_and_incorrect_answers_immutably(monk
             self.puts.append(kwargs)
 
     table = Table()
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     correct = practice_repo.put_attempt(
         "student-1",

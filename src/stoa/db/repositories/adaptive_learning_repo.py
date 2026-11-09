@@ -5,11 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, runtime_checkable
 
-from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -118,7 +117,7 @@ def _put_item(table: object, **kwargs: object) -> object:
         raise account_deletion_repo.AccountDeletionConflict(
             "adaptive learning dependency unavailable"
         )
-    return table.put_item(**kwargs)
+    return db_table.put(table=table, **kwargs)
 
 
 def _query(table: object, **kwargs: object) -> dict[str, Any]:
@@ -130,19 +129,12 @@ def _query(table: object, **kwargs: object) -> dict[str, Any]:
 
 
 def _update_item(table: object, **kwargs: object) -> dict[str, Any]:
+    """The attributes the update hands back; a condition that fails is `WriteRefused`."""
     if not isinstance(table, _UpdateTable):
         raise account_deletion_repo.AccountDeletionConflict(
             "adaptive learning dependency unavailable"
         )
-    return _response(table.update_item(**kwargs))
-
-
-def _scan(table: object, **kwargs: object) -> dict[str, Any]:
-    if not isinstance(table, _ScanTable):
-        raise account_deletion_repo.AccountDeletionConflict(
-            "adaptive learning dependency unavailable"
-        )
-    return _response(table.scan(**kwargs))
+    return db_table.update(table=table, **kwargs)
 
 
 def _atomic_table(table: Any) -> bool:
@@ -237,7 +229,7 @@ def build_adaptive_write_transaction(
 
 
 def put_memory_snapshot(item: dict[str, Any]) -> None:
-    table = get_table()
+    table = db_table.table()
     stored = {
             "PK": f"LEARNING_MEMORY#{item['student_id']}",
             "SK": f"SUBJECT#{item['subject']}#TOPIC#{item['topic_id']}",
@@ -268,7 +260,7 @@ def put_memory_snapshot(item: dict[str, Any]) -> None:
 
 
 def list_memory_snapshots(student_id: str, subject: str | None = None) -> list[dict[str, Any]]:
-    table = get_table()
+    table = db_table.table()
     resp = _query(
         table,
         KeyConditionExpression=(
@@ -282,7 +274,7 @@ def list_memory_snapshots(student_id: str, subject: str | None = None) -> list[d
 
 
 def put_assignment(item: dict[str, Any]) -> None:
-    table = get_table()
+    table = db_table.table()
     stored = {
             "PK": f"ASSIGNMENT#{item['assignment_id']}",
             "SK": "META",
@@ -301,7 +293,7 @@ def put_assignment(item: dict[str, Any]) -> None:
 
 
 def put_assignment_if_absent(item: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    table = get_table()
+    table = db_table.table()
     stored = {
         "PK": f"ASSIGNMENT#{item['assignment_id']}",
         "SK": "META",
@@ -312,8 +304,9 @@ def put_assignment_if_absent(item: dict[str, Any]) -> tuple[dict[str, Any], bool
     operations = build_adaptive_write_transaction(
         item=stored, owner_id=owner, generation=generation
     )
+    atomic = _atomic_table(table)
     try:
-        if _atomic_table(table):
+        if atomic:
             db_table.fenced(owner, operations, generation=generation, table=table)
         else:
             _put_item(
@@ -322,23 +315,21 @@ def put_assignment_if_absent(item: dict[str, Any]) -> tuple[dict[str, Any], bool
                 ConditionExpression=Attr("PK").not_exists(),
             )
     except (
-        ClientError,
         account_deletion_repo.AccountDeletionConflict,
         db_table.WriteRefused,
         db_table.TableUnavailable,
     ) as exc:
-        if not isinstance(exc, ClientError) or exc.response.get("Error", {}).get(
-            "Code"
-        ) == "ConditionalCheckFailedException":
-            existing = get_assignment(str(item["assignment_id"]))
-            return existing or item, False
-        raise
+        # A plain write that the table did not refuse could not be made at all.
+        if isinstance(exc, db_table.TableUnavailable) and not atomic:
+            raise
+        existing = get_assignment(str(item["assignment_id"]))
+        return existing or item, False
     item.update(owner_id=owner, account_fence_generation=generation)
     return operations[-1]["Put"]["Item"], True
 
 
 def get_assignment(assignment_id: str) -> dict[str, Any] | None:
-    table = get_table()
+    table = db_table.table()
     resp = _get_item(
         table, Key={"PK": f"ASSIGNMENT#{assignment_id}", "SK": "META"}
     )
@@ -353,7 +344,7 @@ def update_assignment(
     expected_pending_token: str | None = None,
     expected_pending_state: str | None = None,
 ) -> dict[str, Any] | None:
-    table = get_table()
+    table = db_table.table()
     existing = get_assignment(assignment_id)
     if not existing:
         return None
@@ -376,8 +367,9 @@ def update_assignment(
         state_condition = Attr("pending_sequencing_effect.state").eq(expected_pending_state)
         condition = condition & state_condition
     kwargs["ConditionExpression"] = condition
+    atomic = _atomic_table(table)
     try:
-        if _atomic_table(table):
+        if atomic:
             operations = build_adaptive_write_transaction(
                 item=existing,
                 owner_id=owner,
@@ -392,19 +384,17 @@ def update_assignment(
                 mutation["ExpressionAttributeValues"][":expected_status"] = expected_status
             db_table.fenced(owner, operations, generation=generation, table=table)
             return get_assignment(assignment_id) or {**existing, **updates}
-        resp = _update_item(table, **kwargs)
+        attributes = _update_item(table, **kwargs)
     except (
-        ClientError,
         account_deletion_repo.AccountDeletionConflict,
         db_table.WriteRefused,
         db_table.TableUnavailable,
     ) as exc:
-        if not isinstance(exc, ClientError) or exc.response.get("Error", {}).get(
-            "Code"
-        ) == "ConditionalCheckFailedException":
-            return get_assignment(assignment_id)
-        raise
-    return resp.get("Attributes")
+        # A plain write that the table did not refuse could not be made at all.
+        if isinstance(exc, db_table.TableUnavailable) and not atomic:
+            raise
+        return get_assignment(assignment_id)
+    return attributes or None
 
 
 def list_assignments(
@@ -414,26 +404,17 @@ def list_assignments(
     include_archived: bool = False,
     limit: int | None = 100,
 ) -> list[dict[str, Any]]:
-    table = get_table()
+    table = db_table.table()
     filter_expr = Attr("entity_type").eq(ASSIGNMENT_ENTITY) & Attr("student_id").eq(student_id)
     if status:
         filter_expr = filter_expr & Attr("status").eq(status)
     if not include_archived:
         filter_expr = filter_expr & Attr("status").ne("archived")
-    scan_kwargs: dict[str, Any] = {"FilterExpression": filter_expr}
-    if limit:
-        scan_kwargs["Limit"] = limit
-    items: list[dict[str, Any]] = []
-    while True:
-        resp = _scan(table, **scan_kwargs)
-        items.extend(resp.get("Items", []))
-        if limit and len(items) >= limit:
-            items = items[:limit]
-            break
-        last_key = resp.get("LastEvaluatedKey")
-        if not last_key:
-            break
-        scan_kwargs["ExclusiveStartKey"] = last_key
+    if not isinstance(table, _ScanTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "adaptive learning dependency unavailable"
+        )
+    items = db_table.rows("scan", table=table, want=limit or None, FilterExpression=filter_expr)
     return sorted(items, key=lambda item: item.get("created_at", ""), reverse=True)
 
 
@@ -445,7 +426,7 @@ def scan_adaptive_private_rows(
     maximum_pages: int = 1,
     table: Any | None = None,
 ) -> AdaptivePrivatePage:
-    target: object = table if table is not None else get_table()
+    target: object = table if table is not None else db_table.table()
     marker = dict(cursor) if cursor is not None else None
     found: list[dict[str, Any]] = []
     for page in account_deletion_repo.sweep_pages(
@@ -494,7 +475,7 @@ def scrub_adaptive_private_row(
         for key, value in candidate.items()
         if key in ADAPTIVE_TOMBSTONE_ALLOWLIST and value is not None
     }
-    target = table or get_table()
+    target = table or db_table.table()
     hook = getattr(target, "replace_learning_tombstone", None)
     if callable(hook):
         hook(dict(item), tombstone, owner_id, generation)

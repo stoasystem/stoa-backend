@@ -30,9 +30,7 @@ PAGE = 3
 
 
 @pytest.fixture
-def table(monkeypatch, fake_table) -> FakeTable:
-    for module in (curriculum_ops_repo,):
-        monkeypatch.setattr(module, "get_table", lambda built=fake_table: built)
+def table(fake_table) -> FakeTable:
     return fake_table
 
 

@@ -34,13 +34,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
+from itertools import islice
 from typing import Any, cast
 
 from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.db import table as db_table
 from stoa.config import settings
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, weekly_counter
 from stoa.models.attachment import AttachmentSummary
 from stoa.rule_violation import RuleContract, RuleViolation, register_codes
@@ -80,6 +81,8 @@ _OFFER_FIELDS = ("dispatched_teacher_id", "dispatch_id", "dispatch_deadline_at")
 _NO_CANDIDATE_FIELDS = ("dispatch_no_candidate_reason", "dispatch_no_candidate_since")
 # A scan's ceiling on pages; the table is far from it.
 _SCAN_PAGE_LIMIT = 1000
+# A read on GSI-StudentId continues from the index's key as well as the table's.
+_STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
 
 # The question words a request's state is told in. Their one reader is
 # `sla_metrics`: the admin stats count requests beside the legacy question rows,
@@ -245,7 +248,7 @@ def get(conversation_id: str, *, table: Any | None = None) -> dict[str, Any] | N
     """
     if not conversation_id:
         return None
-    store: Any = table or get_table()
+    store: Any = table or db_table.table()
     try:
         response = store.get_item(Key=key(conversation_id), ConsistentRead=True)
     except Exception as exc:  # noqa: BLE001 - unknown is not absent
@@ -260,18 +263,26 @@ def list_all(*, table: Any | None = None) -> list[dict[str, Any]]:
     A filtered scan stops at a page of the table, not at the matches (#95), so
     every page is read. There is no index by state; requests are few.
     """
-    store: Any = table or get_table()
-    request: dict[str, Any] = {"FilterExpression": Attr("entity_type").eq(ENTITY_TYPE)}
+    store: Any = table or db_table.table()
     items: list[dict[str, Any]] = []
-    for _page in range(_SCAN_PAGE_LIMIT):
-        response = store.scan(**request)
-        items.extend(dict(item) for item in response.get("Items", []) if _is_record(item))
-        cursor = response.get("LastEvaluatedKey")
-        if not cursor:
-            return items
-        if not isinstance(cursor, Mapping) or cursor == request.get("ExclusiveStartKey"):
-            raise HelpRequestUnavailable("scan did not advance")
-        request["ExclusiveStartKey"] = dict(cursor)
+    started_at: dict[str, Any] | None = None
+    try:
+        for page in islice(
+            db_table.pages(
+                "scan", table=store, FilterExpression=Attr("entity_type").eq(ENTITY_TYPE)
+            ),
+            _SCAN_PAGE_LIMIT,
+        ):
+            items.extend(dict(item) for item in page.items if _is_record(item))
+            if page.last_key is None:
+                return items
+            if page.last_key == started_at:
+                raise HelpRequestUnavailable("scan did not advance")
+            started_at = page.last_key
+    except db_table.TableUnavailable as exc:
+        if exc.code.startswith("malformed"):
+            raise HelpRequestUnavailable("scan did not advance") from exc
+        raise
     raise HelpRequestUnavailable("scan page limit reached")
 
 
@@ -289,22 +300,24 @@ def for_student(student_id: str, *, table: Any | None = None) -> dict[str, dict[
     """
     if not student_id:
         return {}
-    store: Any = table or get_table()
-    request: dict[str, Any] = {
-        "IndexName": "GSI-StudentId",
-        "KeyConditionExpression": Key("student_id").eq(student_id),
-        "FilterExpression": Attr("entity_type").eq(ENTITY_TYPE),
-    }
+    store: Any = table or db_table.table()
     found: dict[str, dict[str, Any]] = {}
-    for _page in range(_SCAN_PAGE_LIMIT):
-        response = store.query(**request)
-        for item in response.get("Items", []):
+    for page in islice(
+        db_table.pages(
+            "query",
+            table=store,
+            key=_STUDENT_INDEX_KEY,
+            IndexName="GSI-StudentId",
+            KeyConditionExpression=Key("student_id").eq(student_id),
+            FilterExpression=Attr("entity_type").eq(ENTITY_TYPE),
+        ),
+        _SCAN_PAGE_LIMIT,
+    ):
+        for item in page.items:
             if _is_record(item) and item.get("student_id") == student_id:
                 found[str(item["conversation_id"])] = dict(item)
-        cursor = response.get("LastEvaluatedKey")
-        if not cursor:
+        if page.last_key is None:
             return found
-        request["ExclusiveStartKey"] = cursor
     raise HelpRequestUnavailable("student index page limit reached")
 
 
@@ -553,7 +566,7 @@ def ask(
     transaction behind the student's account fence. The first offer is made
     right after; it is best effort, and the sweep makes it if this one fails.
     """
-    store: Any = table or get_table()
+    store: Any = table or db_table.table()
     timestamp = now or _now()
     conversation_id = str(conversation.get("conversation_id") or "")
     if not conversation_id or conversation.get("student_id") != student_id:
@@ -696,7 +709,7 @@ def dispatch(record: Mapping[str, Any], *, now: str | None = None, table: Any | 
     active account and profile version, and the record's version.
     """
     timestamp = now or _now()
-    store: Any = table or get_table()
+    store: Any = table or db_table.table()
     if stored_status(record) != PENDING or record.get("teacher_id") or _live_offer(record, timestamp):
         return dict(record)
     previous = _previous(record, timestamp)
@@ -867,7 +880,7 @@ def _end(
     again (`weekly_counter.retry`, the one place the attempts are counted).
     """
     allowance = teacher_support_allowance_service
-    store: Any = table or get_table()
+    store: Any = table or db_table.table()
     timestamp = now or _now()
     observed = _parse(timestamp) or datetime.now(timezone.utc)
 
@@ -1015,7 +1028,7 @@ def _advance(
     if target not in TEACHER_TARGETS:
         raise ValueError(f"unsupported help request status: {target}")
     timestamp = now or _now()
-    store: Any = table or get_table()
+    store: Any = table or db_table.table()
     current = stored_status(record)
     holder = str(record.get("teacher_id") or "")
     if current not in OPEN or (holder and holder != teacher_id):
@@ -1107,7 +1120,7 @@ def reply(
     also when the reply took the request - best effort.
     """
     timestamp = now or _now()
-    store: Any = table or get_table()
+    store: Any = table or db_table.table()
     holds = str(record.get("teacher_id") or "") == teacher_id
     if not holds and not holder_or_offered(record, teacher_id):
         raise HelpRequestConflict("help request is not this teacher's")
@@ -1247,7 +1260,7 @@ def _reply_row(
 
 def replies(conversation_id: str, *, table: Any | None = None) -> list[Reply]:
     """The teachers' replies in a request, oldest first: one page of its `NOTE#` rows."""
-    store: Any = table or get_table()
+    store: Any = table or db_table.table()
     response = store.query(
         KeyConditionExpression=(
             Key("PK").eq(learning_session.conv_pk(conversation_id)) & Key("SK").begins_with("NOTE#")
@@ -1326,7 +1339,7 @@ def sweep(*, now: str | None = None, table: Any | None = None) -> dict[str, Any]
     (#88). Safe to run repeatedly: a live offer is left alone.
     """
     timestamp = now or _now()
-    store: Any = table or get_table()
+    store: Any = table or db_table.table()
     cutoff = (
         (_parse(timestamp) or datetime.now(timezone.utc))
         - timedelta(seconds=settings.teacher_help_expiry_seconds)
@@ -1439,7 +1452,7 @@ def scrub_teacher(
             changes,
             remove=remove,
             extra=(account_deletion_repo.deletion_fence_condition(teacher_id, generation),),
-            table=table or get_table(),
+            table=table or db_table.table(),
         )
     except HelpRequestConflict as exc:
         raise account_deletion_repo.AccountDeletionRowConflict("help request changed during cleanup") from exc

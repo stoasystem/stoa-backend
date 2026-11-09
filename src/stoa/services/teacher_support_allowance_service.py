@@ -14,9 +14,7 @@ import struct
 from typing import Any
 from uuid import uuid4
 
-from botocore.exceptions import ClientError
-
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 from stoa.db.repositories import (
     parent_link_repo,
     security_audit_repo,
@@ -354,7 +352,7 @@ def read_assigned_weekly_cases(
     administrator is shown is what the student may spend.
     """
     student = _required_text(student_id, "student_id")
-    stored = _strong_get(table or get_table(), _assigned_allowance_key(student))
+    stored = _strong_get(table or db_table.table(), _assigned_allowance_key(student))
     return AssignedWeeklyCases(
         weekly_cases=assigned_weekly_cases(stored),
         source="administrator" if stored else "default",
@@ -384,7 +382,7 @@ def set_assigned_weekly_cases(
         or not 0 <= weekly_cases <= ASSIGNED_WEEKLY_CASES_MAXIMUM
     ):
         raise ValueError("weekly_cases is out of range")
-    target = table or get_table()
+    target = table or db_table.table()
     key = _assigned_allowance_key(student)
     previous = _strong_get(target, key)
     next_version = (
@@ -399,7 +397,8 @@ def set_assigned_weekly_cases(
         }
     )
     try:
-        target.put_item(  # type: ignore[attr-defined]
+        db_table.put(
+            table=target,
             Item={
                 **key,
                 "entity_type": "teacher_support_assigned_allowance",
@@ -412,10 +411,8 @@ def set_assigned_weekly_cases(
             },
             **condition,
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return AssignedCasesWrite(AssignedCasesDisposition.VERSION_CONFLICT)
-        raise
+    except db_table.WriteRefused:
+        return AssignedCasesWrite(AssignedCasesDisposition.VERSION_CONFLICT)
     return AssignedCasesWrite(AssignedCasesDisposition.WRITTEN, next_version)
 
 
@@ -437,7 +434,7 @@ def read_administered_weekly_cases(
     student_id: str, *, table: object | None = None
 ) -> AssignedWeeklyCases:
     """What an administrator is shown for one student: the figure the admission reads."""
-    target = table or get_table()
+    target = table or db_table.table()
     return read_assigned_weekly_cases(_administered_student(student_id, target), table=target)
 
 
@@ -455,7 +452,7 @@ def administer_weekly_cases(
     concurrent administrator (their figure stands). A figure that was written
     leaves one durable administrator event naming who set what.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     student = _administered_student(student_id, target)
     written = set_assigned_weekly_cases(
         student, weekly_cases, actor_id=actor.user_id, now=now, table=target
@@ -947,7 +944,7 @@ def admit_teacher_support_case(
     if not callable(persist_case):
         raise ValueError("persist_case is required")
     observed = _aware(observed_at, "observed_at")
-    target = table or get_table()
+    target = table or db_table.table()
     receipt_key = _case_key(kind, case_id)
 
     try:
@@ -1116,7 +1113,7 @@ def refund_teacher_support_case(
     if not callable(persist_refund):
         raise ValueError("persist_refund is required")
     observed = _aware(observed_at, "observed_at")
-    target = table or get_table()
+    target = table or db_table.table()
     receipt_key = _case_key(kind, case_id)
 
     retryable = TeacherSupportRefundResult(TeacherSupportRefundDisposition.RETRYABLE)
@@ -1231,7 +1228,7 @@ def get_teacher_support_projection(
 ) -> dict[str, object]:
     """Return the current exact case count for the beneficiary's active grant scope."""
     observed = _aware(observed_at, "observed_at")
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         scope = _resolve_scope(beneficiary_id, table=target)
     except _DependencyFailure:
@@ -1270,7 +1267,7 @@ def get_student_teacher_support_standing(
     allowance cannot be read right now.
     """
     observed = _aware(observed_at, "observed_at")
-    target = table or get_table()
+    target = table or db_table.table()
     week = weekly_counter.zurich_week(observed)
     try:
         scope = _resolve_scope(beneficiary_id, table=target)

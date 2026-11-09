@@ -602,7 +602,7 @@ def test_conversation_plan_denial_runs_before_case_message_and_usage_effect(
     )
     table = FakeTable()
     table.seed_active_account("student-1")
-    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(
         conversations,
         "active_conversation_generation",
