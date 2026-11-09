@@ -39,31 +39,21 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import base64
 import collections
 import datetime as dt
-import decimal
-import hashlib
-import json
 import sys
 
 import boto3
 from botocore.exceptions import ClientError
 
+from stoa.services import security_audit_retention
+
 TABLE = "stoa-main"
 REGION = "eu-central-2"
 BUCKET = "stoa-immutable-evidence-562923011260"
+PREFIX = "audit-retention/"
 AUDIT_ENTITY = "security_audit_event"
 DELETABLE = "authorization_sensitive_allowed"
-
-
-class _Numbers(json.JSONEncoder):
-    """DynamoDB hands numbers back as `Decimal`; the archive keeps them exact."""
-
-    def default(self, o):
-        if isinstance(o, decimal.Decimal):
-            return int(o) if o == o.to_integral_value() else float(o)
-        return super().default(o)
 
 
 def read_audit_rows(table) -> tuple[list[dict], int]:
@@ -97,27 +87,15 @@ def describe(rows: list[dict]) -> tuple[collections.Counter, collections.Counter
 
 
 def archive(s3, rows: list[dict], stamp: str) -> tuple[str, str]:
-    """Write the whole stream as NDJSON, then read it back and match the digest."""
-    body = "".join(
-        json.dumps(row, cls=_Numbers, sort_keys=True, ensure_ascii=False) + "\n"
-        for row in sorted(rows, key=lambda r: (str(r.get("PK")), str(r.get("SK"))))
-    ).encode("utf-8")
-    digest = hashlib.sha256(body).hexdigest()
-    key = f"security-audit-archive/{stamp}/security_audit_event.ndjson"
-    s3.put_object(
-        Bucket=BUCKET,
-        Key=key,
-        Body=body,
-        ContentType="application/x-ndjson",
-        ChecksumSHA256=base64.b64encode(bytes.fromhex(digest)).decode(),
-        Metadata={"rows": str(len(rows)), "sha256": digest},
+    """Write the whole stream where the daily retention writes its batches."""
+    del stamp  # the key carries the moment the service stamps it with
+    return security_audit_retention.archive(
+        s3,
+        rows,
+        bucket=BUCKET,
+        prefix=PREFIX,
+        now=dt.datetime.now(dt.UTC),
     )
-    stored = s3.get_object(Bucket=BUCKET, Key=key)["Body"].read()
-    if hashlib.sha256(stored).hexdigest() != digest:
-        raise SystemExit("archive read back with a different digest; nothing deleted")
-    if sum(1 for line in stored.splitlines() if line.strip()) != len(rows):
-        raise SystemExit("archive read back with a different row count; nothing deleted")
-    return key, digest
 
 
 def delete(table, rows: list[dict]) -> int:

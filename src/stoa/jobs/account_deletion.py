@@ -224,6 +224,13 @@ def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, Any]:
         from stoa.jobs import moderation_image_retention
 
         return moderation_image_retention.handler(event, _context)
+    if event.get("job") == "security_audit_retention":
+        # A daily schedule on this function (card 129): the allow stream is
+        # archived to the evidence bucket and leaves the table 90 days on, so
+        # it stops pushing the retention scans over their cap (#127).
+        from stoa.jobs import security_audit_retention
+
+        return security_audit_retention.handler(event, _context)
     if event.get("job") == "upload_cleanup":
         # Every 15 minutes (#250): the upload sweep. This function already
         # cleans uploads when it deletes an account, with the same code.

@@ -96,7 +96,8 @@ class MultipartS3:
         }
 
     def put_object(self, **kwargs: Any) -> dict[str, Any]:
-        data = kwargs["Body"].read()
+        body = kwargs["Body"]
+        data = body.read() if hasattr(body, "read") else body
         assert len(data) == kwargs["ContentLength"]
         assert b64_sha256(data) == kwargs["ChecksumSHA256"]
         return self._store(kwargs["Key"], data, dict(kwargs["Metadata"]))
