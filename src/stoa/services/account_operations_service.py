@@ -76,8 +76,12 @@ def _current_child_operation_rows(
     current or not, on purpose - support has to see a relationship that is no
     longer current to close it - and that route is authorized as an
     administrator, not as a party to the relationship.
+
+    A child shared with another parent is shown through the entitlement's
+    viewer projection, so this parent is not told who the other parent is -
+    whether through the billing fields or through who pays the usage period.
     """
-    return [
+    rows = [
         _child_operation_row(
             parent_id,
             verdict.student_id,
@@ -86,6 +90,10 @@ def _current_child_operation_rows(
             day=day,
         )
         for verdict in current_relationship.children_of(parent_id)
+    ]
+    return [
+        {**row, "entitlement": entitlement_service.for_parent_viewer(row["entitlement"], parent_id)}
+        for row in rows
     ]
 
 

@@ -1407,6 +1407,22 @@
         "action": "read",
         "capability": null,
         "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/parents/me/usage-period",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
         "resource_type": "practice"
       }
     ],

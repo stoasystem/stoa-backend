@@ -14,6 +14,7 @@ from stoa.services import (
     current_relationship,
     free_trial_service,
     paid_entitlement_service,
+    usage_period,
 )
 
 
@@ -58,13 +59,30 @@ def resolve_student_entitlement(
     *,
     settings: Settings,
     student_profile: dict[str, Any] | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Resolve the plan that should govern a student's product access."""
+    """Resolve the plan that should govern a student's product access.
+
+    `usagePeriod` is the student's effective usage period (#239): the latest of
+    their own and their current parents', judged in this same read - the
+    student's profile, the one list of current parents and the parent of
+    record's profile serve both the billing decision and the period. It refuses
+    nothing yet (#344).
+    """
     student_profile = student_profile if student_profile is not None else user_repo.get_user(student_id)
     student_profile = student_profile or {}
     student_tier = _normalize_tier(student_profile.get("subscription_tier"))
-    parent_id, binding, paid_grant = _relationship_of_record(student_id)
+    current_parents = current_relationship.parents_of(student_id) if student_id else []
+    parent_id, binding, paid_grant = _relationship_of_record(student_id, current_parents)
     parent_profile = user_repo.get_user(parent_id) if parent_id else None
+    moment = now or datetime.now(timezone.utc)
+    usage = usage_period.effective_for_student(
+        student_id,
+        profile=student_profile,
+        parents=current_parents,
+        parent_profiles={parent_id: parent_profile} if parent_id else None,
+        now=moment,
+    )
     billing = _get_billing_item(parent_id) if parent_id else None
     rollout = _get_payment_rollout_item() if parent_id else None
 
@@ -105,6 +123,9 @@ def resolve_student_entitlement(
         "blockingReason": decision["blocking_reason"],
         "supportExplanation": decision["support_explanation"],
         "freeTrial": free_trial.public_projection(),
+        "usagePeriod": usage_period.student_view(
+            usage, student_id=student_id, today=usage_period.zurich_today(moment)
+        ),
         "newUsageAllowed": new_usage_allowed,
         "action": None if new_usage_allowed else free_trial.action,
         "readAccess": {
@@ -130,6 +151,11 @@ def list_parent_child_entitlements(parent_id: str, *, settings: Settings) -> lis
     ]
 
 
+def for_parent_viewer(entitlement: dict[str, Any], viewer_parent_id: str) -> dict[str, Any]:
+    """A child's entitlement as one of their parents may see it."""
+    return _viewer_projection(entitlement, viewer_parent_id)
+
+
 def _viewer_projection(
     entitlement: dict[str, Any], viewer_parent_id: str
 ) -> dict[str, Any]:
@@ -141,7 +167,18 @@ def _viewer_projection(
     to leak (see `parent_link_repo` on the omitted `created_at`). The child's
     own effective plan stays, because it is true and it is the point of the
     list.
+
+    The usage period's end date stays for the same reason; only who pays for it
+    goes when that is another parent (`payerId`, kept for the server and the
+    administrator).
     """
+    period = entitlement.get("usagePeriod")
+    if (
+        isinstance(period, dict)
+        and period.get("paidBy") == usage_period.PaidBy.PARENT.value
+        and period.get("payerId") != viewer_parent_id
+    ):
+        entitlement = {**entitlement, "usagePeriod": {**period, "payerId": None}}
     if entitlement.get("parentId") in (None, viewer_parent_id):
         return entitlement
     return {
@@ -296,6 +333,7 @@ def _decision(
 
 def _relationship_of_record(
     student_id: str,
+    current_parents: list[current_relationship.Verdict],
 ) -> tuple[str | None, dict[str, Any] | None, dict[str, object] | None]:
     """The parent of record, the relationship that proves it, and that parent's grant.
 
@@ -305,7 +343,9 @@ def _relationship_of_record(
     student. A student may have several, so prefer the parent that actually
     carries a paid grant and fall back to a deterministic first.
     """
-    candidates = paid_entitlement_service.beneficiary_parents(student_id)
+    candidates = paid_entitlement_service.beneficiary_parents(
+        student_id, current=current_parents
+    )
     if not candidates:
         return None, None, None
     table = db_table.table()

@@ -791,18 +791,27 @@ def relationship_authority(
     return verdict
 
 
-def beneficiary_parents(student_id: str) -> list[current_relationship.Verdict]:
+def beneficiary_parents(
+    student_id: str,
+    *,
+    current: Sequence[current_relationship.Verdict] | None = None,
+) -> list[current_relationship.Verdict]:
     """Every parent whose relationship with this student can carry a grant now.
 
-    Ordered by parent id, so readers that take the first one agree.
+    Ordered by parent id, so readers that take the first one agree. `current`
+    is the judge's current parents of the student when the caller has already
+    asked it.
     """
     if not student_id:
         return []
+    verdicts = current if current is not None else current_relationship.parents_of(student_id)
     return sorted(
         (
             verdict
-            for verdict in current_relationship.parents_of(student_id)
-            if verdict.relationship == BENEFICIARY_RELATIONSHIP
+            for verdict in verdicts
+            if verdict.is_current
+            and verdict.student_id == student_id
+            and verdict.relationship == BENEFICIARY_RELATIONSHIP
         ),
         key=lambda verdict: verdict.parent_id,
     )

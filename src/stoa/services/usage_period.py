@@ -19,15 +19,16 @@ Storage (the「#239 形状定完」shape, decisions 1 and 2):
   onto the child, so a parent's extension reaches the child at once and a
   revoked relationship stops lending its period at once.
 
-This step stores and administers periods only. Nothing here refuses a student
-anything: reading the period into the entitlement and refusing a question at
-expiry are #343 and #344.
+Students and parents read their period here too (#343): a student's through
+the entitlement (`student_view`), a parent's own and each child's through
+`for_parent`. Nothing here refuses a student anything yet; refusing a question
+at expiry is #344.
 """
 
 from __future__ import annotations
 
 import calendar
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
@@ -86,6 +87,18 @@ class PaidBy(StrEnum):
     PARENT = "parent"
 
 
+class ChildPaidBy(StrEnum):
+    """Whose period covers a child, as the child's parent is told it.
+
+    `other_parent` says only that it is another parent, never which (the same
+    rule as the entitlement's viewer projection).
+    """
+
+    YOU = "you"
+    SELF = "self"
+    OTHER_PARENT = "other_parent"
+
+
 # -- dates --------------------------------------------------------------------------
 
 
@@ -102,6 +115,17 @@ def state_on(ends_on: date | None, today: date) -> PeriodState:
     if ends_on is None:
         return PeriodState.NONE
     return PeriodState.ACTIVE if today <= ends_on else PeriodState.EXPIRED
+
+
+def days_left(ends_on: date | None, today: date) -> int | None:
+    """Whole Zurich days the period still runs after today: 0 on the end day and after it.
+
+    `None` without an end date. An expired period is 0, never negative; its
+    `state` says it is over.
+    """
+    if ends_on is None:
+        return None
+    return max(0, (ends_on - today).days)
 
 
 def add_months(start: date, months: int) -> date:
@@ -238,24 +262,150 @@ def effective_for_student(
     student_id: str,
     *,
     profile: Mapping[str, Any] | None = None,
+    parents: Sequence[current_relationship.Verdict] | None = None,
+    parent_profiles: Mapping[str, Mapping[str, Any] | None] | None = None,
     now: datetime | None = None,
     table: object | None = None,
 ) -> EffectivePeriod:
     """The student's effective period, judged now.
 
     Only a parent the relationship judge calls current lends a period; a pending,
-    rejected or revoked link lends nothing. `profile` is the student's profile
-    when the caller has already read it.
+    rejected or revoked link lends nothing. A caller that has already read some
+    of this hands it in so it is not read twice: `profile` is the student's
+    profile, `parents` the judge's current parents of the student, and
+    `parent_profiles` any parent profiles already in hand, by parent id.
     """
     own_profile = profile if profile is not None else user_repo.get_user(student_id, table=table)
-    parents = [
+    verdicts = (
+        parents
+        if parents is not None
+        else current_relationship.parents_of(student_id, table=table)
+    )
+    known = parent_profiles or {}
+    lenders = [
         (
             verdict.parent_id,
-            stored_end(user_repo.get_user(verdict.parent_id, table=table)),
+            stored_end(
+                known[verdict.parent_id]
+                if verdict.parent_id in known
+                else user_repo.get_user(verdict.parent_id, table=table)
+            ),
         )
-        for verdict in current_relationship.parents_of(student_id, table=table)
+        for verdict in verdicts
+        if verdict.is_current
     ]
-    return latest_period(stored_end(own_profile), parents, today=zurich_today(now))
+    return latest_period(stored_end(own_profile), lenders, today=zurich_today(now))
+
+
+def student_view(
+    effective: EffectivePeriod, *, student_id: str, today: date
+) -> dict[str, Any]:
+    """The entitlement's `usagePeriod`: what the student is told, plus who pays.
+
+    `payerId` is the paying account - the student for their own period, the
+    parent for a lent one. It is for the server and the administrator only: the
+    student's route leaves it out, and a parent's view blanks another parent's.
+    """
+    payer_id: str | None = None
+    if effective.paid_by is PaidBy.SELF:
+        payer_id = student_id
+    elif effective.paid_by is PaidBy.PARENT:
+        payer_id = effective.parent_id
+    return {
+        "endsAt": _iso(effective.ends_on),
+        "state": effective.state.value,
+        "daysLeft": days_left(effective.ends_on, today),
+        "paidBy": effective.paid_by.value if effective.paid_by is not None else None,
+        "payerId": payer_id,
+    }
+
+
+# -- what a parent reads ---------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ChildPeriod:
+    """One child's effective period as their parent is told it."""
+
+    student_id: str
+    name: str
+    ends_on: date | None
+    state: PeriodState
+    paid_by: ChildPaidBy | None
+
+
+@dataclass(frozen=True, slots=True)
+class ParentPeriods:
+    """A parent's own period and that of every child they are currently related to."""
+
+    ends_on: date | None
+    state: PeriodState
+    days_left: int | None
+    children: tuple[ChildPeriod, ...]
+
+
+def _child_name(profile: Mapping[str, Any]) -> str:
+    """The name the parent's child list shows: the stored name, else the address's local part."""
+    email = str(profile.get("email") or "")
+    return str(profile.get("name") or (email.split("@")[0] if email else ""))
+
+
+def _child_paid_by(
+    effective: EffectivePeriod, *, parent_id: str, own_end: date | None
+) -> ChildPaidBy | None:
+    if effective.paid_by is None:
+        return None
+    if effective.paid_by is PaidBy.SELF:
+        return ChildPaidBy.SELF
+    # A period that ends the same day as the viewer's own is theirs as much as
+    # anyone's; only a strictly later one is another parent's.
+    if effective.parent_id == parent_id or effective.ends_on == own_end:
+        return ChildPaidBy.YOU
+    return ChildPaidBy.OTHER_PARENT
+
+
+def for_parent(
+    parent_id: str,
+    *,
+    now: datetime | None = None,
+    table: object | None = None,
+) -> ParentPeriods:
+    """The parent's own period and each current child's effective one, judged now.
+
+    The children are the relationship judge's (`children_of`). A child whose
+    period another parent lends is told as `other_parent`: the end date, never
+    who.
+    """
+    today = zurich_today(now)
+    profile = user_repo.get_user(parent_id, table=table) or {}
+    own_end = stored_end(profile)
+    children: list[ChildPeriod] = []
+    for verdict in current_relationship.children_of(parent_id, table=table):
+        child = user_repo.get_user(verdict.student_id, table=table)
+        if child is None:
+            continue
+        effective = effective_for_student(
+            verdict.student_id,
+            profile=child,
+            parent_profiles={parent_id: profile},
+            now=now,
+            table=table,
+        )
+        children.append(
+            ChildPeriod(
+                student_id=verdict.student_id,
+                name=_child_name(child),
+                ends_on=effective.ends_on,
+                state=effective.state,
+                paid_by=_child_paid_by(effective, parent_id=parent_id, own_end=own_end),
+            )
+        )
+    return ParentPeriods(
+        ends_on=own_end,
+        state=state_on(own_end, today),
+        days_left=days_left(own_end, today),
+        children=tuple(children),
+    )
 
 
 # -- setting and extending -------------------------------------------------------------

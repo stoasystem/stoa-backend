@@ -60,6 +60,7 @@ from stoa.services import (
     student_evidence,
     subscription_service,
     teacher_support_allowance_service,
+    usage_period,
 )
 from stoa.services.billing_errors import BillingErrorCode
 
@@ -136,6 +137,39 @@ class ChildSummary(BaseModel):
 
 class ChildListResponse(BaseModel):
     items: list[ChildSummary]
+
+
+UsagePeriodState = Literal["active", "expired", "none"]
+
+
+class ParentOwnUsagePeriod(BaseModel):
+    """The parent's own usage period (#239).
+
+    `endsAt` is a Zurich date (`YYYY-MM-DD`), the last day of use; `daysLeft`
+    counts the Zurich days after today, 0 on the end day and once expired,
+    `null` without a period.
+    """
+
+    endsAt: str | None
+    state: UsagePeriodState
+    daysLeft: int | None
+
+
+class ParentChildUsagePeriod(BaseModel):
+    """A child's effective usage period. `paidBy` is `you`, `self` (the child's
+    own) or `other_parent` - never which other parent - and `null` without one."""
+
+    studentId: str
+    name: str
+    endsAt: str | None
+    state: UsagePeriodState
+    paidBy: Literal["you", "self", "other_parent"] | None
+
+
+class ParentUsagePeriodResponse(BaseModel):
+    own: ParentOwnUsagePeriod
+    children: list[ParentChildUsagePeriod]
+    renewalContactEmail: str
 
 
 class LegacyChildSummary(BaseModel):
@@ -1154,6 +1188,37 @@ async def list_my_children(
             internal_detail=type(exc).__name__,
         ) from exc
     return ChildListResponse(items=[_child_summary_from_profile(child) for child in children])
+
+
+@router.get("/me/usage-period", response_model=ParentUsagePeriodResponse)
+async def get_my_usage_period(
+    actor: Actor = Depends(_parent_account_read),
+    settings: Settings = Depends(get_settings),
+):
+    """The parent's own usage period, each current child's, and whom to ask to renew.
+
+    Not frozen with billing: payment is offline and an administrator sets the
+    period, so a parent always may read it.
+    """
+    periods = usage_period.for_parent(actor.user_id)
+    return ParentUsagePeriodResponse(
+        own=ParentOwnUsagePeriod(
+            endsAt=periods.ends_on.isoformat() if periods.ends_on else None,
+            state=periods.state.value,
+            daysLeft=periods.days_left,
+        ),
+        children=[
+            ParentChildUsagePeriod(
+                studentId=child.student_id,
+                name=child.name,
+                endsAt=child.ends_on.isoformat() if child.ends_on else None,
+                state=child.state.value,
+                paidBy=child.paid_by.value if child.paid_by else None,
+            )
+            for child in periods.children
+        ],
+        renewalContactEmail=settings.renewal_contact_email,
+    )
 
 
 @router.get("/me/subscription", response_model=ParentSubscriptionResponse)
