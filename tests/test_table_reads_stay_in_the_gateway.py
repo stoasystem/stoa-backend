@@ -77,15 +77,6 @@ ALLOWED: dict[str, dict[str, set[str]]] = {
         "services/teacher_dispatch_service.py": {"get_table", "paging"},
         "services/teacher_support_allowance_service.py": {"get_table", "conditional_check"},
     },
-    "billing and entitlements": {
-        "db/repositories/billing_fact_repo.py": {"get_table"},
-        "db/repositories/checkout_command_repo.py": {"get_table"},
-        "jobs/migrate_billing_plan_identity.py": {"get_table", "conditional_check"},
-        "services/billing_reconciliation_service.py": {"get_table"},
-        "services/entitlement_service.py": {"get_table"},
-        "services/free_trial_service.py": {"get_table"},
-        "services/paid_entitlement_service.py": {"get_table"},
-    },
     "payments, frozen (stays until payments resume)": {
         "services/subscription_service.py": {"get_table", "paging", "conditional_check"},
     },

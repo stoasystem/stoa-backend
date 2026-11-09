@@ -214,12 +214,11 @@ def _grant_item(
 @pytest.fixture
 def table(monkeypatch: pytest.MonkeyPatch) -> ConditionalTable:
     fake = ConditionalTable()
+    db_table.install(fake)
     for module in (
         parent_link_repo,
         user_repo,
         account_deletion_repo,
-        entitlement_service,
-        paid_entitlement_service,
         teacher_support_allowance_service,
     ):
         monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)

@@ -10,10 +10,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timezone
 from enum import StrEnum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
 from stoa.models.billing import CheckoutCommandState, CheckoutIntent
 
@@ -40,11 +40,6 @@ _TERMINAL_STATES = frozenset(
 _CLAIMABLE_EFFECT_STATES = frozenset(
     {"not_started", "create_claimed", "provider_outcome_unknown"}
 )
-
-
-@runtime_checkable
-class _GetTable(Protocol):
-    def get_item(self, **kwargs: object) -> object: ...
 
 
 class CheckoutCommandDisposition(StrEnum):
@@ -269,12 +264,15 @@ def _mapping(value: object) -> CheckoutItem | None:
 
 
 def _strong_get(table: object, key: Mapping[str, str]) -> CheckoutItem | None:
-    if not isinstance(table, _GetTable):
-        raise ValueError("checkout persistence is unavailable")
-    response = table.get_item(Key=dict(key), ConsistentRead=True)
-    if not isinstance(response, Mapping):
-        raise ValueError("checkout dependency returned malformed data")
-    return _mapping(response.get("Item"))
+    try:
+        item = db_table.get(table=table, Key=dict(key), ConsistentRead=True)
+    except db_table.TableUnavailable as exc:
+        raise ValueError(
+            "checkout persistence is unavailable"
+            if exc.code == "no_get_item_entry"
+            else "checkout dependency returned malformed data"
+        ) from exc
+    return _mapping(item)
 
 
 def _strong_command(
@@ -474,7 +472,7 @@ def register_checkout_command(
     """Create command, one-open guard, and public lookup before provider access."""
     if not isinstance(intent, CheckoutIntent):
         raise ValueError("checkout intent is required")
-    target = table or get_table()
+    target = table or db_table.table()
     command_id = checkout_command_id(intent.parent_id, intent.idempotency_key)
     fingerprint = checkout_intent_fingerprint(
         intent, price_id=price_id, environment=environment
@@ -598,7 +596,7 @@ def get_checkout_command_by_public_ref(
     """Resolve an opaque reference only for its authenticated parent owner."""
     reference = _validate_public_ref(checkout_ref)
     parent = _required_text(parent_id, "parent_id")
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         lookup = _strong_get(target, _public_lookup_key(reference))
     except Exception:
@@ -664,7 +662,7 @@ def claim_provider_create(
         raise ValueError("lease_expires_at is invalid")
     timestamp = _required_text(now_iso, "now_iso", maximum=64)
     command_id = _required_text(command.get("command_id"), "command_id")
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         current = _strong_command(command_id, table=target)
     except Exception:
@@ -807,7 +805,7 @@ def attach_provider_session(
         raise ValueError("provider_session_url is invalid")
     timestamp = _required_text(now_iso, "now_iso", maximum=64)
     session_digest = _provider_session_id_digest(session_id)
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         current = _strong_command(claim.command_id, table=target)
     except Exception:
@@ -924,7 +922,7 @@ def mark_provider_outcome_unknown(
     if not isinstance(claim, ProviderCreateClaim):
         raise ValueError("provider claim is required")
     timestamp = _required_text(now_iso, "now_iso", maximum=64)
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         current = _strong_command(claim.command_id, table=target)
     except Exception:
@@ -1040,7 +1038,7 @@ def release_open_guard_for_terminal_command(
     if not isinstance(command, Mapping):
         return CheckoutCommandResult(CheckoutCommandDisposition.NOT_FOUND)
     command_id = _required_text(command.get("command_id"), "command_id")
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         current = _strong_command(command_id, table=target)
     except Exception:
@@ -1150,7 +1148,7 @@ def claim_session_expiration(
         )
     command_id = _required_text(command.get("command_id"), "command_id")
     timestamp = _required_text(now_iso, "now_iso", maximum=64)
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         current = _strong_command(command_id, table=target)
     except Exception:
@@ -1292,7 +1290,7 @@ def record_session_expiration(
     effect_status, command_state, disposition = outcome
     timestamp = _required_text(now_iso, "now_iso", maximum=64)
     command_id = _required_text(command.get("command_id"), "command_id")
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         current = _strong_command(command_id, table=target)
     except Exception:
@@ -1483,7 +1481,7 @@ def supersede_checkout_command(
         price_id=price_id,
         environment=environment,
     )
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         current = _strong_command(old_command_id, table=target)
         guard = _strong_get(target, _open_guard_key(parent_id))

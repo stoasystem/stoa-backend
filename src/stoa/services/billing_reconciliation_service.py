@@ -14,7 +14,7 @@ from enum import StrEnum
 from typing import Protocol, runtime_checkable
 from urllib.parse import urlsplit
 
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import checkout_command_repo
 from stoa.models.billing import CheckoutCommandState
@@ -84,15 +84,6 @@ class BillingReconciliationProvider(Protocol):
         *,
         session_id: str,
     ) -> ProviderCheckoutSessionEvidence: ...
-
-
-@runtime_checkable
-class _WebhookCommandTable(Protocol):
-    """Least-capability table boundary for signed webhook command binding."""
-
-    def get_item(self, **kwargs: object) -> object: ...
-
-    def update_item(self, **kwargs: object) -> object: ...
 
 
 class BillingReconciliationRepository(Protocol):
@@ -199,12 +190,15 @@ def _webhook_get(
     table: object,
     key: Mapping[str, str],
 ) -> dict[str, object] | None:
-    if not isinstance(table, _WebhookCommandTable):
-        raise ValueError("billing webhook persistence is unavailable")
-    response = table.get_item(Key=dict(key), ConsistentRead=True)
-    if not isinstance(response, Mapping):
-        raise ValueError("billing webhook dependency returned malformed data")
-    return _webhook_item(response.get("Item"))
+    try:
+        item = db_table.get(table=table, Key=dict(key), ConsistentRead=True)
+    except db_table.TableUnavailable as exc:
+        raise ValueError(
+            "billing webhook persistence is unavailable"
+            if exc.code == "no_get_item_entry"
+            else "billing webhook dependency returned malformed data"
+        ) from exc
+    return _webhook_item(item)
 
 
 def load_checkout_command_for_webhook(
@@ -214,7 +208,7 @@ def load_checkout_command_for_webhook(
 ) -> dict[str, object] | None:
     """Resolve one provider metadata reference to its exact durable command."""
     reference = _required_text(checkout_ref, "checkout_ref")
-    target = table or get_table()
+    target = table or db_table.table()
     lookup = _webhook_get(
         target,
         {"PK": f"CHECKOUT_PUBLIC#{reference}", "SK": "LOOKUP"},
@@ -283,9 +277,7 @@ def bind_webhook_provider_identity(
     ):
         raise ValueError("provider identity digest is invalid")
     timestamp = _required_text(now_iso, "now_iso", maximum=64)
-    target = table or get_table()
-    if not isinstance(target, _WebhookCommandTable):
-        raise ValueError("billing webhook persistence is unavailable")
+    target = table or db_table.table()
 
     if all(command.get(key) == value for key, value in digests.items()):
         return dict(command)
@@ -306,7 +298,8 @@ def bind_webhook_provider_identity(
         **{f":{key}": value for key, value in digests.items()},
     }
     try:
-        response = target.update_item(
+        attributes = db_table.update(
+            table=target,
             Key={"PK": f"CHECKOUT_COMMAND#{command_id}", "SK": "COMMAND"},
             UpdateExpression=(
                 "SET provider_customer_id_digest=:provider_customer_id_digest, "
@@ -339,9 +332,7 @@ def bind_webhook_provider_identity(
         ):
             return refreshed
         return None
-    if not isinstance(response, Mapping):
-        return None
-    updated = _webhook_item(response.get("Attributes"))
+    updated = _webhook_item(attributes or None)
     if updated is None or not all(
         updated.get(key) == value for key, value in digests.items()
     ):

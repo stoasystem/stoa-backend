@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from collections.abc import Mapping
-from typing import Any, Protocol, runtime_checkable
+from typing import Any
 
 from stoa.config import Settings
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 from stoa.db.repositories import user_repo
 from stoa.models.user import SubscriptionTier
 from stoa.services import (
@@ -42,15 +41,16 @@ PLAN_RANK = {
 }
 
 
-@runtime_checkable
-class _GetTable(Protocol):
-    def get_item(self, **kwargs: object) -> object: ...
-
-
-def _billing_response(value: object) -> dict[str, object]:
-    if not isinstance(value, dict):
-        raise RuntimeError("billing repository response is malformed")
-    return value
+def _billing_get(key: dict[str, str]) -> dict[str, Any] | None:
+    """One billing row, or `None`; a table that cannot answer is a `RuntimeError`."""
+    try:
+        return db_table.get(Key=key)
+    except db_table.TableUnavailable as exc:
+        raise RuntimeError(
+            "billing repository dependency is unavailable"
+            if exc.code == "no_get_item_entry"
+            else "billing repository response is malformed"
+        ) from exc
 
 
 def resolve_student_entitlement(
@@ -308,7 +308,7 @@ def _relationship_of_record(
     candidates = paid_entitlement_service.beneficiary_parents(student_id)
     if not candidates:
         return None, None, None
-    table = get_table()
+    table = db_table.table()
     for verdict in candidates:
         grant = paid_entitlement_service.get_active_beneficiary_grant(
             verdict.parent_id, student_id, table=table
@@ -333,33 +333,11 @@ def _relationship_row(verdict: current_relationship.Verdict) -> dict[str, Any]:
 def _get_billing_item(parent_id: str | None) -> dict[str, Any] | None:
     if not parent_id:
         return None
-    table = get_table()
-    if not isinstance(table, _GetTable):
-        raise RuntimeError("billing repository dependency is unavailable")
-    response = _billing_response(table.get_item(
-        Key={"PK": f"SUBSCRIPTION_BILLING#{parent_id}", "SK": "SUMMARY"}
-    ))
-    item = response.get("Item")
-    if item is None:
-        return None
-    if not isinstance(item, Mapping):
-        raise RuntimeError("billing repository response is malformed")
-    return dict(item)
+    return _billing_get({"PK": f"SUBSCRIPTION_BILLING#{parent_id}", "SK": "SUMMARY"})
 
 
 def _get_payment_rollout_item() -> dict[str, Any] | None:
-    table = get_table()
-    if not isinstance(table, _GetTable):
-        raise RuntimeError("billing repository dependency is unavailable")
-    response = _billing_response(
-        table.get_item(Key={"PK": "SUBSCRIPTION_PAYMENT_ROLLOUT", "SK": "SUMMARY"})
-    )
-    item = response.get("Item")
-    if item is None:
-        return None
-    if not isinstance(item, Mapping):
-        raise RuntimeError("billing repository response is malformed")
-    return dict(item)
+    return _billing_get({"PK": "SUBSCRIPTION_PAYMENT_ROLLOUT", "SK": "SUMMARY"})
 
 
 def _rollout_summary(item: dict[str, Any] | None) -> dict[str, Any]:
