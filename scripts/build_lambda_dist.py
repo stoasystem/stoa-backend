@@ -3,6 +3,10 @@
 
 from __future__ import annotations
 
+# `_imp.source_hash` is what `importlib.util.source_hash` calls, with the key
+# made explicit so bytecode can be checked against the 3.12 runtime from any
+# interpreter (see bytecode_problems).
+import _imp
 import argparse
 import difflib
 import hashlib
@@ -54,6 +58,16 @@ HASHED_SOURCE_ROOTS = ("src/stoa",)
 HASHED_ROOT_FILES = ("requirements.txt", "pyproject.toml")
 EXCLUDED_PARTS = {"__pycache__", ".pytest_cache", ".ruff_cache"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo"}
+# The bytecode the package carries: what CPython 3.12 imports from
+# `__pycache__`. MAGIC is `importlib.util.MAGIC_NUMBER` for 3.12 (3531), fixed
+# here because the interpreter running `--verify-only` need not be 3.12.
+BYTECODE_SUFFIX = ".cpython-312.pyc"
+BYTECODE_MAGIC = b"\xcb\r\r\n"
+# PEP 552 flags word: hash-based, source not re-read at import.
+UNCHECKED_HASH_FLAGS = 0b01
+LAMBDA_TASK_ROOT = "/var/task"
+# `update-function-code --zip-file` refuses a larger archive.
+DIRECT_UPLOAD_LIMIT_BYTES = 50 * 1024 * 1024
 BUILD_MANIFEST_KEYS = {
     "schema_version",
     "project",
@@ -95,6 +109,19 @@ def _should_hash(path: Path) -> bool:
     )
 
 
+def _ships(path: Path) -> bool:
+    """Whether a distribution file goes into the archive and its tree hash.
+
+    Source trees are hashed without bytecode, but the distribution carries the
+    3.12 bytecode compiled for it, and nothing else from a cache directory, so
+    bytecode some other interpreter happens to leave behind never changes the
+    package.
+    """
+    if path.parent.name == "__pycache__" and path.name.endswith(BYTECODE_SUFFIX):
+        return _should_hash(path.parent.parent)
+    return _should_hash(path)
+
+
 def sha256_tree(root: Path, relative_roots: tuple[str, ...]) -> str:
     digest = hashlib.sha256()
     for relative_root in relative_roots:
@@ -116,7 +143,7 @@ def sha256_dist_tree(dist_dir: Path) -> str:
     for path in sorted(dist_dir.rglob("*")):
         if path.is_symlink():
             raise DistVerificationError("Lambda dist contains a symlink")
-        if not path.is_file() or path.name == MANIFEST_NAME or not _should_hash(path):
+        if not path.is_file() or path.name == MANIFEST_NAME or not _ships(path):
             continue
         relative = path.relative_to(dist_dir).as_posix()
         digest.update(relative.encode("utf-8"))
@@ -338,7 +365,9 @@ def boot_smoke(dist_dir: Path) -> dict[str, Any]:
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     try:
         subprocess.run(
-            [sys.executable, "-I", "-c", code, str(dist_dir.resolve()), json.dumps(handler_pairs)],
+            # -B, because -I ignores PYTHONDONTWRITEBYTECODE: the smoke must not
+            # write bytecode into the tree it is checking.
+            [sys.executable, "-I", "-B", "-c", code, str(dist_dir.resolve()), json.dumps(handler_pairs)],
             cwd=dist_dir,
             env=environment,
             check=True,
@@ -429,6 +458,7 @@ def validate_manifest(repo_root: Path, dist_dir: Path) -> dict[str, Any]:
         recorded = inventory.get(handler) or {}
         if recorded.get("exists") is not True or recorded.get("has_attr") is not True:
             errors.append(f"{handler}: manifest does not record a valid handler")
+    errors.extend(bytecode_problems(dist_dir))
 
     expected_asset_hash = cdk_asset_hash(manifest)
     if manifest.get("cdk_asset_hash") != expected_asset_hash:
@@ -459,6 +489,9 @@ def install_dependencies(repo_root: Path, dist_dir: Path) -> None:
         PYTHON_VERSION,
         "--only-binary",
         ":all:",
+        # compile_bytecode writes the bytecode the package ships; pip's own is
+        # timestamp-based and would only be overwritten.
+        "--no-compile",
         "--target",
         str(dist_dir),
         "-r",
@@ -492,6 +525,95 @@ def copy_security_inventory(repo_root: Path, package_dir: Path) -> None:
     shutil.copy2(inventory, target / SECURITY_INVENTORY_NAME)
 
 
+def compile_bytecode(dist_dir: Path) -> None:
+    """Compile every module in the distribution for the Lambda runtime.
+
+    `/var/task` is read-only, so a package without bytecode is compiled from
+    source on every cold start and the result thrown away: about 1.3 s of the
+    API's import (#341). Lambda only uses bytecode from the interpreter it runs,
+    so any other is refused here.
+
+    Hash-based and unchecked (PEP 552). The archive pins every timestamp to 1980,
+    which would invalidate timestamp-based bytecode on arrival. And source cannot
+    change under bytecode shipped beside it in one read-only package; re-reading
+    every source file at import to prove that costs each cold start about 55 ms.
+    bytecode_problems proves it once per build and verify instead.
+    """
+    if not current_python_version().startswith(f"{PYTHON_VERSION}."):
+        raise DistVerificationError(
+            f"Lambda bytecode must be compiled by Python {PYTHON_VERSION}, "
+            f"not {current_python_version()}"
+        )
+    root = str(dist_dir.resolve())
+    # No inherited PYTHON* setting may redirect or change the output
+    # (PYTHONPYCACHEPREFIX, PYTHONOPTIMIZE); the hash seed is pinned so set
+    # constants marshal in the same order in every build.
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("PYTHON")}
+    environment["PYTHONHASHSEED"] = "0"
+    command = [
+        sys.executable,
+        # Never import from the distribution itself while compiling it.
+        "-P",
+        "-m",
+        "compileall",
+        "-q",
+        "-f",
+        "-j",
+        "0",
+        "--invalidation-mode",
+        "unchecked-hash",
+        # Record each module at its Lambda path rather than this build's
+        # directory, so builds in different places produce the same bytes.
+        "-s",
+        root,
+        "-p",
+        LAMBDA_TASK_ROOT,
+        root,
+    ]
+    try:
+        subprocess.run(command, env=environment, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        detail = "\n".join((exc.stdout or "").strip().splitlines()[-20:])
+        raise DistVerificationError(f"Lambda bytecode compilation failed\n{detail}") from exc
+    except OSError as exc:
+        raise DistVerificationError("Lambda bytecode compilation failed") from exc
+    problems = bytecode_problems(dist_dir)
+    if problems:
+        raise DistVerificationError("Lambda bytecode is incomplete:\n  - " + "\n  - ".join(problems))
+
+
+def bytecode_problems(dist_dir: Path, *, max_reported: int = 10) -> list[str]:
+    """Modules that do not ship the 3.12 bytecode of exactly their own source.
+
+    Lambda never re-reads the source of unchecked bytecode, so a module changed
+    after compiling would run its old code with nothing noticing. The source hash
+    is keyed by the 3.12 magic number explicitly, which gives the runtime's
+    answer from any interpreter, so `--verify-only` still works off the target.
+    """
+    key = int.from_bytes(BYTECODE_MAGIC, "little")
+    problems: list[str] = []
+    for source in sorted(dist_dir.rglob("*.py")):
+        if not source.is_file() or not _ships(source):
+            continue
+        relative = source.relative_to(dist_dir).as_posix()
+        compiled = source.parent / "__pycache__" / f"{source.stem}{BYTECODE_SUFFIX}"
+        try:
+            with compiled.open("rb") as handle:
+                header = handle.read(16)
+        except OSError:
+            problems.append(f"{relative}: no {BYTECODE_SUFFIX} bytecode")
+            continue
+        if (
+            header[:4] != BYTECODE_MAGIC
+            or int.from_bytes(header[4:8], "little") != UNCHECKED_HASH_FLAGS
+            or header[8:16] != _imp.source_hash(key, source.read_bytes())
+        ):
+            problems.append(f"{relative}: bytecode is not the unchecked-hash 3.12 build of this source")
+    if len(problems) > max_reported:
+        problems[max_reported:] = [f"... and {len(problems) - max_reported} more modules"]
+    return problems
+
+
 def write_manifest(repo_root: Path, dist_dir: Path) -> dict[str, Any]:
     manifest = build_manifest(repo_root, dist_dir)
     manifest_path = dist_dir / MANIFEST_NAME
@@ -513,6 +635,8 @@ def build_dist(
     if not skip_install:
         install_dependencies(repo_root, dist_dir)
     copy_source(repo_root, dist_dir)
+    # Last, so nothing changes a module after its bytecode is written.
+    compile_bytecode(dist_dir)
     if skip_smoke:
         # Build the manifest with a SKIPPED smoke record.
         # Intended for cross-compilation builds on macOS where Linux ARM64
@@ -560,7 +684,7 @@ def zip_dist(dist_dir: Path, zip_path: Path) -> dict[str, Any]:
     for path in dist_dir.rglob("*"):
         if path.is_symlink():
             raise DistVerificationError("Lambda dist archive cannot contain a symlink")
-        if path.is_file() and _should_hash(path):
+        if path.is_file() and _ships(path):
             paths.append(path)
     # Order by the archive name validate_archive_identity checks. Sorting Path
     # objects compares parts, which disagrees with byte order wherever a package
@@ -586,6 +710,11 @@ def zip_dist(dist_dir: Path, zip_path: Path) -> dict[str, Any]:
         "sha256": sha256_file(zip_path),
     }
     validate_archive_identity(zip_path, identity)
+    if identity["bytes"] > DIRECT_UPLOAD_LIMIT_BYTES:
+        raise DistVerificationError(
+            f"Lambda archive is {identity['bytes']} bytes; update-function-code --zip-file "
+            f"accepts at most {DIRECT_UPLOAD_LIMIT_BYTES}. Upload it through S3 instead."
+        )
     return identity
 
 

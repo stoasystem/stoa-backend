@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import marshal
 import os
 from pathlib import Path
+import py_compile
 import shutil
 import stat
 import subprocess
@@ -369,7 +371,138 @@ def test_dependency_install_uses_closed_al2023_arm64_compatibility_ladder(
     ]
     assert observed["argv"][observed["argv"].index("--python-version") + 1] == "3.12"
     assert observed["argv"][observed["argv"].index("--only-binary") + 1] == ":all:"
+    assert "--no-compile" in observed["argv"]
     assert observed["kwargs"] == {"cwd": tmp_path, "check": True}
+
+
+def _pyc(path: Path) -> tuple[bytes, int, object]:
+    data = path.read_bytes()
+    return data[:4], int.from_bytes(data[4:8], "little"), marshal.loads(data[16:])
+
+
+def test_build_ships_unchecked_hash_312_bytecode_beside_every_module(tmp_path, monkeypatch):
+    # /var/task is read-only: without shipped bytecode every cold start compiles
+    # every module from source and throws the result away (#341).
+    builder = _load_builder()
+    _write_minimal_repo(tmp_path)
+    _stub_locked_export(builder, monkeypatch, tmp_path)
+    dist = tmp_path / "dist"
+    builder.build_dist(tmp_path, dist, skip_install=True)
+
+    sources = sorted(dist.rglob("*.py"))
+    assert sources
+    for source in sources:
+        magic, flags, code = _pyc(source.parent / "__pycache__" / f"{source.stem}.cpython-312.pyc")
+        assert magic == importlib.util.MAGIC_NUMBER == builder.BYTECODE_MAGIC
+        assert flags == 0b01
+        relative = source.relative_to(dist).as_posix()
+        assert code.co_filename.replace("\\", "/") == f"/var/task/{relative}"
+
+    archive = tmp_path / "lambda.zip"
+    builder.zip_dist(dist, archive)
+    with zipfile.ZipFile(archive) as opened:
+        names = set(opened.namelist())
+    assert "stoa/__pycache__/main.cpython-312.pyc" in names
+    assert "stoa/jobs/__pycache__/weekly_reports.cpython-312.pyc" in names
+
+
+def test_bytecode_from_another_interpreter_never_enters_the_package(tmp_path, monkeypatch):
+    builder = _load_builder()
+    _write_minimal_repo(tmp_path)
+    _stub_locked_export(builder, monkeypatch, tmp_path)
+    dist = tmp_path / "dist"
+    builder.build_dist(tmp_path, dist, skip_install=True)
+    before = builder.sha256_dist_tree(dist)
+
+    (dist / "stoa" / "__pycache__" / "main.cpython-313.pyc").write_bytes(b"stray")
+    (dist / "stoa" / "__pycache__" / "main.cpython-312.opt-1.pyc").write_bytes(b"stray")
+    (dist / "stoa" / "legacy.pyc").write_bytes(b"stray")
+
+    assert builder.sha256_dist_tree(dist) == before
+    archive = tmp_path / "lambda.zip"
+    builder.zip_dist(dist, archive)
+    with zipfile.ZipFile(archive) as opened:
+        assert not [name for name in opened.namelist() if "313" in name or "opt-1" in name]
+        assert "stoa/legacy.pyc" not in opened.namelist()
+
+
+def test_source_changed_after_compiling_fails_verification(tmp_path, monkeypatch):
+    # Lambda never re-reads the source of unchecked bytecode, so a stale .pyc
+    # would run old code silently; verification is where that must surface.
+    builder = _load_builder()
+    _write_minimal_repo(tmp_path)
+    _stub_locked_export(builder, monkeypatch, tmp_path)
+    dist = tmp_path / "dist"
+    builder.build_dist(tmp_path, dist, skip_install=True)
+
+    (dist / "stoa" / "main.py").write_text(
+        "def handler(event, context):\n    return {'ok': False}\n", encoding="utf-8"
+    )
+    with pytest.raises(builder.DistVerificationError, match="stoa/main.py: bytecode is not"):
+        builder.validate_manifest(tmp_path, dist)
+
+
+def test_missing_bytecode_fails_verification(tmp_path, monkeypatch):
+    builder = _load_builder()
+    _write_minimal_repo(tmp_path)
+    _stub_locked_export(builder, monkeypatch, tmp_path)
+    dist = tmp_path / "dist"
+    builder.build_dist(tmp_path, dist, skip_install=True)
+
+    (dist / "stoa" / "jobs" / "__pycache__" / "account_deletion.cpython-312.pyc").unlink()
+    with pytest.raises(builder.DistVerificationError, match="account_deletion.py: no .cpython-312.pyc"):
+        builder.validate_manifest(tmp_path, dist)
+
+
+def test_timestamp_bytecode_is_not_accepted(tmp_path):
+    # The archive pins every timestamp to 1980, so timestamp-based bytecode is
+    # invalid the moment Lambda unpacks it.
+    builder = _load_builder()
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+    py_compile.compile(
+        str(dist / "module.py"),
+        cfile=str(dist / "__pycache__" / "module.cpython-312.pyc"),
+        invalidation_mode=py_compile.PycInvalidationMode.TIMESTAMP,
+    )
+
+    assert builder.bytecode_problems(dist) == [
+        "module.py: bytecode is not the unchecked-hash 3.12 build of this source"
+    ]
+
+
+def test_bytecode_is_compiled_only_by_the_runtime_interpreter(tmp_path, monkeypatch):
+    builder = _load_builder()
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+    monkeypatch.setattr(builder, "current_python_version", lambda: "3.13.1")
+
+    with pytest.raises(builder.DistVerificationError, match="compiled by Python 3.12, not 3.13.1"):
+        builder.compile_bytecode(dist)
+    assert not (dist / "__pycache__").exists()
+
+
+def test_uncompilable_module_fails_the_build(tmp_path):
+    builder = _load_builder()
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "broken.py").write_text("def broken(:\n", encoding="utf-8")
+
+    with pytest.raises(builder.DistVerificationError, match="compilation failed"):
+        builder.compile_bytecode(dist)
+
+
+def test_archive_over_the_direct_upload_limit_is_refused(tmp_path, monkeypatch):
+    builder = _load_builder()
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+    monkeypatch.setattr(builder, "DIRECT_UPLOAD_LIMIT_BYTES", 10)
+
+    with pytest.raises(builder.DistVerificationError, match="Upload it through S3"):
+        builder.zip_dist(dist, tmp_path / "lambda.zip")
 
 
 def test_repeated_normalized_zip_is_byte_identical(tmp_path):
