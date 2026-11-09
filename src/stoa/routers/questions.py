@@ -10,14 +10,12 @@ from fastapi import APIRouter, Depends, status
 
 from stoa.deps import get_actor
 from stoa.models.moderation import ModerationCaseResponse, ModerationReportRequest
-from stoa.security.authorization import AuthorizationAction, AuthorizedResource
+from stoa.security.authorization import AuthorizationAction, AuthorizedResource, ResourceType
+from stoa.security.declared_authorization import authorized, path
 from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import Actor
 from stoa.security.request_correlation import get_request_correlation_id
-from stoa.security.route_authorization import (
-    QUESTION_CONTENT_READ,
-    authorized_question_dependency,
-)
+from stoa.security.route_authorization import QUESTION_CONTENT_READ
 from stoa.services import moderation_service
 
 router = APIRouter()
@@ -30,9 +28,12 @@ router = APIRouter()
 )
 async def report_question_content(
     body: ModerationReportRequest,
-    authorized: AuthorizedResource = Depends(
-        authorized_question_dependency(
-            action=AuthorizationAction.CREATE, purposes=QUESTION_CONTENT_READ
+    question: AuthorizedResource = Depends(
+        authorized(
+            ResourceType.QUESTION,
+            AuthorizationAction.CREATE,
+            path("question_id"),
+            QUESTION_CONTENT_READ,
         )
     ),
     actor: Actor = Depends(get_actor),
@@ -41,10 +42,10 @@ async def report_question_content(
     """Create a moderation case for reportable question content."""
     try:
         return moderation_service.create_case(
-            authorized.ref.resource_id,
+            question.ref.resource_id,
             body,
             {"sub": actor.user_id, "role": actor.role.value},
-            request=authorized.value,
+            request=question.value,
         )
     except SecurityDecisionError as error:
         # Refused as the authorization above refuses a request it cannot see.

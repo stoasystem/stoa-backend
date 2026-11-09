@@ -6,14 +6,42 @@ from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 
 from stoa.security.admin_authorization import admin_operation
-from stoa.security.authorization import AuthorizationAction, AuthorizedResource, ResourceType
-from stoa.security.identity import Actor
-from stoa.security.route_authorization import (
-    authorized_notification_event_dependency,
-    authorized_notification_push_token_dependency,
-    notification_self_dependency,
+from stoa.security.authorization import (
+    AuthorizationAction,
+    AuthorizationPurpose,
+    AuthorizedResource,
+    ResourceType,
 )
+from stoa.security.declared_authorization import SELF, TOKEN, authorized, path
+from stoa.security.identity import Actor, CanonicalRole
 from stoa.services import locale_service, notification_service
+
+
+# Every role reads and changes its own notifications, and only its own.
+_OWN_NOTIFICATIONS = {
+    role: AuthorizationPurpose.NOTIFICATION_SELF_SERVICE for role in CanonicalRole
+}
+
+
+def _own(resource_type: ResourceType, action: AuthorizationAction):
+    """The Actor's own notification collection, preferences, digest or new token."""
+    return authorized(resource_type, action, SELF, _OWN_NOTIFICATIONS)
+
+
+_event_update = authorized(
+    ResourceType.NOTIFICATION_EVENT,
+    AuthorizationAction.UPDATE,
+    path("event_id"),
+    _OWN_NOTIFICATIONS,
+)
+_push_token_delete = authorized(
+    ResourceType.NOTIFICATION_PUSH_TOKEN,
+    AuthorizationAction.DELETE,
+    path("token_reference"),
+    _OWN_NOTIFICATIONS,
+    kind=TOKEN,
+)
+
 
 router = APIRouter()
 
@@ -139,7 +167,7 @@ class NotificationDigestPreviewResponse(BaseModel):
 async def list_notifications(
     status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, ge=1, le=100),
-    actor: Actor = Depends(notification_self_dependency(ResourceType.NOTIFICATION_COLLECTION, AuthorizationAction.READ)),
+    actor: Actor = Depends(_own(ResourceType.NOTIFICATION_COLLECTION, AuthorizationAction.READ)),
 ):
     items = notification_service.list_user_events(actor, status=status_filter, limit=limit)
     return NotificationListResponse(
@@ -150,7 +178,7 @@ async def list_notifications(
 
 @router.get("/preferences", response_model=NotificationPreferenceResponse)
 async def get_notification_preferences(
-    actor: Actor = Depends(notification_self_dependency(ResourceType.NOTIFICATION_PREFERENCE, AuthorizationAction.READ)),
+    actor: Actor = Depends(_own(ResourceType.NOTIFICATION_PREFERENCE, AuthorizationAction.READ)),
 ):
     return notification_service.preferences_response(actor.user_id)
 
@@ -158,7 +186,7 @@ async def get_notification_preferences(
 @router.patch("/preferences", response_model=NotificationPreferenceResponse)
 async def update_notification_preferences(
     body: NotificationPreferenceUpdate,
-    actor: Actor = Depends(notification_self_dependency(ResourceType.NOTIFICATION_PREFERENCE, AuthorizationAction.UPDATE)),
+    actor: Actor = Depends(_own(ResourceType.NOTIFICATION_PREFERENCE, AuthorizationAction.UPDATE)),
 ):
     return notification_service.update_preferences(
         actor.user_id, body.preferences, dispatch_email=body.dispatchEmail
@@ -171,7 +199,7 @@ async def preview_notification_digest(
     since: str | None = Query(default=None),
     until: str | None = Query(default=None),
     limit: int = Query(default=25, ge=1, le=100),
-    actor: Actor = Depends(notification_self_dependency(ResourceType.NOTIFICATION_DIGEST, AuthorizationAction.READ)),
+    actor: Actor = Depends(_own(ResourceType.NOTIFICATION_DIGEST, AuthorizationAction.READ)),
 ):
     return notification_service.digest_preview(
         actor,
@@ -185,7 +213,7 @@ async def preview_notification_digest(
 @router.post("/digest-send", response_model=NotificationDigestSendResponse)
 async def send_notification_digest(
     body: NotificationDigestSendRequest,
-    actor: Actor = Depends(notification_self_dependency(ResourceType.NOTIFICATION_DIGEST, AuthorizationAction.CREATE)),
+    actor: Actor = Depends(_own(ResourceType.NOTIFICATION_DIGEST, AuthorizationAction.CREATE)),
 ):
     return notification_service.send_digest(
         actor,
@@ -199,7 +227,7 @@ async def send_notification_digest(
 @router.post("/push-tokens", response_model=NotificationPushTokenResponse)
 async def register_notification_push_token(
     body: NotificationPushTokenRegisterRequest,
-    actor: Actor = Depends(notification_self_dependency(ResourceType.NOTIFICATION_PUSH_TOKEN, AuthorizationAction.CREATE)),
+    actor: Actor = Depends(_own(ResourceType.NOTIFICATION_PUSH_TOKEN, AuthorizationAction.CREATE)),
 ):
     return notification_service.register_push_token(
         actor,
@@ -213,9 +241,7 @@ async def register_notification_push_token(
 @router.delete("/push-tokens/{token_reference}", response_model=NotificationPushTokenResponse)
 async def revoke_notification_push_token(
     token_reference: str,
-    authorized: AuthorizedResource = Depends(
-        authorized_notification_push_token_dependency(AuthorizationAction.DELETE)
-    ),
+    authorized: AuthorizedResource = Depends(_push_token_delete),
 ):
     return notification_service.revoke_authorized_push_token(authorized.value)
 
@@ -223,9 +249,7 @@ async def revoke_notification_push_token(
 @router.post("/{event_id}/read", response_model=NotificationEventResponse, status_code=status.HTTP_200_OK)
 async def mark_notification_read(
     event_id: str,
-    authorized: AuthorizedResource = Depends(
-        authorized_notification_event_dependency(AuthorizationAction.UPDATE)
-    ),
+    authorized: AuthorizedResource = Depends(_event_update),
 ):
     return notification_service.mark_authorized_event(authorized.value, "read")
 
@@ -233,9 +257,7 @@ async def mark_notification_read(
 @router.post("/{event_id}/archive", response_model=NotificationEventResponse, status_code=status.HTTP_200_OK)
 async def archive_notification(
     event_id: str,
-    authorized: AuthorizedResource = Depends(
-        authorized_notification_event_dependency(AuthorizationAction.UPDATE)
-    ),
+    authorized: AuthorizedResource = Depends(_event_update),
 ):
     return notification_service.mark_authorized_event(authorized.value, "archived")
 

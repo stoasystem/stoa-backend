@@ -23,11 +23,17 @@ Where the id comes from is one of four sources:
   when one is registered (so a store outage refuses before the handler runs),
   otherwise the Actor's own record is authorized as is; either way the handler
   receives the `Actor`.
-- ``operator(capability=...)``: an exact operator grant; the handler receives
-  the `Actor`.
+- ``operator(capability=..., target=...)``: an exact operator grant on the
+  global operator resource, or on the object a ``path(...)`` target names (a
+  grant may be scoped to that one object); the handler receives the `Actor`.
+
+A role's purpose may be chosen by a grant the Actor holds (`by_grant`): the
+AI teacher tools are read under their own purpose only by a teacher who
+holds that grant.
 
 A route that loads first and decides after (a list, a batch, an id in a body)
-calls `authorize_loaded` instead and declares itself with `loaded_declaration`.
+calls `authorize_loaded` instead (or `authorize_id`, for an id in a body) and
+declares itself with `loaded_declaration`.
 A route whose check lives in a service declares `service_enforced("<entry>")`,
 so the inventory says where the check is instead of claiming one here.
 
@@ -46,7 +52,13 @@ from typing import Any, TypeVar
 
 from fastapi import Depends, Path, Query, Request
 
-from stoa.db.repositories import adaptive_learning_repo, practice_repo, user_repo
+from stoa.db.repositories import (
+    adaptive_learning_repo,
+    attachment_repo,
+    notification_repo,
+    practice_repo,
+    user_repo,
+)
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.security.authorization import (
@@ -74,7 +86,40 @@ from stoa.security.route_authorization import (
 
 logger = logging.getLogger(__name__)
 
-PurposeMap = Mapping[CanonicalRole, AuthorizationPurpose]
+
+@dataclass(frozen=True, slots=True)
+class GrantedPurpose:
+    """A purpose chosen by a grant: ``granted`` for an Actor holding ``capability``."""
+
+    capability: str
+    granted: AuthorizationPurpose
+    otherwise: AuthorizationPurpose
+
+    def choose(self, actor: Actor) -> AuthorizationPurpose:
+        held = any(grant.capability == self.capability for grant in actor.current_grants)
+        return self.granted if held else self.otherwise
+
+
+def by_grant(
+    capability: str,
+    granted: AuthorizationPurpose,
+    *,
+    otherwise: AuthorizationPurpose,
+) -> GrantedPurpose:
+    """The purpose ``granted`` when the Actor holds ``capability``, else ``otherwise``.
+
+    Which one the policy is asked under is the Actor's; the route inventory
+    lists both, since either may be asked.
+    """
+    if not capability.strip():
+        raise ValueError("by_grant names the capability that chooses the purpose")
+    return GrantedPurpose(
+        capability.strip(), AuthorizationPurpose(granted), AuthorizationPurpose(otherwise)
+    )
+
+
+DeclaredPurpose = AuthorizationPurpose | GrantedPurpose
+PurposeMap = Mapping[CanonicalRole, DeclaredPurpose]
 ResourceLoader = Callable[[str, Actor], Awaitable[AuthorizedResource | None]]
 Dependency = TypeVar("Dependency", bound=Callable[..., Any])
 
@@ -103,6 +148,7 @@ class SelfSource:
 @dataclass(frozen=True, slots=True)
 class OperatorSource:
     capability: str
+    target: PathSource | None = None
 
 
 IdSource = PathSource | QuerySource | SelfSource | OperatorSource
@@ -131,11 +177,16 @@ def query(name: str, *, student_defaults_to_self: bool = False) -> QuerySource:
 SELF = SelfSource()
 
 
-def operator(*, capability: str) -> OperatorSource:
-    """An exact operator grant on the global operator resource; hands over the Actor."""
+def operator(*, capability: str, target: PathSource | None = None) -> OperatorSource:
+    """An exact operator grant; hands over the Actor.
+
+    Without ``target`` the grant is checked on the global operator resource
+    (a queue, a list). With ``target=path(name)`` it is checked on the object
+    that path parameter names, so a grant scoped to that one object opens it.
+    """
     if not capability.strip():
         raise ValueError("operator capability is required")
-    return OperatorSource(capability)
+    return OperatorSource(capability, target)
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +200,7 @@ class AuthorizationDeclaration:
 
     resource_type: ResourceType
     action: AuthorizationAction
-    purposes: tuple[tuple[CanonicalRole, AuthorizationPurpose], ...]
+    purposes: tuple[tuple[CanonicalRole, DeclaredPurpose], ...]
     source: IdSource | None
     service_entry: str | None = None
 
@@ -157,8 +208,30 @@ class AuthorizationDeclaration:
     def capability(self) -> str | None:
         return self.source.capability if isinstance(self.source, OperatorSource) else None
 
-    def purpose_for(self, role: CanonicalRole) -> AuthorizationPurpose | None:
-        return dict(self.purposes).get(role)
+    def purpose_for(self, actor: Actor) -> AuthorizationPurpose | None:
+        declared = dict(self.purposes).get(actor.role)
+        return _chosen(declared, actor) if declared is not None else None
+
+    def first_purpose(self, actor: Actor) -> AuthorizationPurpose:
+        return _chosen(self.purposes[0][1], actor)
+
+    def listed_purposes(self) -> tuple[AuthorizationPurpose, ...]:
+        """Every purpose a request may be asked under, for the route inventory."""
+        listed: list[AuthorizationPurpose] = []
+        for _role, declared in self.purposes:
+            if isinstance(declared, GrantedPurpose):
+                listed.extend((declared.granted, declared.otherwise))
+            else:
+                listed.append(declared)
+        return tuple(dict.fromkeys(listed))
+
+
+def _chosen(declared: DeclaredPurpose, actor: Actor) -> AuthorizationPurpose:
+    return declared.choose(actor) if isinstance(declared, GrantedPurpose) else declared
+
+
+def _declared_purpose(value: DeclaredPurpose) -> DeclaredPurpose:
+    return value if isinstance(value, GrantedPurpose) else AuthorizationPurpose(value)
 
 
 def _declaration(
@@ -173,7 +246,7 @@ def _declaration(
     return AuthorizationDeclaration(
         ResourceType(resource_type),
         AuthorizationAction(action),
-        tuple((CanonicalRole(role), AuthorizationPurpose(p)) for role, p in purposes.items()),
+        tuple((CanonicalRole(role), _declared_purpose(p)) for role, p in purposes.items()),
         source,
         service_entry,
     )
@@ -189,25 +262,41 @@ def declaration_of(call: object) -> AuthorizationDeclaration | None:
 # ---------------------------------------------------------------------------
 
 _LOADERS: dict[tuple[ResourceType, str | None], ResourceLoader] = {}
+#: Types whose kind-free loader loads by a user id: ``SELF`` loads the Actor's own.
+_SELF_LOADED: set[ResourceType] = set()
 
 
 def register_resource_loader(
-    resource_type: ResourceType, loader: ResourceLoader, *, kind: str | None = None
+    resource_type: ResourceType,
+    loader: ResourceLoader,
+    *,
+    kind: str | None = None,
+    loads_self: bool = False,
 ) -> None:
     """Register how one resource type is loaded by id.
 
     ``kind`` separates the ids one resource type is addressed by: a practice
     item is a lesson, a challenge or an attempt, and an adaptive profile is
     reached by its student or by one of its assignments.
+
+    ``loads_self`` says the loader's id is a user id, so ``SELF`` loads the
+    Actor's own record through it. A conversation, a help request or a
+    notification event is loaded by its own id, never by the Actor's.
     """
     key = (ResourceType(resource_type), kind)
     if key in _LOADERS:
         raise ValueError(f"a loader for {key} is already registered")
+    if loads_self and kind is not None:
+        raise ValueError("only a type's kind-free loader loads the Actor's own record")
     _LOADERS[key] = loader
+    if loads_self:
+        _SELF_LOADED.add(key[0])
 
 
 def unregister_resource_loader(resource_type: ResourceType, *, kind: str | None = None) -> None:
     _LOADERS.pop((ResourceType(resource_type), kind), None)
+    if kind is None:
+        _SELF_LOADED.discard(ResourceType(resource_type))
 
 
 def resource_loader(resource_type: ResourceType, kind: str | None = None) -> ResourceLoader:
@@ -288,7 +377,9 @@ CHALLENGE = "challenge"
 ATTEMPT = "attempt"
 
 for _family_type in STUDENT_FACT_FAMILY:
-    register_resource_loader(_family_type, _student_account_loader(_family_type))
+    register_resource_loader(
+        _family_type, _student_account_loader(_family_type), loads_self=True
+    )
 register_resource_loader(ResourceType.ADAPTIVE_PROFILE, _load_assignment, kind=ASSIGNMENT)
 register_resource_loader(
     ResourceType.PRACTICE,
@@ -306,6 +397,165 @@ register_resource_loader(
     kind=ATTEMPT,
 )
 register_resource_loader(ResourceType.CURRICULUM_ANSWER, _load_curriculum_answer)
+
+
+def _conversation_resource(
+    conversation_id: str, item: Mapping[str, object] | None
+) -> AuthorizedResource | None:
+    if not item:
+        return None
+    return AuthorizedResource(
+        ResourceRef(
+            ResourceType.CONVERSATION,
+            conversation_id,
+            str(item.get("student_id") or ""),
+            question_id=str(item.get("question_id") or "") or None,
+        ),
+        item,
+    )
+
+
+async def _load_conversation(conversation_id: str, _actor: Actor) -> AuthorizedResource | None:
+    from stoa.services import learning_session
+
+    return _conversation_resource(conversation_id, learning_session.read(conversation_id))
+
+
+async def _load_live_conversation(
+    conversation_id: str, _actor: Actor
+) -> AuthorizedResource | None:
+    """A conversation that is not deleted: what a new upload code may go into."""
+    from stoa.services import learning_session
+
+    item = learning_session.read(conversation_id)
+    if item is None or item.get("status") == "deleted":
+        return None
+    return _conversation_resource(conversation_id, item)
+
+
+async def _load_question(question_id: str, _actor: Actor) -> AuthorizedResource | None:
+    """A question id is a help request's id (#189), loaded once, as stored (#234)."""
+    from stoa.services import help_requests
+
+    item = help_requests.get(question_id)
+    if not item:
+        return None
+    return AuthorizedResource(
+        ResourceRef(
+            ResourceType.QUESTION,
+            question_id,
+            str(item.get("student_id") or ""),
+            question_id=question_id,
+        ),
+        item,
+    )
+
+
+def teacher_task_resource(
+    resource_type: ResourceType, loaded: Mapping[str, object]
+) -> AuthorizedResource:
+    """A help request, question or draft a teacher works on, as the policy reads it.
+
+    A question id is a help request's id since #189, and a request's id is
+    its conversation's; a draft names its request as ``question_id``.
+    """
+    id_field = {
+        ResourceType.QUESTION: "conversation_id",
+        ResourceType.TEACHER_HELP_REQUEST: "conversation_id",
+        ResourceType.AI_TEACHER_DRAFT: "draft_id",
+    }.get(resource_type, "resource_id")
+    return AuthorizedResource(
+        ResourceRef(
+            resource_type,
+            str(loaded.get(id_field) or ""),
+            str(loaded.get("student_id") or ""),
+            question_id=str(
+                loaded.get("question_id")
+                or loaded.get("escalation_request_id")
+                or loaded.get("conversation_id")
+                or ""
+            )
+            or None,
+        ),
+        loaded,
+    )
+
+
+async def _load_help_request(request_id: str, _actor: Actor) -> AuthorizedResource | None:
+    from stoa.services import help_requests
+
+    item = help_requests.get(request_id)
+    return teacher_task_resource(ResourceType.TEACHER_HELP_REQUEST, item) if item else None
+
+
+async def _load_ai_teacher_draft(draft_id: str, _actor: Actor) -> AuthorizedResource | None:
+    from stoa.services import ai_teacher_tools_service
+
+    item = ai_teacher_tools_service.ai_teacher_tools_repo.get_draft(draft_id)
+    return teacher_task_resource(ResourceType.AI_TEACHER_DRAFT, item) if item else None
+
+
+def _owned(
+    resource_type: ResourceType, resource_id: str, item: Mapping[str, object], owner_id: str
+) -> AuthorizedResource:
+    return AuthorizedResource(
+        ResourceRef(resource_type, resource_id, owner_id, owner_id=owner_id), item
+    )
+
+
+async def _load_notification_event(event_id: str, _actor: Actor) -> AuthorizedResource | None:
+    """An event, bound to its canonical recipient."""
+    item = notification_repo.get_event(event_id)
+    if not item or not item.get("recipient_id"):
+        return None
+    return _owned(ResourceType.NOTIFICATION_EVENT, event_id, item, str(item["recipient_id"]))
+
+
+async def _load_push_token(token_reference: str, actor: Actor) -> AuthorizedResource | None:
+    """A push token is looked up under the Actor's own account, by its reference."""
+    item = notification_repo.get_push_token(actor.user_id, token_reference)
+    if not item:
+        return None
+    return _owned(
+        ResourceType.NOTIFICATION_PUSH_TOKEN,
+        token_reference,
+        item,
+        str(item.get("user_id") or ""),
+    )
+
+
+def _attachment_loader(*, for_reading: bool) -> ResourceLoader:
+    async def load(attachment_id: str, _actor: Actor) -> AuthorizedResource | None:
+        from stoa.services.attachment_service import is_live_attachment
+
+        item = attachment_repo.get_attachment(attachment_id)
+        if not is_live_attachment(item, for_reading=for_reading):
+            return None
+        assert item is not None
+        return _owned(ResourceType.ATTACHMENT, attachment_id, item, str(item["owner_id"]))
+
+    return load
+
+
+#: A conversation that is not deleted.
+LIVE = "live"
+#: A push token, by its reference under the Actor's own account.
+TOKEN = "token"
+#: An attachment that may be deleted: a row missing the fields its bytes are
+#: read by can still go (`attachment_service.is_live_attachment`).
+DELETABLE = "deletable"
+
+register_resource_loader(ResourceType.CONVERSATION, _load_conversation)
+register_resource_loader(ResourceType.CONVERSATION, _load_live_conversation, kind=LIVE)
+register_resource_loader(ResourceType.QUESTION, _load_question)
+register_resource_loader(ResourceType.TEACHER_HELP_REQUEST, _load_help_request)
+register_resource_loader(ResourceType.AI_TEACHER_DRAFT, _load_ai_teacher_draft)
+register_resource_loader(ResourceType.NOTIFICATION_EVENT, _load_notification_event)
+register_resource_loader(ResourceType.NOTIFICATION_PUSH_TOKEN, _load_push_token, kind=TOKEN)
+register_resource_loader(ResourceType.ATTACHMENT, _attachment_loader(for_reading=True))
+register_resource_loader(
+    ResourceType.ATTACHMENT, _attachment_loader(for_reading=False), kind=DELETABLE
+)
 
 
 # ---------------------------------------------------------------------------
@@ -368,14 +618,14 @@ async def _purpose_or_refuse(
     Used where nothing is hidden by refusing outright: the Actor's own account,
     an operator grant, an object the caller already loaded.
     """
-    purpose = declaration.purpose_for(actor.role)
+    purpose = declaration.purpose_for(actor)
     if purpose is not None:
         return purpose
     await _refuse(
         actor,
         ref,
         declaration.action,
-        declaration.purposes[0][1],
+        declaration.first_purpose(actor),
         SecurityErrorCode.ACTION_NOT_ALLOWED,
         "role_not_declared",
         context,
@@ -392,7 +642,7 @@ def _hiding_purpose(
     declared purpose, and is refused there: whether such a resource exists is
     hidden from it exactly as from a role the route does name.
     """
-    return declaration.purpose_for(actor.role) or declaration.purposes[0][1]
+    return declaration.purpose_for(actor) or declaration.first_purpose(actor)
 
 
 class _FactsReached:
@@ -508,6 +758,8 @@ def _declared_parameter(source: IdSource) -> inspect.Parameter | None:
     The value FastAPI parses is not what is authorized: the entry reads the id
     from the request by the declared name.
     """
+    if isinstance(source, OperatorSource):
+        return _declared_parameter(source.target) if source.target is not None else None
     if isinstance(source, PathSource):
         return inspect.Parameter(
             source.name,
@@ -539,6 +791,74 @@ def _absent(source: PathSource | QuerySource) -> str:
     return f"absent:{source.name}"
 
 
+async def _absent_path(
+    request: Request,
+    actor: Actor,
+    declaration: AuthorizationDeclaration,
+    source: PathSource,
+    purpose: AuthorizationPurpose,
+    context: AuthorizationContext,
+) -> AuthorizationDeclarationError:
+    """A declared path value missing from the request: logged, recorded, a 500."""
+    logger.error("declared path identifier %s is absent from %s", source.name, request.url.path)
+    absent = _absent(source)
+    await _refuse(
+        actor,
+        ResourceRef(declaration.resource_type, absent, absent),
+        declaration.action,
+        purpose,
+        SecurityErrorCode.ACTION_NOT_ALLOWED,
+        "declaration_error",
+        context,
+    )
+    return AuthorizationDeclarationError(
+        f"declared path identifier {source.name} is absent from the request"
+    )
+
+
+async def _decide_by_id(
+    actor: Actor,
+    declaration: AuthorizationDeclaration,
+    load_by_id: ResourceLoader,
+    resource_id: str,
+    context: AuthorizationContext,
+) -> AuthorizedResource:
+    async def load(requested: str) -> AuthorizedResource | None:
+        return await load_by_id(requested, actor)
+
+    return await _decide(
+        actor,
+        resource_id,
+        declaration.resource_type,
+        declaration.action,
+        _hiding_purpose(actor, declaration),
+        load,
+        context,
+    )
+
+
+async def authorize_id(
+    actor: Actor,
+    resource_type: ResourceType,
+    resource_id: str,
+    action: AuthorizationAction,
+    purposes: PurposeMap,
+    context: AuthorizationContext,
+    *,
+    kind: str | None = None,
+) -> AuthorizedResource:
+    """Authorize an id the request carries elsewhere than its path or query (a body).
+
+    It is loaded through the loader registered for the type and decided
+    exactly as a ``path(...)`` id is, a role the purposes do not name
+    included. The dependency that calls it declares itself with
+    `loaded_declaration`.
+    """
+    declaration = _declaration(resource_type, action, None, purposes)
+    loader = resource_loader(declaration.resource_type, kind)
+    return await _decide_by_id(actor, declaration, loader, resource_id, context)
+
+
 def authorized(
     resource_type: ResourceType,
     action: AuthorizationAction,
@@ -555,8 +875,8 @@ def authorized(
     declaration = _declaration(resource_type, action, source, purposes)
     if isinstance(source, PathSource | QuerySource) or kind is not None:
         load_by_id: ResourceLoader | None = resource_loader(declaration.resource_type, kind)
-    elif isinstance(source, SelfSource):
-        load_by_id = _LOADERS.get((declaration.resource_type, None))
+    elif isinstance(source, SelfSource) and declaration.resource_type in _SELF_LOADED:
+        load_by_id = resource_loader(declaration.resource_type)
     else:
         load_by_id = None
 
@@ -567,27 +887,14 @@ def authorized(
         **_parsed: object,
     ) -> AuthorizedResource | Actor:
         if isinstance(source, OperatorSource):
-            return await _authorize_operator(actor, declaration, source, context)
+            return await _authorize_operator(request, actor, declaration, source, context)
         if isinstance(source, SelfSource):
             return await _authorize_self(actor, declaration, load_by_id, context)
         assert load_by_id is not None
         resource_id = _requested_id(request, source)
         if resource_id is None and isinstance(source, PathSource):
-            logger.error(
-                "declared path identifier %s is absent from %s", source.name, request.url.path
-            )
-            absent = _absent(source)
-            await _refuse(
-                actor,
-                ResourceRef(declaration.resource_type, absent, absent),
-                declaration.action,
-                _hiding_purpose(actor, declaration),
-                SecurityErrorCode.ACTION_NOT_ALLOWED,
-                "declaration_error",
-                context,
-            )
-            raise AuthorizationDeclarationError(
-                f"declared path identifier {source.name} is absent from the request"
+            raise await _absent_path(
+                request, actor, declaration, source, _hiding_purpose(actor, declaration), context
             )
         if resource_id is None and isinstance(source, QuerySource):
             if source.student_defaults_to_self and actor.role is CanonicalRole.STUDENT:
@@ -607,20 +914,7 @@ def authorized(
                     SecurityErrorCode.RESOURCE_NOT_FOUND, context.correlation_id
                 )
         assert resource_id is not None
-        purpose = _hiding_purpose(actor, declaration)
-
-        async def load(requested: str) -> AuthorizedResource | None:
-            return await load_by_id(requested, actor)
-
-        return await _decide(
-            actor,
-            resource_id,
-            declaration.resource_type,
-            declaration.action,
-            purpose,
-            load,
-            context,
-        )
+        return await _decide_by_id(actor, declaration, load_by_id, resource_id, context)
 
     parameters = [
         inspect.Parameter("request", inspect.Parameter.KEYWORD_ONLY, annotation=Request),
@@ -655,9 +949,17 @@ async def _authorize_self(
     load_by_id: ResourceLoader | None,
     context: AuthorizationContext,
 ) -> Actor:
-    """Authorize the Actor on their own account of this resource type."""
+    """Authorize the Actor on their own account of this resource type.
+
+    The Actor's own record is known to them, so a refusal is a 403, never a
+    404 that pretends their own account might not exist.
+    """
     ref = ResourceRef(
-        declaration.resource_type, actor.user_id, actor.user_id, owner_id=actor.user_id
+        declaration.resource_type,
+        actor.user_id,
+        actor.user_id,
+        owner_id=actor.user_id,
+        relationship_known=True,
     )
     purpose = await _purpose_or_refuse(actor, declaration, ref, context)
     if load_by_id is not None:
@@ -695,14 +997,28 @@ async def _authorize_self(
 
 
 async def _authorize_operator(
+    request: Request,
     actor: Actor,
     declaration: AuthorizationDeclaration,
     source: OperatorSource,
     context: AuthorizationContext,
 ) -> Actor:
-    """Require the exact operator grant, against the global operator resource."""
+    """Require the exact operator grant, on the global resource or the named target."""
+    resource_id = "global"
+    if source.target is not None:
+        requested = _requested_id(request, source.target)
+        if requested is None:
+            raise await _absent_path(
+                request,
+                actor,
+                declaration,
+                source.target,
+                _hiding_purpose(actor, declaration),
+                context,
+            )
+        resource_id = requested
     ref = ResourceRef(
-        declaration.resource_type, "global", actor.user_id, relationship_known=True
+        declaration.resource_type, resource_id, actor.user_id, relationship_known=True
     )
     purpose = await _purpose_or_refuse(actor, declaration, ref, context)
     decision = operator_capability_decision(

@@ -1093,14 +1093,17 @@
         "resource_type": "upload"
       }
     ],
-    "classification": "authorized",
+    "classification": "service-enforced",
     "family": "files",
     "identifiers": [
       "upload_id"
     ],
     "method": "GET",
     "path": "/files/{upload_id}/phone-code",
-    "sensitive": true
+    "sensitive": true,
+    "serviceEnforced": [
+      "upload_code_service.unbound_code_status"
+    ]
   },
   {
     "authorization": [
@@ -1111,14 +1114,17 @@
         "resource_type": "upload"
       }
     ],
-    "classification": "authorized",
+    "classification": "service-enforced",
     "family": "files",
     "identifiers": [
       "upload_id"
     ],
     "method": "GET",
     "path": "/files/{upload_id}/phone-code/content",
-    "sensitive": true
+    "sensitive": true,
+    "serviceEnforced": [
+      "upload_code_service.preview_unbound_upload"
+    ]
   },
   {
     "authorization": [],
@@ -3505,7 +3511,10 @@
     ],
     "method": "POST",
     "path": "/conversations",
-    "sensitive": true
+    "sensitive": true,
+    "serviceEnforced": [
+      "practice_context_service.resolve"
+    ]
   },
   {
     "authorization": [
@@ -3543,7 +3552,11 @@
     ],
     "method": "POST",
     "path": "/conversations/{conv_id}/messages",
-    "sensitive": true
+    "sensitive": true,
+    "serviceEnforced": [
+      "ask_question.submit",
+      "practice_context_service.resolve"
+    ]
   },
   {
     "authorization": [
@@ -3581,7 +3594,11 @@
     ],
     "method": "POST",
     "path": "/conversations/{conv_id}/messages/stream",
-    "sensitive": true
+    "sensitive": true,
+    "serviceEnforced": [
+      "ask_question.submit",
+      "practice_context_service.resolve"
+    ]
   },
   {
     "authorization": [
@@ -3608,14 +3625,17 @@
         "resource_type": "conversation"
       }
     ],
-    "classification": "authorized",
+    "classification": "service-enforced",
     "family": "files",
     "identifiers": [
       "conversationId"
     ],
     "method": "POST",
     "path": "/files/intents",
-    "sensitive": true
+    "sensitive": true,
+    "serviceEnforced": [
+      "uploads.start"
+    ]
   },
   {
     "authorization": [
@@ -3626,14 +3646,17 @@
         "resource_type": "upload"
       }
     ],
-    "classification": "authorized",
+    "classification": "service-enforced",
     "family": "files",
     "identifiers": [
       "upload_id"
     ],
     "method": "POST",
     "path": "/files/{upload_id}/complete",
-    "sensitive": true
+    "sensitive": true,
+    "serviceEnforced": [
+      "uploads.complete"
+    ]
   },
   {
     "authorization": [
@@ -3644,14 +3667,17 @@
         "resource_type": "upload"
       }
     ],
-    "classification": "authorized",
+    "classification": "service-enforced",
     "family": "files",
     "identifiers": [
       "upload_id"
     ],
     "method": "POST",
     "path": "/files/{upload_id}/parts/{part_number}",
-    "sensitive": true
+    "sensitive": true,
+    "serviceEnforced": [
+      "uploads.sign_part"
+    ]
   },
   {
     "authorization": [
@@ -4303,7 +4329,10 @@
     ],
     "method": "POST",
     "path": "/teachers/me/help-requests/{request_id}/notes",
-    "sensitive": true
+    "sensitive": true,
+    "serviceEnforced": [
+      "attachment_service.prepare_reply_images"
+    ]
   },
   {
     "authorization": [

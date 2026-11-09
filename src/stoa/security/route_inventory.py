@@ -28,6 +28,7 @@ from stoa.security.admin_authorization import AdminRoutePolicy, AdminTargetProvi
 from stoa.security.authorization import AuthorizationSpec, ResourceType
 from stoa.security.declared_authorization import (
     AuthorizationDeclaration,
+    OperatorSource,
     PathSource,
     QuerySource,
     declaration_of,
@@ -66,7 +67,7 @@ class RouteInventoryItem:
     authorization_specs: tuple[InventorySpec, ...]
     sensitive: bool
     admin_target: dict[str, object] | None = None
-    service_entry: str | None = None
+    service_entries: tuple[str, ...] = ()
 
     @property
     def authorization_spec(self) -> InventorySpec | None:
@@ -84,8 +85,8 @@ class RouteInventoryItem:
         }
         if self.admin_target is not None:
             projection["adminTarget"] = self.admin_target
-        if self.service_entry is not None:
-            projection["serviceEnforced"] = self.service_entry
+        if self.service_entries:
+            projection["serviceEnforced"] = list(self.service_entries)
         return projection
 
 
@@ -269,20 +270,22 @@ def _declared_inventory_specs(declaration: AuthorizationDeclaration) -> list[Inv
             purpose.value,
             declaration.capability,
         )
-        for _role, purpose in declaration.purposes
+        for purpose in declaration.listed_purposes()
     ]
 
 
-def _service_entry(route: APIRoute) -> str | None:
-    entries = {
-        declaration.service_entry
-        for dependant in _walk_dependants(route.dependant)
-        if (declaration := declaration_of(dependant.call)) is not None
-        and declaration.service_entry is not None
-    }
-    if len(entries) > 1:
-        raise ValueError("a route names more than one enforcing service entry")
-    return next(iter(entries), None)
+def _service_entries(route: APIRoute) -> tuple[str, ...]:
+    """The service functions that hold a check of this route (#349), sorted."""
+    return tuple(
+        sorted(
+            {
+                declaration.service_entry
+                for dependant in _walk_dependants(route.dependant)
+                if (declaration := declaration_of(dependant.call)) is not None
+                and declaration.service_entry is not None
+            }
+        )
+    )
 
 
 def _admin_inventory_spec(policy: AdminRoutePolicy) -> InventorySpec:
@@ -305,18 +308,25 @@ def _classify_route(route: APIRoute, method: str) -> tuple[str, tuple[InventoryS
     specs: list[InventorySpec] = []
     admin_policies: list[AdminRoutePolicy] = []
     safe_public = False
+    # A route is service-enforced when every check it declares is in a
+    # service. One that also authorizes here is "authorized", and still names
+    # the service entries that hold its other checks (#349).
     service_enforced = False
+    enforced_here = False
     for dependant in _walk_dependants(route.dependant):
         call = dependant.call
         safe_public = safe_public or bool(getattr(call, "safe_public", False))
         capability = getattr(call, "required_capability", None)
-        specs.extend(
-            _inventory_spec(spec, capability) for spec in getattr(call, "authorization_specs", ())
-        )
+        pasted = getattr(call, "authorization_specs", ())
+        specs.extend(_inventory_spec(spec, capability) for spec in pasted)
+        enforced_here = enforced_here or bool(pasted)
         declaration = declaration_of(call)
         if declaration is not None:
             specs.extend(_declared_inventory_specs(declaration))
-            service_enforced = service_enforced or declaration.service_entry is not None
+            if declaration.service_entry is not None:
+                service_enforced = True
+            else:
+                enforced_here = True
         classifier = getattr(call, "admin_policy_classifier", None)
         if classifier is not None:
             admin_policies.append(classifier(method, route.path))
@@ -335,7 +345,7 @@ def _classify_route(route: APIRoute, method: str) -> tuple[str, tuple[InventoryS
     elif specs:
         if safe_public:
             classification = "safe-public"
-        elif service_enforced:
+        elif service_enforced and not enforced_here:
             classification = "service-enforced"
         else:
             classification = "authorized"
@@ -504,6 +514,8 @@ def _validate_declared_sources(route: APIRoute) -> str | None:
         if declaration is None:
             continue
         source = declaration.source
+        if isinstance(source, OperatorSource):
+            source = source.target
         if isinstance(source, PathSource) and source.name not in path_names:
             return f"declared path identifier {source.name} is not a parameter of the route path"
         # FastAPI itself refuses to register a query source named like a path
@@ -583,7 +595,7 @@ def inventory_application(app: FastAPI) -> tuple[RouteInventoryItem, ...]:
                     classification not in {"public", "safe-public"}
                     and bool(identifiers or specs or classification == "admin-capability"),
                     target_projection,
-                    _service_entry(route),
+                    _service_entries(route),
                 )
             )
     return tuple(sorted(items, key=lambda item: (item.method, item.path)))
@@ -618,7 +630,7 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
                     classification not in {"public", "safe-public"}
                     and bool(identifiers or specs or classification == "admin-capability"),
                     _target_projection(provider),
-                    _service_entry(route),
+                    _service_entries(route),
                 )
                 if classification == "admin-capability":
                     policy = next(
@@ -714,8 +726,8 @@ def install_authorization_openapi(app: FastAPI) -> None:
             }
             if item.admin_target is not None:
                 extension["adminTarget"] = item.admin_target
-            if item.service_entry is not None:
-                extension["serviceEnforced"] = item.service_entry
+            if item.service_entries:
+                extension["serviceEnforced"] = list(item.service_entries)
             operation["x-stoa-authorization"] = extension
         app.openapi_schema = schema
         return schema

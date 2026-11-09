@@ -21,19 +21,25 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.db import table as db_table
-from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
-from stoa.deps import get_actor, get_authorization_audit_sink
+from stoa.deps import get_actor
 from stoa.db.repositories import (
     account_deletion_repo,
-    practice_repo,
     user_repo,
 )
 from stoa.security.authorization import (
     AuthorizationAction,
-    AuthorizationPurpose,
-    AuthorizationSpec,
     AuthorizedResource,
     ResourceType,
+)
+from stoa.security.declared_authorization import (
+    SELF,
+    AuthorizationContext,
+    authorize_id,
+    authorized,
+    get_authorization_context,
+    loaded_declaration,
+    path,
+    service_enforced,
 )
 from stoa.security.identity import Actor
 from stoa.models.error import (
@@ -47,15 +53,7 @@ from stoa.security.attachment_errors import (
     AttachmentErrorCode,
 )
 from stoa.security.request_correlation import get_request_correlation_id
-from stoa.security.route_authorization import (
-    CONVERSATION_CONTENT_READ,
-    STUDENT_SELF,
-    authorize_conversation_resource,
-    authorized_conversation_dependency,
-    get_authorization_fact_repository,
-    student_actor_dependency,
-    student_create_actor_dependency,
-)
+from stoa.security.route_authorization import CONVERSATION_CONTENT_READ, STUDENT_SELF
 from stoa.services import (
     ask_question,
     attachment_service,
@@ -243,10 +241,41 @@ def _checked_quote_part(conv_id: str, quote: MessageQuote | None) -> None:
         )
 
 
+def _conversation(action: AuthorizationAction, purposes=STUDENT_SELF):
+    """One conversation, named by the route's `conv_id`."""
+    return authorized(ResourceType.CONVERSATION, action, path("conv_id"), purposes)
+
+
+_conversation_read = _conversation(AuthorizationAction.READ, CONVERSATION_CONTENT_READ)
+_conversation_respond = _conversation(AuthorizationAction.RESPOND)
+_conversation_update = _conversation(AuthorizationAction.UPDATE)
+
+# A message may name the exercise it was asked beside (#61): the route reads a
+# practice resource, and `practice_context_service.resolve` only resolves
+# content this student can be shown.
+_practice_context_read = service_enforced(
+    "practice_context_service.resolve",
+    ResourceType.PRACTICE,
+    AuthorizationAction.READ,
+    STUDENT_SELF,
+)
+# The uploads a message attaches, and the attachments they become, are the
+# student's own: `ask_question.submit` resolves them under the Actor.
+_message_uploads = service_enforced(
+    "ask_question.submit", ResourceType.UPLOAD, AuthorizationAction.UPDATE, STUDENT_SELF
+)
+_message_attachments = service_enforced(
+    "ask_question.submit", ResourceType.ATTACHMENT, AuthorizationAction.READ, STUDENT_SELF
+)
+
+
 async def _message_command_dependency(
     conv_id: str,
     body: SendMessageRequest,
     actor: Actor = Depends(get_actor),
+    _uploads: Actor = Depends(_message_uploads),
+    _attachments: Actor = Depends(_message_attachments),
+    _practice: Actor = Depends(_practice_context_read),
 ) -> dict:
     """What `ask_question.submit` takes from the request, before any command is read.
 
@@ -263,54 +292,23 @@ async def _message_command_dependency(
     }
 
 
-async def _attachment_inventory_resolver(resource_id: str):
-    return {"student_id": resource_id}
-
-
-async def _practice_context_challenge_resolver(resource_id: str):
-    return practice_repo.get_challenge(resource_id)
-
-
-# A message may now name the exercise it was asked beside (#61), so these
-# routes read a practice resource and say so. The reading itself is narrow:
-# `practice_context_service` only resolves content the student can be shown.
-_PRACTICE_CONTEXT_SPEC = AuthorizationSpec(
-    ResourceType.PRACTICE,
-    AuthorizationAction.READ,
-    AuthorizationPurpose.SELF_SERVICE,
-    _practice_context_challenge_resolver,
+_own_conversations = authorized(
+    ResourceType.CONVERSATION, AuthorizationAction.READ, SELF, STUDENT_SELF
+)
+_own_teacher_availability = authorized(
+    ResourceType.CONVERSATION, AuthorizationAction.LOOKUP, SELF, STUDENT_SELF
+)
+_conversation_create = authorized(
+    ResourceType.CONVERSATION, AuthorizationAction.CREATE, SELF, STUDENT_SELF
 )
 
 
-_message_command_dependency.authorization_specs = (  # type: ignore[attr-defined]
-    AuthorizationSpec(
-        ResourceType.UPLOAD,
-        AuthorizationAction.UPDATE,
-        AuthorizationPurpose.SELF_SERVICE,
-        _attachment_inventory_resolver,
-    ),
-    AuthorizationSpec(
-        ResourceType.ATTACHMENT,
-        AuthorizationAction.READ,
-        AuthorizationPurpose.SELF_SERVICE,
-        _attachment_inventory_resolver,
-    ),
-    _PRACTICE_CONTEXT_SPEC,
-)
-
-
-def _conversation_create_dependency():
+async def _conversation_create_actor(
+    actor: Actor = Depends(_conversation_create),
+    _practice: Actor = Depends(_practice_context_read),
+) -> Actor:
     """The create route's actor, plus the practice read a `practiceContext` is."""
-    base = student_create_actor_dependency(ResourceType.CONVERSATION)
-
-    async def dependency(actor: Actor = Depends(base)) -> Actor:
-        return actor
-
-    dependency.authorization_specs = (_PRACTICE_CONTEXT_SPEC,)  # type: ignore[attr-defined]
-    return dependency
-
-
-_conversation_create_actor = _conversation_create_dependency()
+    return actor
 
 
 class ConversationSummary(BaseModel):
@@ -395,9 +393,7 @@ class TeacherAvailabilityResponse(BaseModel):
 
 @router.get("", response_model=ConversationListResponse)
 async def list_conversations(
-    actor: Actor = Depends(
-        student_actor_dependency(ResourceType.CONVERSATION, AuthorizationAction.READ)
-    ),
+    actor: Actor = Depends(_own_conversations),
 ):
     student_id = actor.user_id
     page = _list_conversations(student_id)
@@ -606,13 +602,7 @@ async def create_conversation(
 
 @router.get("/{conv_id}", response_model=ConversationDetail)
 async def get_conversation(
-    authorized: AuthorizedResource = Depends(
-        authorized_conversation_dependency(
-            action=AuthorizationAction.READ,
-            purposes=CONVERSATION_CONTENT_READ,
-            resolver=lambda conversation_id: learning_session.read(conversation_id),
-        )
-    ),
+    authorized: AuthorizedResource = Depends(_conversation_read),
 ):
     conv_id = authorized.ref.resource_id
     conv = _conversation_record(authorized.value)
@@ -646,13 +636,7 @@ async def get_conversation(
     },
 )
 async def get_generation_progress(
-    authorized: AuthorizedResource = Depends(
-        authorized_conversation_dependency(
-            action=AuthorizationAction.READ,
-            purposes=CONVERSATION_CONTENT_READ,
-            resolver=lambda conversation_id: learning_session.read(conversation_id),
-        )
-    ),
+    authorized: AuthorizedResource = Depends(_conversation_read),
     idempotency_key: str | None = Query(
         default=None,
         alias="idempotencyKey",
@@ -679,13 +663,7 @@ async def get_generation_progress(
 )
 async def send_message(
     body: SendMessageRequest,
-    authorized: AuthorizedResource = Depends(
-        authorized_conversation_dependency(
-            action=AuthorizationAction.RESPOND,
-            purposes=STUDENT_SELF,
-            resolver=lambda conversation_id: learning_session.read(conversation_id),
-        )
-    ),
+    authorized: AuthorizedResource = Depends(_conversation_respond),
     message_command: dict = Depends(_message_command_dependency),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
@@ -717,13 +695,7 @@ async def send_message(
 )
 async def stream_message(
     body: SendMessageRequest,
-    authorized: AuthorizedResource = Depends(
-        authorized_conversation_dependency(
-            action=AuthorizationAction.RESPOND,
-            purposes=STUDENT_SELF,
-            resolver=lambda conversation_id: learning_session.read(conversation_id),
-        )
-    ),
+    authorized: AuthorizedResource = Depends(_conversation_respond),
     message_command: dict = Depends(_message_command_dependency),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
@@ -810,44 +782,26 @@ async def stream_message(
 teacher_help_router = APIRouter()
 
 
+@loaded_declaration(ResourceType.CONVERSATION, AuthorizationAction.UPDATE, STUDENT_SELF)
 async def _teacher_help_conversation_dependency(
     body: TeacherHelpRequest,
     actor: Actor = Depends(get_actor),
-    facts=Depends(get_authorization_fact_repository),
-    correlation_id: str = Depends(get_request_correlation_id),
-    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
+    context: AuthorizationContext = Depends(get_authorization_context),
 ) -> AuthorizedResource:
-    return await authorize_conversation_resource(
-        conversation_id=body.conversationId,
-        actor=actor,
-        facts=facts,
-        correlation_id=correlation_id,
-        audit_sink=audit_sink,
-        action=AuthorizationAction.UPDATE,
-        purposes=STUDENT_SELF,
-        resolver=learning_session.read,
-    )
-
-
-async def _teacher_help_conversation_metadata_resolver(conversation_id: str):
-    return learning_session.read(conversation_id)
-
-
-setattr(_teacher_help_conversation_dependency, "authorization_specs", (
-    AuthorizationSpec(
+    """The conversation the body names, authorized as its path id would be."""
+    return await authorize_id(
+        actor,
         ResourceType.CONVERSATION,
+        body.conversationId,
         AuthorizationAction.UPDATE,
-        AuthorizationPurpose.SELF_SERVICE,
-        _teacher_help_conversation_metadata_resolver,
-    ),
-))
+        STUDENT_SELF,
+        context,
+    )
 
 
 @teacher_help_router.get("/availability", response_model=TeacherAvailabilityResponse)
 async def get_teacher_help_availability(
-    actor: Actor = Depends(
-        student_actor_dependency(ResourceType.CONVERSATION, AuthorizationAction.LOOKUP)
-    ),
+    actor: Actor = Depends(_own_teacher_availability),
 ):
     """Return student-safe teacher availability for the chat indicator.
 
@@ -992,13 +946,7 @@ def _teacher_name(teacher_id: object) -> str | None:
     "/conversations/{conv_id}/request/withdraw", response_model=TeacherHelpResponse
 )
 async def withdraw_teacher_help_request(
-    authorized: AuthorizedResource = Depends(
-        authorized_conversation_dependency(
-            action=AuthorizationAction.UPDATE,
-            purposes=STUDENT_SELF,
-            resolver=lambda conversation_id: learning_session.read(conversation_id),
-        )
-    ),
+    authorized: AuthorizedResource = Depends(_conversation_update),
 ):
     """Take back a teacher-help request no teacher has taken yet (#86).
 
@@ -1027,13 +975,7 @@ async def withdraw_teacher_help_request(
     },
 )
 async def get_teacher_help_status(
-    authorized: AuthorizedResource = Depends(
-        authorized_conversation_dependency(
-            action=AuthorizationAction.READ,
-            purposes=CONVERSATION_CONTENT_READ,
-            resolver=lambda conversation_id: learning_session.read(conversation_id),
-        )
-    ),
+    authorized: AuthorizedResource = Depends(_conversation_read),
 ):
     """Report where a student's request stands, for the waiting indicator."""
     record = help_requests.get(authorized.ref.resource_id, table=db_table.table())

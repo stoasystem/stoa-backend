@@ -37,19 +37,15 @@ from stoa.security.attachment_errors import (
 )
 from stoa.security.authorization import (
     AuthorizationAction,
-    AuthorizationPurpose,
-    AuthorizationSpec,
     AuthorizedResource,
     ResourceType,
 )
+from stoa.security.declared_authorization import LIVE, authorized, path, service_enforced
 from stoa.security.identity import Actor
 from stoa.security.request_correlation import get_request_correlation_id
-from stoa.security.route_authorization import (
-    STUDENT_SELF,
-    authorized_conversation_dependency,
-)
+from stoa.security.route_authorization import STUDENT_SELF
 from stoa.security.route_inventory import explicit_route_classification
-from stoa.services import learning_session, rate_limit, upload_code_service
+from stoa.services import rate_limit, upload_code_service
 
 
 conversation_router = APIRouter()
@@ -58,11 +54,21 @@ files_router = APIRouter()
 router = APIRouter()
 
 
-def _live_conversation(conversation_id: str):
-    item = learning_session.read(conversation_id)
-    if item is None or item.get("status") == "deleted":
-        return None
-    return item
+# A code goes into a conversation that is not deleted (`declared_authorization.LIVE`).
+_conversation_respond = authorized(
+    ResourceType.CONVERSATION,
+    AuthorizationAction.RESPOND,
+    path("conv_id"),
+    STUDENT_SELF,
+    kind=LIVE,
+)
+_conversation_read = authorized(
+    ResourceType.CONVERSATION,
+    AuthorizationAction.READ,
+    path("conv_id"),
+    STUDENT_SELF,
+    kind=LIVE,
+)
 
 
 def _source_digest(request: Request) -> str:
@@ -74,13 +80,7 @@ def _source_digest(request: Request) -> str:
 
 @conversation_router.post("/{conv_id}/upload-codes", response_model=UploadCodeResponse)
 async def issue_upload_code(
-    authorized: AuthorizedResource = Depends(
-        authorized_conversation_dependency(
-            action=AuthorizationAction.RESPOND,
-            purposes=STUDENT_SELF,
-            resolver=_live_conversation,
-        )
-    ),
+    authorized: AuthorizedResource = Depends(_conversation_respond),
     actor: Actor = Depends(get_actor),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
@@ -100,13 +100,7 @@ async def issue_upload_code(
 )
 async def read_upload_code(
     code_id: str,
-    authorized: AuthorizedResource = Depends(
-        authorized_conversation_dependency(
-            action=AuthorizationAction.READ,
-            purposes=STUDENT_SELF,
-            resolver=_live_conversation,
-        )
-    ),
+    authorized: AuthorizedResource = Depends(_conversation_read),
     actor: Actor = Depends(get_actor),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
@@ -120,13 +114,7 @@ async def read_upload_code(
 @conversation_router.get("/{conv_id}/upload-codes/{code_id}/content")
 async def preview_upload_code_photo(
     code_id: str,
-    authorized: AuthorizedResource = Depends(
-        authorized_conversation_dependency(
-            action=AuthorizationAction.READ,
-            purposes=STUDENT_SELF,
-            resolver=_live_conversation,
-        )
-    ),
+    authorized: AuthorizedResource = Depends(_conversation_read),
     actor: Actor = Depends(get_actor),
     s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
@@ -168,30 +156,26 @@ async def issue_unbound_upload_code(
     return upload_code_service.issue_code(None, actor, settings=settings)
 
 
-async def _reserved_upload_resolver(upload_id: str):
-    return {"student_id": upload_id}
-
-
-async def _reserved_upload_actor(actor: Actor = Depends(get_actor)) -> Actor:
-    return actor
-
-
 # The upload is the student's own: `upload_code_service` reads the code it was
 # reserved for and refuses one that is not theirs, as `/files` does for uploads.
-_reserved_upload_actor.authorization_specs = (  # type: ignore[attr-defined]
-    AuthorizationSpec(
-        ResourceType.UPLOAD,
-        AuthorizationAction.READ,
-        AuthorizationPurpose.SELF_SERVICE,
-        _reserved_upload_resolver,
-    ),
+_reserved_upload_status = service_enforced(
+    "upload_code_service.unbound_code_status",
+    ResourceType.UPLOAD,
+    AuthorizationAction.READ,
+    STUDENT_SELF,
+)
+_reserved_upload_preview = service_enforced(
+    "upload_code_service.preview_unbound_upload",
+    ResourceType.UPLOAD,
+    AuthorizationAction.READ,
+    STUDENT_SELF,
 )
 
 
 @files_router.get("/{upload_id}/phone-code", response_model=UploadCodeStatusResponse)
 async def read_unbound_upload_code(
     upload_id: str,
-    actor: Actor = Depends(_reserved_upload_actor),
+    actor: Actor = Depends(_reserved_upload_status),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
@@ -202,7 +186,7 @@ async def read_unbound_upload_code(
 @files_router.get("/{upload_id}/phone-code/content")
 async def preview_unbound_upload_code_photo(
     upload_id: str,
-    actor: Actor = Depends(_reserved_upload_actor),
+    actor: Actor = Depends(_reserved_upload_preview),
     s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),

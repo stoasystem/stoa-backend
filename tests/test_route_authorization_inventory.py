@@ -556,6 +556,8 @@ def test_openapi_and_checked_json_are_identical_runtime_projections():
         }
         if "adminTarget" in item:
             expected["adminTarget"] = item["adminTarget"]
+        if "serviceEnforced" in item:
+            expected["serviceEnforced"] = item["serviceEnforced"]
         assert extension == expected
 
 
