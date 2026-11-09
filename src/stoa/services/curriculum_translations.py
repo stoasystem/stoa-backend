@@ -211,6 +211,38 @@ TITLE_TRANSLATIONS: dict[str, dict[str, str]] = {
         "fr": "ZAP 2023-2025 : type d'exercice B",
         "it": "ZAP 2023-2025: tipo di esercizio B",
     },
+    # Lessons of batch 1 of the fractions exercise bank (#360), created by migration
+    # under brueche-u2 with the German knowledge-card titles.
+    "zap-bru-anteilwert-1": {
+        "en": "A fraction of a quantity · Part 1",
+        "fr": "Calculer une fraction d'une grandeur · Partie 1",
+        "it": "Calcolare una frazione di una grandezza · Parte 1",
+    },
+    "zap-bru-anteilwert-2": {
+        "en": "A fraction of a quantity · Part 2",
+        "fr": "Calculer une fraction d'une grandeur · Partie 2",
+        "it": "Calcolare una frazione di una grandezza · Parte 2",
+    },
+    "zap-bru-ganzes": {
+        "en": "From a fraction back to the whole",
+        "fr": "D'une fraction au tout",
+        "it": "Da una frazione all'intero",
+    },
+    "zap-bru-anteilsbruch": {
+        "en": "Writing a share as a fraction of the whole",
+        "fr": "Exprimer une part en fraction du tout",
+        "it": "Esprimere una parte come frazione dell'intero",
+    },
+    "zap-bru-addition": {
+        "en": "Adding unlike fractions and mixed numbers",
+        "fr": "Additionner des fractions de dénominateurs différents et des nombres mixtes",
+        "it": "Addizionare frazioni con denominatori diversi e numeri misti",
+    },
+    "zap-bru-rechenreihenfolge": {
+        "en": "Order of operations in fraction terms",
+        "fr": "Priorité des opérations dans les calculs avec fractions",
+        "it": "Ordine delle operazioni nelle espressioni con frazioni",
+    },
 }
 
 
