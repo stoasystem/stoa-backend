@@ -165,7 +165,7 @@ def build_exercise_preview(raw: Mapping[str, Any], locale: str = "de") -> dict[s
         PracticeExercisePreview(
             id=raw["challenge_id"],
             lessonId=raw["lesson_id"],
-            subjectId=_normal_subject_id(raw["subject_id"]),
+            subjectId=_subject_key(raw["subject_id"]),
             topicId=raw["topic_id"],
             type=raw.get("type") or DEFAULT_CHALLENGE_TYPE,
             prompt=shown["prompt"],
@@ -188,7 +188,7 @@ def build_curriculum_lesson_preview(
     return _dump(
         CurriculumLessonPreview(
             id=raw["lesson_id"],
-            subjectId=_normal_subject_id(raw["subject_id"]),
+            subjectId=_subject_key(raw["subject_id"]),
             gradeLevel=raw.get("grade_level", raw.get("grade_band", "")),
             unitId=raw.get("unit_id", ""),
             topicId=raw["topic_id"],
@@ -360,8 +360,11 @@ def _content_state(raw: Mapping[str, Any]) -> str:
     return content_state(raw)
 
 
-def _normal_subject_id(subject_id: Any) -> str:
-    return practice_repo.normal_subject_id(subject_id)
+def _subject_key(subject_id: Any) -> str:
+    # `curriculum_service` reads this module, so it is imported where used.
+    from stoa.services import curriculum_service
+
+    return curriculum_service.subject_key(subject_id)
 
 
 def _as_int(value: Any, default: int = 0) -> int:

@@ -420,7 +420,7 @@ def stored_teacher_subjects(profile: Mapping[str, object] | None) -> list[str]:
     Older profiles carry them in `subjects` or `subject_ids`; the first
     non-empty field wins. This is the one reading of those fields, used by the
     dispatch planner and by the teacher's own availability view. Comparing
-    subjects is not done here: that goes through `practice_repo.normal_subject_id`.
+    subjects is not done here: that goes through `curriculum_service.subject_key`.
     """
     for field in TEACHER_SUBJECT_FIELDS:
         value = (profile or {}).get(field)

@@ -377,29 +377,18 @@ def _validate_unique_challenges(items: list[dict]) -> list[dict]:
 
 # ── Subject ids ───────────────────────────────────────────────────────────
 
-_SUBJECT_ALIASES = {
-    "mathematics": "math",
-    "mathematik": "math",
-    "deutsch": "german",
-    "englisch": "english",
-}
-
-
-def normal_subject_id(subject_id: Any) -> str:
-    """The canonical subject id for a stored or requested one.
-
-    `math` is canonical: the curriculum responses, the rollout subjects, learning
-    profiles and question subjects all say it. The practice content is seeded with
-    `mathematics`, and progress rows copy their lesson's value, so a subject filter
-    that compared raw values found nothing for `math`. Every subject comparison
-    runs both sides through here. stoasystem/stoa-backend#62.
-    """
-    value = str(subject_id).strip().lower()
-    return _SUBJECT_ALIASES.get(value, value)
-
 
 def same_subject(stored: Any, requested: Any) -> bool:
-    return normal_subject_id(stored) == normal_subject_id(requested)
+    """Whether a stored subject and a requested one are the same subject.
+
+    The content is seeded with `mathematics` and progress rows copy it, while
+    every client says `math` (#62). The comparison is
+    `curriculum_service.same_subject`, the one subject entry point (#354);
+    imported here because that service reads this repository.
+    """
+    from stoa.services import curriculum_service
+
+    return curriculum_service.same_subject(stored, requested)
 
 
 # ── Content read ──────────────────────────────────────────────────────────

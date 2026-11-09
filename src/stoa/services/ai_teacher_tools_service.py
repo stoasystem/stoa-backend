@@ -9,7 +9,7 @@ from uuid import uuid4
 from stoa.db.repositories import ai_teacher_tools_repo
 from stoa.security.authorization import AuthorizedResource
 from stoa.security.identity import Actor
-from stoa.services import learning_profile_service
+from stoa.services import curriculum_service, learning_profile_service
 from stoa.services.ai_teacher_tools_errors import AiTeacherToolsErrorCode as _A, AiTeacherToolsViolation
 
 
@@ -340,17 +340,14 @@ def _source_context(requests: list[dict[str, Any]], *, student_id: str) -> dict[
 
 
 def _normalize_subject(subject: str) -> str:
-    try:
-        return learning_profile_service.normalize_subject(subject)
-    except ValueError as exc:
-        raise AiTeacherToolsViolation(_A.SUBJECT_UNSUPPORTED) from exc
+    canonical = curriculum_service.subject_id(subject or "math")
+    if canonical is None:
+        raise AiTeacherToolsViolation(_A.SUBJECT_UNSUPPORTED)
+    return canonical
 
 
 def _safe_subject(subject: Any) -> str:
-    try:
-        return learning_profile_service.normalize_subject(str(subject or "math"))
-    except ValueError:
-        return "math"
+    return curriculum_service.counted_subject(subject)
 
 
 def _normalize_topics(topic_ids: list[str]) -> list[str]:

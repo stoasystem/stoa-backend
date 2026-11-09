@@ -38,10 +38,8 @@ class PracticeErrorCode(StrEnum):
     # The curriculum as the student walks it.
     CURRICULUM_STUDENT_REQUIRED = "curriculum_student_required"
     CURRICULUM_LESSON_NOT_FOUND = "curriculum_lesson_not_found"
-    NO_LESSONS_AVAILABLE = "no_lessons_available"
     SUBJECT_UNKNOWN = "subject_unknown"
     TOPIC_NOT_FOUND = "topic_not_found"
-    NO_TOPICS_FOUND = "no_topics_found"
 
     @property
     def contract(self) -> RuleContract:
@@ -80,10 +78,11 @@ PRACTICE_ERROR_REGISTRY: dict[PracticeErrorCode, RuleContract] = {
     _C.PRACTICE_ATTEMPT_NOT_FOUND: _GONE,
     _C.CURRICULUM_STUDENT_REQUIRED: RuleContract(400, "correct_input"),
     _C.CURRICULUM_LESSON_NOT_FOUND: _GONE,
-    _C.NO_LESSONS_AVAILABLE: _GONE,
-    _C.SUBJECT_UNKNOWN: RuleContract(422, "correct_input"),
+    # A subject the platform does not teach: asked for on the star map, or
+    # written into a profile or a conversation. `fields` names the request
+    # field when it was written (#354).
+    _C.SUBJECT_UNKNOWN: RuleContract(422, "correct_input", public_fields=frozenset({"fields"})),
     _C.TOPIC_NOT_FOUND: _GONE,
-    _C.NO_TOPICS_FOUND: _GONE,
 }
 
 register_codes("practice", PracticeErrorCode, PRACTICE_ERROR_REGISTRY)

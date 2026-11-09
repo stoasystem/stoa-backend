@@ -32,6 +32,7 @@ from typing import Any
 
 from stoa.db.repositories import practice_repo
 from stoa.services import (
+    curriculum_service,
     curriculum_translations,
     knowledge_base_catalog,
     knowledge_mastery_service,
@@ -397,8 +398,8 @@ def build_map(
                 "name": str(subject.get("name") or ""),
                 "lit": sum(1 for star in mine if star["state"] == "lit"),
                 "total": len(mine),
-                "enrolled": practice_repo.normal_subject_id(sid)
-                in {practice_repo.normal_subject_id(item) for item in enrolled_subject_ids},
+                "enrolled": curriculum_service.subject_key(sid)
+                in {curriculum_service.subject_key(item) for item in enrolled_subject_ids},
             }
         )
 
@@ -564,7 +565,7 @@ def knowledge_map(
     # with a summary of 0 of 0 (#124). An alias names the subject it is an
     # alias of; it does not name a subject with nothing in it.
     focus = (
-        practice_repo.normal_subject_id(requested)
+        curriculum_service.subject_key(requested)
         if requested
         else (str(subjects[0].get("id") or "") if subjects else "")
     )
@@ -583,7 +584,7 @@ def knowledge_map(
         # start with however their year group reads (#321). The union only
         # grows - unticking a subject with progress in it does not drop it.
         enrolled_subject_ids=evidence.subjects_taken
-        | frozenset(practice_repo.normal_subject_id(item) for item in chosen_subject_ids),
+        | frozenset(curriculum_service.subject_key(item) for item in chosen_subject_ids),
         lit_facts=_lit_facts(evidence, states),
         star_quiz_retry_at=evidence.star_quiz_retry_at,
         last_evidence_by_unit=_last_evidence_by_unit(evidence),
@@ -622,7 +623,7 @@ def neighbourhood(
     _require_known_subject(requested, catalog)
     subjects = [item for item in catalog.get("subjects") or () if isinstance(item, Mapping)]
     subject = (
-        practice_repo.normal_subject_id(requested)
+        curriculum_service.subject_key(requested)
         if requested
         else (str(subjects[0].get("id") or "") if subjects else "")
     )
@@ -631,7 +632,7 @@ def neighbourhood(
         str(unit.get("id") or ""): unit
         for unit in catalog.get("units") or ()
         if isinstance(unit, Mapping)
-        and practice_repo.normal_subject_id(unit.get("subjectId")) == subject
+        and curriculum_service.subject_key(unit.get("subjectId")) == subject
         and states.get(str(unit.get("id") or "")) is not None
         and states[str(unit.get("id") or "")].lesson_count > 0
     }
@@ -765,12 +766,12 @@ def _known_subject_ids(catalog: Mapping[str, Any]) -> frozenset[str]:
     galaxy, and `rolloutSubjects` is where the catalog says so.
     """
     known = {
-        practice_repo.normal_subject_id(subject.get("id"))
+        curriculum_service.subject_key(subject.get("id"))
         for subject in catalog.get("subjects") or ()
         if isinstance(subject, Mapping)
     }
     known.update(
-        practice_repo.normal_subject_id(subject)
+        curriculum_service.subject_key(subject)
         for subject in catalog.get("rolloutSubjects") or ()
     )
     return frozenset(known - {""})
@@ -789,7 +790,7 @@ def _require_known_subject(subject_id: str | None, catalog: Mapping[str, Any]) -
     """
     if not subject_id:
         return
-    if practice_repo.normal_subject_id(subject_id) not in _known_subject_ids(catalog):
+    if curriculum_service.subject_key(subject_id) not in _known_subject_ids(catalog):
         raise UnknownSubject(str(subject_id))
 
 

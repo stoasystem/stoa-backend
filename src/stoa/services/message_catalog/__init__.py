@@ -178,7 +178,7 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "Vous pouvez désactiver ce rappel dans les paramètres de notification de STOA.",
         "it": "Può disattivare questo promemoria nelle impostazioni delle notifiche di STOA.",
     },
-    # ── subjects, by `learning_profile_service.SUPPORTED_SUBJECTS` id ────
+    # ── subjects, by `curriculum_service.SUPPORTED_SUBJECTS` id ────
     "subject.math": {
         "de": "Mathematik",
         "en": "Mathematics",

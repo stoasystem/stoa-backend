@@ -140,12 +140,6 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Cette leçon est introuvable.",
         "it": "Questa lezione non è stata trovata.",
     },
-    "error.no_lessons_available": {
-        "de": "Hier gibt es noch keine Lektionen.",
-        "en": "There are no lessons here yet.",
-        "fr": "Il n'y a pas encore de leçons ici.",
-        "it": "Qui non ci sono ancora lezioni.",
-    },
     "error.subject_unknown": {
         "de": "Dieses Fach gibt es im Lehrplan nicht.",
         "en": "This subject is not in the curriculum.",
@@ -157,11 +151,5 @@ TEXT: dict[str, dict[str, str]] = {
         "en": "This topic was not found.",
         "fr": "Ce thème est introuvable.",
         "it": "Questo argomento non è stato trovato.",
-    },
-    "error.no_topics_found": {
-        "de": "Hier gibt es noch keine Themen.",
-        "en": "There are no topics here yet.",
-        "fr": "Il n'y a pas encore de thèmes ici.",
-        "it": "Qui non ci sono ancora argomenti.",
     },
 }

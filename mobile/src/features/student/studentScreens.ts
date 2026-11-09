@@ -11,7 +11,7 @@ export const STUDENT_SCREEN_CONTRACTS: StudentScreenContract[] = [
   {
     route: "/student",
     titleKey: "studentDashboard",
-    endpointContracts: ["/students/me/profile", "/practice/overview", "/notifications"],
+    endpointContracts: ["/students/me/profile", "/practice/curriculum/progress", "/notifications"],
     states: ["loading", "ready", "empty", "blocked", "stale", "error"],
     offlineReadThrough: true,
     onlineOnlyMutations: []
@@ -20,7 +20,6 @@ export const STUDENT_SCREEN_CONTRACTS: StudentScreenContract[] = [
     route: "/student/practice",
     titleKey: "practice",
     endpointContracts: [
-      "/practice/overview",
       "/practice/curriculum/catalog",
       "/practice/curriculum/progress",
       "/practice/curriculum/lessons/{lessonId}",

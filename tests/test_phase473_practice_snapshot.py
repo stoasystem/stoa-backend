@@ -536,12 +536,10 @@ def test_every_student_preview_route_recursively_filters_real_row_canaries(monke
     install_actor_overrides(app, {"sub": "student-1", "role": "student"})
     client = TestClient(app)
     responses = [
-        client.get("/practice/overview"),
         client.get("/practice/curriculum/catalog"),
         client.get("/practice/curriculum/lessons/lesson-1"),
         client.get("/practice/curriculum/exercises"),
         client.get("/practice/math/topic-1/roadmap"),
-        client.get("/practice/math/topic-1/path"),
         client.get("/practice/lessons/lesson-1"),
     ]
     for response in responses:

@@ -31,6 +31,7 @@ from stoa.services.account_errors import AccountErrorCode, AccountViolation
 from stoa.services import (
     allowance_service,
     current_relationship,
+    curriculum_service,
     entitlement_service,
     help_requests,
     learning_profile_service,
@@ -149,7 +150,9 @@ def _profile_subjects(profile: Mapping[str, object], correlation_id: str) -> lis
         return []
     if not isinstance(value, list) or not all(isinstance(subject, str) for subject in value):
         _invalid_stored_student_response(correlation_id, "primary_subjects")
-    return value
+    # Read through the subject entry point (#354): `mathematics` written before
+    # writes were checked reads as `math`; a value it does not know, as stored.
+    return list(dict.fromkeys(curriculum_service.readable_subject(subject) for subject in value))
 
 
 def _optional_profile_text(
@@ -550,7 +553,9 @@ async def update_my_profile(
 
     if body.primarySubjects is not None:
         update_expr_parts.append("primary_subjects = :s")
-        expr_values[":s"] = body.primarySubjects
+        expr_values[":s"] = curriculum_service.require_subjects(
+            body.primarySubjects, field="primarySubjects"
+        )
 
     if body.schoolSystem is not None:
         update_expr_parts.append("school_system = :ss")

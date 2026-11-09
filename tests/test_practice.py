@@ -39,17 +39,15 @@ def _client(actor: Actor | None = None, facts=None) -> TestClient:
 
 
 def test_practice_catalog_is_explicitly_safe_public(monkeypatch):
-    monkeypatch.setattr(
-        practice.practice_repo,
-        "get_subjects",
-        lambda: [{"subject_id": "math", "name": "Math", "order": 1}],
-    )
+    monkeypatch.setattr(practice.curriculum_service, "list_catalog", lambda **_kwargs: {"subjects": []})
 
-    response = _client().get("/practice/subjects")
+    response = _client().get("/practice/curriculum/catalog")
 
     assert response.status_code == 200
     route = next(
-        route for route in practice.router.routes if getattr(route, "path", "") == "/subjects"
+        route
+        for route in practice.router.routes
+        if getattr(route, "path", "") == "/curriculum/catalog"
     )
     dependency = route.dependant.dependencies[0].call
     assert dependency.safe_public is True

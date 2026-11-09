@@ -59,6 +59,7 @@ from stoa.security.route_authorization import (
 from stoa.services import (
     ask_question,
     attachment_service,
+    curriculum_service,
     help_requests,
     learning_profile_service,
     learning_session,
@@ -407,7 +408,7 @@ async def list_conversations(
             # subject id put the stored `math` in the sidebar as if it were a
             # name, which is the placeholder #124 removed.
             title=_conversation_title(item),
-            subject=item.get("subject", ""),
+            subject=curriculum_service.readable_subject(item.get("subject", "")),
             grade=item.get("grade", ""),
             updatedAt=item.get("updated_at", item.get("created_at", _now())),
             lastMessagePreview=item.get("last_message_preview"),
@@ -542,18 +543,21 @@ async def create_conversation(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     student_id = actor.user_id
-    # Before anything is written: an id that names no exercise this student can
-    # be shown leaves no half-opened conversation behind.
+    # Before anything is written: a subject the platform does not teach, or an
+    # id that names no exercise this student can be shown, leaves no
+    # half-opened conversation behind. The subject is stored as its canonical
+    # id (#354).
+    subject = curriculum_service.require_subject(body.subject, field="subject")
     practice_context = _resolved_practice_context(student_id, body.practiceContext)
     now = _now()
     title = (
         _title_from_question(body.initialMessage)
         if body.initialMessage
-        else _default_conversation_title(body.subject, body.grade)
+        else _default_conversation_title(subject, body.grade)
     )
 
     conv_item = learning_session.open(
-        student_id, subject=body.subject, grade=body.grade, title=title, now=now
+        student_id, subject=subject, grade=body.grade, title=title, now=now
     )
     conv_id = str(conv_item["conversation_id"])
     generation = int(cast(int, conv_item["account_fence_generation"]))
@@ -593,7 +597,7 @@ async def create_conversation(
     return ConversationDetail(
         id=conv_id,
         title=title,
-        subject=body.subject,
+        subject=subject,
         grade=body.grade,
         updatedAt=now,
         messages=messages,
@@ -621,7 +625,7 @@ async def get_conversation(
     return ConversationDetail(
         id=conv_id,
         title=_conversation_title(conv),
-        subject=required_conversation_text(conv, "subject"),
+        subject=curriculum_service.readable_subject(required_conversation_text(conv, "subject")),
         grade=conversation_grade(conv),
         updatedAt=required_conversation_text(conv, "updated_at"),
         messages=messages,

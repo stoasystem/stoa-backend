@@ -9,68 +9,33 @@ from collections.abc import Mapping
 from typing import Any
 
 from stoa.db.dynamodb import stored_int
-from stoa.services import locale_service, message_catalog
-
-
-SUPPORTED_SUBJECTS: dict[str, dict[str, str]] = {
-    "math": {
-        "label": "Mathematics",
-        "rollout_state": "active",
-        "prompt_focus": "Use step-by-step mathematical reasoning and keep the student doing the thinking.",
-    },
-    "physics": {
-        "label": "Physics",
-        "rollout_state": "foundation",
-        "prompt_focus": "Explain concepts with simple physical intuition, units, and step-by-step reasoning.",
-    },
-    "german": {
-        "label": "German",
-        "rollout_state": "foundation",
-        "prompt_focus": "Treat this as language learning: correct, explain grammar or wording, and give examples.",
-    },
-    "english": {
-        "label": "English",
-        "rollout_state": "foundation",
-        "prompt_focus": "Treat this as language learning: correct, explain grammar or wording, and give examples.",
-    },
-}
+from stoa.services import curriculum_service, locale_service, message_catalog
 
 
 def supported_subject_ids() -> set[str]:
-    return set(SUPPORTED_SUBJECTS)
+    return set(curriculum_service.SUPPORTED_SUBJECTS)
 
 
-def subject_metadata(subject: str) -> dict[str, str]:
-    normalized = normalize_subject(subject)
-    return {"id": normalized, **SUPPORTED_SUBJECTS[normalized]}
+def subject_metadata(subject: str | None) -> dict[str, str]:
+    """A supported subject's id, label, rollout mark and prompt focus.
 
-
-def normalize_subject(subject: str | None) -> str:
-    value = (subject or "math").strip().lower()
-    aliases = {
-        "mathematics": "math",
-        "mathematik": "math",
-        "deutsch": "german",
-        "englisch": "english",
-    }
-    value = aliases.get(value, value)
-    if value not in SUPPORTED_SUBJECTS:
+    No subject at all is mathematics, as it always was for routing; a subject
+    the platform does not teach is a `ValueError`.
+    """
+    canonical = curriculum_service.subject_id(subject or "math")
+    if canonical is None:
         raise ValueError(f"Unsupported subject: {subject}")
-    return value
+    return {"id": canonical, **curriculum_service.SUPPORTED_SUBJECTS[canonical]}
 
 
 def subject_name(subject: object, locale: str) -> str:
     """The subject as the reader says it, never the stored id (#105).
 
     A row with no subject, or one this backend does not teach, is "general"
-    rather than mathematics: `normalize_subject` defaults to math for routing,
-    which would be a wrong claim in a sentence. Whatever the row holds is read
-    as text first; a stored number is a subject nobody teaches, not a crash.
+    rather than mathematics, which would be a wrong claim in a sentence. A
+    stored number is a subject nobody teaches, not a crash.
     """
-    try:
-        subject_id = normalize_subject(str(subject)) if subject else None
-    except ValueError:
-        subject_id = None
+    subject_id = curriculum_service.subject_id(subject)
     if subject_id is None:
         return message_catalog.text("activity.subject.unknown", locale)
     return message_catalog.text(f"subject.{subject_id}", locale)
@@ -266,7 +231,7 @@ def chosen_subjects(profile: Mapping[str, object]) -> tuple[str, ...]:
     profile response. Read for the star map, so nothing here refuses: a value
     that is not a list, an entry that is not text and a blank entry are passed
     over, and an id no subject goes by simply matches nothing. Not normalised:
-    the reader compares through `practice_repo.normal_subject_id`.
+    the reader compares through `curriculum_service.subject_key`.
     """
     value = profile.get("primary_subjects") if "primary_subjects" in profile else profile.get("subjects")
     if not isinstance(value, list):
@@ -303,7 +268,7 @@ def build_learning_profile(
     topic_latest: dict[tuple[str, str, str], str] = {}
     topic_evidence: dict[tuple[str, str, str], set[str]] = defaultdict(set)
 
-    for subject_id in SUPPORTED_SUBJECTS:
+    for subject_id in curriculum_service.SUPPORTED_SUBJECTS:
         activity[subject_id] = _empty_subject_activity(subject_id)
 
     def count_topics(source: dict[str, Any], subject_id: str) -> None:
@@ -374,7 +339,7 @@ def build_learning_profile(
                 "label": meta["label"],
                 "rolloutState": meta["rollout_state"],
             }
-            for subject_id, meta in SUPPORTED_SUBJECTS.items()
+            for subject_id, meta in curriculum_service.SUPPORTED_SUBJECTS.items()
         ],
         "subjectActivity": list(activity.values()),
         "weakTopics": weak_topics[:10],
@@ -437,7 +402,4 @@ def normalize_topic_id(label: str) -> str:
 
 
 def _safe_subject(subject: Any) -> str:
-    try:
-        return normalize_subject(str(subject or "math"))
-    except ValueError:
-        return "math"
+    return curriculum_service.counted_subject(subject)
