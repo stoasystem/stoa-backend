@@ -3,8 +3,10 @@
 A question is **admitted** once, when it is first submitted (`admit`): its
 eligibility is read once, which gives today's message limit, the plan its
 attachments are counted under and the allowance identity stored with the
-command; and a week with nothing left refuses it before anything is stored.
-Replays and the worker read only what the command stored.
+command; a usage period that has ended (or was never set) refuses it, and so
+does a week with nothing left, both before anything is stored. Replays and the
+worker read only what the command stored, so an answer already being generated
+when the period ends is finished (#239 decision 8).
 
 A question is charged through its **meter** (`meter(command)`), built from the
 message command alone. The meter's `model` is what the answer is asked of in
@@ -47,10 +49,11 @@ from stoa.services.ask_question_errors import AskQuestionErrorCode
 
 
 class AdmissionError(AttachmentDecisionError):
-    """The allowance refused the answer, or could not say.
+    """Admission or the allowance refused the answer, or could not say.
 
-    `code` is `ALLOWANCE_EXHAUSTED`, `PROVIDER_TOKEN_COUNT_UNAVAILABLE` or
-    `ALLOWANCE_UNAVAILABLE`; it is rendered like every other question code.
+    `code` is `USAGE_PERIOD_ENDED`, `ALLOWANCE_EXHAUSTED`,
+    `PROVIDER_TOKEN_COUNT_UNAVAILABLE` or `ALLOWANCE_UNAVAILABLE`; it is
+    rendered like every other question code.
     """
 
 
@@ -95,12 +98,16 @@ class Admitted:
 def admit(student_id: str, command_draft: Mapping[str, object]) -> Admitted:
     """Admit a question being submitted for the first time.
 
-    `command_draft` is the command about to be claimed. Raises `AdmissionError`:
-    `ALLOWANCE_EXHAUSTED` when the week has nothing left in either dimension,
-    before today's message is counted or anything is stored;
+    `command_draft` is the command about to be claimed. Raises `AdmissionError`,
+    always before today's message is counted or anything is stored:
+    `USAGE_PERIOD_ENDED` when the student's effective usage period is not
+    active (`newUsageAllowed`, judged in the same eligibility read);
+    `ALLOWANCE_EXHAUSTED` when the week has nothing left in either dimension;
     `ALLOWANCE_UNAVAILABLE` when the eligibility cannot be read.
     """
     entitlement = _read_entitlement(student_id)
+    if entitlement.get("newUsageAllowed") is not True:
+        raise AdmissionError(AskQuestionErrorCode.USAGE_PERIOD_ENDED)
     identity = allowance_identity(command_draft, entitlement)
     if allowance_service.week_exhausted(
         beneficiary_id=student_id,

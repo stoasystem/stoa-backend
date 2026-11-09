@@ -18,6 +18,7 @@ from fakes.learning_session import seed_conversation
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import help_requests, teacher_support_allowance_service
+from fakes.admission import seed_period_active
 
 STUDENT = "student-189"
 TEACHER = "teacher-189"
@@ -26,6 +27,12 @@ CONV = "conv-189"
 ASKED = datetime(2026, 11, 1, 9, 0, tzinfo=timezone.utc)
 Admission = teacher_support_allowance_service.TeacherSupportAdmissionDisposition
 Refund = teacher_support_allowance_service.TeacherSupportRefundDisposition
+
+
+@pytest.fixture(autouse=True)
+def _usage_period_active(monkeypatch):
+    """Every student here may ask a teacher; an ended period is #344's own test."""
+    seed_period_active(monkeypatch)
 
 
 def at(minutes: float = 0) -> str:

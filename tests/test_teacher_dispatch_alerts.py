@@ -36,12 +36,19 @@ from test_chat_help_request_lifecycle import (
     STUDENT,
     TEACHER,
 )
+from fakes.admission import seed_period_active
 
 QUESTION_TEXT = "Step 2 makes no sense to me."
 CONVERSATION_TITLE = "Fractions"
 STUDENT_NAME = "Mia Muster"
 TEACHER_EMAIL = "teacher-66@stoa.test"
 OTHER_TEACHER_EMAIL = "teacher-66-other@stoa.test"
+
+
+@pytest.fixture(autouse=True)
+def _usage_period_active(monkeypatch):
+    """Every student here may ask a teacher; an ended period is #344's own test."""
+    seed_period_active(monkeypatch)
 
 
 class RecordingSes:

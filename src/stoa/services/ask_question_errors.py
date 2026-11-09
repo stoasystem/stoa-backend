@@ -27,6 +27,10 @@ class AskQuestionErrorCode(StrEnum):
     ALLOWANCE_EXHAUSTED = "allowance_exhausted"
     PROVIDER_TOKEN_COUNT_UNAVAILABLE = "provider_token_count_unavailable"
     ALLOWANCE_UNAVAILABLE = "allowance_unavailable"
+    # The student's usage period has ended, or they have none (#344). A request
+    # for a human teacher is refused with this same code: one string may name
+    # only one code, and the client reads the code alone.
+    USAGE_PERIOD_ENDED = "usage_period_ended"
 
     @property
     def contract(self) -> RuleContract:
@@ -88,6 +92,12 @@ ASK_QUESTION_ERROR_REGISTRY: dict[AskQuestionErrorCode, RuleContract] = {
     AskQuestionErrorCode.ALLOWANCE_UNAVAILABLE: RuleContract(
         503,
         action=AttachmentClientAction.RETRY_LATER,
+        public_fields=_NAMES_CONVERSATION,
+    ),
+    # Asking again changes nothing until an administrator extends the period
+    # (payment is offline), so it is not retryable and names no action.
+    AskQuestionErrorCode.USAGE_PERIOD_ENDED: RuleContract(
+        403,
         public_fields=_NAMES_CONVERSATION,
     ),
 }

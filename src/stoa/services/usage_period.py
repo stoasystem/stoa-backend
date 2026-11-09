@@ -21,8 +21,15 @@ Storage (the「#239 形状定完」shape, decisions 1 and 2):
 
 Students and parents read their period here too (#343): a student's through
 the entitlement (`student_view`), a parent's own and each child's through
-`for_parent`. Nothing here refuses a student anything yet; refusing a question
-at expiry is #344.
+`for_parent`.
+
+The period is also a rule of 准入 (#344): only a student whose effective period
+is `active` may ask a new question or a human teacher (`allows_new_usage`); no
+period at all counts as ended (decision 6). A question reads it in its one
+eligibility read (`entitlement_service.resolve_student_entitlement`'s
+`newUsageAllowed`), a request for a teacher through `student_may_ask`. What is
+already under way - an answer being generated, a request already open - is not
+refused, and history and practice stay open.
 """
 
 from __future__ import annotations
@@ -295,6 +302,26 @@ def effective_for_student(
         if verdict.is_current
     ]
     return latest_period(stored_end(own_profile), lenders, today=zurich_today(now))
+
+
+def allows_new_usage(period: EffectivePeriod) -> bool:
+    """Whether a student with this effective period may ask something new (#344).
+
+    Only an `active` period does: an ended one, and having none at all, both
+    refuse (decision 6).
+    """
+    return period.state is PeriodState.ACTIVE
+
+
+def student_may_ask(
+    student_id: str, *, now: datetime | None = None, table: object | None = None
+) -> bool:
+    """`allows_new_usage` for a student, judged now from one read of their period.
+
+    For a request for a human teacher, which does not read the entitlement; a
+    question judges the same rule inside its eligibility read instead.
+    """
+    return allows_new_usage(effective_for_student(student_id, now=now, table=table))
 
 
 def student_view(

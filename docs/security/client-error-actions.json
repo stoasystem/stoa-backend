@@ -3610,6 +3610,21 @@
         "retryable": false
       }
     },
+    "usage_period_ended": {
+      "action": null,
+      "domain": "ask_question",
+      "http_status": 403,
+      "message_key": "error.usage_period_ended",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "usage_period_role_invalid": {
       "action": "correct_input",
       "domain": "account",

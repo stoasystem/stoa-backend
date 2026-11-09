@@ -1416,7 +1416,8 @@
           "message_command_not_found",
           "allowance_exhausted",
           "provider_token_count_unavailable",
-          "allowance_unavailable"
+          "allowance_unavailable",
+          "usage_period_ended"
         ],
         "title": "AskQuestionErrorCode",
         "type": "string"
@@ -26188,6 +26189,24 @@
             },
             "description": "No usable bearer token"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SecurityErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/FirstMessageRefusalResponse"
+                    }
+                  ],
+                  "title": "Response 403 Create Conversation Conversations Post"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
           "409": {
             "content": {
               "application/json": {
@@ -34452,7 +34471,7 @@
     },
     "/teacher-help/request": {
       "post": {
-        "description": "Ask a human teacher about this conversation (#189: one request per conversation).\n\nA conversation that already has a request answers with it, whatever its\nstate. Otherwise a case of the week is spent, the request written and\noffered to a teacher; `help_requests.ask` does all three.",
+        "description": "Ask a human teacher about this conversation (#189: one request per conversation).\n\nA conversation that already has a request answers with it, whatever its\nstate. Otherwise a case of the week is spent, the request written and\noffered to a teacher; `help_requests.ask` does all three, and refuses a new\nrequest `usage_period_ended` (403) once the student's usage period has ended.",
         "operationId": "request_teacher_help_teacher_help_request_post",
         "requestBody": {
           "content": {

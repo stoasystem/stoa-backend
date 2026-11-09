@@ -30,7 +30,6 @@ MODEL_IMAGE_MAX_BYTES = 5 * 1024 * 1024 * 3 // 4
 MESSAGE_IMAGES_MAX_BYTES = 4 * MODEL_IMAGE_MAX_BYTES
 FREE_STORAGE_BYTES = 5 * 1024 * 1024 * 1024
 PAID_STORAGE_BYTES = 15 * 1024 * 1024 * 1024
-FREE_TRIAL_DAYS = 14
 # Switzerland puts majority at 18. Another jurisdiction may put it elsewhere, so
 # every decision reads this setting instead of writing the number down again.
 # STOA assigns accounts; it does not sell them, and for now it will not. One
@@ -179,7 +178,6 @@ class Settings(BaseSettings):
     image_max_bytes: int = IMAGE_MAX_BYTES
     document_max_bytes: int = DOCUMENT_MAX_BYTES
     image_max_edge: int = IMAGE_MAX_EDGE
-    free_trial_days: int = FREE_TRIAL_DAYS
     # Where a student or parent whose usage period is ending writes to renew it
     # (#239); payment is offline, so this address is the whole renewal flow.
     renewal_contact_email: str = "info@stoaedu.ch"
@@ -329,8 +327,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_plan_identity_configuration(self) -> "Settings":
-        if self.free_trial_days != FREE_TRIAL_DAYS:
-            raise ValueError("free_trial_days_locked")
         if self.free_attachment_storage_bytes != FREE_STORAGE_BYTES:
             raise ValueError("free_attachment_storage_bytes_locked")
         if self.paid_attachment_storage_bytes != PAID_STORAGE_BYTES:

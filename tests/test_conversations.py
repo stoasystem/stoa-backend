@@ -52,6 +52,13 @@ from fakes.ask_question import bucket as bucket  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from rule_violation_helpers import assert_violation
+from fakes.admission import seed_period_active
+
+
+@pytest.fixture(autouse=True)
+def _usage_period_active(monkeypatch):
+    """Every student here may ask a teacher; an ended period is #344's own test."""
+    seed_period_active(monkeypatch)
 
 
 @pytest.fixture(autouse=True)
