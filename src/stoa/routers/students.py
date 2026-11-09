@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from decimal import Decimal
 from datetime import datetime, timezone
 import logging
-from typing import NoReturn, Optional
+from typing import Literal, NoReturn, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -252,14 +252,30 @@ def _plan_includes_teacher_support(plan: str) -> bool:
     return budget.teacher_support_cases > 0
 
 
+class StudentUsagePeriod(BaseModel):
+    """The student's effective usage period (#239).
+
+    `endsAt` is the last day it may be used, a Zurich date (`YYYY-MM-DD`); the
+    period ends at 23:59:59 that day. `daysLeft` counts the Zurich days after
+    today: 0 on the end day and once expired, `null` without a period.
+    `paidBy` says whether the student's own period or a parent's covers them,
+    `null` without one; which parent is never said.
+    """
+
+    endsAt: str | None
+    state: Literal["active", "expired", "none"]
+    daysLeft: int | None
+    paidBy: Literal["self", "parent"] | None
+
+
 class StudentEntitlementResponse(BaseModel):
     effectivePlan: str
     newUsageAllowed: bool
     teacherSupportIncluded: bool = False
     dailyAiQuestionLimit: int | None = None
     dailyChatMessageLimit: int | None = None
-    freeTrialActive: bool = False
-    freeTrialEndsAt: str | None = None
+    usagePeriod: StudentUsagePeriod
+    renewalContactEmail: str
 
 
 def _stored_limit(value: object) -> int | None:
@@ -270,10 +286,6 @@ def _stored_limit(value: object) -> int | None:
     if isinstance(value, Decimal) and value == value.to_integral_value():
         return int(value)
     return None
-
-
-def _optional_text(value: object) -> str | None:
-    return value if isinstance(value, str) and value else None
 
 
 def _history_text(value: object) -> str:
@@ -418,7 +430,7 @@ async def get_my_entitlement(
         student_profile=dict(authorized.value or {}),
     )
     limits = entitlement.get("limits") or {}
-    free_trial = entitlement.get("freeTrial") or {}
+    period = entitlement.get("usagePeriod") or {}
     plan = str(entitlement.get("effectivePlan") or "free_trial")
     return StudentEntitlementResponse(
         effectivePlan=plan,
@@ -426,8 +438,14 @@ async def get_my_entitlement(
         teacherSupportIncluded=_plan_includes_teacher_support(plan),
         dailyAiQuestionLimit=_stored_limit(limits.get("dailyAiQuestionLimit")),
         dailyChatMessageLimit=_stored_limit(limits.get("dailyChatMessageLimit")),
-        freeTrialActive=bool(free_trial.get("active")),
-        freeTrialEndsAt=_optional_text(free_trial.get("endsAt")),
+        # `payerId` stays on the server: the student is told self or parent only.
+        usagePeriod=StudentUsagePeriod(
+            endsAt=period.get("endsAt"),
+            state=period.get("state") or "none",
+            daysLeft=period.get("daysLeft"),
+            paidBy=period.get("paidBy"),
+        ),
+        renewalContactEmail=settings.renewal_contact_email,
     )
 
 

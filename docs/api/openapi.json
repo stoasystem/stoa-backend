@@ -8266,6 +8266,64 @@
         "title": "ParentChildSummaryStudent",
         "type": "object"
       },
+      "ParentChildUsagePeriod": {
+        "description": "A child's effective usage period. `paidBy` is `you`, `self` (the child's\nown) or `other_parent` - never which other parent - and `null` without one.",
+        "properties": {
+          "endsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endsat"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "paidBy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "you",
+                  "self",
+                  "other_parent"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paidby"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "expired",
+              "none"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "studentId": {
+            "title": "Studentid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "studentId",
+          "name",
+          "endsAt",
+          "state",
+          "paidBy"
+        ],
+        "title": "ParentChildUsagePeriod",
+        "type": "object"
+      },
       "ParentLinkRequestCommand": {
         "additionalProperties": false,
         "properties": {
@@ -8333,6 +8391,49 @@
           }
         },
         "title": "ParentLinkRequestListResponse",
+        "type": "object"
+      },
+      "ParentOwnUsagePeriod": {
+        "description": "The parent's own usage period (#239).\n\n`endsAt` is a Zurich date (`YYYY-MM-DD`), the last day of use; `daysLeft`\ncounts the Zurich days after today, 0 on the end day and once expired,\n`null` without a period.",
+        "properties": {
+          "daysLeft": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daysleft"
+          },
+          "endsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endsat"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "expired",
+              "none"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endsAt",
+          "state",
+          "daysLeft"
+        ],
+        "title": "ParentOwnUsagePeriod",
         "type": "object"
       },
       "ParentPaymentReminderProjection": {
@@ -8729,6 +8830,31 @@
           "limit"
         ],
         "title": "ParentTeacherCasesProjection",
+        "type": "object"
+      },
+      "ParentUsagePeriodResponse": {
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/ParentChildUsagePeriod"
+            },
+            "title": "Children",
+            "type": "array"
+          },
+          "own": {
+            "$ref": "#/components/schemas/ParentOwnUsagePeriod"
+          },
+          "renewalContactEmail": {
+            "title": "Renewalcontactemail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "own",
+          "children",
+          "renewalContactEmail"
+        ],
+        "title": "ParentUsagePeriodResponse",
         "type": "object"
       },
       "PasswordChangeConfirmRequest": {
@@ -11814,35 +11940,28 @@
             "title": "Effectiveplan",
             "type": "string"
           },
-          "freeTrialActive": {
-            "default": false,
-            "title": "Freetrialactive",
-            "type": "boolean"
-          },
-          "freeTrialEndsAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Freetrialendsat"
-          },
           "newUsageAllowed": {
             "title": "Newusageallowed",
             "type": "boolean"
+          },
+          "renewalContactEmail": {
+            "title": "Renewalcontactemail",
+            "type": "string"
           },
           "teacherSupportIncluded": {
             "default": false,
             "title": "Teachersupportincluded",
             "type": "boolean"
+          },
+          "usagePeriod": {
+            "$ref": "#/components/schemas/StudentUsagePeriod"
           }
         },
         "required": [
           "effectivePlan",
-          "newUsageAllowed"
+          "newUsageAllowed",
+          "usagePeriod",
+          "renewalContactEmail"
         ],
         "title": "StudentEntitlementResponse",
         "type": "object"
@@ -11932,6 +12051,65 @@
           "choices"
         ],
         "title": "StudentProfileResponse",
+        "type": "object"
+      },
+      "StudentUsagePeriod": {
+        "description": "The student's effective usage period (#239).\n\n`endsAt` is the last day it may be used, a Zurich date (`YYYY-MM-DD`); the\nperiod ends at 23:59:59 that day. `daysLeft` counts the Zurich days after\ntoday: 0 on the end day and once expired, `null` without a period.\n`paidBy` says whether the student's own period or a parent's covers them,\n`null` without one; which parent is never said.",
+        "properties": {
+          "daysLeft": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daysleft"
+          },
+          "endsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endsat"
+          },
+          "paidBy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "self",
+                  "parent"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paidby"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "expired",
+              "none"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endsAt",
+          "state",
+          "daysLeft",
+          "paidBy"
+        ],
+        "title": "StudentUsagePeriod",
         "type": "object"
       },
       "SubscriptionAccountingExportResponse": {
@@ -29977,6 +30155,65 @@
           "authorization": [
             {
               "action": "create",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "parent_binding"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
+    "/parents/me/usage-period": {
+      "get": {
+        "description": "The parent's own usage period, each current child's, and whom to ask to renew.\n\nNot frozen with billing: payment is offline and an administrator sets the\nperiod, so a parent always may read it.",
+        "operationId": "get_my_usage_period_parents_me_usage_period_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParentUsagePeriodResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get My Usage Period",
+        "tags": [
+          "parents"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
               "capability": null,
               "purpose": "self_service",
               "resource_type": "parent_binding"

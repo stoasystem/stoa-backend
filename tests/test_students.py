@@ -335,7 +335,8 @@ def test_a_plan_without_teacher_support_says_so(monkeypatch):
 
     body = response.json()
     assert body["teacherSupportIncluded"] is False
-    assert body["freeTrialActive"] is True
+    # The trial fields read keys the trial projection never had; they are gone (#343).
+    assert "freeTrialActive" not in body and "freeTrialEndsAt" not in body
 
 
 def test_a_student_the_administrator_opened_can_read_its_own_profile(monkeypatch):
