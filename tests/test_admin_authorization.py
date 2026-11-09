@@ -79,7 +79,7 @@ def test_registered_admin_router_has_exact_executable_policy_and_controls(method
 
 def test_registered_admin_router_table_is_complete_across_main_registrations():
     keys = [(method, path) for method, path, _route in REGISTERED_ADMIN_ROUTES]
-    assert len(keys) == len(set(keys)) == 83
+    assert len(keys) == len(set(keys)) == 87
     assert ("GET", "/admin/notifications") in keys
     assert ("GET", "/admin/notifications/delivery-status") in keys
     # Card 002-D: every account command is an admin-capability route, not a role check.
@@ -91,9 +91,20 @@ def test_registered_admin_router_table_is_complete_across_main_registrations():
         ("POST", "/admin/users/{user_id}/password-reset"),
         ("POST", "/admin/users/{user_id}/status"),
         ("POST", "/admin/users/parent-links"),
+        # #239: setting or extending an account's usage period.
+        ("POST", "/admin/users/{user_id}/usage-period/extensions"),
+        ("PUT", "/admin/users/{user_id}/usage-period"),
     ):
         assert account_route in keys, account_route
         assert classify_admin_route(*account_route).capability == "admin_identity_manager"
+    # Reading a period, and the ending-soon list, are support lookups - not the
+    # usage-ledger inspector the `/admin/usage` prefix would otherwise give it.
+    for lookup_route in (
+        ("GET", "/admin/users/{user_id}/usage-period"),
+        ("GET", "/admin/usage-periods"),
+    ):
+        assert lookup_route in keys, lookup_route
+        assert classify_admin_route(*lookup_route).capability == "student_support_lookup"
     assert all(classify_admin_route(method, path) for method, path in keys)
 
 

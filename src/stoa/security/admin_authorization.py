@@ -582,6 +582,11 @@ def classify_admin_route(method: str, path: str) -> AdminRoutePolicy:
             capability, op_action = "billing_operations_manager", action
         return _policy(capability, AuthorizationPurpose.BILLING_OPERATIONS, op_action,
                        "parent_id", "request_id")
+    if path == "/admin/usage-periods":
+        # The ending-soon list is support lookup over student and parent
+        # accounts, not usage-ledger inspection, which the prefix below is.
+        return _policy("student_support_lookup", AuthorizationPurpose.ACCOUNT_OPERATIONS,
+                       AuthorizationAction.LOOKUP, "user_id")
     if path.startswith("/admin/usage"):
         capability = "usage_reconciliation_operator" if "reconciliation" in path else "usage_event_inspector"
         op_action = AuthorizationAction.UPDATE if "reconciliation" in path else AuthorizationAction.READ

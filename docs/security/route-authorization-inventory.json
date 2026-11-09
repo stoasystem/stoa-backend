@@ -817,6 +817,22 @@
   {
     "authorization": [
       {
+        "action": "lookup",
+        "capability": "student_support_lookup",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/usage-periods",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
         "action": "update",
         "capability": "usage_reconciliation_operator",
         "purpose": "usage_operations",
@@ -882,6 +898,24 @@
     "identifiers": [],
     "method": "GET",
     "path": "/admin/users",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "lookup",
+        "capability": "student_support_lookup",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "user_id"
+    ],
+    "method": "GET",
+    "path": "/admin/users/{user_id}/usage-period",
     "sensitive": true
   },
   {
@@ -3353,6 +3387,24 @@
     "sensitive": true
   },
   {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "user_id"
+    ],
+    "method": "POST",
+    "path": "/admin/users/{user_id}/usage-period/extensions",
+    "sensitive": true
+  },
+  {
     "authorization": [],
     "classification": "public",
     "family": "analytics",
@@ -4389,6 +4441,24 @@
     ],
     "method": "PUT",
     "path": "/admin/teacher-support/allowances/{student_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "user_id"
+    ],
+    "method": "PUT",
+    "path": "/admin/users/{user_id}/usage-period",
     "sensitive": true
   }
 ]

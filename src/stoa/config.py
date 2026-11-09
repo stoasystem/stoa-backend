@@ -180,6 +180,9 @@ class Settings(BaseSettings):
     document_max_bytes: int = DOCUMENT_MAX_BYTES
     image_max_edge: int = IMAGE_MAX_EDGE
     free_trial_days: int = FREE_TRIAL_DAYS
+    # Where a student or parent whose usage period is ending writes to renew it
+    # (#239); payment is offline, so this address is the whole renewal flow.
+    renewal_contact_email: str = "info@stoaedu.ch"
     adult_age_years: int = ADULT_AGE_YEARS
     free_attachment_storage_bytes: int = FREE_STORAGE_BYTES
     paid_attachment_storage_bytes: int = PAID_STORAGE_BYTES

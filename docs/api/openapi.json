@@ -8824,6 +8824,22 @@
         "title": "PasswordResetResponse",
         "type": "object"
       },
+      "PeriodSource": {
+        "enum": [
+          "paid",
+          "gifted"
+        ],
+        "title": "PeriodSource",
+        "type": "string"
+      },
+      "PeriodUnit": {
+        "enum": [
+          "months",
+          "days"
+        ],
+        "title": "PeriodUnit",
+        "type": "string"
+      },
       "PracticeAnswerSubmission": {
         "additionalProperties": false,
         "properties": {
@@ -14149,6 +14165,88 @@
           "count"
         ],
         "title": "UsageEventListResponse",
+        "type": "object"
+      },
+      "UsagePeriodExtensionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "maximum": 366.0,
+            "minimum": 1.0,
+            "title": "Amount",
+            "type": "integer"
+          },
+          "expectedVersion": {
+            "minimum": 0.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "paymentReference": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paymentreference"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PeriodSource"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/PeriodUnit"
+          }
+        },
+        "required": [
+          "unit",
+          "amount",
+          "source",
+          "expectedVersion"
+        ],
+        "title": "UsagePeriodExtensionRequest",
+        "type": "object"
+      },
+      "UsagePeriodSetRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "endsOn": {
+            "format": "date",
+            "title": "Endson",
+            "type": "string"
+          },
+          "expectedVersion": {
+            "minimum": 0.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endsOn",
+          "reason",
+          "expectedVersion"
+        ],
+        "title": "UsagePeriodSetRequest",
         "type": "object"
       },
       "UsageReconciliationResponse": {
@@ -23164,6 +23262,91 @@
         }
       }
     },
+    "/admin/usage-periods": {
+      "get": {
+        "description": "Students and parents whose period ends within the window or ended in the last 30 days.\n\nA parent's row names the children it currently covers, so the administrator\nknows whom a lapse reaches.",
+        "operationId": "list_ending_usage_periods_admin_usage_periods_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "endingWithinDays",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "maximum": 366,
+              "minimum": 0,
+              "title": "Endingwithindays",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Ending Usage Periods Admin Usage Periods Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Ending Usage Periods",
+        "tags": [
+          "admin"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "lookup",
+              "capability": "student_support_lookup",
+              "purpose": "account_operations",
+              "resource_type": "operator_resource"
+            }
+          ],
+          "classification": "admin-capability",
+          "identifiers": []
+        }
+      }
+    },
     "/admin/usage/reconciliation": {
       "get": {
         "description": "Preview or explicitly repair daily counter versus ledger reconciliation.",
@@ -24353,6 +24536,305 @@
           }
         ],
         "summary": "Change Account Status",
+        "tags": [
+          "admin"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "manage_privilege",
+              "capability": "admin_identity_manager",
+              "purpose": "account_operations",
+              "resource_type": "operator_resource"
+            }
+          ],
+          "classification": "admin-capability",
+          "identifiers": [
+            "user_id"
+          ]
+        }
+      }
+    },
+    "/admin/users/{user_id}/usage-period": {
+      "get": {
+        "description": "The account's own end date, a student's effective period, and the records.\n\nRecords are newest first, one page at a time; `nextPageToken` continues this\naccount's records and no other listing.",
+        "operationId": "read_usage_period_admin_users__user_id__usage_period_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageToken",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2048,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pagetoken"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Usage Period Admin Users  User Id  Usage Period Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Usage Period",
+        "tags": [
+          "admin"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "lookup",
+              "capability": "student_support_lookup",
+              "purpose": "account_operations",
+              "resource_type": "operator_resource"
+            }
+          ],
+          "classification": "admin-capability",
+          "identifiers": [
+            "user_id"
+          ]
+        }
+      },
+      "put": {
+        "description": "Put the end date on a given day: to correct a mistake or end a period early.",
+        "operationId": "set_usage_period_admin_users__user_id__usage_period_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsagePeriodSetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Usage Period Admin Users  User Id  Usage Period Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Usage Period",
+        "tags": [
+          "admin"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "manage_privilege",
+              "capability": "admin_identity_manager",
+              "purpose": "account_operations",
+              "resource_type": "operator_resource"
+            }
+          ],
+          "classification": "admin-capability",
+          "identifiers": [
+            "user_id"
+          ]
+        }
+      }
+    },
+    "/admin/users/{user_id}/usage-period/extensions": {
+      "post": {
+        "description": "Extend by months or days, counted from today or the current end, whichever is later.\n\nThe write carries the version the console read: two administrators extending\nthe same account at once cannot both add their months (`usage_period_version_conflict`).",
+        "operationId": "extend_usage_period_admin_users__user_id__usage_period_extensions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsagePeriodExtensionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Extend Usage Period Admin Users  User Id  Usage Period Extensions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Extend Usage Period",
         "tags": [
           "admin"
         ],
