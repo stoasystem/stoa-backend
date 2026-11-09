@@ -214,7 +214,7 @@ def _client(
     app.include_router(auth.router, prefix="/auth")
     app.dependency_overrides[deps.get_verified_token] = lambda: token or _token()
     app.dependency_overrides[deps.get_identity_repository] = lambda: identity
-    monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     def run(command_id: str) -> None:
         table.effects["background_runs"] += 1

@@ -14,7 +14,8 @@ from typing import Any
 import pytest
 from fakes.dynamodb import FakeTable
 
-from stoa.db.repositories import account_deletion_repo, security_audit_repo, user_repo
+from stoa.db import table as db_table
+from stoa.db.repositories import user_repo
 from stoa.rule_violation import RuleViolation
 from stoa.security.identity import AccountStatus
 from stoa.services import account_lifecycle, privileged_identity_service
@@ -28,8 +29,7 @@ TARGET = "student-1"
 @pytest.fixture
 def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     fake = FakeTable()
-    for module in (account_deletion_repo, security_audit_repo, user_repo):
-        monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
+    db_table.install(fake)
     return fake
 
 

@@ -14,6 +14,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from stoa.db import table as db_table
 from stoa.rule_violation import RuleViolation
 from fastapi.testclient import TestClient
 import pytest
@@ -24,12 +25,7 @@ from test_parent_student_links import FakeLinkTable
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import (
-    account_deletion_repo,
-    account_invitation_repo,
-    account_number_repo,
-    identity_repo,
     parent_link_repo,
-    security_audit_repo,
     user_repo,
 )
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -65,15 +61,7 @@ ONE_DAY_SHORT = "2008-09-21"
 @pytest.fixture
 def table(monkeypatch: pytest.MonkeyPatch) -> FakeAccountTable:
     fake = FakeAccountTable()
-    for module in (
-        account_invitation_repo,
-        account_number_repo,
-        account_deletion_repo,
-        identity_repo,
-        security_audit_repo,
-        user_repo,
-    ):
-        monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
+    db_table.install(fake)
     return fake
 
 
@@ -260,7 +248,7 @@ class LinkWorld:
 @pytest.fixture
 def world(monkeypatch: pytest.MonkeyPatch) -> LinkWorld:
     built = LinkWorld(FakeLinkTable())
-    monkeypatch.setattr(parent_link_repo, "get_table", lambda: built.table)
+    db_table.install(built.table)
     monkeypatch.setattr(
         user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(built.accounts.get(user_id))
     )

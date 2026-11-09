@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import boto3
 
+from stoa.db import table as db_table
 from stoa.config import get_settings
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
@@ -658,7 +659,7 @@ def _question_ocr_session_branch(
                 teacher_id=deleting_user_id,
                 generation=generation,
                 now=now,
-                table=account_deletion_repo.get_table(),
+                table=db_table.table(),
             )
         elif (
             item.get("entity_type") == "question"

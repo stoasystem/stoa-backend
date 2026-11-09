@@ -35,27 +35,6 @@ RULES = {
 }
 
 ALLOWED: dict[str, dict[str, set[str]]] = {
-    "accounts and identity": {
-        "db/repositories/account_deletion_repo.py": {"get_table", "conditional_check"},
-        "db/repositories/account_email_claim_repo.py": {"get_table"},
-        "db/repositories/account_invitation_repo.py": {"get_table", "paging", "conditional_check"},
-        "db/repositories/account_number_repo.py": {"get_table", "conditional_check"},
-        "db/repositories/capability_repo.py": {"paging"},
-        "db/repositories/identity_repo.py": {"get_table", "conditional_check"},
-        "db/repositories/parent_link_repo.py": {"get_table"},
-        "db/repositories/privileged_identity_repo.py": {"get_table", "conditional_check"},
-        "db/repositories/public_identity_repo.py": {"get_table", "conditional_check"},
-        "db/repositories/security_audit_repo.py": {"get_table", "conditional_check"},
-        "db/repositories/teacher_application_repo.py": {"get_table", "conditional_check"},
-        "db/repositories/user_repo.py": {"get_table", "paging"},
-        "routers/auth.py": {"get_table"},
-        "services/account_deletion_service.py": {"get_table"},
-        "services/account_lifecycle.py": {"get_table"},
-        "services/account_provisioning_service.py": {"get_table"},
-        "services/current_relationship.py": {"get_table", "paging"},
-        "services/password_change_code_service.py": {"get_table", "conditional_check"},
-        "services/rate_limit.py": {"get_table"},
-    },
     "learning and practice": {
         "db/repositories/adaptive_learning_repo.py": {"get_table", "paging", "conditional_check"},
         "db/repositories/ai_teacher_tools_repo.py": {"get_table", "paging"},

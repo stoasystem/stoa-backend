@@ -13,10 +13,9 @@ import hashlib
 import secrets
 
 import boto3
-from botocore.exceptions import ClientError
 
+from stoa.db import table as db_table
 from stoa.config import settings
-from stoa.db.dynamodb import get_table
 from stoa.services import locale_service
 
 
@@ -64,7 +63,7 @@ def _now_epoch(now: datetime | None = None) -> int:
 
 
 def _table(table=None):
-    return table if table is not None else get_table()
+    return table if table is not None else db_table.table()
 
 
 def _int(value: object, default: int = 0) -> int:
@@ -75,10 +74,6 @@ def _int(value: object, default: int = 0) -> int:
     if isinstance(value, str) and value.strip().isdigit():
         return int(value)
     return default
-
-
-def _conditional_check_failed(exc: ClientError) -> bool:
-    return exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException"
 
 
 def _code_key(user_id: str) -> dict[str, str]:
@@ -148,7 +143,8 @@ def admit_send(user_id: str, *, now: datetime | None = None, table=None) -> None
         expires_at = moment + SEND_WINDOW_SECONDS
         try:
             if version == 0:
-                client.put_item(
+                db_table.put(
+                    table=client,
                     Item={
                         **key,
                         "entity_type": _QUOTA_ENTITY,
@@ -159,7 +155,8 @@ def admit_send(user_id: str, *, now: datetime | None = None, table=None) -> None
                     ConditionExpression="attribute_not_exists(PK)",
                 )
             else:
-                client.update_item(
+                db_table.update(
+                    table=client,
                     Key=key,
                     UpdateExpression=(
                         "SET #sends = :sends, #version = :next_version, #expires_at = :expires_at"
@@ -178,9 +175,9 @@ def admit_send(user_id: str, *, now: datetime | None = None, table=None) -> None
                     },
                 )
             return
-        except ClientError as exc:
-            if not _conditional_check_failed(exc):
-                raise
+        except db_table.WriteRefused:
+            # Another send moved the quota first: read it again.
+            continue
     raise PasswordChangeCodeRateLimited("password change code send limit reached")
 
 
@@ -203,7 +200,8 @@ def release_send(user_id: str, sent_at: int, *, table=None) -> None:
             return
         sends.remove(sent_at)
         try:
-            client.update_item(
+            db_table.update(
+                table=client,
                 Key=key,
                 UpdateExpression="SET #sends = :sends, #version = :next_version",
                 ConditionExpression="#version = :version",
@@ -215,9 +213,10 @@ def release_send(user_id: str, sent_at: int, *, table=None) -> None:
                 },
             )
             return
-        except ClientError as exc:
-            if not _conditional_check_failed(exc):
-                return
+        except db_table.WriteRefused:
+            continue
+        except db_table.TableUnavailable:
+            return
 
 
 def store_code(user_id: str, code: str, *, now: datetime | None = None, table=None) -> int:
@@ -290,7 +289,8 @@ def verify_and_consume(
     if moment >= _int(stored.get("expires_at")):
         raise PasswordChangeCodeRejected()
     try:
-        client.update_item(
+        db_table.update(
+            table=client,
             Key=key,
             UpdateExpression="SET #consumed_at = :consumed_at",
             ConditionExpression=(
@@ -310,17 +310,16 @@ def verify_and_consume(
                 **_identity_values(stored),
             },
         )
-    except ClientError as exc:
-        if _conditional_check_failed(exc):
-            raise PasswordChangeCodeRejected() from exc
-        raise
+    except db_table.WriteRefused as exc:
+        raise PasswordChangeCodeRejected() from exc
 
 
 def _record_failed_attempt(client, key: dict[str, str], stored: dict) -> None:
     """Charge the guess to the challenge it was a guess at, or to nothing."""
 
     try:
-        client.update_item(
+        db_table.update(
+            table=client,
             Key=key,
             UpdateExpression="ADD #attempts :one",
             ConditionExpression=f"attribute_not_exists(#consumed_at) AND {_IDENTITY_CONDITION}",
@@ -331,9 +330,9 @@ def _record_failed_attempt(client, key: dict[str, str], stored: dict) -> None:
             },
             ExpressionAttributeValues={":one": 1, **_identity_values(stored)},
         )
-    except ClientError as exc:
-        if not _conditional_check_failed(exc):
-            raise
+    except db_table.WriteRefused:
+        # A guess at a challenge that has since been spent or replaced.
+        pass
 
 
 _EMAIL_TEMPLATES: dict[str, tuple[str, str]] = {

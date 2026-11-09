@@ -8,7 +8,6 @@ from typing import Any, Final
 from boto3.dynamodb.conditions import Key
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -111,7 +110,7 @@ def _items(values: object) -> list[LinkItem]:
 def get_parent_side_link(
     parent_id: str, student_id: str, *, table: Any | None = None
 ) -> LinkItem | None:
-    target = table or get_table()
+    target = table or db_table.table()
     response = target.get_item(
         Key=parent_side_key(_required(parent_id, "parent_id"), _required(student_id, "student_id")),
         ConsistentRead=True,
@@ -122,7 +121,7 @@ def get_parent_side_link(
 def get_student_side_link(
     student_id: str, parent_id: str, *, table: Any | None = None
 ) -> LinkItem | None:
-    target = table or get_table()
+    target = table or db_table.table()
     response = target.get_item(
         Key=student_side_key(_required(student_id, "student_id"), _required(parent_id, "parent_id")),
         ConsistentRead=True,
@@ -131,7 +130,7 @@ def get_student_side_link(
 
 
 def list_links_for_parent(parent_id: str, *, table: Any | None = None) -> list[LinkItem]:
-    target = table or get_table()
+    target = table or db_table.table()
     response = target.query(
         KeyConditionExpression=Key("PK").eq(f"PARENT#{_required(parent_id, 'parent_id')}")
         & Key("SK").begins_with("CHILD#"),
@@ -141,7 +140,7 @@ def list_links_for_parent(parent_id: str, *, table: Any | None = None) -> list[L
 
 
 def list_links_for_student(student_id: str, *, table: Any | None = None) -> list[LinkItem]:
-    target = table or get_table()
+    target = table or db_table.table()
     response = target.query(
         KeyConditionExpression=Key("PK").eq(f"STUDENT#{_required(student_id, 'student_id')}")
         & Key("SK").begins_with("PARENT#"),
@@ -204,7 +203,7 @@ def create_link(
         updated_by=_required(created_by, "created_by"),
         link_updated_at=_required(linked_at, "linked_at"),
     )
-    target = table or get_table()
+    target = table or db_table.table()
     forward, reverse = _both_sides(body)
     operations = [
         {
@@ -273,7 +272,7 @@ def transition_link(
     if expected_status == next_status:
         raise ValueError("link transition must change the status")
 
-    target = table or get_table()
+    target = table or db_table.table()
     current, mirror = _both_sides_stored(parent_id, student_id, target)
     if current.get("status") != expected_status or mirror.get("status") != expected_status:
         raise ParentLinkConflict("parent link is no longer in the expected status")
@@ -327,7 +326,7 @@ def reclaim_link(
         # The fence is the stamp changing; a reclaim that reuses it lets both racers win.
         raise ValueError("reclaim must advance link_updated_at")
 
-    target = table or get_table()
+    target = table or db_table.table()
     current, mirror = _both_sides_stored(parent_id, student_id, target)
     for side in (current, mirror):
         if side.get("status") != expected_status:
@@ -430,7 +429,7 @@ def close_link(
             operation["ExpressionAttributeNames"] = {"#status": "status"}
             operation["ExpressionAttributeValues"] = values
         operations.append({"Put": operation})
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         db_table.transact(operations, table=target)
     except (db_table.WriteRefused, db_table.TableUnavailable) as exc:

@@ -29,12 +29,6 @@ from test_account_provisioning import FakeAccountTable
 from stoa.db import table as db_table
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import (
-    account_deletion_repo,
-    account_invitation_repo,
-    account_number_repo,
-    identity_repo,
-    parent_link_repo,
-    security_audit_repo,
     user_repo,
 )
 from stoa.deps import (
@@ -75,17 +69,6 @@ TEST_EMAIL = "student-9@example.com"
 @pytest.fixture
 def table(monkeypatch: pytest.MonkeyPatch) -> FakeAccountTable:
     fake = FakeAccountTable()
-    for module in (
-        account_invitation_repo,
-        account_number_repo,
-        account_deletion_repo,
-        identity_repo,
-        parent_link_repo,
-        security_audit_repo,
-        user_repo,
-        auth,
-    ):
-        monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
     db_table.install(fake)
     parent_link_service.set_account_number_resolver(account_numbering_service.resolve_account_id)
     return fake

@@ -6,9 +6,8 @@ from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Key
-from botocore.exceptions import ClientError
 
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 
 
 class TeacherApplicationConflict(RuntimeError):
@@ -71,10 +70,12 @@ def _get_item(table: object, **kwargs: object) -> TeacherApplicationItem:
     return _mapping(table.get_item(**kwargs))
 
 
-def _put_item(table: object, **kwargs: object) -> object:
+def _put_item(table: object, **kwargs: object) -> None:
+    """A conditional put through the gateway: a condition that does not hold is
+    `db_table.WriteRefused`, any other answer `db_table.TableUnavailable`."""
     if not isinstance(table, _PutTable):
         raise TeacherApplicationConflict("teacher application dependency unavailable")
-    return table.put_item(**kwargs)
+    db_table.put(table=table, **kwargs)
 
 
 def _query(table: object, **kwargs: object) -> TeacherApplicationItem:
@@ -84,9 +85,11 @@ def _query(table: object, **kwargs: object) -> TeacherApplicationItem:
 
 
 def _update_item(table: object, **kwargs: object) -> TeacherApplicationItem:
+    """A conditional update through the gateway, with `_put_item`'s outcomes; the
+    attributes it hands back."""
     if not isinstance(table, _UpdateTable):
         raise TeacherApplicationConflict("teacher application dependency unavailable")
-    return _mapping(table.update_item(**kwargs))
+    return db_table.update(table=table, **kwargs)
 
 
 def _optional_item(value: object) -> TeacherApplicationItem | None:
@@ -122,7 +125,7 @@ def list_applications_by_review_state(
 ) -> list[TeacherApplicationItem]:
     """List candidacy versions in one review state, oldest first for FIFO review."""
     response = _query(
-        get_table(),
+        db_table.table(),
         IndexName=REVIEW_STATE_INDEX,
         KeyConditionExpression=Key("review_state").eq(review_state),
         ScanIndexForward=True,
@@ -145,7 +148,7 @@ def set_application_review_state(
     """
     try:
         _update_item(
-            get_table(),
+            db_table.table(),
             Key={
                 "PK": f"TEACHER_APPLICATION#{application_id}",
                 "SK": f"VERSION#{int(version):08d}",
@@ -161,17 +164,15 @@ def set_application_review_state(
                 ":decided_at": decided_at,
             },
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            raise TeacherApplicationConflict("application version missing") from exc
-        raise
+    except db_table.WriteRefused as exc:
+        raise TeacherApplicationConflict("application version missing") from exc
 
 
 def get_application_version(
     application_id: str, version: int
 ) -> TeacherApplicationItem | None:
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key={
             "PK": f"TEACHER_APPLICATION#{application_id}",
             "SK": f"VERSION#{int(version):08d}",
@@ -184,7 +185,7 @@ def get_application_version(
 
 def list_application_versions(application_id: str) -> list[TeacherApplicationItem]:
     response = _query(
-        get_table(),
+        db_table.table(),
         KeyConditionExpression=(
             Key("PK").eq(f"TEACHER_APPLICATION#{application_id}")
             & Key("SK").begins_with("VERSION#")
@@ -212,7 +213,7 @@ def create_review(item: TeacherApplicationItem) -> TeacherApplicationItem:
 
 def get_review(application_id: str, version: int) -> TeacherApplicationItem | None:
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key={
             "PK": f"TEACHER_APPLICATION#{application_id}",
             "SK": f"REVIEW#{int(version):08d}",
@@ -237,7 +238,7 @@ def create_invitation(item: TeacherApplicationItem) -> TeacherApplicationItem:
 
 def get_invitation(token_digest: str) -> TeacherApplicationItem | None:
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key={"PK": f"TEACHER_INVITATION#{token_digest}", "SK": "META"},
         ConsistentRead=True,
     )
@@ -248,7 +249,7 @@ def get_invitation(token_digest: str) -> TeacherApplicationItem | None:
 def claim_invitation(token_digest: str, *, command_id: str, consumed_at: str) -> bool:
     try:
         _update_item(
-            get_table(),
+            db_table.table(),
             Key={"PK": f"TEACHER_INVITATION#{token_digest}", "SK": "META"},
             UpdateExpression=(
                 "SET #status = :consumed, #command_id = :command_id, "
@@ -270,10 +271,8 @@ def claim_invitation(token_digest: str, *, command_id: str, consumed_at: str) ->
                 ":next_version": 2,
             },
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
@@ -297,7 +296,7 @@ def create_activation_command(item: TeacherApplicationItem) -> TeacherApplicatio
 
 def get_activation_command(command_id: str) -> TeacherApplicationItem | None:
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key={"PK": f"TEACHER_ACTIVATION#{command_id}", "SK": "COMMAND"},
         ConsistentRead=True,
     )
@@ -314,8 +313,8 @@ def update_activation_command(
     evidence_reference: str,
 ) -> TeacherApplicationItem:
     try:
-        response = _update_item(
-            get_table(),
+        attributes = _update_item(
+            db_table.table(),
             Key={"PK": f"TEACHER_ACTIVATION#{command_id}", "SK": "COMMAND"},
             UpdateExpression=(
                 "SET #status = :status, #updated_at = :updated_at, "
@@ -337,22 +336,17 @@ def update_activation_command(
             },
             ReturnValues="ALL_NEW",
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            raise TeacherApplicationConflict("stale activation command") from exc
-        raise
-    attributes = response.get("Attributes")
-    return {} if attributes is None else _mapping(attributes)
+    except db_table.WriteRefused as exc:
+        raise TeacherApplicationConflict("stale activation command") from exc
+    return _mapping(attributes)
 
 
 def _conditional_put(row: TeacherApplicationItem) -> None:
     try:
         _put_item(
-            get_table(),
+            db_table.table(),
             Item=row,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            raise TeacherApplicationConflict("immutable lifecycle row already exists") from exc
-        raise
+    except db_table.WriteRefused as exc:
+        raise TeacherApplicationConflict("immutable lifecycle row already exists") from exc

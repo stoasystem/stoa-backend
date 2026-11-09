@@ -36,9 +36,6 @@ import pytest
 
 from stoa.db import table as db_table
 from stoa.config import UPLOAD_INTENT_TTL_SECONDS, Settings
-from stoa.db.repositories import (
-    account_deletion_repo,
-)
 from stoa.deps import (
     get_actor,
     get_authorization_audit_sink,
@@ -51,7 +48,7 @@ from stoa.routers import conversations, upload_codes
 from stoa.services.ask_question import _answering
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services import attachment_service, rate_limit, upload_code_service
+from stoa.services import attachment_service, upload_code_service
 from fakes.admission import seed_plan
 from fakes.ask_question import AtomicAllowanceTable, _patch_allowance_table
 from fakes.bedrock import FakeBedrock
@@ -124,11 +121,10 @@ class _Api:
         for module in (
             conversations,
             _answering,
-            rate_limit,
         ):
             monkeypatch.setattr(module, "get_table", lambda table=table: table)
         db_table.install(table)
-        monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+        db_table.install(table)
         self.clock = _Clock()
         monkeypatch.setattr(upload_code_service, "_now", self.clock)
         self.table = table

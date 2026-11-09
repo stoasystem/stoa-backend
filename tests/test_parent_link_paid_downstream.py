@@ -33,7 +33,6 @@ from stoa.db.repositories import (
     account_deletion_repo,
     billing_fact_repo,
     parent_link_repo,
-    user_repo,
 )
 from stoa.models.billing import BillingPlanId
 from stoa.services import (
@@ -215,12 +214,7 @@ def _grant_item(
 def table(monkeypatch: pytest.MonkeyPatch) -> ConditionalTable:
     fake = ConditionalTable()
     db_table.install(fake)
-    for module in (
-        parent_link_repo,
-        user_repo,
-        account_deletion_repo,
-        teacher_support_allowance_service,
-    ):
+    for module in (teacher_support_allowance_service,):
         monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
     fake.put(
         {

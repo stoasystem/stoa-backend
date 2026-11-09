@@ -10,6 +10,7 @@ from typing import Any, Mapping
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.db.repositories import (
     account_deletion_repo,
     attachment_repo,
@@ -283,7 +284,7 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation(mo
         def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
             profile_ops.extend(from_wire(TransactItems))
 
-    monkeypatch.setattr(user_repo, "get_table", _ProfileTable)
+    db_table.install(_ProfileTable())
     user_repo.update_profile_fields_versioned(
         STUDENT_ID,
         update_expression="SET grade=:grade",
@@ -466,7 +467,7 @@ def test_scheduled_discovery_recovers_lost_route_trigger_and_reconstructs_servic
 
     _repository, service, job = _deletion_modules()
     table = FakeTable()
-    monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+    db_table.install(table)
     table.seed(
         {
             "PK": f"USER#{STUDENT_ID}",

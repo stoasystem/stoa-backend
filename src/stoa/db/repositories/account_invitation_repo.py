@@ -12,9 +12,8 @@ from collections.abc import Iterable, Mapping
 from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
-from botocore.exceptions import ClientError
 
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 
 
 class AccountInvitationConflict(RuntimeError):
@@ -26,6 +25,8 @@ type InvitationItem = dict[str, object]
 
 INVITATION_SK = "META"
 POINTER_SK = "POINTER"
+# GSI-Email is keyed on the address alone; a page of it ends on the base key and that.
+EMAIL_INDEX_KEY = ("PK", "SK", "email")
 
 CREATE_CONDITION = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
 ISSUED_CONDITION = "#status = :issued AND #version = :expected_version"
@@ -52,17 +53,12 @@ class _PutTable(Protocol):
 
 
 @runtime_checkable
-class _QueryTable(Protocol):
-    def query(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
 class _UpdateTable(Protocol):
     def update_item(self, **kwargs: object) -> object: ...
 
 
 def _table(candidate: object | None = None) -> object:
-    return candidate or get_table()
+    return candidate or db_table.table()
 
 
 def _response(value: object) -> InvitationItem:
@@ -82,26 +78,19 @@ def _get_item(table: object, **kwargs: object) -> InvitationItem:
     return _response(table.get_item(**kwargs))
 
 
-def _put_item(table: object, **kwargs: object) -> object:
+def _put_item(table: object, **kwargs: object) -> None:
+    """A conditional put through the gateway: a condition that does not hold is
+    `db_table.WriteRefused`, any other answer `db_table.TableUnavailable`."""
     if not isinstance(table, _PutTable):
         raise AccountInvitationConflict("account invitation dependency unavailable")
-    return table.put_item(**kwargs)
+    db_table.put(table=table, **kwargs)
 
 
-def _query(table: object, **kwargs: object) -> InvitationItem:
-    if not isinstance(table, _QueryTable):
-        raise AccountInvitationConflict("account invitation dependency unavailable")
-    return _response(table.query(**kwargs))
-
-
-def _update_item(table: object, **kwargs: object) -> object:
+def _update_item(table: object, **kwargs: object) -> None:
+    """A conditional update through the gateway, with `_put_item`'s outcomes."""
     if not isinstance(table, _UpdateTable):
         raise AccountInvitationConflict("account invitation dependency unavailable")
-    return table.update_item(**kwargs)
-
-
-def _conditional_failure(exc: ClientError) -> bool:
-    return exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException"
+    db_table.update(table=table, **kwargs)
 
 
 def _required_text(item: Mapping[str, object], key: str) -> str:
@@ -231,23 +220,18 @@ def issued_invitation_ids(
                 & Attr("status").eq(ISSUED_STATUS)
             ),
         }
-        while True:
-            response = _query(target, **request)
-            rows = response.get("Items", [])
-            if not isinstance(rows, list):
-                raise AccountInvitationConflict("account invitation dependency unavailable")
-            for row in map(_response, rows):
-                account_id = str(row.get("account_id") or "")
-                invitation_id = str(row.get("invitation_id") or "")
-                if account_id not in account_ids or not invitation_id:
-                    continue
-                issued_at = str(row.get("issued_at") or "")
-                if account_id not in latest or issued_at >= latest[account_id][0]:
-                    latest[account_id] = (issued_at, invitation_id)
-            cursor = response.get("LastEvaluatedKey")
-            if not cursor:
-                break
-            request["ExclusiveStartKey"] = cursor
+        try:
+            for page in db_table.pages("query", table=target, key=EMAIL_INDEX_KEY, **request):
+                for row in map(_response, page.items):
+                    account_id = str(row.get("account_id") or "")
+                    invitation_id = str(row.get("invitation_id") or "")
+                    if account_id not in account_ids or not invitation_id:
+                        continue
+                    issued_at = str(row.get("issued_at") or "")
+                    if account_id not in latest or issued_at >= latest[account_id][0]:
+                        latest[account_id] = (issued_at, invitation_id)
+        except db_table.TableUnavailable as exc:
+            raise AccountInvitationConflict("account invitation dependency unavailable") from exc
     return {account_id: invitation_id for account_id, (_, invitation_id) in latest.items()}
 
 
@@ -304,10 +288,8 @@ def restore_invitation(
                 ":next_version": 1,
             },
         )
-    except ClientError as exc:
-        if _conditional_failure(exc):
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
@@ -343,10 +325,8 @@ def restore_revoked_invitation(
                 ":next_version": 1,
             },
         )
-    except ClientError as exc:
-        if _conditional_failure(exc):
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
@@ -380,17 +360,13 @@ def _transition(
                 ":next_version": 2,
             },
         )
-    except ClientError as exc:
-        if _conditional_failure(exc):
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def _conditional_put(row: InvitationItem, *, table: object) -> None:
     try:
         _put_item(table, Item=row, ConditionExpression=CREATE_CONDITION)
-    except ClientError as exc:
-        if _conditional_failure(exc):
-            raise AccountInvitationConflict("account invitation already exists") from exc
-        raise
+    except db_table.WriteRefused as exc:
+        raise AccountInvitationConflict("account invitation already exists") from exc

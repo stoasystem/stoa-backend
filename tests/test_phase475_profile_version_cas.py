@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, user_repo
 from fakes.dynamodb import from_wire
 
@@ -134,7 +135,7 @@ def test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = _ProfileRaceTable(first="scrub")
-    monkeypatch.setattr(user_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     updated, _ = _race(
         table,
@@ -159,7 +160,7 @@ def test_same_sensitive_field_race_always_leaves_scrubbed_linkage_absent(
     monkeypatch: pytest.MonkeyPatch, first: str
 ) -> None:
     table = _ProfileRaceTable(first=first)
-    monkeypatch.setattr(user_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     result, _ = _race(
         table,
@@ -240,7 +241,7 @@ def test_unrelated_profile_cas_loss_is_bounded_and_typed_retryable(
             raise account_deletion_repo.AccountDeletionConflict("injected CAS loss")
 
     table = _AlwaysContended()
-    monkeypatch.setattr(user_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     result = user_repo.update_profile_fields_versioned(
         "parent-1",

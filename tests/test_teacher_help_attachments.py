@@ -373,6 +373,12 @@ class _BatchReads:
         ]
         return {"Responses": {self.name: rows}, "UnprocessedKeys": {}}
 
+    # The account and identity repositories read through the same gateway (#327)
+    # and check their table's protocol statically, where a forwarded method does
+    # not count.
+    def get_item(self, **kwargs: Any) -> Any:
+        return self.table.get_item(**kwargs)
+
     def __getattr__(self, name: str) -> Any:
         return getattr(self.table, name)
 

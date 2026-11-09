@@ -8,7 +8,6 @@ from fakes import student_evidence as fake_evidence
 from fakes.links import LinkRows
 from stoa.db import table as db_table
 from stoa.config import Settings
-from stoa.db.repositories import parent_link_repo
 from stoa.services import message_catalog, report_service
 
 
@@ -51,15 +50,30 @@ def _fenced_report_provider_compat(monkeypatch):
 
 
 class FakeTable:
-    def __init__(self, children=None, conversations=None):
+    """The report's own reads; any other read goes to the link table, when there is one.
+
+    The link rows and the report's rows are read through the same table gateway
+    (#327), so one double answers both.
+    """
+
+    def __init__(self, children=None, conversations=None, links=None):
         self.children = children or []
         self.conversations = conversations or []
+        self.links = links
 
     def scan(self, **kwargs):
         return {"Items": self.children}
 
     def query(self, **kwargs):
+        if self.links is not None and "IndexName" not in kwargs:
+            return self.links.query(**kwargs)
         return {"Items": self.conversations}
+
+    def get_item(self, **kwargs):
+        return self.links.get_item(**kwargs)
+
+    def transact_write_items(self, **kwargs):
+        return self.links.transact_write_items(**kwargs)
 
 
 class FakeBody:
@@ -120,12 +134,11 @@ def _production_settings(**overrides) -> Settings:
 
 
 def patch_sources(monkeypatch, *, children=None, questions=None, progress=None, mistakes=None, conversations=None):
-    db_table.install(FakeTable(children=children, conversations=conversations))
     # `children` seeds the link rows the judge reads, not a profile scan: a
     # child listed with a non-active `parent_binding_status` stays unlinked,
     # which is the point of the defect these cover.
     links = LinkRows()
-    monkeypatch.setattr(parent_link_repo, "get_table", lambda: links.table)
+    db_table.install(FakeTable(children=children, conversations=conversations, links=links.table))
     students = {}
     for child in children or []:
         student_id = child.get("user_id") or child.get("id")

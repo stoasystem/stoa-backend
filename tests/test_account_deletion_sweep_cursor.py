@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 
 from fakes.dynamodb import FakeTable
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 from stoa.jobs import account_deletion as job
 
@@ -57,7 +58,7 @@ class _Worker:
 @pytest.fixture
 def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     built = FakeTable()
-    monkeypatch.setattr(account_deletion_repo, "get_table", lambda: built)
+    db_table.install(built)
     return built
 
 
@@ -158,7 +159,7 @@ def test_a_run_that_dies_after_scanning_leaves_the_stored_place_alone(
     assert _stored() == saved
 
     monkeypatch.undo()
-    monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+    db_table.install(table)
     scans_so_far = len(_scan_starts(table))
     _run(worker)
     assert _scan_starts(table)[scans_so_far] == saved.cursor

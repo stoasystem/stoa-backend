@@ -13,7 +13,6 @@ import logging
 from boto3.dynamodb.conditions import Key
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
 logger = logging.getLogger(__name__)
@@ -201,7 +200,7 @@ def grant_capability(
     if capability == STUDENT_DATA_BREAK_GLASS and not expires_at:
         raise ValueError("break-glass grants must expire")
 
-    table = (table_factory or get_table)()
+    table = (table_factory or db_table.table)()
     fence_user_ids = {user_id}
     target_student = _target_student_from_scope(scope)
     if target_student:
@@ -309,7 +308,7 @@ def revoke_capability(
         raise ValueError("expected generation and version are required")
     if not actor_id.strip() or not reason.strip() or not action_id.strip():
         raise ValueError("actor_id, reason and action_id are required")
-    table = (table_factory or get_table)()
+    table = (table_factory or db_table.table)()
     pointer_key = _pointer_key(user_id, capability, scope)
     pointer = _get(table, pointer_key)
     if pointer is None:
@@ -385,7 +384,7 @@ def current_lineage_generation(
     is a different number that happens to look like a plausible one, and the
     store answers both with the same conflict.
     """
-    table = (table_factory or get_table)()
+    table = (table_factory or db_table.table)()
     pointer = _get(table, _pointer_key(user_id, capability, scope))
     if pointer is None:
         return 0
@@ -399,7 +398,7 @@ def get_current_grants(
     table_factory: Callable[[], object] | None = None,
 ) -> list[CapabilityItem]:
     """Authorize only exact active pointer/revision pairs, with fail-closed legacy fallback."""
-    table = (table_factory or get_table)()
+    table = (table_factory or db_table.table)()
     items = [dict(item) for item in _query_user_capabilities(table, user_id)]
     pointers = [item for item in items if item.get("entity_type") == "capability_grant_current"]
     revisions: dict[tuple[str, str], CapabilityItem] = {}
@@ -600,23 +599,18 @@ def _query_user_capabilities(table: object, user_id: str) -> list[CapabilityItem
     if not isinstance(table, _CapabilityQueryTable):
         raise RuntimeError("capability repository query is unavailable")
     items: list[CapabilityItem] = []
-    start_key: object = None
-    while True:
-        kwargs: dict[str, object] = {
-            "KeyConditionExpression": Key("PK").eq(_pk(user_id))
+    try:
+        for page in db_table.pages(
+            "query",
+            table=table,
+            KeyConditionExpression=Key("PK").eq(_pk(user_id))
             & Key("SK").begins_with("CAPABILITY"),
-            "ConsistentRead": True,
-        }
-        if start_key is not None:
-            kwargs["ExclusiveStartKey"] = start_key
-        response = _mapping(table.query(**kwargs))
-        raw_items = response.get("Items", [])
-        if not isinstance(raw_items, list):
-            raise ValueError("malformed capability repository response")
-        items.extend(_mapping(item) for item in raw_items)
-        start_key = response.get("LastEvaluatedKey")
-        if not start_key:
-            return items
+            ConsistentRead=True,
+        ):
+            items.extend(_mapping(item) for item in page.items)
+    except db_table.TableUnavailable as exc:
+        raise ValueError("malformed capability repository response") from exc
+    return items
 
 
 def list_grant_revisions(
@@ -625,7 +619,7 @@ def list_grant_revisions(
     table_factory: Callable[[], object] | None = None,
 ) -> list[CapabilityItem]:
     """Every revision of every grant the user has held, revoked ones included."""
-    table = (table_factory or get_table)()
+    table = (table_factory or db_table.table)()
     return [
         item
         for item in _query_user_capabilities(table, user_id)

@@ -12,7 +12,6 @@ from typing import Any, Mapping
 
 from stoa.db import table as db_table
 from stoa.config import settings
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 from stoa.services.rate_limit_errors import RateLimitErrorCode, RateLimitViolation
 
@@ -299,7 +298,7 @@ def check_and_record_operation(
         "quota_period",
     )
     expires_at_value = int(observed_now.timestamp()) + _OPERATION_TTL_SECONDS
-    target = table or get_table()
+    target = table or db_table.table()
     counter_key = _counter_key(owner, normalized_kind, period)
     operation_key = _operation_key(owner, normalized_kind, opaque_operation_id)
 
@@ -583,7 +582,7 @@ def source_window_count(
     moment = int(observed_now.timestamp())
     key = _source_window_key(scope, source_digest, moment - (moment % window_seconds))
     try:
-        item = _get_item(table if table is not None else get_table(), key)
+        item = _get_item(table if table is not None else db_table.table(), key)
     except _RateDependencyFailure:
         return None
     if item is None:
@@ -623,7 +622,7 @@ def admit_source_window(
     moment = int(observed_now.timestamp())
     window_start = moment - (moment % window_seconds)
 
-    target = table if table is not None else get_table()
+    target = table if table is not None else db_table.table()
     updater = getattr(target, "update_item", None)
     if not callable(updater):
         return False

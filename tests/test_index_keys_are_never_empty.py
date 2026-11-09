@@ -337,7 +337,7 @@ def test_a_parent_request_does_not_write_null_into_an_index_key(monkeypatch):
     """
     from fakes.dynamodb import FakeTable
 
-    from stoa.db.repositories import user_repo
+    from stoa.db import table as db_table
     from stoa.services import subscription_service
 
     table = FakeTable()
@@ -353,7 +353,7 @@ def test_a_parent_request_does_not_write_null_into_an_index_key(monkeypatch):
         }
     )
     monkeypatch.setattr(subscription_service, "get_table", lambda: table)
-    monkeypatch.setattr(user_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     created = subscription_service.create_parent_request(
         parent_id="parent-1",

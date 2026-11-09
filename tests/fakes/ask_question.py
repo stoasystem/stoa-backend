@@ -109,9 +109,6 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
         monkeypatch.setattr(module, "get_table", lambda table=table: table)
     # The rows the attachment and upload repositories read, through the gateway.
     db_table.install(table)
-    monkeypatch.setattr(
-        conversations.account_deletion_repo, "get_table", lambda: table, raising=False
-    )
     seed_plan(monkeypatch)
     # The week a question is admitted against: on this table, until a test
     # points the allowance at its own.

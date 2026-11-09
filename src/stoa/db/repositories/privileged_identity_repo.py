@@ -5,9 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
 
-from botocore.exceptions import ClientError
 
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 
 
 class PrivilegedIdentityCommandConflict(RuntimeError):
@@ -60,16 +59,20 @@ def _get_item(table: object, **kwargs: object) -> PrivilegedIdentityCommand:
     return _mapping(table.get_item(**kwargs))
 
 
-def _put_item(table: object, **kwargs: object) -> object:
+def _put_item(table: object, **kwargs: object) -> None:
+    """A conditional put through the gateway: a condition that does not hold is
+    `db_table.WriteRefused`, any other answer `db_table.TableUnavailable`."""
     if not isinstance(table, _PutTable):
         raise PrivilegedIdentityCommandConflict("privileged identity dependency unavailable")
-    return table.put_item(**kwargs)
+    db_table.put(table=table, **kwargs)
 
 
 def _update_item(table: object, **kwargs: object) -> PrivilegedIdentityCommand:
+    """A conditional update through the gateway, with `_put_item`'s outcomes; the
+    attributes it hands back."""
     if not isinstance(table, _UpdateTable):
         raise PrivilegedIdentityCommandConflict("privileged identity dependency unavailable")
-    return _mapping(table.update_item(**kwargs))
+    return db_table.update(table=table, **kwargs)
 
 
 def create_command(
@@ -84,13 +87,11 @@ def create_command(
     }
     try:
         _put_item(
-            get_table(),
+            db_table.table(),
             Item=row,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
-            raise
+    except db_table.WriteRefused as exc:
         existing = get_command(command_id)
         immutable = ("operation", "target_id", "issuer", "subject", "reason", "approved_by")
         if existing and all(existing.get(key) == item.get(key) for key in immutable):
@@ -101,7 +102,7 @@ def create_command(
 
 def get_command(command_id: str) -> PrivilegedIdentityCommand | None:
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key={"PK": f"PRIVILEGED_IDENTITY_COMMAND#{command_id}", "SK": "COMMAND"},
         ConsistentRead=True,
     )
@@ -121,8 +122,8 @@ def update_command(
     evidence_reference: str,
 ) -> PrivilegedIdentityCommand:
     try:
-        response = _update_item(
-            get_table(),
+        attributes = _update_item(
+            db_table.table(),
             Key={"PK": f"PRIVILEGED_IDENTITY_COMMAND#{command_id}", "SK": "COMMAND"},
             UpdateExpression=(
                 "SET #status = :status, #updated_at = :updated_at, "
@@ -144,9 +145,6 @@ def update_command(
             },
             ReturnValues="ALL_NEW",
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            raise PrivilegedIdentityCommandConflict("stale privileged command") from exc
-        raise
-    attributes = response.get("Attributes")
-    return {} if attributes is None else _mapping(attributes)
+    except db_table.WriteRefused as exc:
+        raise PrivilegedIdentityCommandConflict("stale privileged command") from exc
+    return _mapping(attributes)

@@ -18,13 +18,7 @@ from test_account_provisioning import FakeAccountTable, RecordingProvider
 from stoa.db import table as db_table
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import (
-    account_deletion_repo,
-    account_invitation_repo,
-    account_number_repo,
-    identity_repo,
     parent_link_repo,
-    security_audit_repo,
-    user_repo,
 )
 from stoa.routers import admin, auth, parents, students
 from stoa.services import notify_service
@@ -178,17 +172,6 @@ def _key_terms(expression: Any) -> dict[tuple[str, str], str]:
 @pytest.fixture
 def table(monkeypatch: pytest.MonkeyPatch) -> AccountAdminTable:
     fake = AccountAdminTable()
-    for module in (
-        account_invitation_repo,
-        account_number_repo,
-        account_deletion_repo,
-        identity_repo,
-        parent_link_repo,
-        security_audit_repo,
-        user_repo,
-        auth,
-    ):
-        monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
     db_table.install(fake)
     parent_link_service.set_account_number_resolver(account_numbering_service.resolve_account_id)
     return fake

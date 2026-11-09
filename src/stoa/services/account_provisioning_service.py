@@ -699,8 +699,6 @@ def _attach_account_number(*, account_id: str, role: str, now: datetime) -> str:
         db_table.fenced(
             account_id,
             [operation],
-            # The table the fence is read from.
-            table=account_deletion_repo.get_table(),
         )
     except (
         account_deletion_repo.AccountDeletionConflict,
@@ -738,8 +736,6 @@ def _record_date_of_birth(*, account_id: str, date_of_birth: str, now: datetime)
         db_table.fenced(
             account_id,
             [operation],
-            # The table the fence is read from.
-            table=account_deletion_repo.get_table(),
         )
     except (
         account_deletion_repo.AccountDeletionConflict,
