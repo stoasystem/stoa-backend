@@ -849,7 +849,8 @@ def test_a_student_is_told_what_to_master_first_and_nothing_is_locked(
 
 
 def _go_live(imported: list[dict[str, Any]]) -> None:
-    """Publish everything and write the stars live, as --knowledge-base-live does."""
+    """Publish everything and write the stars live, with their prerequisites, as
+    --knowledge-base-live does."""
     _publish_all(imported)
     _subjects, topics, units = seed_practice.knowledge_base_rows(live=True)
     db_table.table().seed(
@@ -955,6 +956,47 @@ def test_the_neighbourhood_sends_the_star_its_prerequisites_and_its_practice(
     )["focus"]
 
 
+def test_the_neighbourhood_reads_prerequisites_only_from_the_unit_rows(
+    imported: list[dict[str, Any]],
+) -> None:
+    """The knowledge base JSON is the seed's input, not a second source (#317)."""
+    _go_live(imported)
+    row = db_table.table().get_item(
+        Key={"PK": "PRACTICE", "SK": "UNIT#brueche-brueche-addieren"}
+    )["Item"]
+    db_table.table().seed({**row, "prerequisite_unit_ids": []})
+
+    around = knowledge_map_service.neighbourhood(
+        student_evidence.for_student("student-1"),
+        subject_id="mathematics",
+        around="brueche-brueche-addieren",
+    )
+
+    stars = {star["unitId"]: star for star in around["stars"]}
+    assert stars["brueche-brueche-addieren"]["prerequisiteUnitIds"] == []
+    assert stars.get("brueche-bruchbegriff", {}).get("relation") != "prerequisite"
+
+
+def test_a_neighbourhood_star_reports_as_unlit_exactly_its_prerequisites_not_lit(
+    imported: list[dict[str, Any]],
+) -> None:
+    _go_live(imported)
+    evidence = student_evidence.for_student("student-1")
+    states = knowledge_mastery_service.unit_states(evidence)
+
+    around = knowledge_map_service.neighbourhood(
+        evidence, subject_id="mathematics", around="brueche-brueche-addieren"
+    )
+
+    assert any(star["unlitPrerequisiteIds"] for star in around["stars"])
+    for star in around["stars"]:
+        not_lit = [
+            unit_id for unit_id in star["prerequisiteUnitIds"]
+            if states[unit_id].state.value != "lit"
+        ]
+        assert star["unlitPrerequisiteIds"] == not_lit, star["unitId"]
+
+
 def test_a_star_lights_from_its_core_and_extension_practice_is_beside_it() -> None:
     lessons = [{"id": "core"}, {"id": "proof", "extension": True}]
     exercises = {"core": ["c1"], "proof": ["p1"]}
@@ -1043,12 +1085,22 @@ def test_the_knowledge_base_stars_stay_hidden_until_they_go_live(
     subjects, topics, units = seed_practice.knowledge_base_rows(live=False)
     assert subjects == []
     assert {row["rollout_state"] for row in (*topics, *units)} == {"preview"}
-    assert all(unit["prerequisite_unit_ids"] == [] for unit in units)
-    subjects, topics, units = seed_practice.knowledge_base_rows(live=True, prerequisites=True)
+    subjects, topics, units = seed_practice.knowledge_base_rows(live=True)
     assert [s["subject_id"] for s in subjects] == ["english", "physics"]
     assert {row["rollout_state"] for row in (*topics, *units)} == {"active"}
-    prerequisites = {unit["unit_id"]: unit["prerequisite_unit_ids"] for unit in units}
-    assert prerequisites["brueche-brueche-addieren"] == ["brueche-bruchbegriff"]
+
+
+def test_the_seed_writes_every_prerequisite_of_the_knowledge_base() -> None:
+    """Hidden or live, a star's row carries every edge the committed JSON draws."""
+    drawn = {unit["unit_id"]: unit["prerequisites"] for unit in knowledge_base_catalog.units()}
+    for knowledge_base in ("preview", "live"):
+        written = {
+            row["unit_id"]: row["prerequisite_unit_ids"]
+            for row in seed_practice.seed_rows(knowledge_base=knowledge_base)
+            if row["SK"].startswith("UNIT#") and row["unit_id"] in drawn
+        }
+        assert written == drawn
+    assert sum(len(edges) for edges in drawn.values()) == 425
 
 
 def test_a_language_is_laid_out_by_situations_of_life_and_by_grammar(

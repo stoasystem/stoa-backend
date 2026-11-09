@@ -131,9 +131,10 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
     sets are skipped, and a set left in review or approved continues from there.
 13. **Go live:** `seed_practice.py --knowledge-base-live` writes the stars and nebulae
     active, and the English and physics subjects with them.
-14. **Prerequisites:** a prerequisite no longer locks a star (stoa-backend#125); add
-    `--knowledge-base-prerequisites` to write the stars' prerequisites, drawn from the
-    upstream edges between knowledge points with every cycle left out.
+14. **Prerequisites:** both seed options write the stars' prerequisites, drawn from the
+    upstream edges between knowledge points with every cycle left out; the unit rows
+    are the only place the runtime reads them (stoa-backend#317). A prerequisite no
+    longer locks a star (stoa-backend#125).
 
 ### Running the seed again
 

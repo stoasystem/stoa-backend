@@ -5,10 +5,10 @@ A subject is a galaxy, a topic is a nebula, a unit is a star, and each star
 carries the learning state `knowledge_mastery_service` judges it to be in.
 
 * **Prerequisites** are the unit rows' `prerequisite_unit_ids`, which only the
-  seed writes. Since stoa-backend#125 they lock nothing; they decide which
-  prerequisites a star reports unlit and where the map recommends starting. The
-  view around one star still adds the knowledge base's own edges
-  (`_prerequisites_of`) until stoa-backend#317 makes the rows the only source.
+  seed writes, and the only source: the whole map, the view around one star and
+  the mastery judgement all read them (stoa-backend#317). Since
+  stoa-backend#125 they lock nothing; they decide which prerequisites a star
+  reports unlit and where the map recommends starting.
 * **Skills** are the skill points each star's exercises train (stoa-backend#58).
 
 Coordinates are computed here, deterministically from the identifiers, so the
@@ -674,15 +674,9 @@ def neighbourhood(
 
 
 def _prerequisites_of(unit_id: str, units: Mapping[str, Mapping[str, Any]]) -> list[str]:
-    """What a star needs: the unit row's own prerequisites, and for a knowledge-base
-    star those drawn from its knowledge points - shown, never locking."""
+    """What a star needs, from its unit row - shown, never locking."""
     stated = [str(item) for item in units[unit_id].get("prerequisiteUnitIds") or () if item]
-    drawn = next(
-        (list(star.get("prerequisites") or []) for star in knowledge_base_catalog.units()
-         if star["unit_id"] == unit_id),
-        [],
-    )
-    return [item for item in dict.fromkeys([*stated, *drawn]) if item in units and item != unit_id]
+    return [item for item in dict.fromkeys(stated) if item in units and item != unit_id]
 
 
 def _focus(
