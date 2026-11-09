@@ -1,7 +1,7 @@
 """Admin routes — user management, report operations, and platform statistics."""
 from collections.abc import Callable, Mapping
 from datetime import date, datetime, timezone
-from functools import lru_cache, partial
+from functools import partial
 from typing import Annotated, Any, Literal, Optional
 from uuid import uuid4
 
@@ -329,7 +329,6 @@ class CapabilityTransitionCommand(BaseModel):
     changed_at: str
 
 
-@lru_cache(maxsize=1)
 def get_privileged_identity_provider(settings: Settings = Depends(get_settings)) -> Any:
     return boto3.client("cognito-idp", region_name=settings.aws_region)
 
