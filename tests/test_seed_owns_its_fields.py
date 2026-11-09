@@ -71,9 +71,7 @@ def test_position_fields_are_the_ones_the_layout_script_writes() -> None:
 
 def test_every_seeded_row_carries_only_owned_fields() -> None:
     for knowledge_base in (None, "preview", "live"):
-        for row in seed_practice.seed_rows(
-            knowledge_base=knowledge_base, knowledge_base_prerequisites=True
-        ):
+        for row in seed_practice.seed_rows(knowledge_base=knowledge_base):
             owned = seed_practice.SEED_OWNED_FIELDS[seed_practice.row_kind(row)]
             assert set(row) - {"PK", "SK"} <= owned, row["SK"]
 
@@ -162,7 +160,7 @@ def test_the_seed_writes_its_stamp(monkeypatch: pytest.MonkeyPatch) -> None:
     assert stamp["git_commit"] == "abc123"
     assert stamp["git_dirty"] is False
     assert stamp["knowledge_base"] == "preview"
-    assert stamp["knowledge_base_prerequisites"] is False
+    assert "knowledge_base_prerequisites" not in stamp
     assert stamp["seeded_at"]
 
 

@@ -990,14 +990,15 @@ RETIRED_BUILDERS = (_retired_textaufgaben_data,)
 # subjects; the subject list shows a subject whether or not it has lessons.
 #
 # The stars' prerequisites, drawn from the upstream edges between knowledge
-# points, are written only with --knowledge-base-prerequisites. A prerequisite
-# no longer locks a star (stoa-backend#125); it only decides which unlit
-# prerequisites a star reports and where the map recommends starting.
+# points, are written by both options: the unit rows are the only source the
+# runtime reads (stoa-backend#317). A prerequisite no longer locks a star
+# (stoa-backend#125); it only decides which unlit prerequisites a star reports
+# and where the map recommends starting.
 
 KNOWLEDGE_BASE_PREVIEW = "preview"
 
 
-def knowledge_base_rows(*, live: bool, prerequisites: bool = False):
+def knowledge_base_rows(*, live: bool):
     """The subjects, nebulae and stars of the knowledge base, as the seed writes them."""
     state = "active" if live else KNOWLEDGE_BASE_PREVIEW
     grade_levels = knowledge_base_catalog.SUBJECT_GRADE_LEVELS
@@ -1029,7 +1030,7 @@ def knowledge_base_rows(*, live: bool, prerequisites: bool = False):
             "grade_level": "grade_6_primary" if unit["subject_id"] == "mathematics" else "",
             "title": unit["titles"]["de"], "description": unit["description"],
             "order": unit["order"],
-            "prerequisite_unit_ids": list(unit.get("prerequisites") or []) if prerequisites else [],
+            "prerequisite_unit_ids": list(unit.get("prerequisites") or []),
             "rollout_state": state,
         }
         for unit in knowledge_base_catalog.units()
@@ -1157,9 +1158,7 @@ def row_kind(row: dict) -> str:
     return kind
 
 
-def seed_rows(
-    *, knowledge_base: str | None = None, knowledge_base_prerequisites: bool = False
-) -> list[dict]:
+def seed_rows(*, knowledge_base: str | None = None) -> list[dict]:
     """Every row the seed writes, holding only the fields it owns, in write order."""
     all_topics, all_units, all_lessons, all_challenges = [], [], [], []
     kb_subjects: list[dict] = []
@@ -1171,9 +1170,7 @@ def seed_rows(
         all_lessons.extend(lessons)
         all_challenges.extend(challenges)
     if knowledge_base:
-        kb_subjects, kb_topics, kb_units = knowledge_base_rows(
-            live=knowledge_base == "live", prerequisites=knowledge_base_prerequisites
-        )
+        kb_subjects, kb_topics, kb_units = knowledge_base_rows(live=knowledge_base == "live")
         all_topics.extend(kb_topics)
         all_units.extend(kb_units)
 
@@ -1284,12 +1281,8 @@ def seed(
     profile_name: str = "stoa",
     account_id: str = DEFAULT_AWS_ACCOUNT_ID,
     knowledge_base: str | None = None,
-    knowledge_base_prerequisites: bool = False,
 ):
-    rows = seed_rows(
-        knowledge_base=knowledge_base,
-        knowledge_base_prerequisites=knowledge_base_prerequisites,
-    )
+    rows = seed_rows(knowledge_base=knowledge_base)
     # Build every request first, so a row with a field the seed does not own
     # stops the run before anything is written.
     requests = [seed_update(row) for row in rows]
@@ -1323,7 +1316,6 @@ def seed(
         "git_commit": commit,
         "git_dirty": dirty,
         "knowledge_base": knowledge_base or "off",
-        "knowledge_base_prerequisites": knowledge_base_prerequisites,
     })
 
     dirty_note = " (uncommitted changes)" if dirty else ""
@@ -1354,16 +1346,9 @@ if __name__ == "__main__":
         "--knowledge-base-live", dest="knowledge_base", action="store_const", const="live",
         help="write them active, with the English and physics subjects, once published",
     )
-    parser.add_argument(
-        "--knowledge-base-prerequisites", action="store_true",
-        help="with either of the two, also write the stars' prerequisites",
-    )
     args = parser.parse_args()
     if args.print_hash:
-        print(seed_hash(seed_rows(
-            knowledge_base=args.knowledge_base,
-            knowledge_base_prerequisites=args.knowledge_base_prerequisites,
-        )))
+        print(seed_hash(seed_rows(knowledge_base=args.knowledge_base)))
     else:
         seed(
             args.table,
@@ -1372,5 +1357,4 @@ if __name__ == "__main__":
             profile_name=args.profile,
             account_id=args.account_id,
             knowledge_base=args.knowledge_base,
-            knowledge_base_prerequisites=args.knowledge_base_prerequisites,
         )
