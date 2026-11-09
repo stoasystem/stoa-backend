@@ -29,7 +29,7 @@ from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.security.identity import Actor
 from stoa.services.ask_question import _answering, _store, _sweep, dispatch
 from stoa.services.ask_question._replay import _conversation_repository_call
-from stoa.services.ask_question.errors import AskQuestionErrorCode
+from stoa.services.ask_question_errors import AskQuestionErrorCode
 from stoa.services.ask_question.models import (
     ChatMessage,
     GenerationProgressResponse,

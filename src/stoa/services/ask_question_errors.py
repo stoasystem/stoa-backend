@@ -3,6 +3,11 @@
 The strings are the ones the frontend compares, so they never change. They
 are raised as `AttachmentDecisionError` and rendered, like every rule
 violation, by `stoa.rule_violation`.
+
+It sits beside the `ask_question` package rather than in it, like the other
+`*_errors` modules: `stoa.models.error` names these codes in the OpenAPI error
+bodies, and importing anything inside the package first runs the package's
+`__init__`, which loads the whole question flow (#306).
 """
 
 from enum import StrEnum

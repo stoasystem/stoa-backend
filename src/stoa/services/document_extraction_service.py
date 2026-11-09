@@ -7,8 +7,6 @@ import re
 from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 
-from pypdf import PdfReader
-
 from stoa.services.file_validation_service import (
     PassivePackageError,
     ensure_safe_xml,
@@ -60,11 +58,22 @@ def extract_attachment_text(data, media_type: str) -> str:
     raise DocumentExtractionFailure("unsupported_document")
 
 
+def _pdf_reader(stream):
+    """A strict `PdfReader` over `stream`, importing pypdf only now.
+
+    pypdf is the largest library the API loads and only a PDF needs it, so it
+    is not paid for on every Lambda cold start (#306).
+    """
+    from pypdf import PdfReader
+
+    return PdfReader(stream, strict=True)
+
+
 def extract_pdf_text(data) -> str:
     try:
         stream = BytesIO(data) if isinstance(data, bytes) else data
         stream.seek(0)
-        reader = PdfReader(stream, strict=True)
+        reader = _pdf_reader(stream)
         if reader.is_encrypted:
             raise DocumentExtractionFailure("encrypted_document")
         if len(reader.pages) > MAX_PDF_PAGES:
@@ -90,7 +99,7 @@ def check_pdf_structure(data) -> None:
     try:
         stream = BytesIO(data) if isinstance(data, bytes) else data
         stream.seek(0)
-        reader = PdfReader(stream, strict=True)
+        reader = _pdf_reader(stream)
         if reader.is_encrypted:
             raise DocumentExtractionFailure("encrypted_document")
         if len(reader.pages) > MAX_ADMITTED_PDF_PAGES:

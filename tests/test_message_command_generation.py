@@ -35,7 +35,7 @@ from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa.services import ai_service, ask_question, locale_service
 from stoa.services.ask_question import _admission
-from stoa.services.ask_question.errors import AskQuestionErrorCode
+from stoa.services.ask_question_errors import AskQuestionErrorCode
 
 
 def test_a_committed_and_generated_answer_still_streams_as_before(table, model) -> None:

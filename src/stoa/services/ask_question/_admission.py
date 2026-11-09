@@ -43,7 +43,7 @@ from stoa.services import (
     bedrock_token_count_service,
     entitlement_service,
 )
-from stoa.services.ask_question.errors import AskQuestionErrorCode
+from stoa.services.ask_question_errors import AskQuestionErrorCode
 
 
 class AdmissionError(AttachmentDecisionError):

@@ -14,8 +14,6 @@ import warnings
 from xml.parsers import expat
 from zipfile import BadZipFile, ZIP_DEFLATED, ZIP_STORED, ZipFile
 
-from PIL import Image, UnidentifiedImageError
-
 from stoa.config import DOCUMENT_MAX_BYTES, IMAGE_MAX_BYTES, IMAGE_MAX_EDGE
 from stoa.security.attachment_errors import AttachmentErrorCode
 from stoa.services import document_parser_worker
@@ -139,6 +137,10 @@ def validate_uploaded_file(data, filename: str, declared_mime: str) -> DetectedF
 
 
 def validate_image(stream, extension: str, size: int) -> DetectedFile:
+    # Imported here, not at the top: only an image upload needs Pillow, and
+    # every module-level import is paid on each Lambda cold start (#306).
+    from PIL import Image, UnidentifiedImageError
+
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)

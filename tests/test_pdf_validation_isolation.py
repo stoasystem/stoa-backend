@@ -117,12 +117,9 @@ def test_the_api_process_does_not_parse_the_pdf_itself(monkeypatch: pytest.Monke
         def __init__(self, *_args: object, **_kwargs: object) -> None:
             raise AssertionError("PdfReader was constructed in the API process")
 
-    from stoa.services import document_extraction_service
-
-    # Every copy this process holds: pypdf's own, and the one the extraction
-    # module bound at import, which a direct call to its check would use.
+    # The extraction module imports `PdfReader` from pypdf when it reads a PDF
+    # (#306), so pypdf's own is the only copy this process could construct.
     monkeypatch.setattr(pypdf, "PdfReader", _Refuse)
-    monkeypatch.setattr(document_extraction_service, "PdfReader", _Refuse)
 
     detected = validate_uploaded_file(_pdf(), "student.pdf", "application/pdf")
 

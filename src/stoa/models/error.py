@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.security.attachment_errors import AttachmentErrorCode
 from stoa.security.errors import SecurityErrorCode
-from stoa.services.ask_question import AskQuestionErrorCode
+from stoa.services.ask_question_errors import AskQuestionErrorCode
 
 
 class _ErrorModel(BaseModel):
