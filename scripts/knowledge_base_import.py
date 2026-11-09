@@ -28,9 +28,10 @@ to curriculum migration manifests:
                        - one per small star, every one "publish": false - and a
                        report of what became of each record
 
-The source text and its translations stay out of the repository: the licence
-does not allow commercial use without the author's permission, which publishing
-waits for. Only the star file and the vocabulary (names) are committed. The
+The source text and its translations stay out of the repository: the licence does
+not allow commercial use without the author's permission, which the author gave
+in words on 2026-11-09 (recorded in docs/knowledge-base-import.md). Only the star
+file and the vocabulary (names) are committed. The
 operator steps are in docs/knowledge-base-import.md.
 """
 
@@ -354,8 +355,8 @@ FIRST_IMPORTED_ORDER = 101
 LESSONS_PER_MANIFEST = 40
 SOURCE_ID = "knowledge-base"
 OPERATOR_NOTE = (
-    "Knowledge base adapted from cn-math-taxonomy (CC BY-NC 4.0; commercial use needs the "
-    "author's written permission before anything is published). AI-written source, "
+    "Knowledge base adapted from cn-math-taxonomy (CC BY-NC 4.0; the author gave permission "
+    "for this use on 2026-11-09). AI-written source, "
     "machine-translated into de/en/fr/it: every lesson is a draft for a teacher's review."
 )
 

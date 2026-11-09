@@ -12,8 +12,12 @@ practice sets that carry the small star's id (cut into parts of at most ten
 exercises), so the practice reads, the quiz and the mastery work unchanged.
 
 **Licence.** The upstream is CC BY-NC 4.0: no commercial use without the author's
-permission. Nothing is published before that permission is in writing. The source
-text and its translations stay out of the repository; only the star file and the
+permission. On 2026-11-09 the author's permission to use it was given to the
+operator and passed on here in words, not in writing, together with the note that
+the upstream itself was generated elsewhere; publishing goes ahead on that basis
+and this paragraph is the record of it. Neither the permission nor the upstream's
+own provenance settles any third party's rights in the material. The source text
+and its translations still stay out of the repository; only the star file and the
 skill vocabulary (names of knowledge points and question types) are committed.
 
 ## What is left behind
@@ -103,8 +107,8 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
     stars and nebulae in preview: hidden from students, there for the drafts to name.
 11. **Dry run and apply** each manifest through `POST /admin/curriculum/migrations/dry-run`
     and `.../apply`. Every practice set becomes a draft; nothing is published.
-12. **Review** the drafts in the curriculum workflow. Once the licence permission is in
-    writing, publish the reviewed practice sets with
+12. **Review** the drafts in the curriculum workflow. The licence permission is in
+    (see **Licence** above), so the reviewed practice sets can be published with
     `scripts/publish_curriculum_drafts.py`, which makes the submit-review, approve and
     publish calls for every draft of the manifests, under your own admin session (its
     access token in `STOA_ADMIN_TOKEN`):
