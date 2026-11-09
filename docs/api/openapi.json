@@ -4397,6 +4397,24 @@
         "title": "CurriculumWorklistResponse",
         "type": "object"
       },
+      "EmailSubscriptionResponse": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "subscribed": {
+            "title": "Subscribed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "subscribed"
+        ],
+        "title": "EmailSubscriptionResponse",
+        "type": "object"
+      },
       "EmailVerificationConfirmRequest": {
         "additionalProperties": false,
         "properties": {
@@ -6804,12 +6822,17 @@
           "userId": {
             "title": "Userid",
             "type": "string"
+          },
+          "weeklyReportEmail": {
+            "title": "Weeklyreportemail",
+            "type": "boolean"
           }
         },
         "required": [
           "userId",
           "preferences",
           "dispatchEmail",
+          "weeklyReportEmail",
           "supportedCategories",
           "supportedChannels"
         ],
@@ -6845,6 +6868,17 @@
               }
             ],
             "title": "Preferences"
+          },
+          "weeklyReportEmail": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weeklyreportemail"
           }
         },
         "title": "NotificationPreferenceUpdate",
@@ -27904,6 +27938,124 @@
             }
           ],
           "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
+    "/notifications/email-resubscribe": {
+      "post": {
+        "description": "Undo an unsubscribe from the same link (#363).",
+        "operationId": "resubscribe_to_email_notifications_email_resubscribe_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "maxLength": 2048,
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailSubscriptionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "summary": "Resubscribe To Email",
+        "tags": [
+          "notifications"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [],
+          "classification": "public",
+          "identifiers": []
+        }
+      }
+    },
+    "/notifications/email-unsubscribe": {
+      "post": {
+        "description": "Stop one kind of notification email for the person the link was sent to (#363).\n\nAnswers the frontend's unsubscribe page and the RFC 8058 one-click POST a\nmail client sends to the `List-Unsubscribe` address (its form body,\n`List-Unsubscribe=One-Click`, is not read). The signed token in the query\nis the credential: it names one person and one kind of email. A link that\nis broken, altered, for another kind or no longer signed by a key we hold is\nrefused with `email_unsubscribe_link_invalid`.",
+        "operationId": "unsubscribe_from_email_notifications_email_unsubscribe_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "maxLength": 2048,
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailSubscriptionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "summary": "Unsubscribe From Email",
+        "tags": [
+          "notifications"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [],
+          "classification": "public",
           "identifiers": []
         }
       }

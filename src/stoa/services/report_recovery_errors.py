@@ -37,6 +37,8 @@ class ReportRecoveryErrorCode(StrEnum):
     REPORT_HTML_ARTIFACT_MISSING = "report_html_artifact_missing"
     REPORT_RECIPIENT_UNLINKED = "report_recipient_unlinked"
     REPORT_RECIPIENT_EMAIL_MISSING = "report_recipient_email_missing"
+    # The parent switched the weekly report email off (#363).
+    REPORT_RECIPIENT_UNSUBSCRIBED = "report_recipient_unsubscribed"
     REPORT_RESEND_FAILED = "report_resend_failed"
     REPORT_GENERATION_NOT_FAILED = "report_generation_not_failed"
     REPORT_GENERATION_RETRY_IN_PROGRESS = "report_generation_retry_in_progress"
@@ -98,6 +100,7 @@ REPORT_RECOVERY_ERROR_REGISTRY: dict[ReportRecoveryErrorCode, RuleContract] = {
     _C.REPORT_HTML_ARTIFACT_MISSING: _needs_repair(),
     _C.REPORT_RECIPIENT_UNLINKED: RuleContract(403),
     _C.REPORT_RECIPIENT_EMAIL_MISSING: _needs_repair(),
+    _C.REPORT_RECIPIENT_UNSUBSCRIBED: _conflict(),
     _C.REPORT_RESEND_FAILED: _delivery_failed(),
     _C.REPORT_GENERATION_NOT_FAILED: _conflict(),
     _C.REPORT_GENERATION_RETRY_IN_PROGRESS: _conflict(),

@@ -27,12 +27,16 @@ from stoa.services import (
     current_relationship,
     locale_service,
     message_catalog,
+    notification_service,
     notify_service,
     report_artifact_service,
     student_evidence,
 )
 
 logger = logging.getLogger(__name__)
+
+# A report's `email_status` when the parent switched the weekly email off (#363).
+EMAIL_SKIPPED_PREFERENCE = "skipped_preference"
 
 
 @runtime_checkable
@@ -408,10 +412,16 @@ def store_and_send_weekly_report(
             error_class=str(recipient.refusal),
             error_message=_WITHHELD_MESSAGES.get(str(recipient.refusal), "withheld"),
         )
+    # A parent who unsubscribed still has the report in STOA; only the email
+    # stops, and the report says so (#363).
+    if not notification_service.weekly_report_email_enabled(str(report_item["parent_id"])):
+        return _mark_report_email_skipped(report_item)
     try:
         delivery_outcome = notify_service.send_fenced_weekly_report_email(
             recipient.email,
             html_report,
+            recipient_user_id=str(report_item["parent_id"]),
+            locale=locale,
             owner_id=str(report_item["student_id"]),
             generation=generation,
             report_id=str(report_item["report_id"]),
@@ -456,6 +466,32 @@ _WITHHELD_MESSAGES = {
     ),
     current_relationship.RECIPIENT_MISSING: "Parent has no email address",
 }
+
+
+def _mark_report_email_skipped(report_item: dict[str, Any]) -> dict[str, Any]:
+    """Record that the parent switched the weekly report email off (#363)."""
+    skipped_at = _now_iso()
+    report_repo.update_report_status(
+        report_item["report_id"],
+        "generated",
+        email_status=EMAIL_SKIPPED_PREFERENCE,
+        email_skipped_at=skipped_at,
+        updated_at=skipped_at,
+    )
+    logger.info(
+        "Weekly report email skipped by preference report_id=%s parent_id=%s student_id=%s week_start=%s",
+        report_item["report_id"],
+        report_item["parent_id"],
+        report_item["student_id"],
+        report_item["week_start"],
+    )
+    return {
+        **report_item,
+        "status": "generated",
+        "email_status": EMAIL_SKIPPED_PREFERENCE,
+        "email_skipped_at": skipped_at,
+        "updated_at": skipped_at,
+    }
 
 
 def _mark_report_email_failed(

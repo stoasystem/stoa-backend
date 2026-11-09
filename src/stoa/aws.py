@@ -48,6 +48,9 @@ class Kind(StrEnum):
     S3 = "s3"
     S3_PRESIGN = "s3-presign"
     SES = "ses"
+    # Notification emails carry `List-Unsubscribe` headers, which only SESv2
+    # `SendEmail` can set (#363); one-off emails stay on SES.
+    SES_NOTIFICATION = "ses-notification"
     SES_DISPATCH_REMINDER = "ses-dispatch-reminder"
     COGNITO = "cognito-idp"
     BEDROCK_RUNTIME = "bedrock-runtime"
@@ -112,7 +115,9 @@ KINDS: Mapping[Kind, Spec] = {
     Kind.S3: Spec("s3", _api_region),
     Kind.S3_PRESIGN: Spec("s3", _api_region, PRESIGN_CONFIG),
     Kind.SES: Spec("ses", _api_region),
-    Kind.SES_DISPATCH_REMINDER: Spec("ses", _api_region, DISPATCH_REMINDER_SES_CONFIG),
+    Kind.SES_NOTIFICATION: Spec("sesv2", _api_region),
+    # The dispatch reminder is a notification email too (#363), hence SESv2.
+    Kind.SES_DISPATCH_REMINDER: Spec("sesv2", _api_region, DISPATCH_REMINDER_SES_CONFIG),
     Kind.COGNITO: Spec("cognito-idp", _api_region),
     Kind.BEDROCK_RUNTIME: Spec("bedrock-runtime", _api_region),
     Kind.LAMBDA: Spec("lambda", _api_region),

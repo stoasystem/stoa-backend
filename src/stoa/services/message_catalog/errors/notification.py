@@ -107,4 +107,10 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "La notification n'a pas d'identifiant.",
         "it": "La notifica non ha un identificativo.",
     },
+    "error.email_unsubscribe_link_invalid": {
+        "de": "Dieser Abmeldelink ist ungültig. Sie können die E-Mails in STOA in den Benachrichtigungseinstellungen abschalten.",
+        "en": "This unsubscribe link is not valid. You can turn these emails off in STOA's notification settings.",
+        "fr": "Ce lien de désabonnement n'est pas valide. Vous pouvez désactiver ces e-mails dans les paramètres de notification de STOA.",
+        "it": "Questo link di disiscrizione non è valido. Può disattivare queste e-mail nelle impostazioni delle notifiche di STOA.",
+    },
 }

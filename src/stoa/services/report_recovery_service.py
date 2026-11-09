@@ -19,6 +19,7 @@ from stoa.rule_violation import render_message
 from stoa.services import (
     current_relationship,
     locale_service,
+    notification_service,
     notify_service,
     report_artifact_service,
     report_service,
@@ -111,22 +112,33 @@ def resend_report_email(
             error_class=recipient.refusal,
         )
 
+    parent_id = str(report.get("parent_id") or "")
+    if not notification_service.weekly_report_email_enabled(parent_id):
+        raise _refused(
+            report,
+            "resend_email",
+            operator,
+            reason,
+            source,
+            _C.REPORT_RECIPIENT_UNSUBSCRIBED,
+        )
+
     before = _audit_snapshot(report)
     attempted_at = _now_iso()
     try:
         html = report_artifact_service.get_report_html(str(html_key))
         owner_id = str(report.get("student_id") or "")
         fence = account_deletion_repo.require_active_account_fence(owner_id)
+        locale = locale_service.stored_locale(parent_id)
         delivery_outcome = notify_service.send_fenced_weekly_report_email(
             recipient.email,
             html,
+            recipient_user_id=parent_id,
+            locale=locale,
             owner_id=owner_id,
             generation=int(fence["generation"]),
             report_id=str(report["report_id"]),
-            subject=notify_service.weekly_report_subject(
-                report.get("student_name"),
-                locale_service.stored_locale(str(report.get("parent_id") or "")),
-            ),
+            subject=notify_service.weekly_report_subject(report.get("student_name"), locale),
         )
         if delivery_outcome != "accepted":
             raise RuntimeError(delivery_outcome)

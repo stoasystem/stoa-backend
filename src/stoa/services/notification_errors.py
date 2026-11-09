@@ -30,6 +30,9 @@ class NotificationErrorCode(StrEnum):
     WEBSOCKET_CHANNEL_REQUIRED = "websocket_channel_required"
     WEBSOCKET_CONNECTION_NOT_FOUND = "websocket_connection_not_found"
     NOTIFICATION_EVENT_ID_REQUIRED = "notification_event_id_required"
+    # An unsubscribe link from a notification email (#363): broken, altered, for
+    # another kind of email, or signed with a key no longer held - all alike.
+    EMAIL_UNSUBSCRIBE_LINK_INVALID = "email_unsubscribe_link_invalid"
 
     @property
     def contract(self) -> RuleContract:
@@ -60,6 +63,7 @@ NOTIFICATION_ERROR_REGISTRY: dict[NotificationErrorCode, RuleContract] = {
     _C.WEBSOCKET_CHANNEL_REQUIRED: _INPUT,
     _C.WEBSOCKET_CONNECTION_NOT_FOUND: RuleContract(404),
     _C.NOTIFICATION_EVENT_ID_REQUIRED: _INPUT,
+    _C.EMAIL_UNSUBSCRIBE_LINK_INVALID: RuleContract(400),
 }
 
 register_codes("notification", NotificationErrorCode, NOTIFICATION_ERROR_REGISTRY)

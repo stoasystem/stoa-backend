@@ -578,6 +578,11 @@ GATEWAY_PUBLIC_PATHS = {
     ("POST", "/auth/register"),
     ("POST", "/auth/reset-password"),
     ("POST", "/billing/webhooks/stripe"),
+    # The unsubscribe link in a notification email, and the RFC 8058 one-click
+    # POST a mail client sends to `List-Unsubscribe` (#363). The signed token in
+    # the query is the credential; nobody clicking it is signed in.
+    ("POST", "/notifications/email-resubscribe"),
+    ("POST", "/notifications/email-unsubscribe"),
     ("POST", "/teacher-applications"),
     ("POST", "/teacher-applications/activation/claim"),
     # The phone that scanned a one-time upload code is not signed in (#146); the

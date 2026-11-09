@@ -3696,6 +3696,24 @@
     "sensitive": true
   },
   {
+    "authorization": [],
+    "classification": "public",
+    "family": "notifications",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/notifications/email-resubscribe",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "notifications",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/notifications/email-unsubscribe",
+    "sensitive": false
+  },
+  {
     "authorization": [
       {
         "action": "create",

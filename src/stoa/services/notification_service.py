@@ -18,6 +18,7 @@ from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
 from stoa.services import (
+    email_unsubscribe,
     learning_profile_service,
     locale_service,
     message_catalog,
@@ -63,6 +64,8 @@ ALWAYS_IN_APP_EVENT_TYPES = frozenset({"teacher_help_dispatched"})
 # it off. It is not a category x channel cell: the bell for the same offer
 # cannot be turned off, and the email is sent at once, not in a digest.
 DISPATCH_EMAIL_DEFAULT = True
+# The parent's weekly report email (#363); on until they switch it off.
+WEEKLY_REPORT_EMAIL_DEFAULT = True
 EVENT_CATEGORY_BY_TYPE = {
     "teacher_requested": "teacher_responses",
     "teacher_takeover": "teacher_responses",
@@ -1000,6 +1003,7 @@ def emit_teacher_help_dispatched(
             return
         notify_service.send_dispatch_reminder_email(
             recipient,
+            recipient_user_id=teacher_id,
             subject_name=subject_name,
             request_id=request_id,
             minutes=accept_minutes,
@@ -1198,12 +1202,27 @@ def dispatch_email_enabled(user_id: str) -> bool:
     return _stored_dispatch_email(notification_repo.get_preferences(user_id) or {})
 
 
+def _stored_weekly_report_email(stored: Mapping[str, Any]) -> bool:
+    value = stored.get("weekly_report_email")
+    return value if isinstance(value, bool) else WEEKLY_REPORT_EMAIL_DEFAULT
+
+
+def weekly_report_email_enabled(user_id: str) -> bool:
+    """Whether this parent wants the weekly report by email (#363).
+
+    Switched off, the report is still generated and readable in STOA; only the
+    email is not sent.
+    """
+    return _stored_weekly_report_email(notification_repo.get_preferences(user_id) or {})
+
+
 def preferences_response(user_id: str) -> dict[str, Any]:
     stored = notification_repo.get_preferences(user_id) or {}
     return {
         "userId": user_id,
         "preferences": _merged_preferences(stored.get("preferences")),
         "dispatchEmail": _stored_dispatch_email(stored),
+        "weeklyReportEmail": _stored_weekly_report_email(stored),
         "supportedCategories": sorted(PREFERENCE_CATEGORIES),
         "supportedChannels": sorted(PREFERENCE_CHANNELS),
         "updatedAt": stored.get("updated_at"),
@@ -1215,11 +1234,12 @@ def update_preferences(
     preferences: dict[str, Any] | None,
     *,
     dispatch_email: bool | None = None,
+    weekly_report_email: bool | None = None,
 ) -> dict[str, Any]:
-    """Write the matrix and the dispatch email switch; a part left out keeps what is stored.
+    """Write the matrix and the email switches; a part left out keeps what is stored.
 
     A client that only knows the matrix must not turn a teacher's dispatch
-    email back on, and one that only flips the switch must not reset the matrix.
+    email back on, and one that only flips a switch must not reset the matrix.
     """
     stored = notification_repo.get_preferences(user_id) or {}
     if preferences is None:
@@ -1229,6 +1249,8 @@ def update_preferences(
         merged = _merged_preferences(None)
     if dispatch_email is None:
         dispatch_email = _stored_dispatch_email(stored)
+    if weekly_report_email is None:
+        weekly_report_email = _stored_weekly_report_email(stored)
     for category, channel_updates in preferences.items():
         if category not in PREFERENCE_CATEGORIES:
             raise NotificationViolation(_N.NOTIFICATION_PREFERENCE_CATEGORY_UNSUPPORTED)
@@ -1249,6 +1271,7 @@ def update_preferences(
             "owner_id": user_id,
             "preferences": merged,
             "dispatch_email": dispatch_email,
+            "weekly_report_email": weekly_report_email,
             "updated_at": updated_at,
         }
     )
@@ -1256,10 +1279,61 @@ def update_preferences(
         "userId": user_id,
         "preferences": merged,
         "dispatchEmail": dispatch_email,
+        "weeklyReportEmail": weekly_report_email,
         "supportedCategories": sorted(PREFERENCE_CATEGORIES),
         "supportedChannels": sorted(PREFERENCE_CHANNELS),
         "updatedAt": updated_at,
     }
+
+
+def set_email_subscription(token: str, *, subscribed: bool) -> dict[str, Any]:
+    """Follow an unsubscribe link from a notification email, or undo it (#363).
+
+    The token, not a session, names whose preference changes and which one;
+    any doubt about it is the one `email_unsubscribe_link_invalid`. Each kind
+    writes the preference the settings page already shows:
+
+    - dispatch reminder: `dispatch_email`;
+    - weekly report: `weekly_report_email`;
+    - digest: the `email_digest` channel of every category. The categories it
+      turns off are remembered, so undoing turns back on those and no others.
+    """
+    target = email_unsubscribe.read_token(token)
+    user_id = target.user_id
+    stored = notification_repo.get_preferences(user_id) or {}
+    # The repository merges these fields onto the stored row.
+    item: dict[str, Any] = {
+        "entity_type": notification_repo.PREFERENCE_ENTITY,
+        "user_id": user_id,
+        "owner_id": user_id,
+        "updated_at": now_iso(),
+    }
+    if target.kind is email_unsubscribe.EmailKind.DISPATCH_REMINDER:
+        item["dispatch_email"] = subscribed
+    elif target.kind is email_unsubscribe.EmailKind.WEEKLY_REPORT:
+        item["weekly_report_email"] = subscribed
+    else:
+        merged = _merged_preferences(stored.get("preferences"))
+        raw = stored.get("email_digest_unsubscribed")
+        remembered = {str(c) for c in raw} if isinstance(raw, list) else set()
+        if subscribed:
+            for category in remembered & PREFERENCE_CATEGORIES:
+                merged[category]["email_digest"] = True
+            remembered = set()
+        else:
+            for category, channels in merged.items():
+                if channels["email_digest"]:
+                    remembered.add(category)
+                    channels["email_digest"] = False
+        item["preferences"] = merged
+        item["email_digest_unsubscribed"] = sorted(remembered)
+    try:
+        notification_repo.put_preferences(item)
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        # The account was deleted since the email: the write is fenced off, and
+        # the link answers as any other that no longer works.
+        raise email_unsubscribe.invalid_link() from exc
+    return {"kind": target.kind.value, "subscribed": subscribed}
 
 
 def category_for_event(*, event_type: str, target_type: str) -> str:
@@ -1478,7 +1552,8 @@ def send_digest(
                 "deliveryId": delivery_id,
                 "recipientEmail": recipient_email,
                 "subject": message_catalog.text("email.notification_digest.title", locale),
-                "html": _digest_email_html(canonical_items, locale),
+                "html": _digest_email_html(canonical_items, locale, _user_id(user)),
+                "recipientUserId": _user_id(user),
                 "items": canonical_items,
                 "template": config.settings().notification_email_digest_template,
             }
@@ -1922,14 +1997,14 @@ def _record_event_attempts(event_ids: list[str], metadata_key: str, attempt: dic
 
 
 def _send_email_digest_provider(payload: dict[str, Any]) -> dict[str, Any]:
-    ses = aws.client(Kind.SES)
-    response = ses.send_email(
-        Source=config.settings().notification_email_sender,
-        Destination={"ToAddresses": [payload["recipientEmail"]]},
-        Message={
-            "Subject": {"Data": payload["subject"]},
-            "Body": {"Html": {"Data": payload["html"]}},
-        },
+    response = notify_service.send_notification_email(
+        aws.client(Kind.SES_NOTIFICATION),
+        sender=config.settings().notification_email_sender,
+        recipient=payload["recipientEmail"],
+        recipient_user_id=payload["recipientUserId"],
+        kind=email_unsubscribe.EmailKind.NOTIFICATION_DIGEST,
+        subject=payload["subject"],
+        html=payload["html"],
     )
     return {"messageId": response.get("MessageId")}
 
@@ -1949,13 +2024,16 @@ def _send_push_provider(payload: dict[str, Any]) -> dict[str, Any]:
     return {"statusCode": response.status, "bodyHash": _hash_value(raw) if raw else None}
 
 
-def _digest_email_html(items: list[dict[str, Any]], locale: str) -> str:
+def _digest_email_html(items: list[dict[str, Any]], locale: str, user_id: str) -> str:
     rows = "".join(
         f"<li><strong>{_html_escape(item.get('title'))}</strong>: {_html_escape(item.get('summary'))}</li>"
         for item in items
     )
     heading = _html_escape(message_catalog.text("email.notification_digest.title", locale))
-    return f"<h1>{heading}</h1><ul>{rows}</ul>"
+    footer = email_unsubscribe.footer_html(
+        user_id, email_unsubscribe.EmailKind.NOTIFICATION_DIGEST, locale
+    )
+    return f"<h1>{heading}</h1><ul>{rows}</ul>{footer}"
 
 
 def _redacted_provider_result(value: Any) -> dict[str, Any]:

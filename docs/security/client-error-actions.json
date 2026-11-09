@@ -1072,6 +1072,19 @@
         "retryable": false
       }
     },
+    "email_unsubscribe_link_invalid": {
+      "action": null,
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.email_unsubscribe_link_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "email_verification_required": {
       "action": "verify_email",
       "domain": "security",
@@ -2805,6 +2818,19 @@
       "domain": "report_recovery",
       "http_status": 403,
       "message_key": "error.report_recipient_unlinked",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "report_recipient_unsubscribed": {
+      "action": null,
+      "domain": "report_recovery",
+      "http_status": 409,
+      "message_key": "error.report_recipient_unsubscribed",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,

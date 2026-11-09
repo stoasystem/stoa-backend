@@ -61,6 +61,33 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Ce lien est à usage unique et valable jusqu'au {expires}.",
         "it": "Il link è utilizzabile una sola volta ed è valido fino al {expires}.",
     },
+    # ── the unsubscribe line under each notification email (#363) ─────────
+    #
+    # Why this email came, then the link that stops this kind of email.
+    "email.unsubscribe.reason.weekly_report": {
+        "de": "Sie erhalten diese E-Mail, weil STOA Ihnen Wochenberichte über Ihr Kind sendet.",
+        "en": "You are receiving this email because STOA sends you weekly reports about your child.",
+        "fr": "Vous recevez cet e-mail parce que STOA vous envoie des rapports hebdomadaires sur votre enfant.",
+        "it": "Riceve questa e-mail perché STOA Le invia rapporti settimanali su Suo/a figlio/a.",
+    },
+    "email.unsubscribe.reason.dispatch_reminder": {
+        "de": "Sie erhalten diese E-Mail, weil STOA Ihnen Hilfeanfragen zuweist.",
+        "en": "You are receiving this email because STOA offers you help requests.",
+        "fr": "Vous recevez cet e-mail parce que STOA vous attribue des demandes d'aide.",
+        "it": "Riceve questa e-mail perché STOA Le assegna richieste di aiuto.",
+    },
+    "email.unsubscribe.reason.notification_digest": {
+        "de": "Sie erhalten diese E-Mail, weil Sie Zusammenfassungen Ihrer Mitteilungen per E-Mail eingeschaltet haben.",
+        "en": "You are receiving this email because you turned on notification digests by email.",
+        "fr": "Vous recevez cet e-mail parce que vous avez activé les résumés de notifications par e-mail.",
+        "it": "Riceve questa e-mail perché ha attivato i riepiloghi delle notifiche via e-mail.",
+    },
+    "email.unsubscribe.action": {
+        "de": "Diese E-Mails abbestellen",
+        "en": "Unsubscribe from these emails",
+        "fr": "Se désabonner de ces e-mails",
+        "it": "Non ricevere più queste e-mail",
+    },
     # ── the notification digest email ────────────────────────────────────
     #
     # The subject and the heading of the body; each item below it is the
