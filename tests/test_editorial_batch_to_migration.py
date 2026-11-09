@@ -20,7 +20,12 @@ from fakes.dynamodb import FakeTable
 from scripts import editorial_batch_to_migration as converter
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.routers import admin
-from stoa.services import answer_judging, curriculum_migration_service, curriculum_ops_service
+from stoa.services import (
+    answer_judging,
+    curriculum_migration_service,
+    curriculum_ops_service,
+    exercise_localization,
+)
 from test_curriculum_publish_projection import install_seeded_table
 
 
@@ -135,6 +140,7 @@ def test_the_limits_are_the_authoring_request_limits() -> None:
     assert converter.MAX_ID == limit(
         admin.CurriculumExerciseDraftRequest, "exercise_id", "max_length"
     )
+    assert converter.MAX_FEEDBACK == curriculum_ops_service.MAX_FEEDBACK_LENGTH
 
 
 def test_one_lesson_per_card_and_never_a_publish_intent() -> None:
@@ -201,6 +207,7 @@ def test_one_lesson_per_card_and_never_a_publish_intent() -> None:
         (_question("EX-S", solution=[]), "no solution steps"),
         (_question("EX-L", prompt="x" * 2001), "prompt is 2001 characters"),
         (_question("EX-M", shared_material_id="CTX-1"), "shared material CTX-1 is missing"),
+        (_question("EX-K", correct_feedback="x" * 501), "correct_feedback is 501 characters"),
     ],
 )
 def test_what_the_platform_cannot_show_or_judge_is_skipped_with_its_reason(
@@ -231,6 +238,62 @@ def test_a_child_question_must_carry_its_shared_material() -> None:
 
     assert _report_row(report, "EX-3A")["status"] == "converted"
     assert "does not contain shared material CTX-1" in _report_row(report, "EX-3B")["reason"]
+
+
+def _french(**extra: Any) -> dict[str, Any]:
+    return {
+        "prompt": "Calcule $\\frac{3}{4}$ de $24$.",
+        "explanation": "Un quart de $24$ vaut $6$.",
+        "correct_answer": "18",
+        "accepted_answers": ["18 pièces"],
+        "correct_feedback": "Juste !",
+        "incorrect_feedback": "Pas encore.",
+        **extra,
+    }
+
+
+def test_translations_and_feedback_are_carried_in_the_platform_form() -> None:
+    question = _question(
+        "EX-T",
+        correct_feedback="Richtig!",
+        incorrect_feedback="Noch nicht.",
+        translations={"fr": _french(review_status="pending_native_review")},
+        translation_review={"fr": "pending_native_review"},
+    )
+
+    manifest, report = converter.convert(_batch(question))
+
+    exercise = manifest["lessons"][0]["exercises"][0]
+    assert exercise["correctFeedback"] == "Richtig!"
+    assert exercise["incorrectFeedback"] == "Noch nicht."
+    # Only what a locale of an exercise holds; the editorial review note stays behind.
+    assert exercise["translations"] == {"fr": _french()}
+    assert "translation_review" in _report_row(report, "EX-T")["notCarried"]
+
+
+@pytest.mark.parametrize(
+    ("translations", "reason"),
+    [
+        ({"zh": _french()}, "translations.zh"),
+        ({"fr": _french(prompt=" ")}, "translations.fr"),
+        ({"fr": _french(correct_answer="")}, "translations.fr"),
+        (
+            {"fr": _french(incorrect_feedback="x" * 501)},
+            "translations.fr.incorrect_feedback is 501 characters",
+        ),
+    ],
+)
+def test_a_translation_the_platform_would_refuse_skips_the_exercise(
+    translations: dict[str, Any], reason: str
+) -> None:
+    manifest, report = converter.convert(
+        _batch(_question("EX-T", translations=translations), _question("EX-OK"))
+    )
+
+    row = _report_row(report, "EX-T")
+    assert row["status"] == "skipped"
+    assert reason in row["reason"]
+    assert [item["exerciseId"] for item in manifest["lessons"][0]["exercises"]] == ["zap-ok"]
 
 
 def test_another_schema_is_refused() -> None:
@@ -305,6 +368,56 @@ def test_a_converted_draft_goes_through_review_and_judges_its_listed_answers(
     assert challenge is not None
     assert answer_judging.judge_challenge("18 stück", challenge)
     assert not answer_judging.judge_challenge("24", challenge)
+
+
+@pytest.mark.parametrize(
+    "lesson_id",
+    [
+        # The lessons batch 1 of the fractions bank (#360) creates under brueche-u2: one per
+        # knowledge card, the ten-exercise card in two parts.
+        f"{converter.lesson_id_for('KP-BRU-ANTEILWERT')}-1",
+        f"{converter.lesson_id_for('KP-BRU-ANTEILWERT')}-2",
+        converter.lesson_id_for("KP-BRU-GANZES"),
+        converter.lesson_id_for("KP-BRU-ANTEILSBRUCH"),
+        converter.lesson_id_for("KP-BRU-ADDITION"),
+        converter.lesson_id_for("KP-BRU-RECHENREIHENFOLGE"),
+    ],
+)
+def test_the_fractions_batch_lessons_have_their_titles_in_every_locale(lesson_id: str) -> None:
+    from stoa.services import curriculum_translations
+
+    titles = {
+        locale: curriculum_translations.translated_title(lesson_id, "Deutscher Titel", locale)
+        for locale in ("en", "fr", "it")
+    }
+    assert "Deutscher Titel" not in titles.values()
+    assert len(set(titles.values())) == 3
+
+
+def test_a_translated_draft_publishes_and_judges_in_its_locale(table: FakeTable) -> None:
+    question = _question(
+        "EX-D0001-1A", correct_feedback="Richtig!", translations={"fr": _french()}
+    )
+    manifest, _report = converter.convert(_batch(question))
+    preview = curriculum_migration_service.dry_run(manifest, OPERATOR)
+    assert preview["summary"]["errors"] == 0, preview["rows"][0]["validationIssues"]
+    applied = curriculum_migration_service.apply_migration(
+        preview["migrationId"], manifest, preview["confirmationToken"], OPERATOR
+    )
+    version_id = applied["rows"][0]["versionId"]
+    curriculum_ops_service.submit_review("zap-anteil", version_id, OPERATOR)
+    curriculum_ops_service.approve("zap-anteil", version_id, OPERATOR)
+    curriculum_ops_service.publish(
+        "zap-anteil", version_id, OPERATOR, expected_published_version_id=None
+    )
+
+    challenge = practice_repo.get_challenge("zap-d0001-1a")
+    assert challenge is not None
+    assert challenge["correct_feedback"] == "Richtig!"
+    french = exercise_localization.localized(challenge, "fr")
+    assert french["prompt"] == "Calcule $\\frac{3}{4}$ de $24$."
+    assert answer_judging.judge_challenge("18 pièces", french)
+    assert answer_judging.judge_challenge("18 Stück", french)
 
 
 def _steps(count: int) -> list[dict[str, Any]]:

@@ -21,6 +21,12 @@ card's unit, and every text within the authoring limits. Anything else is listed
 in the report with the reason, never shortened or approximated. Editorial hints
 are left out on purpose: a student hint is a reviewed template, not free text.
 
+An exercise may carry `correct_feedback`, `incorrect_feedback` and `translations`
+(locale -> prompt, explanation, correct_answer, accepted_answers and the two
+feedbacks, the platform's own field names). They are carried as the platform
+stores them; a translation the migration would refuse skips the exercise with the
+reason, and an editorial `translation_review` note stays behind.
+
     uv run python scripts/editorial_batch_to_migration.py BATCH.json \\
         --manifest manifest.json --report report.json
 """
@@ -35,7 +41,7 @@ import re
 import sys
 from typing import Any
 
-from stoa.services import answer_judging, curriculum_service
+from stoa.services import answer_judging, curriculum_service, exercise_localization
 
 
 SCHEMA_VERSION = "stoa-editorial-1.0"
@@ -46,6 +52,8 @@ MAX_TITLE = 300
 MAX_OBJECTIVE = 1000
 MAX_TEXT = 2000
 MAX_ID = 200
+#: What the curriculum keeps of one feedback text (curriculum_ops_service cuts the rest).
+MAX_FEEDBACK = 500
 #: A knowledge card with more exercises than this becomes several lessons of
 #: near-equal size, easiest first. A 26-exercise lesson reads as a test.
 MAX_EXERCISES_PER_LESSON = 8
@@ -61,7 +69,15 @@ CONVERTIBLE_STATUSES = frozenset({"mapped", "reviewed", "ready_for_adapter"})
 #: Editorial response types the text input control answers and the judge can mark.
 TEXT_RESPONSE_TYPES = frozenset({"short_answer", "short_answer_with_working"})
 #: Editorial fields the platform has no place for; named in the report per exercise.
-NOT_CARRIED = ("hints", "grading", "source_refs", "knowledge_links", "review", "provenance")
+NOT_CARRIED = (
+    "hints",
+    "grading",
+    "source_refs",
+    "knowledge_links",
+    "review",
+    "provenance",
+    "translation_review",
+)
 
 
 def _platform_id(prefix: str, editorial_id: str) -> str:
@@ -165,6 +181,38 @@ def _length_problem(fields: Mapping[str, str], limits: Mapping[str, int]) -> str
         if len(fields[name]) > limit:
             return f"{name} is {len(fields[name])} characters, the limit is {limit}"
     return None
+
+
+def _translation_problem(translations: dict[str, dict[str, Any]], canonical: str) -> str | None:
+    """What the migration's validation would refuse in an exercise's translations."""
+    issues = exercise_localization.translation_issues(
+        {"correct_answer": canonical, "translations": translations}, max_text=MAX_TEXT
+    )
+    if not issues:
+        return None
+    field, issue = issues[0]
+    return f"{field}: {issue.message()}"
+
+
+def _feedback_problem(
+    exercise: Mapping[str, Any], translations: Mapping[str, Mapping[str, Any]]
+) -> str | None:
+    """Feedback the platform would cut at its limit; cut text is never carried."""
+    texts = {
+        name: str(exercise.get(name) or "").strip()
+        for name in ("correct_feedback", "incorrect_feedback")
+    }
+    for locale, text in translations.items():
+        for name in ("correct_feedback", "incorrect_feedback"):
+            texts[f"translations.{locale}.{name}"] = str(text.get(name) or "")
+    return next(
+        (
+            f"{name} is {len(text)} characters, the limit is {MAX_FEEDBACK}"
+            for name, text in texts.items()
+            if len(text) > MAX_FEEDBACK
+        ),
+        None,
+    )
 
 
 def _split(lesson: dict[str, Any], max_exercises: int) -> list[dict[str, Any]]:
@@ -282,6 +330,11 @@ def convert(
         )
         if problem is None and not fields["explanation"]:
             problem = "no solution steps to explain the answer"
+        translations = exercise_localization.normalize_translations(exercise.get("translations"))
+        if problem is None and translations:
+            problem = _translation_problem(translations, canonical)
+        if problem is None:
+            problem = _feedback_problem(exercise, translations)
         if problem is not None:
             row["status"] = "skipped"
             row["reason"] = problem
@@ -330,6 +383,15 @@ def convert(
         }
         if accepted:
             exercise_payload["acceptedAnswers"] = accepted
+        for source_field, target in (
+            ("correct_feedback", "correctFeedback"),
+            ("incorrect_feedback", "incorrectFeedback"),
+        ):
+            text = str(exercise.get(source_field) or "").strip()
+            if text:
+                exercise_payload[target] = text
+        if translations:
+            exercise_payload["translations"] = translations
         lesson["exercises"].append(exercise_payload)
         row.update(
             status="converted",
