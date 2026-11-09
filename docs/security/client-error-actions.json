@@ -3610,6 +3610,32 @@
         "retryable": false
       }
     },
+    "usage_period_role_invalid": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.usage_period_role_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "usage_period_version_conflict": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.usage_period_version_conflict",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "valid_email_required": {
       "action": "correct_input",
       "domain": "account",

@@ -904,6 +904,8 @@ def test_列表只发名单上的字段_后加的字段不会自动发布给客�
         "linkedAccounts",
         "isMinor",
         "minorKnown",
+        # #239: the account's own usage period end date, named on purpose.
+        "usagePeriodEndsAt",
     }
     for leaked in (
         "cus_SECRET",

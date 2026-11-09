@@ -335,6 +335,18 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Le quota a été modifié entre-temps. Rechargez la page et réessayez.",
         "it": "Nel frattempo la quota è stata modificata. Ricarica la pagina e riprova.",
     },
+    "error.usage_period_role_invalid": {
+        "de": "Nur Schüler- und Elternkonten haben eine Nutzungsdauer.",
+        "en": "Only student and parent accounts have a usage period.",
+        "fr": "Seuls les comptes d'élève et de parent ont une période d'utilisation.",
+        "it": "Solo gli account studente e genitore hanno un periodo di utilizzo.",
+    },
+    "error.usage_period_version_conflict": {
+        "de": "Die Nutzungsdauer wurde inzwischen geändert. Lade die Seite neu und versuche es erneut.",
+        "en": "The usage period changed in the meantime. Reload and try again.",
+        "fr": "La période d'utilisation a été modifiée entre-temps. Rechargez la page et réessayez.",
+        "it": "Nel frattempo il periodo di utilizzo è stato modificato. Ricarica la pagina e riprova.",
+    },
     "error.cursor_invalid": {
         "de": "Diese Seitenmarke ist ungültig. Lade die Liste von vorne.",
         "en": "This page cursor is not valid. Load the list from the start.",

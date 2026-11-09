@@ -34,6 +34,7 @@ from stoa.services import (
     attachment_service,
     help_requests,
     moderation_service,
+    usage_period,
 )
 
 
@@ -546,8 +547,11 @@ def _account_profile_branch(
         # which the scanner finds. They fall to `delete_owned_row` in `mutate`
         # above - never to the two profile arms, whose keys are `PROFILE` - so
         # two clean epochs cannot be reached with the relationship still stored.
+        # The account's usage-period records (#239) go the same way: the money
+        # is accounted for offline, so nothing of them outlives the account.
         predicate=lambda item: item.get("SK") == "PROFILE"
-        or item.get("entity_type") == parent_link_repo.ENTITY_TYPE,
+        or item.get("entity_type")
+        in {parent_link_repo.ENTITY_TYPE, usage_period.RECORD_ENTITY_TYPE},
         mutate=mutate,
     )
 

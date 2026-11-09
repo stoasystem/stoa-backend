@@ -82,6 +82,10 @@ class AccountErrorCode(StrEnum):
     ACCOUNT_PEER_ADMIN_PASSWORD_RESET_FORBIDDEN = "account_peer_admin_password_reset_forbidden"
     ACCOUNT_PASSWORD_RESET_CONFLICT = "account_password_reset_conflict"
     ALLOWANCE_VERSION_CONFLICT = "allowance_version_conflict"
+    # An account's usage period (`services/usage_period.py`, #239): only a
+    # student or a parent holds one, and a write names the version it read.
+    USAGE_PERIOD_ROLE_INVALID = "usage_period_role_invalid"
+    USAGE_PERIOD_VERSION_CONFLICT = "usage_period_version_conflict"
     CURSOR_INVALID = "cursor_invalid"
     PAGE_TOKEN_INVALID = "page_token_invalid"
     REPORT_NOT_FOUND = "report_not_found"
@@ -188,6 +192,8 @@ ACCOUNT_ERROR_REGISTRY: dict[AccountErrorCode, RuleContract] = {
     _C.ACCOUNT_PEER_ADMIN_PASSWORD_RESET_FORBIDDEN: _conflict(),
     _C.ACCOUNT_PASSWORD_RESET_CONFLICT: _conflict(),
     _C.ALLOWANCE_VERSION_CONFLICT: _conflict(),
+    _C.USAGE_PERIOD_ROLE_INVALID: _invalid(),
+    _C.USAGE_PERIOD_VERSION_CONFLICT: _conflict(),
     _C.CURSOR_INVALID: _invalid(),
     _C.PAGE_TOKEN_INVALID: RuleContract(400, _A.CORRECT_INPUT),
     _C.REPORT_NOT_FOUND: _not_found(),
