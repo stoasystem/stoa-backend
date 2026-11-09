@@ -5,10 +5,8 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
 from stoa.config import Settings, get_settings
-from stoa.db.repositories import attachment_repo
 from stoa.deps import (
     get_actor,
-    get_authorization_audit_sink,
     get_image_moderation_client,
     get_s3_client,
     get_s3_presign_client,
@@ -31,22 +29,22 @@ from stoa.security.attachment_errors import (
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
-    AuthorizationSpec,
     AuthorizedResource,
-    CurrentAuthorizationFactRepository,
-    ResourceRef,
     ResourceType,
-    authorize_and_resolve,
+)
+from stoa.security.declared_authorization import (
+    DELETABLE,
+    authorized,
+    path,
+    service_enforced,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
-from stoa.security.identity import Actor
+from stoa.security.identity import Actor, CanonicalRole
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_inventory import explicit_route_classification
-from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import uploads
 from stoa.services.attachment_service import (
     delete_saved_attachment,
-    is_live_attachment,
     list_owned_attachments,
     prepare_saved_attachment_download,
     saved_attachment_detail,
@@ -56,101 +54,40 @@ from stoa.services.attachment_service import (
 router = APIRouter()
 
 
-async def _upload_inventory_resolver(upload_id: str):
-    return {"student_id": upload_id}
-
-
-async def _upload_actor_dependency(actor: Actor = Depends(get_actor)) -> Actor:
-    return actor
-
-
-_upload_actor_dependency.authorization_specs = (  # type: ignore[attr-defined]
-    AuthorizationSpec(
-        ResourceType.UPLOAD,
-        AuthorizationAction.UPDATE,
-        AuthorizationPurpose.SELF_SERVICE,
-        _upload_inventory_resolver,
-    ),
+# Whose an upload is, and whether an intent may name its learning session
+# (#139), is checked by the upload service itself, against the Actor it is
+# handed: these routes say so instead of claiming a check here.
+_OWN = {role: AuthorizationPurpose.SELF_SERVICE for role in CanonicalRole}
+_upload_intent_actor = service_enforced(
+    "uploads.start", ResourceType.CONVERSATION, AuthorizationAction.UPDATE, _OWN
+)
+_upload_part_actor = service_enforced(
+    "uploads.sign_part", ResourceType.UPLOAD, AuthorizationAction.UPDATE, _OWN
+)
+_upload_complete_actor = service_enforced(
+    "uploads.complete", ResourceType.UPLOAD, AuthorizationAction.UPDATE, _OWN
 )
 
 
-async def _upload_intent_conversation_resolver(conversation_id: str):
-    return {"student_id": conversation_id}
+def _owned_attachment(action: AuthorizationAction, kind: str | None = None):
+    """The Actor's own live attachment; one that is not there is `upload_not_found`."""
+    check = authorized(ResourceType.ATTACHMENT, action, path("attachment_id"), _OWN, kind=kind)
 
-
-async def _upload_intent_actor_dependency(actor: Actor = Depends(get_actor)) -> Actor:
-    return actor
-
-
-# An intent may name the learning session it is for; `uploads.start`
-# refuses one that is not the student's own (#139).
-_upload_intent_actor_dependency.authorization_specs = (  # type: ignore[attr-defined]
-    AuthorizationSpec(
-        ResourceType.CONVERSATION,
-        AuthorizationAction.UPDATE,
-        AuthorizationPurpose.SELF_SERVICE,
-        _upload_intent_conversation_resolver,
-    ),
-)
-
-
-def _owned_attachment_dependency(action: AuthorizationAction):
-    async def resolve(attachment_id: str):
-        item = attachment_repo.get_attachment(attachment_id)
-        if not is_live_attachment(item, for_reading=action is AuthorizationAction.READ):
-            return None
-        owner_id = item["owner_id"]
-        return AuthorizedResource(
-            ResourceRef(
-                ResourceType.ATTACHMENT,
-                attachment_id,
-                owner_id,
-                owner_id=owner_id,
-            ),
-            item,
-        )
-
-    async def dependency(
-        attachment_id: str,
-        actor: Actor = Depends(get_actor),
-        facts: CurrentAuthorizationFactRepository = Depends(
-            get_authorization_fact_repository
-        ),
-        correlation_id: str = Depends(get_request_correlation_id),
-        audit_sink=Depends(get_authorization_audit_sink),
-    ) -> AuthorizedResource:
+    async def dependency(**values: object) -> AuthorizedResource:
         try:
-            return await authorize_and_resolve(
-                actor=actor,
-                resource_id=attachment_id,
-                spec=AuthorizationSpec(
-                    ResourceType.ATTACHMENT,
-                    action,
-                    AuthorizationPurpose.SELF_SERVICE,
-                    resolve,
-                ),
-                fact_repository=facts,
-                correlation_id=correlation_id,
-                audit_sink=audit_sink,
-            )
+            return await check(**values)
         except SecurityDecisionError as error:
             if error.code is SecurityErrorCode.RESOURCE_NOT_FOUND:
                 raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from error
             raise
 
-    dependency.authorization_specs = (  # type: ignore[attr-defined]
-        AuthorizationSpec(
-            ResourceType.ATTACHMENT,
-            action,
-            AuthorizationPurpose.SELF_SERVICE,
-            resolve,
-        ),
-    )
+    setattr(dependency, "__signature__", getattr(check, "__signature__"))
+    setattr(dependency, "authorization_declaration", check.authorization_declaration)
     return dependency
 
 
-_attachment_read = _owned_attachment_dependency(AuthorizationAction.READ)
-_attachment_delete = _owned_attachment_dependency(AuthorizationAction.DELETE)
+_attachment_read = _owned_attachment(AuthorizationAction.READ)
+_attachment_delete = _owned_attachment(AuthorizationAction.DELETE, DELETABLE)
 
 
 @router.get("/attachments", response_model=SavedAttachmentPage)
@@ -212,7 +149,7 @@ async def remove_saved_attachment(
 @router.post("/intents", response_model=UploadIntentResponse)
 async def create_owned_upload_intent(
     body: UploadIntentRequest,
-    actor: Actor = Depends(_upload_intent_actor_dependency),
+    actor: Actor = Depends(_upload_intent_actor),
     s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
@@ -225,7 +162,7 @@ async def sign_owned_upload_part(
     upload_id: str,
     part_number: int,
     body: UploadPartUrlRequest,
-    actor: Actor = Depends(_upload_actor_dependency),
+    actor: Actor = Depends(_upload_part_actor),
     signer=Depends(get_s3_presign_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
@@ -245,7 +182,7 @@ async def sign_owned_upload_part(
 async def complete_owned_upload(
     upload_id: str,
     body: CompleteUploadRequest,
-    actor: Actor = Depends(_upload_actor_dependency),
+    actor: Actor = Depends(_upload_complete_actor),
     s3=Depends(get_s3_client),
     moderation=Depends(get_image_moderation_client),
     settings: Settings = Depends(get_settings),

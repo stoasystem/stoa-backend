@@ -26055,6 +26055,9 @@
           "classification": "authorized",
           "identifiers": [
             "challengeId"
+          ],
+          "serviceEnforced": [
+            "practice_context_service.resolve"
           ]
         }
       }
@@ -26400,6 +26403,10 @@
             "attachmentId",
             "challengeId",
             "uploadId"
+          ],
+          "serviceEnforced": [
+            "ask_question.submit",
+            "practice_context_service.resolve"
           ]
         }
       }
@@ -26520,6 +26527,10 @@
             "attachmentId",
             "challengeId",
             "uploadId"
+          ],
+          "serviceEnforced": [
+            "ask_question.submit",
+            "practice_context_service.resolve"
           ]
         }
       }
@@ -27184,9 +27195,12 @@
               "resource_type": "conversation"
             }
           ],
-          "classification": "authorized",
+          "classification": "service-enforced",
           "identifiers": [
             "conversationId"
+          ],
+          "serviceEnforced": [
+            "uploads.start"
           ]
         }
       }
@@ -27275,9 +27289,12 @@
               "resource_type": "upload"
             }
           ],
-          "classification": "authorized",
+          "classification": "service-enforced",
           "identifiers": [
             "upload_id"
+          ],
+          "serviceEnforced": [
+            "uploads.complete"
           ]
         }
       }
@@ -27376,9 +27393,12 @@
               "resource_type": "upload"
             }
           ],
-          "classification": "authorized",
+          "classification": "service-enforced",
           "identifiers": [
             "upload_id"
+          ],
+          "serviceEnforced": [
+            "uploads.sign_part"
           ]
         }
       }
@@ -27458,9 +27478,12 @@
               "resource_type": "upload"
             }
           ],
-          "classification": "authorized",
+          "classification": "service-enforced",
           "identifiers": [
             "upload_id"
+          ],
+          "serviceEnforced": [
+            "upload_code_service.unbound_code_status"
           ]
         }
       }
@@ -27538,9 +27561,12 @@
               "resource_type": "upload"
             }
           ],
-          "classification": "authorized",
+          "classification": "service-enforced",
           "identifiers": [
             "upload_id"
+          ],
+          "serviceEnforced": [
+            "upload_code_service.preview_unbound_upload"
           ]
         }
       }
@@ -35070,19 +35096,19 @@
         "parameters": [
           {
             "in": "path",
-            "name": "request_id",
+            "name": "attachment_id",
             "required": true,
             "schema": {
-              "title": "Request Id",
+              "title": "Attachment Id",
               "type": "string"
             }
           },
           {
             "in": "path",
-            "name": "attachment_id",
+            "name": "request_id",
             "required": true,
             "schema": {
-              "title": "Attachment Id",
+              "title": "Request Id",
               "type": "string"
             }
           }
@@ -35254,6 +35280,9 @@
           "identifiers": [
             "request_id",
             "uploadId"
+          ],
+          "serviceEnforced": [
+            "attachment_service.prepare_reply_images"
           ]
         }
       }

@@ -468,7 +468,7 @@ def test_service_enforced_routes_name_where_the_check_is():
     assert TestClient(app).post("/uploads").json() == {"actor": "student-1"}
     [item] = inventory_application(app)
     assert item.classification == "service-enforced"
-    assert item.projection()["serviceEnforced"] == "uploads.start"
+    assert item.projection()["serviceEnforced"] == ["uploads.start"]
     assert [(s.resource_type, s.action, s.purpose) for s in item.authorization_specs] == [
         ("upload", "create", "self_service")
     ]
@@ -477,10 +477,10 @@ def test_service_enforced_routes_name_where_the_check_is():
 def test_a_type_without_a_registered_loader_cannot_be_declared():
     with pytest.raises(LookupError):
         authorized(
-            ResourceType.NOTIFICATION_EVENT,
+            ResourceType.UPLOAD,
             AuthorizationAction.READ,
-            path("event_id"),
-            {CanonicalRole.STUDENT: AuthorizationPurpose.NOTIFICATION_SELF_SERVICE},
+            path("upload_id"),
+            {CanonicalRole.STUDENT: AuthorizationPurpose.SELF_SERVICE},
         )
 
 

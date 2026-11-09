@@ -13,6 +13,7 @@ from pydantic import BaseModel
 import pytest
 
 from stoa.config import Settings, get_settings
+from stoa.db.repositories import attachment_repo
 from stoa.deps import get_actor, get_s3_client
 from stoa.models import attachment as attachment_models
 from stoa.routers import files
@@ -448,9 +449,9 @@ def test_owner_routes_use_one_loaded_record_and_exact_private_content(monkeypatc
         calls.append(attachment_id)
         return dict(item)
 
-    monkeypatch.setattr(files.attachment_repo, "get_attachment", get_attachment)
+    monkeypatch.setattr(attachment_repo, "get_attachment", get_attachment)
     monkeypatch.setattr(
-        files.attachment_repo,
+        attachment_repo,
         "list_saved_attachments",
         lambda owner_id, **_kwargs: ([dict(item)] if owner_id == "student-1" else [], None),
     )
@@ -483,7 +484,7 @@ def test_foreign_and_missing_routes_share_concealed_attachment_error(monkeypatch
     shapes = []
     for item in (None, _saved_attachment(owner_id="student-2")):
         monkeypatch.setattr(
-            files.attachment_repo,
+            attachment_repo,
             "get_attachment",
             lambda _attachment_id, value=item, **_kwargs: value,
         )
@@ -497,7 +498,7 @@ def test_foreign_and_missing_routes_share_concealed_attachment_error(monkeypatch
 
 def test_referenced_delete_route_returns_friendly_stable_in_use_action(monkeypatch) -> None:
     monkeypatch.setattr(
-        files.attachment_repo,
+        attachment_repo,
         "get_attachment",
         lambda _attachment_id, **_kwargs: _saved_attachment(ref_count=1),
     )

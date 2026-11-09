@@ -8,11 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import Settings, get_settings
 from stoa.deps import get_verified_token
-from stoa.security.authorization import AuthorizationAction
-from stoa.security.route_authorization import (
-    teacher_application_queue_dependency,
-    teacher_application_reviewer_dependency,
-)
+from stoa.security.authorization import AuthorizationAction, AuthorizationPurpose, ResourceType
+from stoa.security.declared_authorization import authorized, operator, path
+from stoa.security.identity import Actor, CanonicalRole
 from stoa.security.route_inventory import explicit_route_classification
 from stoa.security.tokens import VerifiedAccessToken
 from stoa.services import public_identity_service, teacher_application_service
@@ -60,6 +58,44 @@ class TeacherActivationClaimRequest(BaseModel):
     password: str = Field(min_length=12, max_length=256)
 
 
+_REVIEWER = "teacher_identity_reviewer"
+_IDENTITY_MANAGEMENT = {CanonicalRole.ADMIN: AuthorizationPurpose.IDENTITY_MANAGEMENT}
+
+# The queue names no application, so the grant is checked on the global
+# operator resource, as the `/admin` list routes check theirs (#104); one
+# application's routes check it on that application, so a grant scoped to it
+# opens it.
+_queue_reviewer = authorized(
+    ResourceType.OPERATOR_RESOURCE,
+    AuthorizationAction.READ,
+    operator(capability=_REVIEWER),
+    _IDENTITY_MANAGEMENT,
+)
+_application_reader = authorized(
+    ResourceType.OPERATOR_RESOURCE,
+    AuthorizationAction.READ,
+    operator(capability=_REVIEWER, target=path("application_id")),
+    _IDENTITY_MANAGEMENT,
+)
+_application_reviewer = authorized(
+    ResourceType.OPERATOR_RESOURCE,
+    AuthorizationAction.UPDATE,
+    operator(capability=_REVIEWER, target=path("application_id")),
+    _IDENTITY_MANAGEMENT,
+)
+
+
+def _reviewer(actor: Actor) -> dict[str, Any]:
+    """The authorized reviewer, as `teacher_application_service` reads its actor."""
+    return {
+        "sub": actor.user_id,
+        "user_id": actor.user_id,
+        "role": actor.role.value,
+        "account_status": actor.account_status.value,
+        "capabilities": {grant.capability: "granted" for grant in actor.current_grants},
+    }
+
+
 def get_teacher_identity_provider(settings: Settings = Depends(get_settings)) -> Any:
     return boto3.client("cognito-idp", region_name=settings.aws_region)
 
@@ -88,10 +124,10 @@ def apply(payload: TeacherApplicationRequest) -> dict[str, Any]:
 def pending_applications(
     review_state: str = "pending_review",
     limit: int = 50,
-    user: dict[str, Any] = Depends(teacher_application_queue_dependency()),
+    actor: Actor = Depends(_queue_reviewer),
 ) -> dict[str, Any]:
     return teacher_application_service.applications_for_reviewer(
-        user, review_state=review_state, limit=limit
+        _reviewer(actor), review_state=review_state, limit=limit
     )
 
 
@@ -110,24 +146,22 @@ def application_status(application_id: str) -> dict[str, Any]:
 def full_application(
     application_id: str,
     version: int,
-    user: dict[str, Any] = Depends(
-        teacher_application_reviewer_dependency(AuthorizationAction.READ)
-    ),
+    actor: Actor = Depends(_application_reader),
 ) -> dict[str, Any]:
-    return teacher_application_service.full_application_for_reviewer(user, application_id, version)
+    return teacher_application_service.full_application_for_reviewer(
+        _reviewer(actor), application_id, version
+    )
 
 
 @router.post("/{application_id}/reviews")
 def review(
     application_id: str,
     payload: TeacherReviewRequest,
-    user: dict[str, Any] = Depends(
-        teacher_application_reviewer_dependency(AuthorizationAction.UPDATE)
-    ),
+    actor: Actor = Depends(_application_reviewer),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     return teacher_application_service.review_application(
-        actor=user,
+        actor=_reviewer(actor),
         application_id=application_id,
         version=payload.version,
         decision=payload.decision,
@@ -140,13 +174,11 @@ def review(
 def reissue(
     application_id: str,
     payload: TeacherReissueRequest,
-    user: dict[str, Any] = Depends(
-        teacher_application_reviewer_dependency(AuthorizationAction.UPDATE)
-    ),
+    actor: Actor = Depends(_application_reviewer),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     return teacher_application_service.reissue_invitation(
-        actor=user,
+        actor=_reviewer(actor),
         application_id=application_id,
         version=payload.version,
         invitation_expiry_seconds=settings.teacher_activation_invitation_expiry_seconds,
