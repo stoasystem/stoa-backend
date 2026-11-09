@@ -8,10 +8,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 from stoa.models.billing import BillingFact, BillingFactKind, BillingPlanId
 
 
@@ -28,16 +28,6 @@ _OBJECT_ID_DOMAIN = b"stoa.billing.provider-object.v1"
 _SEMANTIC_DOMAIN = b"stoa.billing.semantic-event.v1"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MAX_LEASE_SECONDS = 300
-
-
-@runtime_checkable
-class _GetTable(Protocol):
-    def get_item(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _QueryTable(Protocol):
-    def query(self, **kwargs: object) -> object: ...
 
 
 class BillingEventDisposition(StrEnum):
@@ -245,12 +235,15 @@ def _mapping(value: object) -> BillingItem | None:
 
 
 def _strong_get(table: object, key: Mapping[str, str]) -> BillingItem | None:
-    if not isinstance(table, _GetTable):
-        raise ValueError("billing persistence is unavailable")
-    response = table.get_item(Key=dict(key), ConsistentRead=True)
-    if not isinstance(response, Mapping):
-        raise ValueError("billing dependency returned malformed data")
-    return _mapping(response.get("Item"))
+    try:
+        item = db_table.get(table=table, Key=dict(key), ConsistentRead=True)
+    except db_table.TableUnavailable as exc:
+        raise ValueError(
+            "billing persistence is unavailable"
+            if exc.code == "no_get_item_entry"
+            else "billing dependency returned malformed data"
+        ) from exc
+    return _mapping(item)
 
 
 def _create_only(item: Mapping[str, object]) -> dict[str, Any]:
@@ -295,7 +288,7 @@ def register_provider_event(
     event_id_digest = _event_digest(provider_event_id)
     object_id_digest = _object_digest(provider_object_id)
     semantic_identity = _semantic_digest(event_kind, provider_object_id)
-    target = table or get_table()
+    target = table or db_table.table()
     key = _event_key(event_id_digest)
     try:
         existing_event = _strong_get(target, key)
@@ -473,7 +466,7 @@ def record_provider_fact(
     """Create or monotonically advance one provider-object fact."""
     if not isinstance(fact, BillingFact):
         raise ValueError("BillingFact is required")
-    target = table or get_table()
+    target = table or db_table.table()
     item = _fact_item(fact)
     key = _fact_key(fact)
     try:
@@ -544,21 +537,24 @@ def load_activation_facts(
 ) -> tuple[BillingFact, ...]:
     """Strongly load the current independent object facts for one command."""
     partition = _command_partition(command_id)
-    target = table or get_table()
-    if not isinstance(target, _QueryTable):
-        raise ValueError("billing fact query is unavailable")
-    response = target.query(
-        KeyConditionExpression="PK=:pk",
-        ExpressionAttributeValues={":pk": partition},
-        ConsistentRead=True,
-    )
-    if not isinstance(response, Mapping) or not isinstance(response.get("Items"), list):
-        raise ValueError("billing fact query returned malformed data")
+    try:
+        items = db_table.rows(
+            "query",
+            table=table or db_table.table(),
+            KeyConditionExpression="PK=:pk",
+            ExpressionAttributeValues={":pk": partition},
+            ConsistentRead=True,
+        )
+    except db_table.TableUnavailable as exc:
+        raise ValueError(
+            "billing fact query is unavailable"
+            if exc.code == "no_query_entry"
+            else "billing fact query returned malformed data"
+        ) from exc
     facts = [
         billing_fact_from_item(item)
-        for item in response["Items"]
-        if isinstance(item, Mapping)
-        and item.get("schema_version") == OBJECT_FACT_SCHEMA_VERSION
+        for item in items
+        if item.get("schema_version") == OBJECT_FACT_SCHEMA_VERSION
     ]
     return tuple(
         sorted(
@@ -604,7 +600,7 @@ def claim_fact_reconciliation(
         raise ValueError("lease_seconds exceeds the bounded maximum")
     timestamp = _timestamp(now_iso, "now_iso")
     expiry = now + duration
-    target = table or get_table()
+    target = table or db_table.table()
     key = _lease_key(command)
     try:
         current = _strong_get(target, key)
@@ -790,7 +786,7 @@ def commit_paid_activation(
     transaction is then sent behind every one of those fences.
     """
     activation = _activation_request(request)
-    target = table or get_table()
+    target = table or db_table.table()
     projection = _activation_item(
         billing_projection,
         entity_type="billing_projection",

@@ -9,10 +9,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import (
     account_deletion_repo,
     billing_fact_repo,
@@ -39,11 +38,6 @@ _PLAN_RANK = {
     BillingPlanId.TEACHER_SUPPORTED: 2,
     BillingPlanId.FAMILY: 3,
 }
-
-
-@runtime_checkable
-class _GetTable(Protocol):
-    def get_item(self, **kwargs: object) -> object: ...
 
 
 class PaidGrantConflict(RuntimeError):
@@ -157,11 +151,14 @@ def _mapping(value: object) -> dict[str, object] | None:
 
 
 def _strong_get(table: object, key: Mapping[str, str]) -> dict[str, object] | None:
-    if not isinstance(table, _GetTable):
-        raise TypeError("table does not support get_item")
-    response = table.get_item(Key=dict(key), ConsistentRead=True)
-    response_map = _mapping(response)
-    return _mapping((response_map or {}).get("Item"))
+    try:
+        item = db_table.get(table=table, Key=dict(key), ConsistentRead=True)
+    except db_table.TableUnavailable as exc:
+        if exc.code == "no_get_item_entry":
+            raise TypeError("table does not support get_item") from exc
+        # An answer that is not an item counts as none: no grant, no transition.
+        return None
+    return _mapping(item)
 
 
 def _grant_key(parent_id: str, beneficiary_id: str) -> dict[str, str]:
@@ -317,7 +314,7 @@ def schedule_period_end_transition(
         target_plan,
         effective_at,
     )
-    target = table or get_table()
+    target = table or db_table.table()
     key = _transition_key(parent, digest, "period_end")
     previous = _transition_item(target, key)
     if previous is not None:
@@ -396,7 +393,7 @@ def start_renewal_grace(
         failure,
         started,
     )
-    target = table or get_table()
+    target = table or db_table.table()
     key = _transition_key(parent, digest, "renewal_grace")
     previous = _transition_item(target, key)
     if previous is not None:
@@ -458,7 +455,7 @@ def clear_renewal_grace(
     digest = _digest(subscription_id_digest, "subscription_id_digest")
     identity = _digest(transition_identity, "transition_identity")
     recovered = _aware_timestamp(recovered_at, "recovered_at")
-    target = table or get_table()
+    target = table or db_table.table()
     key = _transition_key(parent, digest, "renewal_grace")
     previous = _transition_item(target, key)
     if previous is None or previous.get("transition_identity") != identity:
@@ -530,7 +527,7 @@ def apply_due_paid_transition(
     digest = _digest(subscription_id_digest, "subscription_id_digest")
     identity = _digest(transition_identity, "transition_identity")
     now_text = _aware_timestamp(now, "now")
-    target = table or get_table()
+    target = table or db_table.table()
     key = _transition_key(parent, digest, transition_kind)
     previous = _transition_item(target, key)
     if previous is None or previous.get("transition_identity") != identity:
@@ -934,7 +931,7 @@ def build_paid_activation_operations(
     """Revalidate immutable beneficiaries and build exact transaction conditions."""
     if not isinstance(request, billing_fact_repo.PaidActivationRequest):
         raise ValueError("PaidActivationRequest is required")
-    target = table or get_table()
+    target = table or db_table.table()
     command_item = _mapping(command)
     if command_item is None:
         raise ValueError("command is invalid")
@@ -1009,7 +1006,7 @@ def commit_paid_activation(
     table: object | None = None,
 ) -> billing_fact_repo.ActivationResult:
     """Publish activation and relationship-fenced grants in Plan 10's transaction."""
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         built = build_paid_activation_operations(
             request,
@@ -1070,7 +1067,7 @@ def get_active_beneficiary_grant(
     table: object | None = None,
 ) -> dict[str, object] | None:
     """Return only an exact owner-scoped grant with a current strict relationship."""
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         grant = _active_grant(
             _strong_get(target, _grant_key(parent_id, beneficiary_id)),
@@ -1130,7 +1127,7 @@ def apply_paid_upgrade(
     allowance_version = _positive_integer(allowance_version, "allowance_version")
     activation_version = _positive_integer(activation_version, "activation_version")
     activated_text = _aware_timestamp(activated_at, "activated_at")
-    target = table or get_table()
+    target = table or db_table.table()
 
     current: list[dict[str, object]] = []
     for student_id in selected:

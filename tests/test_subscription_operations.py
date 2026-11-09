@@ -12,11 +12,11 @@ from botocore.exceptions import ClientError
 from fakes.dynamodb import from_wire
 from stoa.config import Settings, get_settings
 from fakes.links import LinkRows
-from stoa.db.repositories import billing_fact_repo, checkout_command_repo, parent_link_repo
+from stoa.db import table as db_table
+from stoa.db.repositories import parent_link_repo
 from stoa.routers import admin, billing, parents
 from stoa.services import (
     account_operations_service,
-    billing_reconciliation_service,
     entitlement_service,
     subscription_service,
 )
@@ -325,13 +325,12 @@ def _install_fakes(monkeypatch):
         )
 
     table.update_item = update_item
+    # The billing modules read through the gateway; the frozen subscription
+    # service still takes its own table.
+    db_table.install(table)
     monkeypatch.setattr(subscription_service, "get_table", lambda: table)
-    monkeypatch.setattr(checkout_command_repo, "get_table", lambda: table)
-    monkeypatch.setattr(billing_fact_repo, "get_table", lambda: table)
-    monkeypatch.setattr(billing_reconciliation_service, "get_table", lambda: table)
     monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: False)
     monkeypatch.setattr(subscription_service.user_repo, "get_user", get_user)
-    monkeypatch.setattr(entitlement_service, "get_table", lambda: table)
     monkeypatch.setattr(entitlement_service.user_repo, "get_user", get_user)
     monkeypatch.setattr(parents.user_repo, "get_user", get_user)
     monkeypatch.setattr(account_operations_service.user_repo, "get_user", get_user)

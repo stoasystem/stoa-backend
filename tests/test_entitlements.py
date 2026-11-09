@@ -2,18 +2,6 @@ from stoa.config import Settings
 from stoa.services import entitlement_service
 
 
-class FakeTable:
-    def __init__(self):
-        self.items = {}
-
-    def put_item(self, Item):
-        self.items[(Item["PK"], Item["SK"])] = dict(Item)
-
-    def get_item(self, Key, **_kwargs):
-        item = self.items.get((Key["PK"], Key["SK"]))
-        return {"Item": dict(item)} if item else {}
-
-
 def _settings() -> Settings:
     return Settings(
         free_tier_daily_question_limit=2,
@@ -28,8 +16,9 @@ def _settings() -> Settings:
     )
 
 
-def _install(monkeypatch, link_rows):
-    table = FakeTable()
+def _install(monkeypatch, link_rows, fake_table):
+    # Billing rows go in the gateway's table, beside the link rows.
+    table = fake_table
     profiles = {
         "parent-1": {
             "user_id": "parent-1",
@@ -50,7 +39,6 @@ def _install(monkeypatch, link_rows):
     def get_user(user_id, **_kwargs):
         return profiles.get(user_id)
 
-    monkeypatch.setattr(entitlement_service, "get_table", lambda: table)
     monkeypatch.setattr(entitlement_service.user_repo, "get_user", get_user)
     monkeypatch.setattr(
         entitlement_service.paid_entitlement_service.account_deletion_repo,
@@ -62,8 +50,8 @@ def _install(monkeypatch, link_rows):
     return table, profiles
 
 
-def test_active_parent_billing_grants_linked_student_paid_entitlement(monkeypatch, link_rows):
-    table, profiles = _install(monkeypatch, link_rows)
+def test_active_parent_billing_grants_linked_student_paid_entitlement(monkeypatch, link_rows, fake_table):
+    table, profiles = _install(monkeypatch, link_rows, fake_table)
     table.put_item(
         Item={
             "PK": "SUBSCRIPTION_BILLING#parent-1",
@@ -106,8 +94,8 @@ def test_active_parent_billing_grants_linked_student_paid_entitlement(monkeypatc
     assert entitlement["blockingReason"] is None
 
 
-def test_pending_checkout_does_not_grant_paid_parent_access(monkeypatch, link_rows):
-    table, profiles = _install(monkeypatch, link_rows)
+def test_pending_checkout_does_not_grant_paid_parent_access(monkeypatch, link_rows, fake_table):
+    table, profiles = _install(monkeypatch, link_rows, fake_table)
     table.put_item(
         Item={
             "PK": "SUBSCRIPTION_BILLING#parent-1",
@@ -131,11 +119,11 @@ def test_pending_checkout_does_not_grant_paid_parent_access(monkeypatch, link_ro
     assert entitlement["blockingReason"] == "checkout_pending"
 
 
-def test_manual_override_no_longer_grants_anything(monkeypatch, link_rows):
+def test_manual_override_no_longer_grants_anything(monkeypatch, link_rows, fake_table):
     """Card 007 froze the admin override; it was the one bypass with no billing
     fact behind it. Pinned as the frozen state rather than deleted, because a
     legacy `manual_override` row is still sitting in the table."""
-    table, profiles = _install(monkeypatch, link_rows)
+    table, profiles = _install(monkeypatch, link_rows, fake_table)
     table.put_item(
         Item={
             "PK": "SUBSCRIPTION_BILLING#parent-1",
@@ -158,10 +146,10 @@ def test_manual_override_no_longer_grants_anything(monkeypatch, link_rows):
     assert entitlement["limits"]["dailyAiQuestionLimit"] == 2
 
 
-def test_manual_override_takes_precedence_once_unfrozen(monkeypatch, link_rows):
+def test_manual_override_takes_precedence_once_unfrozen(monkeypatch, link_rows, fake_table):
     """The behaviour was switched off, not deleted: this is what unfreezing restores."""
     monkeypatch.setattr(entitlement_service, "MANUAL_BILLING_OVERRIDE_ENABLED", True)
-    table, profiles = _install(monkeypatch, link_rows)
+    table, profiles = _install(monkeypatch, link_rows, fake_table)
     table.put_item(
         Item={
             "PK": "SUBSCRIPTION_BILLING#parent-1",
@@ -186,7 +174,7 @@ def test_manual_override_takes_precedence_once_unfrozen(monkeypatch, link_rows):
 
 
 def test_legacy_binding_rows_and_profile_pointer_alone_buy_a_student_nothing(
-    monkeypatch, link_rows
+    monkeypatch, link_rows, fake_table
 ):
     """#287: a paid parent reaches a student only through a current link.
 
@@ -194,7 +182,7 @@ def test_legacy_binding_rows_and_profile_pointer_alone_buy_a_student_nothing(
     authorize this; with no link they name no parent of record, so the parent's
     grant and active billing do not reach the student.
     """
-    table, profiles = _install(monkeypatch, link_rows)
+    table, profiles = _install(monkeypatch, link_rows, fake_table)
     link_rows.unlink("parent-1", "student-1")
     profiles["student-1"].update(parent_id="parent-1", parent_binding_status="active")
     for pk, sk, entity in (

@@ -23,8 +23,7 @@ import re
 import sys
 from typing import Never, Protocol
 
-from botocore.exceptions import ClientError
-
+from stoa.db import table as db_table
 from stoa.models.billing import BillingPlanId
 
 
@@ -235,21 +234,18 @@ class DynamoPlanMigrationRepository:
         self._table = table
 
     def read_source(self, coordinate: PlanMigrationCoordinate) -> Mapping[str, object] | None:
-        get_item = getattr(self._table, "get_item", None)
-        if not callable(get_item):
-            raise MigrationBlockedError("migration repository is unavailable")
-        response = get_item(
-            Key={"PK": coordinate.pk, "SK": coordinate.sk},
-            ConsistentRead=True,
-        )
-        if not isinstance(response, Mapping):
-            raise MigrationBlockedError("migration repository returned malformed evidence")
-        item = response.get("Item")
-        if item is None:
-            return None
-        if not isinstance(item, Mapping):
-            raise MigrationBlockedError("migration repository returned malformed evidence")
-        return dict(item)
+        try:
+            return db_table.get(
+                table=self._table,
+                Key={"PK": coordinate.pk, "SK": coordinate.sk},
+                ConsistentRead=True,
+            )
+        except db_table.TableUnavailable as exc:
+            raise MigrationBlockedError(
+                "migration repository is unavailable"
+                if exc.code == "no_get_item_entry"
+                else "migration repository returned malformed evidence"
+            ) from exc
 
     def conditional_apply(
         self,
@@ -274,11 +270,9 @@ class DynamoPlanMigrationRepository:
         if _source_digest(current) != expected_source_digest:
             return "changed"
         history = _migration_history(current, applied_at=applied_at)
-        update_item = getattr(self._table, "update_item", None)
-        if not callable(update_item):
-            raise MigrationBlockedError("migration repository is unavailable")
         try:
-            update_item(
+            db_table.update(
+                table=self._table,
                 Key={"PK": coordinate.pk, "SK": coordinate.sk},
                 UpdateExpression=(
                     "SET #plan=:target_plan, #schema=:schema, #evidence=:evidence, "
@@ -309,9 +303,12 @@ class DynamoPlanMigrationRepository:
                     ":expected_source_plan": source_plan,
                 },
             )
-        except ClientError as exc:
-            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-                return "changed"
+        except db_table.WriteRefused:
+            # The version or the source plan moved since it was read.
+            return "changed"
+        except db_table.TableUnavailable as exc:
+            if exc.code == "no_update_item_entry":
+                raise MigrationBlockedError("migration repository is unavailable") from exc
             raise
         return "applied"
 
@@ -608,10 +605,8 @@ def lambda_handler(event: object, _context: object) -> dict[str, object]:
         _validated_applied_at(event.get("appliedAt"))
         dispositions = _event_operator_dispositions(event.get("operatorDispositions"))
 
-    # Import and acquire the table only after every untrusted field is validated.
-    from stoa.db.dynamodb import get_table
-
-    repository = DynamoPlanMigrationRepository(get_table())
+    # Acquire the table only after every untrusted field is validated.
+    repository = DynamoPlanMigrationRepository(db_table.table())
     preview = preview_plan_identity_migration(
         coordinates,
         environment=environment,
