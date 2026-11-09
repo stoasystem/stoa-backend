@@ -34,7 +34,6 @@ from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
 
-from stoa.db import table as db_table
 from stoa.config import UPLOAD_INTENT_TTL_SECONDS, Settings
 from stoa.deps import (
     get_actor,
@@ -118,13 +117,6 @@ class _Api:
         settings: Settings | None = None,
     ) -> None:
         patch_session_table(monkeypatch, table)
-        for module in (
-            conversations,
-            _answering,
-        ):
-            monkeypatch.setattr(module, "get_table", lambda table=table: table)
-        db_table.install(table)
-        db_table.install(table)
         self.clock = _Clock()
         monkeypatch.setattr(upload_code_service, "_now", self.clock)
         self.table = table

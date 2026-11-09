@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 from actor_helpers import install_actor_overrides
 from fakes import student_evidence as fake_evidence
 from fakes.dynamodb import FakeTable
-from stoa.db.repositories import practice_repo, review_repo
+from stoa.db import table as db_table
 from stoa.routers import practice
 from stoa.security import route_authorization
 from stoa.services import (
@@ -82,8 +82,7 @@ def _table(monkeypatch: pytest.MonkeyPatch, **options: Any) -> FakeTable:
            "lesson_id": lesson, "status": "active"} for lesson in ("l1", "l2", "l3")),
         *_student_rows(),
     )
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
-    monkeypatch.setattr(review_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(curriculum_service, "list_catalog", lambda **_k: CATALOG)
     return table
 
@@ -344,7 +343,7 @@ def test_one_adaptive_memory_summary_reads_progress_once(monkeypatch) -> None:
             for topic in topics
         ),
     )
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
     service = adaptive_learning_service
     monkeypatch.setattr(
         service.question_repo, "list_questions_by_student", lambda *_a, **_k: {"Items": []}

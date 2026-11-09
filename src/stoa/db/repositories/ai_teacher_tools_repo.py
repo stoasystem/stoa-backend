@@ -9,7 +9,7 @@ from typing import Protocol, runtime_checkable
 from boto3.dynamodb.conditions import Attr, ConditionBase
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -123,12 +123,6 @@ def _put_item(table: object, **kwargs: object) -> object:
     return table.put_item(**kwargs)
 
 
-def _scan(table: object, **kwargs: object) -> AIDraftItem:
-    if not isinstance(table, _ScanTable):
-        raise account_deletion_repo.AccountDeletionConflict("AI draft dependency unavailable")
-    return _mapping(table.scan(**kwargs))
-
-
 def _update_item(table: object, **kwargs: object) -> object:
     if not isinstance(table, _UpdateTable):
         raise account_deletion_repo.AccountDeletionConflict("AI draft dependency unavailable")
@@ -226,7 +220,7 @@ def draft_pk(draft_id: str) -> str:
 
 
 def put_draft(item: AIDraftItem) -> None:
-    table = get_table()
+    table = db_table.table()
     stored = {
         **item,
         "PK": draft_pk(_required_text(item.get("draft_id"), field="identifier")),
@@ -245,7 +239,7 @@ def put_draft(item: AIDraftItem) -> None:
 
 
 def get_draft(draft_id: str) -> AIDraftItem | None:
-    response = _get_item(get_table(), Key={"PK": draft_pk(draft_id), "SK": "META"})
+    response = _get_item(db_table.table(), Key={"PK": draft_pk(draft_id), "SK": "META"})
     item = response.get("Item")
     return _mapping(item) if item is not None else None
 
@@ -261,7 +255,7 @@ def update_draft(
         return None
     if not updates:
         return existing
-    table = get_table()
+    table = db_table.table()
     owner, generation = _generation(existing, table)
     names = {f"#{key}": key for key in updates}
     values = {f":{key}": value for key, value in updates.items()}
@@ -305,20 +299,12 @@ def list_drafts(
         filter_expr = filter_expr & Attr("status").eq(status)
     if draft_type is not None:
         filter_expr = filter_expr & Attr("draft_type").eq(draft_type)
-    scan_kwargs: AIDraftItem = {"FilterExpression": filter_expr}
-    if limit:
-        scan_kwargs["Limit"] = limit
-    items: list[AIDraftItem] = []
-    while True:
-        response = _scan(get_table(), **scan_kwargs)
-        items.extend(_items(response.get("Items", [])))
-        if limit and len(items) >= limit:
-            items = items[:limit]
-            break
-        last_key = response.get("LastEvaluatedKey")
-        if not last_key:
-            break
-        scan_kwargs["ExclusiveStartKey"] = last_key
+    table = db_table.table()
+    if not isinstance(table, _ScanTable):
+        raise account_deletion_repo.AccountDeletionConflict("AI draft dependency unavailable")
+    items = _items(
+        db_table.rows("scan", table=table, want=limit or None, FilterExpression=filter_expr)
+    )
     return sorted(items, key=_created_at, reverse=True)
 
 
@@ -329,7 +315,7 @@ def scan_ai_draft_private_rows(
     maximum_pages: int = 1,
     table: object | None = None,
 ) -> AIDraftPrivatePage:
-    target = table or get_table()
+    target = table or db_table.table()
     marker = dict(cursor) if cursor is not None else None
     found: list[AIDraftItem] = []
     for page in account_deletion_repo.sweep_pages(
@@ -376,7 +362,7 @@ def scrub_ai_draft_private_row(
         for key, value in candidate.items()
         if key in AI_DRAFT_TOMBSTONE_ALLOWLIST and value is not None
     }
-    target = table or get_table()
+    target = table or db_table.table()
     if isinstance(target, _TombstoneTable):
         target.replace_learning_tombstone(_mapping(item), tombstone, owner_id, generation)
     else:

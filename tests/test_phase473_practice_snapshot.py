@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from actor_helpers import install_actor_overrides
 from fakes import student_evidence as fake_evidence
 from scripts import seed_practice
+from stoa.db import table as db_table
 from stoa.db.repositories import practice_repo
 from stoa.routers import practice
 from stoa.services import practice_projection_service
@@ -153,7 +154,7 @@ def _pointer(challenge: Mapping[str, Any], **overrides: Any) -> dict[str, Any]:
 def test_get_challenge_uses_pointer_then_exact_canonical_get(monkeypatch) -> None:
     challenge = _versioned_challenge()
     table = _LookupTable([{"Item": _pointer(challenge)}, {"Item": challenge}])
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     assert practice_repo.get_challenge("challenge-1") == challenge
     assert [call["Key"] for call in table.get_calls] == [
@@ -183,7 +184,7 @@ def test_get_challenge_rejects_missing_or_malformed_pointer(monkeypatch, pointer
     else:
         responses = [{"Item": _pointer(challenge, **pointer_override)}, {"Item": challenge}]
     table = _LookupTable(responses)
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     assert practice_repo.get_challenge("challenge-1") is None
     assert table.query_calls == []
@@ -204,7 +205,7 @@ def test_get_challenge_validates_canonical_id_version_and_hash(
     challenge = _versioned_challenge()
     malformed = {**challenge, **canonical_override}
     table = _LookupTable([{"Item": _pointer(challenge)}, {"Item": malformed}])
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     assert practice_repo.get_challenge("challenge-1") is None
 
@@ -228,7 +229,7 @@ def test_challenge_lists_fully_paginate(monkeypatch) -> None:
     )
     marker = {"PK": "PRACTICE", "SK": first["SK"]}
     table = _PagedTable([{"Items": [first], "LastEvaluatedKey": marker}, {"Items": [second]}])
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     assert [item["challenge_id"] for item in practice_repo.get_challenges("lesson-1")] == [
         "challenge-1",
@@ -242,7 +243,7 @@ def test_challenge_lists_reject_duplicate_ids_versions_and_stalled_markers(monke
     duplicate = {**first, "SK": "CHALLENGE#other-lesson#challenge-1"}
     marker = {"PK": "PRACTICE", "SK": first["SK"]}
     table = _PagedTable([{"Items": [first], "LastEvaluatedKey": marker}, {"Items": [duplicate]}])
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
     with pytest.raises(ValueError, match="duplicate"):
         practice_repo.get_all_challenges()
 
@@ -252,7 +253,7 @@ def test_challenge_lists_reject_duplicate_ids_versions_and_stalled_markers(monke
             {"Items": [], "LastEvaluatedKey": marker},
         ]
     )
-    monkeypatch.setattr(practice_repo, "get_table", lambda: stalled)
+    db_table.install(stalled)
     with pytest.raises(ValueError, match="pagination"):
         practice_repo.get_all_challenges()
 

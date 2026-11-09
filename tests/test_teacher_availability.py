@@ -246,7 +246,7 @@ def test_help_request_list_and_stats_include_only_current_assignment(monkeypatch
             escalation_message="private-other",
         ),
     )
-    monkeypatch.setattr(teachers, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(teachers, "_get_student_name", lambda _id: "Current Student")
     client = _client(
         teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}
@@ -283,11 +283,6 @@ def test_cross_teacher_help_request_update_is_hidden_before_mutation(monkeypatch
     )
     before = dict(table.rows[("CONV#conv-1", "HELP")])
     monkeypatch.setattr(teachers, "_get_student_name", lambda _id: "Student")
-    for module in (
-        teachers,
-        teacher_dispatch_service,
-    ):
-        monkeypatch.setattr(module, "get_table", lambda table=table: table)
     db_table.install(table)
 
     other = _client(
@@ -323,7 +318,7 @@ def test_help_request_authorization_outage_returns_503_before_mutation(monkeypat
         async def facts_for(self, *_args, **_kwargs):
             raise RuntimeError("authorization store unavailable")
 
-    monkeypatch.setattr(teachers, "get_table", lambda: table)
+    db_table.install(table)
     app = FastAPI()
     app.include_router(teachers.router, prefix="/teachers")
     install_actor_overrides(app, {"sub": "teacher-1", "role": "teacher"})
@@ -370,8 +365,6 @@ def _availability_table(monkeypatch, **profile_fields) -> FakeTable:
             "generation": 1,
         },
     )
-    for module in (teacher_dispatch_service,):
-        monkeypatch.setattr(module, "get_table", lambda table=table: table)
     db_table.install(table)
     return table
 

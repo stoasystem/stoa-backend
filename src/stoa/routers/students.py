@@ -297,7 +297,7 @@ def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
     rows = help_requests.with_requests(
         [row for row in (raw_rows if isinstance(raw_rows, list) else []) if isinstance(row, Mapping)],
         student_id,
-        table=question_repo.get_table(),
+        table=db_table.table(),
     )
     for row in rows:
         created_at = _history_text(row.get("created_at"))
@@ -672,7 +672,7 @@ async def get_summary(
         for conversation in help_requests.with_requests(
             conversation_routes._list_conversations(student_id).items,
             student_id,
-            table=question_repo.get_table(),
+            table=db_table.table(),
         )
         if conversation.get("escalated") and conversation.get("escalation_status") == "resolved"
     )

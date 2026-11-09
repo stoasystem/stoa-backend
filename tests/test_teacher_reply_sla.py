@@ -106,7 +106,7 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
             "escalated_at": "2026-06-08T08:00:00+00:00",
         }
     )
-    monkeypatch.setattr(teachers, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(teachers.user_repo, "get_user", lambda user_id, **_kwargs: {"name": "Teacher One"})
     # The holder's reply is one transaction behind the student's fence (#74).
     captured: list[dict] = []
@@ -173,7 +173,7 @@ def test_teacher_help_requests_expose_sla_and_average_response(monkeypatch):
             "subject": "Mathematics",
         },
     )
-    monkeypatch.setattr(teachers, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(teachers, "_get_student_name", lambda student_id: "Student")
 
     client = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})

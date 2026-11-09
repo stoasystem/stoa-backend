@@ -8,11 +8,12 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from enum import StrEnum
 import hashlib
+from itertools import islice
 import json
 from typing import Any
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, weekly_counter
 from stoa.models.allowance import (
     MAX_EXACT_COUNT,
@@ -215,46 +216,36 @@ def _strong_get(table: object, key: Mapping[str, str]) -> AllowanceItem | None:
 
 
 def _query_evidence(table: object, beneficiary_id: str) -> list[AllowanceItem]:
-    query = getattr(table, "query", None)
-    if not callable(query):
-        raise _AllowanceDependencyFailure("allowance persistence is unavailable")
-    request: dict[str, object] = {
-        "KeyConditionExpression": "PK=:pk AND begins_with(SK,:prefix)",
-        "ExpressionAttributeValues": {
-            ":pk": _partition(beneficiary_id),
-            ":prefix": "PROVIDER_USAGE#",
-        },
-        "ConsistentRead": True,
-    }
     items: list[AllowanceItem] = []
-    for _ in range(20):
-        try:
-            response = query(**request)
-        except Exception:
-            raise _AllowanceDependencyFailure(
-                "allowance persistence is unavailable"
-            ) from None
-        if not isinstance(response, Mapping) or not isinstance(response.get("Items"), list):
-            raise _AllowanceDependencyFailure(
-                "allowance dependency returned malformed data"
-            )
-        items.extend(
-            item
-            for raw in response["Items"]
-            if (item := _mapping(raw)) is not None
-        )
-        cursor = response.get("LastEvaluatedKey")
-        if cursor is None:
-            return items
-        if (
-            not isinstance(cursor, Mapping)
-            or set(cursor) != {"PK", "SK"}
-            or any(not isinstance(cursor[field], str) for field in ("PK", "SK"))
+    try:
+        for page in islice(
+            db_table.pages(
+                "query",
+                table=table,
+                KeyConditionExpression="PK=:pk AND begins_with(SK,:prefix)",
+                ExpressionAttributeValues={
+                    ":pk": _partition(beneficiary_id),
+                    ":prefix": "PROVIDER_USAGE#",
+                },
+                ConsistentRead=True,
+            ),
+            20,
         ):
+            items.extend(
+                item for raw in page.items if (item := _mapping(raw)) is not None
+            )
+            if page.last_key is None:
+                return items
+    except _AllowanceDependencyFailure:
+        raise
+    except db_table.TableUnavailable as exc:
+        if exc.code.startswith("malformed"):
             raise _AllowanceDependencyFailure(
                 "allowance dependency returned malformed data"
-            )
-        request["ExclusiveStartKey"] = dict(cursor)
+            ) from None
+        raise _AllowanceDependencyFailure("allowance persistence is unavailable") from None
+    except Exception:
+        raise _AllowanceDependencyFailure("allowance persistence is unavailable") from None
     raise _AllowanceDependencyFailure("allowance evidence exceeds the read bound")
 
 
@@ -477,7 +468,7 @@ def reserve_allowance(
     ):
         return ReservationResult(ReservationDisposition.LIMIT_EXCEEDED)
 
-    target = table or get_table()
+    target = table or db_table.table()
     effect_key = _effect_key(beneficiary, effect)
     try:
         existing = _strong_get(target, effect_key)
@@ -753,7 +744,7 @@ def _record_usage(
             **({"cost_basis": "unknown_cost"} if unknown_cost else {}),
         },
     )
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         existing_evidence = _strong_get(target, evidence_key)
         if existing_evidence is not None:
@@ -984,7 +975,7 @@ def _complete_allowance(
             "stable_replay_readable": stable_replay_readable,
         },
     )
-    target = table or get_table()
+    target = table or db_table.table()
     effect_key = _effect_key(beneficiary, effect)
 
     def attempt() -> FinalizationResult:
@@ -1194,7 +1185,7 @@ def release_unknown_cost(
     beneficiary = _required_text(beneficiary_id, "beneficiary_id")
     effect = _sha256(effect_id, "effect_id")
     now = _aware_timestamp(released_at, "released_at")
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         raw_effect = _strong_get(target, _effect_key(beneficiary, effect))
         if raw_effect is None:
@@ -1261,7 +1252,7 @@ def get_allowance_counter(
 ) -> AllowanceItem | None:
     """Load one strict weekly counter; malformed persisted numbers fail closed."""
     beneficiary = _required_text(beneficiary_id, "beneficiary_id")
-    counter = _read_counter(table or get_table(), beneficiary, week)
+    counter = _read_counter(table or db_table.table(), beneficiary, week)
     return None if counter is None else counter.item
 
 
@@ -1274,7 +1265,7 @@ def list_provider_usage_evidence(
     """List exact content-free evidence for one beneficiary and week."""
     beneficiary = _required_text(beneficiary_id, "beneficiary_id")
     identity = _required_text(week_identity, "week_identity", maximum=8)
-    target = table or get_table()
+    target = table or db_table.table()
     evidence: list[ProviderUsageEvidence] = []
     for item in _query_evidence(target, beneficiary):
         if item.get("week_identity") != identity:

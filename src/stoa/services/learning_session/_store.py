@@ -11,12 +11,11 @@ partition itself.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 from boto3.dynamodb.conditions import Key
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import attachment_repo
 from stoa.db.repositories.attachment_repo import AttachmentRepositoryConflict
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
@@ -39,7 +38,7 @@ def record_key(conversation_id: str) -> dict[str, str]:
 
 def table() -> Any:
     """The table the session's rows live on, for a transaction that spans them."""
-    return get_table()
+    return db_table.table()
 
 
 # ── Reads ─────────────────────────────────────────────────────────────────────
@@ -47,7 +46,7 @@ def table() -> Any:
 
 def get_record(conversation_id: str) -> dict[str, object] | None:
     """The record, read strongly; `None` when there is none."""
-    response = get_table().get_item(Key=record_key(conversation_id), ConsistentRead=True)
+    response = db_table.table().get_item(Key=record_key(conversation_id), ConsistentRead=True)
     if not isinstance(response, Mapping):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     item = response.get("Item")
@@ -60,7 +59,7 @@ def get_record(conversation_id: str) -> dict[str, object] | None:
 
 def get_message(conversation_id: str, message_id: str) -> object:
     """One message row as stored, read strongly; `None` when there is none."""
-    return get_table().get_item(
+    return db_table.table().get_item(
         Key={"PK": conv_pk(conversation_id), "SK": msg_sk(message_id)},
         ConsistentRead=True,
     ).get("Item")
@@ -68,17 +67,26 @@ def get_message(conversation_id: str, message_id: str) -> object:
 
 def message_page(conversation_id: str, cursor: object | None) -> object:
     """One page of the message rows, strongly read, ascending by sort key."""
-    request: dict[str, object] = {
-        "KeyConditionExpression": (
-            Key("PK").eq(conv_pk(conversation_id))
-            & Key("SK").begins_with("MSG#")
-        ),
-        "ScanIndexForward": True,
-        "ConsistentRead": True,
-    }
-    if cursor is not None:
-        request["ExclusiveStartKey"] = cursor
-    return get_table().query(**request)
+    try:
+        page = next(
+            db_table.pages(
+                "query",
+                table=db_table.table(),
+                start=cast(Mapping[str, object] | None, cursor),
+                KeyConditionExpression=(
+                    Key("PK").eq(conv_pk(conversation_id))
+                    & Key("SK").begins_with("MSG#")
+                ),
+                ScanIndexForward=True,
+                ConsistentRead=True,
+            )
+        )
+    except (db_table.TableUnavailable, db_table.PageTokenInvalid) as exc:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from exc
+    response: dict[str, object] = {"Items": page.items}
+    if page.last_key is not None:
+        response["LastEvaluatedKey"] = page.last_key
+    return response
 
 
 # ── Fenced writes of the record (moved from attachment_repo) ──────────────────
@@ -141,7 +149,7 @@ def _conversation_write(
     operations = build_conversation_write_transaction(
         item=item, owner_id=owner_id, generation=generation, mode=mode
     )
-    target = table or get_table()
+    target = table or db_table.table()
     if not db_table.transactional(target) and hasattr(target, "put_item") and mode == "put":
         # Narrow compatibility for inherited in-memory fakes. Production tables
         # always execute the fenced transaction below.
@@ -171,7 +179,7 @@ def owns_conversation(
     conversation_id: str, owner_id: str, *, table: object | None = None
 ) -> bool:
     """Whether this learning session exists, is the owner's own, and is not deleted."""
-    target = table or get_table()
+    target = table or db_table.table()
     item = attachment_repo._optional_mapping(
         attachment_repo._get_item(
             target,
@@ -200,7 +208,7 @@ def retitle_conversation(
     Conditional on the placeholder still being present, so a title a student
     chose is never overwritten. Returns whether the title was adopted.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     update_item = getattr(target, "update_item", None)
     if not callable(update_item):
         return False

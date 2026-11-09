@@ -9,7 +9,6 @@ from typing import Protocol, runtime_checkable
 from boto3.dynamodb.conditions import Attr, ConditionBase
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -93,12 +92,12 @@ def _put_item(table: object, **kwargs: object) -> object:
     return table.put_item(**kwargs)
 
 
-def _scan(table: object, **kwargs: object) -> CurriculumSignalItem:
+def _scan_rows(table: object, *, want: int | None, **kwargs: object) -> list[CurriculumSignalItem]:
     if not isinstance(table, _ScanTable):
         raise account_deletion_repo.AccountDeletionConflict(
             "curriculum signal dependency unavailable"
         )
-    return _mapping(table.scan(**kwargs))
+    return _items(db_table.rows("scan", table=table, want=want, **kwargs))
 
 
 def _update_item(table: object, **kwargs: object) -> object:
@@ -225,7 +224,7 @@ def record_student_signal(
     account_fence_generation: int | None = None,
     table: object | None = None,
 ) -> None:
-    target = table or get_table()
+    target = table or db_table.table()
     generation = _generation(student_id, account_fence_generation, target)
     operations = build_curriculum_signal_transaction(
         student_id=student_id, generation=generation, item=item
@@ -243,7 +242,7 @@ def record_student_signal(
 
 
 def put_signal(item: CurriculumSignalItem) -> None:
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -256,7 +255,7 @@ def put_signal(item: CurriculumSignalItem) -> None:
 
 
 def increment_metric(item: CurriculumSignalItem) -> None:
-    table = get_table()
+    table = db_table.table()
     signal_field = f"signal_{item['signal_type']}_count"
     source_field = f"source_{item['source_type']}_count"
     names = {
@@ -305,7 +304,7 @@ def list_metrics(
     topic_id: str | None = None,
     limit: int | None = 100,
 ) -> list[CurriculumSignalItem]:
-    table = get_table()
+    table = db_table.table()
     filter_expr: ConditionBase = Attr("entity_type").eq(METRIC_ENTITY)
     if content_type:
         filter_expr = filter_expr & Attr("content_type").eq(content_type)
@@ -313,21 +312,7 @@ def list_metrics(
         filter_expr = filter_expr & Attr("subject_id").eq(subject_id)
     if topic_id:
         filter_expr = filter_expr & Attr("topic_id").eq(topic_id)
-    scan_kwargs: CurriculumSignalItem = {"FilterExpression": filter_expr}
-    if limit:
-        scan_kwargs["Limit"] = limit
-    items: list[CurriculumSignalItem] = []
-    while True:
-        resp = _scan(table, **scan_kwargs)
-        items.extend(_items(resp.get("Items", [])))
-        if limit and len(items) >= limit:
-            items = items[:limit]
-            break
-        last_key = resp.get("LastEvaluatedKey")
-        if not last_key:
-            break
-        scan_kwargs["ExclusiveStartKey"] = last_key
-    return items
+    return _scan_rows(table, want=limit or None, FilterExpression=filter_expr)
 
 
 def scan_curriculum_signal_manifests(
@@ -338,7 +323,7 @@ def scan_curriculum_signal_manifests(
     table: object | None = None,
 ) -> CurriculumSignalPage:
     """Strongly scan owner manifests plus legacy deterministic-hash signals."""
-    target = table or get_table()
+    target = table or db_table.table()
     marker = dict(cursor) if cursor is not None else None
     legacy_hash = _legacy_student_hash(owner_id)
     found: list[CurriculumSignalItem] = []
@@ -373,7 +358,7 @@ def reconcile_curriculum_signal(
     table: object | None = None,
 ) -> str:
     """Delete one signal and reverse its metric contribution exactly once."""
-    target = table or get_table()
+    target = table or db_table.table()
     signal_id = str(manifest.get("signal_id") or "").strip()
     if not signal_id:
         raise account_deletion_repo.AccountDeletionConflict(

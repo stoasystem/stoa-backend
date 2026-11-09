@@ -6,10 +6,9 @@ from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Key
-from botocore.exceptions import ClientError
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, omit_none_attributes
+from stoa.db.dynamodb import omit_none_attributes
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -53,7 +52,7 @@ class _UpdateTable(Protocol):
 
 
 def _table(candidate: object | None = None) -> object:
-    return candidate or get_table()
+    return candidate or db_table.table()
 
 
 def _get_item(table: object, **kwargs: object) -> UsageItem:
@@ -70,7 +69,7 @@ def _put_item(table: object, **kwargs: object) -> object:
         # A ledger event names its parent even when the student has none, and
         # `parent_id` keys GSI-ParentId; the table refuses it as NULL.
         kwargs["Item"] = omit_none_attributes(item)
-    return table.put_item(**kwargs)
+    return db_table.put(table=table, **kwargs)
 
 
 def _event_exists(table: object, event: UsageItem) -> bool:
@@ -86,10 +85,6 @@ def _event_exists(table: object, event: UsageItem) -> bool:
     return response.get("Item") is not None
 
 
-def _query(table: object, **kwargs: object) -> UsageItem:
-    if not isinstance(table, _QueryTable):
-        raise ValueError("usage ledger dependency unavailable")
-    return _response(table.query(**kwargs))
 
 
 def _update_item(table: object, **kwargs: object) -> object:
@@ -142,10 +137,8 @@ def put_usage_event(
                     Item=event,
                     ConditionExpression="attribute_not_exists(PK)",
                 )
-            except ClientError as exc:
-                if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-                    return False
-                raise
+            except db_table.WriteRefused:
+                return False
             return True
         try:
             db_table.fenced(
@@ -177,10 +170,8 @@ def put_usage_event(
             Item=event,
             ConditionExpression="attribute_not_exists(PK)",
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
@@ -212,22 +203,25 @@ def list_usage_events(
     """List usage events for one student/action/period."""
     table = _table()
     prefix = f"EVENT#{action}#{quota_period}#"
-    kwargs: dict[str, object] = {
-        "KeyConditionExpression": Key("PK").eq(f"USAGE_LEDGER#{student_id}")
-        & Key("SK").begins_with(prefix),
-        "Limit": limit,
-    }
+    if not isinstance(table, _QueryTable):
+        raise ValueError("usage ledger dependency unavailable")
     items: list[UsageItem] = []
-    while True:
-        response = _query(table, **kwargs)
-        raw_items = response.get("Items", [])
-        if not isinstance(raw_items, list) or any(not isinstance(item, dict) for item in raw_items):
-            raise ValueError("usage ledger dependency unavailable")
-        items.extend(_response(item) for item in raw_items)
-        last_key = response.get("LastEvaluatedKey")
-        if not last_key or len(items) >= limit:
-            return items[:limit]
-        kwargs["ExclusiveStartKey"] = last_key
+    try:
+        for page in db_table.pages(
+            "query",
+            table=table,
+            KeyConditionExpression=Key("PK").eq(f"USAGE_LEDGER#{student_id}")
+            & Key("SK").begins_with(prefix),
+            Limit=limit,
+        ):
+            items.extend(_response(item) for item in page.items)
+            if page.last_key is None or len(items) >= limit:
+                break
+    except db_table.TableUnavailable as exc:
+        if exc.code.startswith("malformed"):
+            raise ValueError("usage ledger dependency unavailable") from None
+        raise
+    return items[:limit]
 
 
 def get_daily_question_counter(student_id: str, day: str) -> UsageItem | None:

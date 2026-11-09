@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fakes.dynamodb import FakeTable
 
+from stoa.db import table as db_table
 from stoa.db.repositories import practice_repo
 from stoa.services import student_evidence
 
@@ -36,7 +37,7 @@ def test_the_right_answers_of_a_lesson_are_read_across_every_page(monkeypatch) -
     rows.append(_attempt("student-2", 22, lesson="lesson-1", challenge="c-1", correct=True))
     rows.append(_attempt("student-1", 23, lesson="lesson-1", challenge="c-2", correct=True))
     table.seed(*rows)
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     assert practice_repo.challenges_answered_right("student-1", "lesson-1") == {"c-0", "c-2"}
 
@@ -73,7 +74,7 @@ def test_a_right_answer_saved_just_before_completion_is_read(monkeypatch) -> Non
         _attempt("student-1", 1, lesson="lesson-1", challenge="c-1", correct=True),
         last,
     )
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     assert practice_repo.challenges_answered_right("student-1", "lesson-1") == {"c-0", "c-1", "c-2"}
 
@@ -96,7 +97,7 @@ def test_an_answer_the_backend_never_judged_does_not_count(monkeypatch) -> None:
         _attempt("student-1", 0, lesson="lesson-1", challenge="c-0", correct=True),
         _self_reported("student-1", 1, lesson="lesson-1", challenge="c-1"),
     )
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     assert practice_repo.challenges_answered_right("student-1", "lesson-1") == {"c-0"}
     assert student_evidence.for_student("student-1").answered_right == {"c-0"}
@@ -108,7 +109,7 @@ def test_a_lesson_is_unfinished_while_one_exercise_is_only_self_reported(monkeyp
         _attempt("student-1", 0, lesson="lesson-1", challenge="c-0", correct=True),
         _self_reported("student-1", 1, lesson="lesson-1", challenge="c-1"),
     )
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(
         practice_repo,
         "get_challenges",
@@ -121,7 +122,7 @@ def test_a_lesson_is_unfinished_while_one_exercise_is_only_self_reported(monkeyp
 def test_an_attempt_is_only_marked_when_it_was_not_judged(monkeypatch) -> None:
     table = FakeTable()
     table.seed_active_account("student-1")
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     judged = practice_repo.put_attempt("student-1", "c-0", "4", True, lesson_id="lesson-1")
     unchecked = practice_repo.put_attempt(

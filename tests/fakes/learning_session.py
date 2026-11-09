@@ -7,9 +7,8 @@ helpers instead of writing the rows by hand, so a change to the shape
 - `seed_conversation` plants the record `learning_session.open` stores, owner-
   and fence-stamped the way the record's fenced write stamps it.
 - `seed_message` plants a row made by `learning_session.append`.
-- `patch_session_table` points the module's one table access at the fake
-  (decision 8): every session read and write goes through
-  `learning_session._store.get_table`.
+- `patch_session_table` installs the fake in the table gateway (decision 8):
+  every session read and write goes through `stoa.db.table`.
 
 Teacher-note rows (`NOTE#…`) belong to the help request: `fakes.help_requests.seed_reply`
 plants them (#233).
@@ -22,6 +21,7 @@ from typing import Any
 import pytest
 
 from fakes.dynamodb import FakeTable
+from stoa.db import table as db_table
 from stoa.services import learning_session
 from stoa.services.learning_session import _store
 
@@ -108,5 +108,9 @@ def seed_message(
 
 
 def patch_session_table(monkeypatch: pytest.MonkeyPatch, table: object) -> None:
-    """Have every read and write of the session's rows reach `table`."""
-    monkeypatch.setattr(_store, "get_table", lambda: table)
+    """Have every read and write of the session's rows reach `table`.
+
+    It is the gateway's table for the rest of the test, so every other row the
+    test reads or writes is on it too.
+    """
+    db_table.install(table)

@@ -1,3 +1,4 @@
+from stoa.db import table as db_table
 from stoa.services import help_requests, teacher_dispatch_service
 from fakes.dynamodb import FakeTable, as_stored as _as_stored
 
@@ -172,7 +173,7 @@ def test_dispatch_scans_continue_after_sparse_filtered_page(monkeypatch):
         {"PK": "PRACTICE#0", "SK": "ROW"},
         _profile_row(),
     )
-    monkeypatch.setattr(teacher_dispatch_service, "get_table", lambda: table)
+    db_table.install(table)
 
     teachers = teacher_dispatch_service.list_teacher_profiles(limit=1)
     profile_scans = _scans_since(table, 0)
@@ -200,7 +201,7 @@ def test_dispatch_scans_continue_after_nonempty_business_rejected_page(monkeypat
         _profile_row(user_id="student-rejected", role="student"),
         _profile_row(),
     )
-    monkeypatch.setattr(teacher_dispatch_service, "get_table", lambda: table)
+    db_table.install(table)
 
     teachers = teacher_dispatch_service.list_teacher_profiles(limit=1)
     profile_scans = _scans_since(table, 0)

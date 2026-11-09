@@ -2,16 +2,16 @@
 
 import hashlib
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
+from itertools import islice
 from typing import Any, Protocol, runtime_checkable
 import uuid
 
 from boto3.dynamodb.conditions import Attr, Key
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -331,21 +331,33 @@ def _query_all_challenge_pages(table: object, **query: object) -> list[dict]:
     lessons, and a first page would have dropped whichever came last."""
     items: list[dict] = []
     previous_marker: PracticeItem | None = None
-    for _page in range(_MAX_CHALLENGE_PAGES):
-        response = _query(table, **query)
-        page_items = _response_items(response.get("Items", []))
-        items.extend(page_items)
-        marker = response.get("LastEvaluatedKey")
+    for page in islice(_query_pages(table, **query), _MAX_CHALLENGE_PAGES):
+        items.extend(_response_items(page.items))
+        marker = page.last_key
         if marker is None:
             break
-        marker = _dependency_mapping(marker)
-        if not marker or marker == previous_marker:
+        if marker == previous_marker:
             raise ValueError("challenge pagination did not make progress")
         previous_marker = marker
-        query["ExclusiveStartKey"] = marker
     else:
         raise ValueError("challenge pagination exceeded the bounded page limit")
     return items
+
+
+def _query_pages(table: object, **query: object) -> Iterator[db_table.Page]:
+    """The pages of one query, read through the table gateway.
+
+    A page or a continuation key the table did not hand back in shape is the
+    same malformed response it always was here.
+    """
+    if not isinstance(table, _QueryTable):
+        raise ValueError("practice dependency unavailable")
+    try:
+        yield from db_table.pages("query", table=table, **query)
+    except db_table.TableUnavailable as exc:
+        if exc.code.startswith("malformed"):
+            raise ValueError("malformed practice dependency response") from None
+        raise
 
 
 def _validate_unique_challenges(items: list[dict]) -> list[dict]:
@@ -427,14 +439,14 @@ def indexed_exercises(lesson: Mapping[str, Any]) -> list[dict[str, Any]] | None:
 
 
 def get_subjects() -> list[dict]:
-    table = get_table()
+    table = db_table.table()
     return _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("SUBJECT#"))
     )
 
 
 def get_topics(subject_id: str | None = None) -> list[dict]:
-    table = get_table()
+    table = db_table.table()
     items = _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("TOPIC#"))
     )
@@ -444,13 +456,13 @@ def get_topics(subject_id: str | None = None) -> list[dict]:
 
 
 def get_topic(topic_id: str) -> dict | None:
-    table = get_table()
+    table = db_table.table()
     resp = _get_item(table, Key={"PK": "PRACTICE", "SK": f"TOPIC#{topic_id}"})
     return _optional_item(resp.get("Item"))
 
 
 def get_lessons(topic_id: str | None = None, unit_id: str | None = None) -> list[dict]:
-    table = get_table()
+    table = db_table.table()
     items = _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("LESSON#"))
     )
@@ -462,13 +474,13 @@ def get_lessons(topic_id: str | None = None, unit_id: str | None = None) -> list
 
 
 def get_lesson(lesson_id: str) -> dict | None:
-    table = get_table()
+    table = db_table.table()
     resp = _get_item(table, Key={"PK": "PRACTICE", "SK": f"LESSON#{lesson_id}"})
     return _optional_item(resp.get("Item"))
 
 
 def get_challenges(lesson_id: str) -> list[dict]:
-    table = get_table()
+    table = db_table.table()
     items = _query_all_challenge_pages(
         table,
         KeyConditionExpression=(
@@ -483,7 +495,7 @@ def get_all_challenges(
     subject_id: str | None = None,
     topic_id: str | None = None,
 ) -> list[dict]:
-    table = get_table()
+    table = db_table.table()
     prefix = f"CHALLENGE#{lesson_id}#" if lesson_id else "CHALLENGE#"
     items = _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with(prefix))
@@ -500,7 +512,7 @@ def get_challenge(challenge_id: str) -> dict | None:
     """Resolve one opaque ID through an answer-free pointer and exact row key."""
     if not isinstance(challenge_id, str) or not challenge_id.strip():
         return None
-    table = get_table()
+    table = db_table.table()
     pointer = _optional_item(
         _get_item(
             table,
@@ -540,7 +552,7 @@ def get_challenge(challenge_id: str) -> dict | None:
 
 
 def get_units(topic_id: str) -> list[dict]:
-    table = get_table()
+    table = db_table.table()
     items = _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("UNIT#"))
     )
@@ -551,7 +563,7 @@ def get_units(topic_id: str) -> list[dict]:
 
 
 def get_progress(user_id: str, subject_id: str | None = None) -> list[dict]:
-    table = get_table()
+    table = db_table.table()
     items = _query_all_challenge_pages(
         table,
         KeyConditionExpression=(
@@ -571,7 +583,7 @@ def mark_lesson_completed(
 ) -> dict[str, Any]:
     from datetime import datetime, timezone
 
-    table = get_table()
+    table = db_table.table()
     generation = _write_generation(user_id, account_fence_generation, table)
     item = {
         "PK": f"PROGRESS#{user_id}",
@@ -648,7 +660,7 @@ def put_attempt(
     (`practice_projection_service.normalize_submitted_answer`), and its shape
     is the one `SUBMITTED_ANSWER_SCHEMA_VERSION` names.
     """
-    table = get_table()
+    table = db_table.table()
     generation = _write_generation(student_id, account_fence_generation, table)
     attempt_key = attempt_id or str(uuid.uuid4())
     item = {
@@ -704,7 +716,7 @@ def put_attempt(
 
 def get_attempt(student_id: str, attempt_id: str) -> dict | None:
     """Load one attempt through its owner-scoped primary key."""
-    table = get_table()
+    table = db_table.table()
     response = _get_item(table, Key={"PK": f"ATTEMPTS#{student_id}", "SK": f"ATTEMPT#{attempt_id}"})
     return _optional_item(response.get("Item"))
 
@@ -718,7 +730,7 @@ def list_attempts(student_id: str) -> list[dict]:
     out stars the student earned, and do so more the more they practise; a
     stale one would miss the answer saved a moment before the page was asked.
     """
-    table = get_table()
+    table = db_table.table()
     return _query_all_challenge_pages(
         table,
         KeyConditionExpression=(
@@ -735,7 +747,7 @@ def challenges_answered_right(student_id: str, lesson_id: str) -> set[str]:
     a lesson depends on it, and the last right answer, saved a moment before
     completion is asked, must not read as missing (#83).
     """
-    table = get_table()
+    table = db_table.table()
     items = _query_all_challenge_pages(
         table,
         KeyConditionExpression=(
@@ -801,7 +813,7 @@ def scan_practice_private_rows(
     table: Any | None = None,
 ) -> PracticePrivatePage:
     """Strongly scan current and legacy practice/usage rows owned by one student."""
-    target = table or get_table()
+    target = table or db_table.table()
     if maximum_pages <= 0:
         raise account_deletion_repo.AccountDeletionConflict("invalid page bound")
     marker = dict(cursor) if cursor is not None else None
@@ -857,7 +869,7 @@ def scrub_practice_private_row(
         for key, value in retained.items()
         if key in PRACTICE_TOMBSTONE_ALLOWLIST and value is not None
     }
-    target = table or get_table()
+    target = table or db_table.table()
     hook = getattr(target, "replace_learning_tombstone", None)
     if callable(hook):
         hook(dict(item), tombstone, owner_id, generation)
@@ -938,7 +950,7 @@ def record_study_day(
     on which kind of work was done - finishing a lesson and clearing a review
     both count.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     generation = _write_generation(student_id, account_fence_generation, target)
     item = {
         "PK": study_day_partition(student_id),
@@ -980,7 +992,7 @@ def list_activity(student_id: str, *, table: Any | None = None) -> list[dict]:
     may be celebrated, so reading them apart would let the two answers come
     from different moments.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     return _query_all_challenge_pages(
         target, KeyConditionExpression=Key("PK").eq(activity_partition(student_id))
     )
@@ -999,7 +1011,7 @@ def _activity_write(
     table: Any | None,
 ) -> dict[str, Any]:
     """Put one activity row once, behind the account fence."""
-    target = table or get_table()
+    target = table or db_table.table()
     generation = _write_generation(student_id, account_fence_generation, target)
     operations = build_practice_write_transaction(
         item=item, owner_id=student_id, generation=generation
@@ -1077,7 +1089,7 @@ def acknowledge_lit_units(
     write declines it. There is no path from the unit id to anybody else's
     partition.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     generation = _write_generation(student_id, account_fence_generation, target)
     moment = at or datetime.now(timezone.utc).isoformat()
     confirmed: list[str] = []
@@ -1143,7 +1155,7 @@ def _quiz_write(
     account_fence_generation: int | None,
     table: Any | None = None,
 ) -> dict[str, Any]:
-    target = table or get_table()
+    target = table or db_table.table()
     generation = _write_generation(student_id, account_fence_generation, target)
     operations = build_practice_write_transaction(
         item=item, owner_id=student_id, generation=generation
@@ -1197,7 +1209,7 @@ def put_quiz_paper(
 
 def get_quiz_paper(student_id: str, quiz_id: str, *, table: Any | None = None) -> dict | None:
     """Read one paper of this student, strongly: the answer just before it wrote."""
-    target = table or get_table()
+    target = table or db_table.table()
     response = _get_item(
         target,
         Key={"PK": quiz_partition(student_id), "SK": f"{QUIZ_PAPER_PREFIX}{quiz_id}"},
@@ -1208,22 +1220,18 @@ def get_quiz_paper(student_id: str, quiz_id: str, *, table: Any | None = None) -
 
 def list_quiz_papers(student_id: str, *, table: Any | None = None) -> list[dict]:
     """Every paper of this student still kept, either kind, any status."""
-    target = table or get_table()
-    request: dict[str, Any] = {
-        "KeyConditionExpression": (
+    target = table or db_table.table()
+    items: list[dict] = []
+    for page in _query_pages(
+        target,
+        KeyConditionExpression=(
             Key("PK").eq(quiz_partition(student_id))
             & Key("SK").begins_with(QUIZ_PAPER_PREFIX)
         ),
-        "ConsistentRead": True,
-    }
-    items: list[dict] = []
-    while True:
-        response = _query(target, **request)
-        items.extend(_response_items(response.get("Items", [])))
-        cursor = response.get("LastEvaluatedKey")
-        if not cursor:
-            return items
-        request["ExclusiveStartKey"] = cursor
+        ConsistentRead=True,
+    ):
+        items.extend(_response_items(page.items))
+    return items
 
 
 def update_quiz_paper(
@@ -1242,7 +1250,7 @@ def update_quiz_paper(
     requests that read the same paper cannot both write it: the second finds
     the count moved, or the row changed under it, and is refused.
     """
-    target: Any = table or get_table()
+    target: Any = table or db_table.table()
     generation = _write_generation(student_id, account_fence_generation, target)
     operations = build_practice_write_transaction(
         item={"PK": quiz_partition(student_id), "SK": f"{QUIZ_PAPER_PREFIX}{quiz_id}"},
@@ -1295,7 +1303,7 @@ def put_quiz_credential(
 def get_quiz_credential(
     student_id: str, credential_id: str, *, table: Any | None = None
 ) -> dict | None:
-    target = table or get_table()
+    target = table or db_table.table()
     response = _get_item(
         target,
         Key={
@@ -1322,7 +1330,7 @@ def consume_quiz_credential(
     and the lesson, so a row reached by any route other than this student's
     own partition is still not spent here.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         target.delete_item(
             Key={
@@ -1418,7 +1426,7 @@ def put_star_quiz_pass(
 def get_star_quiz_pass(
     student_id: str, unit_id: str, *, table: Any | None = None
 ) -> dict | None:
-    target = table or get_table()
+    target = table or db_table.table()
     response = _get_item(
         target,
         Key={"PK": quiz_partition(student_id), "SK": f"{STAR_QUIZ_PASS_PREFIX}{unit_id}"},
@@ -1437,7 +1445,7 @@ def list_star_quiz_outcomes(student_id: str, *, table: Any | None = None) -> lis
     The papers themselves (`PAPER#`) are left out: what they hold is the
     quiz in progress, not what it decided.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     return _query_all_challenge_pages(
         target,
         KeyConditionExpression=(

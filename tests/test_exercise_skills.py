@@ -22,6 +22,7 @@ from actor_helpers import install_actor_overrides
 from rule_violation_helpers import assert_violation
 from scripts import backfill_exercise_skills as backfill
 from scripts import seed_practice
+from stoa.db import table as db_table
 from stoa.db.repositories import practice_repo
 from stoa.routers import admin
 from stoa.services import curriculum_ops_service, curriculum_service, curriculum_translations
@@ -343,7 +344,7 @@ def test_a_wrong_answer_after_a_right_one_does_not_put_a_skill_out(monkeypatch) 
             "correct": False,
         },
     )
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(
         practice_repo,
         "get_challenges",

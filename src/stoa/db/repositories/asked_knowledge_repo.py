@@ -23,11 +23,12 @@ carries the student as owner: deleting the account scrubs it with them.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from itertools import islice
 from typing import Any
 
 from boto3.dynamodb.conditions import Attr, Key
 
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 from stoa.db.repositories import knowledge_gap_repo
 
 ENTITY_TYPE = "asked_knowledge_points"
@@ -41,6 +42,8 @@ MAX_PER_QUESTION = 10
 READ_LIMIT = 500
 #: Most index pages one read of a student follows.
 READ_PAGE_BUDGET = 25
+#: GSI-StudentId continues from its own key as well as the table's.
+STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
 
 
 def record_key(conversation_id: str, message_id: str) -> dict[str, str]:
@@ -121,24 +124,26 @@ def list_for_student(
     spent entirely on messages: reading goes on until `READ_LIMIT` records are
     in hand or `READ_PAGE_BUDGET` pages are read.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     condition = Key("student_id").eq(student_id)
     if since is not None:
         condition = condition & Key("created_at").gte(since)
-    request: dict[str, Any] = {
-        "IndexName": "GSI-StudentId",
-        "KeyConditionExpression": condition,
-        "FilterExpression": Attr("entity_type").eq(ENTITY_TYPE),
-        "ScanIndexForward": False,
-    }
     records: list[dict[str, Any]] = []
-    for _page in range(READ_PAGE_BUDGET):
-        response = target.query(**request)
-        records.extend(dict(row) for row in response.get("Items", []) if _is_record(row))
-        cursor = response.get("LastEvaluatedKey")
-        if len(records) >= READ_LIMIT or not cursor:
+    for page in islice(
+        db_table.pages(
+            "query",
+            table=target,
+            key=STUDENT_INDEX_KEY,
+            IndexName="GSI-StudentId",
+            KeyConditionExpression=condition,
+            FilterExpression=Attr("entity_type").eq(ENTITY_TYPE),
+            ScanIndexForward=False,
+        ),
+        READ_PAGE_BUDGET,
+    ):
+        records.extend(dict(row) for row in page.items if _is_record(row))
+        if len(records) >= READ_LIMIT:
             break
-        request["ExclusiveStartKey"] = cursor
     return records[:READ_LIMIT]
 
 
@@ -146,18 +151,17 @@ def list_for_conversation(
     conversation_id: str, *, table: Any | None = None
 ) -> list[dict[str, Any]]:
     """The records of one conversation's questions, newest first."""
-    target = table or get_table()
-    request: dict[str, Any] = {
-        "KeyConditionExpression": (
-            Key("PK").eq(f"CONV#{conversation_id}") & Key("SK").begins_with("KNOWLEDGE#")
-        ),
-    }
+    target = table or db_table.table()
     records: list[dict[str, Any]] = []
-    for _page in range(READ_PAGE_BUDGET):
-        response = target.query(**request)
-        records.extend(dict(row) for row in response.get("Items", []) if _is_record(row))
-        cursor = response.get("LastEvaluatedKey")
-        if not cursor:
-            break
-        request["ExclusiveStartKey"] = cursor
+    for page in islice(
+        db_table.pages(
+            "query",
+            table=target,
+            KeyConditionExpression=(
+                Key("PK").eq(f"CONV#{conversation_id}") & Key("SK").begins_with("KNOWLEDGE#")
+            ),
+        ),
+        READ_PAGE_BUDGET,
+    ):
+        records.extend(dict(row) for row in page.items if _is_record(row))
     return sorted(records, key=lambda row: str(row.get("created_at") or ""), reverse=True)

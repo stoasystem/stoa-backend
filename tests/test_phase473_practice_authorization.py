@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
 from audit_helpers import MemoryAuthorizationAuditSink
+from stoa.db import table as db_table
 from stoa.db.repositories import question_repo, user_repo
 from stoa.deps import get_authorization_audit_sink
 from stoa.routers import practice
@@ -245,7 +246,7 @@ def test_assignment_repository_reads_exact_current_key_consistently(monkeypatch)
             calls.append(kwargs)
             return {"Item": _assignment()}
 
-    monkeypatch.setattr(question_repo, "get_table", lambda: Table())
+    db_table.install(Table())
     assert question_repo.get_teacher_curriculum_assignment("teacher-1") == _assignment()
     assert calls == [
         {
@@ -587,7 +588,7 @@ def _stored_assignment_row(monkeypatch: Any, item: dict[str, Any]):
         def get_item(self, **kwargs: Any) -> dict[str, Any]:
             return {"Item": stored}
 
-    monkeypatch.setattr(question_repo, "get_table", lambda: Table())
+    db_table.install(Table())
     return question_repo.get_teacher_curriculum_assignment("teacher-1")
 
 

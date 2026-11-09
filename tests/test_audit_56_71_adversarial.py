@@ -16,7 +16,8 @@ from fastapi.testclient import TestClient
 from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable
 
-from stoa.db.repositories import curriculum_ops_repo, practice_repo, review_repo
+from stoa.db import table as db_table
+from stoa.db.repositories import practice_repo
 from stoa.routers import admin, practice
 from stoa.security import route_authorization
 from stoa.services import curriculum_service, student_evidence
@@ -82,8 +83,7 @@ UNITS = [
 def _units_table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     table = FakeTable()
     table.seed(*[{"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u} for u in UNITS])
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
-    monkeypatch.setattr(curriculum_ops_repo, "get_table", lambda: table)
+    db_table.install(table)
     return table
 
 
@@ -255,8 +255,7 @@ class Sky:
             "u1": _judged("u1", mastery.LearningState.READY),
             "u2": _judged("u2", mastery.LearningState.READY),
         }
-        monkeypatch.setattr(practice_repo, "get_table", lambda: self.table)
-        monkeypatch.setattr(review_repo, "get_table", lambda: self.table)
+        db_table.install(self.table)
         monkeypatch.setattr(curriculum_service, "list_catalog", lambda **_k: CATALOG)
         monkeypatch.setattr(
             km.knowledge_mastery_service, "unit_states", lambda *_a, **_k: dict(self.states)

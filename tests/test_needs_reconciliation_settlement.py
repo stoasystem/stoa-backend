@@ -33,6 +33,7 @@ from fakes.ask_question import (
 from fakes.ask_question import patch_store, store_call
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.bedrock import FakeBedrock
+from stoa.db import table as db_table
 from stoa.db.repositories import allowance_repo, weekly_counter
 from stoa.jobs import conversation_generation
 from stoa.services import ai_service, allowance_service
@@ -108,7 +109,7 @@ def model(monkeypatch: pytest.MonkeyPatch, table) -> _Model:
             return model.invoke(self, self._invocation_method, **kwargs)
 
     monkeypatch.setattr(_admission, "MeteredModel", Scripted)
-    monkeypatch.setattr(allowance_repo, "get_table", lambda: table)
+    db_table.install(table)
     return model
 
 

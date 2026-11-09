@@ -16,7 +16,6 @@ from typing import Any
 from boto3.dynamodb.conditions import Key
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories.practice_repo import (
     _atomic_table,
     _get_item,
@@ -113,7 +112,7 @@ def item_from_state(
 
 
 def get_card(student_id: str, challenge_id: str, *, table: Any | None = None) -> dict[str, Any] | None:
-    target = table or get_table()
+    target = table or db_table.table()
     response = _get_item(
         target,
         Key={"PK": card_partition(student_id), "SK": f"{CARD_PREFIX}{challenge_id}"},
@@ -128,7 +127,7 @@ def list_cards(student_id: str, *, table: Any | None = None) -> list[dict[str, A
     Which of them are due, and where each one counts, is the student
     evidence's rule (`student_evidence.StudentEvidence.due_cards`).
     """
-    target = table or get_table()
+    target = table or db_table.table()
     return _query_all_challenge_pages(
         target,
         KeyConditionExpression=(
@@ -149,7 +148,7 @@ def save_card(
     table: Any | None = None,
 ) -> dict[str, Any]:
     """Write the schedule for one question behind the account fence."""
-    target = table or get_table()
+    target = table or db_table.table()
     generation = _write_generation(student_id, account_fence_generation, target)
     item = item_from_state(
         student_id,

@@ -20,6 +20,7 @@ from typing import Any
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.services import knowledge_map_service as km
 from stoa.services import knowledge_mastery_service as mastery
 
@@ -357,7 +358,6 @@ def test_each_subject_has_at_most_one() -> None:
 def test_the_latest_evidence_is_an_answer_or_a_finished_lesson_never_a_self_report(monkeypatch) -> None:
     from fakes.dynamodb import FakeTable
 
-    from stoa.db.repositories import practice_repo
     from stoa.services import student_evidence
 
     table = FakeTable()
@@ -368,7 +368,7 @@ def test_the_latest_evidence_is_an_answer_or_a_finished_lesson_never_a_self_repo
         {"PK": "PROGRESS#s1", "SK": "LESSON#l1", "lesson_id": "l1", "unit_id": "b", "status": "completed", "completed_at": "2026-11-01T10:00:00+00:00"},
         {"PK": "PROGRESS#s1", "SK": "LESSON#l2", "lesson_id": "l2", "unit_id": "c", "status": "in_progress", "completed_at": "2026-11-01T11:00:00+00:00"},
     )
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     assert student_evidence.for_student("s1").last_activity_by_unit == {
         "a": "2026-11-01T09:00:00+00:00",

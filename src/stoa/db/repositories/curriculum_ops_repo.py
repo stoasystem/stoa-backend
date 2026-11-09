@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from decimal import Decimal
+from itertools import islice
 from typing import NamedTuple, Protocol, SupportsInt, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
-from botocore.exceptions import ClientError
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, omit_none_attributes
+from stoa.db.dynamodb import omit_none_attributes
 from stoa.db.repositories import practice_repo
 
 
@@ -97,6 +97,22 @@ def _update_item(table: object, **kwargs: object) -> CurriculumItem:
     return _mapping(table.update_item(**kwargs))
 
 
+def _practice_rows(table: object, **request: object) -> list[CurriculumItem]:
+    """Every row one practice query admits, across at most `PRACTICE_PAGE_BUDGET` pages."""
+    if not isinstance(table, _QueryTable):
+        raise RuntimeError("curriculum dependency unavailable")
+    items: list[CurriculumItem] = []
+    started_at: dict[str, object] | None = None
+    for page in islice(db_table.pages("query", table=table, **request), PRACTICE_PAGE_BUDGET):
+        items.extend(_items(page.items))
+        if page.last_key is None:
+            return items
+        if page.last_key == started_at:
+            raise RuntimeError("practice pagination did not move forward")
+        started_at = page.last_key
+    raise RuntimeError("practice pagination exceeded the bounded page limit")
+
+
 def _delete_item(table: object, **kwargs: object) -> object:
     if not isinstance(table, _DeleteTable):
         raise RuntimeError("curriculum dependency unavailable")
@@ -116,7 +132,7 @@ def _integer(value: object) -> int:
 
 
 def put_version(item: CurriculumItem) -> None:
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -129,7 +145,7 @@ def put_version(item: CurriculumItem) -> None:
 
 
 def get_version(public_id: str, version_id: str) -> CurriculumItem | None:
-    table = get_table()
+    table = db_table.table()
     resp = _get_item(
         table,
         Key={
@@ -142,7 +158,7 @@ def get_version(public_id: str, version_id: str) -> CurriculumItem | None:
 
 
 def get_pointer(public_id: str) -> CurriculumItem | None:
-    table = get_table()
+    table = db_table.table()
     resp = _get_item(table, Key={"PK": f"CURRICULUM_POINTER#{public_id}", "SK": "META"})
     item = resp.get("Item")
     return _mapping(item) if item is not None else None
@@ -154,7 +170,7 @@ def put_pointer(item: CurriculumItem) -> None:
     A new draft names only `draft_version_id`. Replacing the row erased the published
     version and manifest, so the next publish that named the live version as expected
     was refused as stale."""
-    table = get_table()
+    table = db_table.table()
     fields = {
         "entity_type": POINTER_ENTITY,
         **{key: value for key, value in item.items() if value is not None},
@@ -179,7 +195,7 @@ def set_published_pointer(
     actor_id: str,
     updated_at: str,
 ) -> CurriculumItem:
-    table = get_table()
+    table = db_table.table()
     names = {
         "#published_version_id": "published_version_id",
         "#manifest_id": "manifest_id",
@@ -200,9 +216,11 @@ def set_published_pointer(
     if expected_published_version_id is not None:
         condition = "#published_version_id = :expected"
         values[":expected"] = expected_published_version_id
+    if not isinstance(table, _UpdateTable):
+        raise RuntimeError("curriculum dependency unavailable")
     try:
-        resp = _update_item(
-            table,
+        attributes = db_table.update(
+            table=table,
             Key={"PK": f"CURRICULUM_POINTER#{public_id}", "SK": "META"},
             UpdateExpression=(
                 "SET #entity_type = :entity_type, #public_id = :public_id, "
@@ -214,16 +232,13 @@ def set_published_pointer(
             ExpressionAttributeValues=values,
             ReturnValues="ALL_NEW",
         )
-    except ClientError as exc:
-        error = exc.response.get("Error", {}).get("Code")
-        if error == "ConditionalCheckFailedException":
-            raise StalePointerError("Published pointer changed") from exc
-        raise
-    return _mapping(resp.get("Attributes", {}))
+    except db_table.WriteRefused as exc:
+        raise StalePointerError("Published pointer changed") from exc
+    return _mapping(attributes)
 
 
 def put_manifest(item: CurriculumItem) -> None:
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -236,7 +251,7 @@ def put_manifest(item: CurriculumItem) -> None:
 
 
 def put_migration_evidence(item: CurriculumItem) -> None:
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -249,7 +264,7 @@ def put_migration_evidence(item: CurriculumItem) -> None:
 
 
 def get_migration_evidence(migration_id: str) -> CurriculumItem | None:
-    table = get_table()
+    table = db_table.table()
     resp = _get_item(
         table,
         Key={
@@ -333,7 +348,7 @@ def assert_exercise_ids_available(version: CurriculumItem) -> None:
     Challenge ids are global: the lookup pointer is keyed by the id alone. Taking one
     over would repoint a seeded or published exercise at this lesson's row. Called
     before the published pointer moves, so a refusal leaves nothing half-published."""
-    table = get_table()
+    table = db_table.table()
     public_id = version["public_id"]
     for exercise in _version_exercises(version):
         exercise_id = _exercise_id(exercise)
@@ -351,21 +366,11 @@ def assert_exercise_ids_available(version: CurriculumItem) -> None:
 def _lesson_challenge_rows(table: object, public_id: object) -> list[CurriculumItem]:
     """Every challenge row under one lesson, read raw: rows an earlier projection
     wrote unversioned must still be found to be retired."""
-    items: list[CurriculumItem] = []
-    request: CurriculumItem = {
-        "KeyConditionExpression": Key("PK").eq(PRACTICE_PK)
+    return _practice_rows(
+        table,
+        KeyConditionExpression=Key("PK").eq(PRACTICE_PK)
         & Key("SK").begins_with(_challenge_sort_key(public_id, "")),
-    }
-    for _page in range(PRACTICE_PAGE_BUDGET):
-        resp = _query(table, **request)
-        items.extend(_items(resp.get("Items", [])))
-        cursor = resp.get("LastEvaluatedKey")
-        if not cursor:
-            return items
-        if not isinstance(cursor, Mapping) or cursor == request.get("ExclusiveStartKey"):
-            raise RuntimeError("practice pagination did not move forward")
-        request["ExclusiveStartKey"] = dict(cursor)
-    raise RuntimeError("practice pagination exceeded the bounded page limit")
+    )
 
 
 def put_published_projection(version: CurriculumItem, manifest: CurriculumItem) -> None:
@@ -374,7 +379,7 @@ def put_published_projection(version: CurriculumItem, manifest: CurriculumItem) 
     Each exercise becomes a versioned challenge row with its lookup pointer, the way
     the seed writes them, and the exercises an earlier projection wrote that this
     version no longer has are retired with their pointers."""
-    table = get_table()
+    table = db_table.table()
     public_id = version["public_id"]
     assert_exercise_ids_available(version)
     rows = published_challenge_rows(version, manifest)
@@ -407,20 +412,21 @@ def put_published_projection(version: CurriculumItem, manifest: CurriculumItem) 
         challenge_id = row.get("challenge_id")
         if not isinstance(challenge_id, str):
             continue
+        if not isinstance(table, _DeleteTable):
+            raise RuntimeError("curriculum dependency unavailable")
         try:
-            _delete_item(
-                table,
+            db_table.delete(
+                table=table,
                 Key={"PK": practice_repo.CHALLENGE_POINTER_PK, "SK": f"CHALLENGE#{challenge_id}"},
                 ConditionExpression=Attr("target_sk").eq(sort_key),
             )
-        except ClientError as exc:
+        except db_table.WriteRefused:
             # No pointer was ever written for it, or the id now points elsewhere.
-            if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
-                raise
+            pass
 
 
 def get_practice_unit(unit_id: str) -> CurriculumItem | None:
-    table = get_table()
+    table = db_table.table()
     resp = _get_item(table, Key={"PK": "PRACTICE", "SK": f"UNIT#{unit_id}"})
     item = resp.get("Item")
     return _mapping(item) if item is not None else None
@@ -428,21 +434,11 @@ def get_practice_unit(unit_id: str) -> CurriculumItem | None:
 
 def list_practice_units() -> list[CurriculumItem]:
     """Every unit row, across every page: the knowledge base brings two hundred."""
-    table = get_table()
-    items: list[CurriculumItem] = []
-    request: CurriculumItem = {
-        "KeyConditionExpression": Key("PK").eq(PRACTICE_PK) & Key("SK").begins_with("UNIT#"),
-    }
-    for _page in range(PRACTICE_PAGE_BUDGET):
-        resp = _query(table, **request)
-        items.extend(_items(resp.get("Items", [])))
-        cursor = resp.get("LastEvaluatedKey")
-        if not cursor:
-            return items
-        if not isinstance(cursor, Mapping) or cursor == request.get("ExclusiveStartKey"):
-            raise RuntimeError("practice pagination did not move forward")
-        request["ExclusiveStartKey"] = dict(cursor)
-    raise RuntimeError("practice pagination exceeded the bounded page limit")
+    table = db_table.table()
+    return _practice_rows(
+        table,
+        KeyConditionExpression=Key("PK").eq(PRACTICE_PK) & Key("SK").begins_with("UNIT#"),
+    )
 
 
 def set_unit_prerequisites(
@@ -453,7 +449,7 @@ def set_unit_prerequisites(
     updated_at: str,
 ) -> CurriculumItem:
     """Replace one unit's prerequisite list; the unit itself is never created here."""
-    table = get_table()
+    table = db_table.table()
     resp = _update_item(
         table,
         Key={"PK": "PRACTICE", "SK": f"UNIT#{unit_id}"},
@@ -478,7 +474,7 @@ def set_unit_prerequisites(
 
 
 def append_audit_event(public_id: str, event: CurriculumItem) -> None:
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -491,7 +487,7 @@ def append_audit_event(public_id: str, event: CurriculumItem) -> None:
 
 
 def list_audit_events(public_id: str, limit: int = 50) -> list[CurriculumItem]:
-    table = get_table()
+    table = db_table.table()
     resp = _query(
         table,
         KeyConditionExpression=(
@@ -516,7 +512,7 @@ class WorklistRows(NamedTuple):
 
 
 def list_worklist() -> WorklistRows:
-    table = get_table()
+    table = db_table.table()
     # One scan for both: the versions and the pointers that say which one is live.
     rows = db_table.rows(
         "scan",
@@ -540,7 +536,7 @@ def list_worklist() -> WorklistRows:
 
 
 def list_active_assignment_refs(public_id: str, limit: int = 100) -> list[CurriculumItem]:
-    table = get_table()
+    table = db_table.table()
     # This one answers "is anything still using this lesson?". A miss here
     # does not shorten a list; it turns a no into a yes.
     rows = db_table.rows(
@@ -584,26 +580,15 @@ def list_practice_rows() -> list[CurriculumItem]:
     back last, and a layout computed from part of a subject is wrong everywhere,
     not just where the rows went missing.
     """
-    table = get_table()
-    items: list[CurriculumItem] = []
-    request: CurriculumItem = {"KeyConditionExpression": Key("PK").eq(PRACTICE_PK)}
-    for _page in range(PRACTICE_PAGE_BUDGET):
-        resp = _query(table, **request)
-        items.extend(_items(resp.get("Items", [])))
-        cursor = resp.get("LastEvaluatedKey")
-        if not cursor:
-            return items
-        if not isinstance(cursor, Mapping) or cursor == request.get("ExclusiveStartKey"):
-            raise RuntimeError("practice pagination did not move forward")
-        request["ExclusiveStartKey"] = dict(cursor)
-    raise RuntimeError("practice pagination exceeded the bounded page limit")
+    table = db_table.table()
+    return _practice_rows(table, KeyConditionExpression=Key("PK").eq(PRACTICE_PK))
 
 
 def set_practice_attributes(sort_key: str, attributes: Mapping[str, object]) -> None:
     """Write layout attributes onto one practice row that already exists."""
     if not attributes:
         return
-    table = get_table()
+    table = db_table.table()
     names: dict[str, str] = {}
     values: CurriculumItem = {}
     assignments: list[str] = []

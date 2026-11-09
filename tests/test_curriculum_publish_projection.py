@@ -19,6 +19,7 @@ import pytest
 
 from fakes.dynamodb import FakeTable
 from scripts import seed_practice
+from stoa.db import table as db_table
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.rule_violation import RuleViolation
 from stoa.services.curriculum_errors import CurriculumErrorCode
@@ -69,8 +70,7 @@ def install_seeded_table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     """One table double holding the seed, behind both repositories the workflow uses."""
     table = FakeTable()
     table.seed(*_seed_rows())
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
-    monkeypatch.setattr(curriculum_ops_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(curriculum_analytics_service, "record_publish_event", lambda *a, **k: None)
     return table
 

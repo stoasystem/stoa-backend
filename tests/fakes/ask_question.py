@@ -36,8 +36,6 @@ from fakes.admission import seed_plan
 from fakes.bedrock import FakeBedrock
 from fakes.dynamodb import FakeTable
 from fakes.learning_session import patch_session_table, seed_conversation
-from stoa.db import table as db_table
-from stoa.db.repositories import allowance_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
@@ -103,16 +101,9 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     table = _Table()
     table.seed_active_account(STUDENT)
     seed_conversation(table, conversation_id=CONV, student_id=STUDENT)
+    # Every read and write of the question reaches it through the table gateway.
     patch_session_table(monkeypatch, table)
-    # These still reach the table themselves for rows that are not the session's.
-    for module in (conversations, _answering):
-        monkeypatch.setattr(module, "get_table", lambda table=table: table)
-    # The rows the attachment and upload repositories read, through the gateway.
-    db_table.install(table)
     seed_plan(monkeypatch)
-    # The week a question is admitted against: on this table, until a test
-    # points the allowance at its own.
-    monkeypatch.setattr(allowance_repo, "get_table", lambda table=table: table)
     monkeypatch.setattr(conversations.user_repo, "get_user", lambda *_a, **_k: {})
     # Answered in the request unless a test hands the answer to the worker.
     monkeypatch.setattr(dispatch.settings, "conversation_generation_function_name", "")

@@ -17,7 +17,8 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 import boto3
 
 from stoa.config import settings
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db import table as db_table
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     asked_knowledge_repo,
     knowledge_gap_repo,
@@ -558,7 +559,7 @@ def load_committed_message(command: dict) -> CommittedMessage:
     command's identity, its history snapshot, the stored student message and
     its attachments. A command without its generation context is given one.
     """
-    table = cast(DynamoConversationTable, get_table())
+    table = cast(DynamoConversationTable, db_table.table())
     conv_id = str(command.get("conversation_id") or "")
     student_id = str(command.get("owner_id") or "")
     command = _validate_replay_command(
@@ -683,7 +684,7 @@ def commit_message_command(
     """
     actor: Actor = command_context["actor"]
     fingerprint = str(command_context["fingerprint"])
-    table = cast(DynamoConversationTable, get_table())
+    table = cast(DynamoConversationTable, db_table.table())
     existing = command_context.get("existing")
     account_fence_generation = int(
         command_context.get("account_fence_generation")
@@ -1071,7 +1072,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     prepared = committed.prepared
     attachments = committed.attachments
     prior_messages = committed.prior_messages
-    table = cast(DynamoConversationTable, get_table())
+    table = cast(DynamoConversationTable, db_table.table())
     context = command.get("generation_context")
     if (
         not isinstance(context, Mapping)

@@ -19,7 +19,8 @@ import pytest
 
 from scripts import knowledge_base_import as kb
 from scripts import seed_practice
-from stoa.db.repositories import practice_repo, review_repo
+from stoa.db import table as db_table
+from stoa.db.repositories import practice_repo
 from stoa.services import (
     answer_judging,
     curriculum_migration_service,
@@ -752,7 +753,7 @@ def imported(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[dict[str, 
     _register(monkeypatch, stars_file, vocabulary)
     table = install_seeded_table(monkeypatch)
     # The student's review cards are in the same table as everything else.
-    monkeypatch.setattr(review_repo, "get_table", lambda: table)
+    db_table.install(table)
     _subjects, topics, units = seed_practice.knowledge_base_rows(live=False)
     table.seed(
         *({"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **t} for t in topics),
@@ -822,7 +823,7 @@ def test_a_student_is_told_what_to_master_first_and_nothing_is_locked(
     _publish_all(imported)
     # Live, as --knowledge-base-live writes them once the sets are published.
     _subjects, topics, units = seed_practice.knowledge_base_rows(live=True)
-    practice_repo.get_table().seed(
+    db_table.table().seed(
         *({"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **t} for t in topics),
         *({"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u} for u in units),
     )
@@ -835,7 +836,7 @@ def test_a_student_is_told_what_to_master_first_and_nothing_is_locked(
     assert before.ready is False and before.missing_unit_ids == ("brueche-bruchbegriff",)
     assert skill("brueche-brueche-addieren--schliessen").extension is True
 
-    practice_repo.get_table().seed(
+    db_table.table().seed(
         {
             "PK": "ATTEMPTS#student-1",
             "SK": "ATTEMPT#a1",
@@ -851,7 +852,7 @@ def _go_live(imported: list[dict[str, Any]]) -> None:
     """Publish everything and write the stars live, as --knowledge-base-live does."""
     _publish_all(imported)
     _subjects, topics, units = seed_practice.knowledge_base_rows(live=True)
-    practice_repo.get_table().seed(
+    db_table.table().seed(
         *({"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **t} for t in topics),
         *({"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u} for u in units),
     )
@@ -889,7 +890,8 @@ def test_the_star_map_reads_no_exercise_of_an_indexed_practice_set(
 
 def test_lists_of_the_practice_partition_follow_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
     pages = [
-        {"Items": [{"PK": "PRACTICE", "SK": "LESSON#a", "lesson_id": "a"}], "LastEvaluatedKey": {"SK": "1"}},
+        {"Items": [{"PK": "PRACTICE", "SK": "LESSON#a", "lesson_id": "a"}],
+         "LastEvaluatedKey": {"PK": "PRACTICE", "SK": "LESSON#a"}},
         {"Items": [{"PK": "PRACTICE", "SK": "LESSON#b", "lesson_id": "b"}]},
     ]
 
@@ -897,7 +899,7 @@ def test_lists_of_the_practice_partition_follow_every_page(monkeypatch: pytest.M
         def query(self, **kwargs: Any) -> dict[str, Any]:
             return pages[1] if kwargs.get("ExclusiveStartKey") else pages[0]
 
-    monkeypatch.setattr(practice_repo, "get_table", lambda: Paged())
+    db_table.install(Paged())
 
     assert [row["lesson_id"] for row in practice_repo.get_lessons()] == ["a", "b"]
 

@@ -3,12 +3,12 @@ import hashlib
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.routers import admin, parents
 from fakes.dynamodb import FakeTable
 from stoa.services import usage_ledger_service
 from actor_helpers import install_actor_overrides
-from stoa.db.repositories import usage_ledger_repo
 
 
 def _seed_question_event(
@@ -122,7 +122,7 @@ def test_usage_idempotency_and_metadata_helpers_are_privacy_safe():
 
 def test_record_usage_event_is_taxonomy_gated_and_content_safe(monkeypatch):
     table = FakeTable()
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     created = usage_ledger_service.record_usage_event(
         student_id="student-1",
@@ -160,7 +160,7 @@ def test_record_usage_event_is_taxonomy_gated_and_content_safe(monkeypatch):
 
 def test_reconciliation_reports_and_repairs_counter_mismatch(monkeypatch):
     table = FakeTable()
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     for index in range(2):
         _seed_question_event(
@@ -190,7 +190,7 @@ def test_reconciliation_reports_and_repairs_counter_mismatch(monkeypatch):
 
 def test_reconciliation_explains_no_usage_without_marking_unreconciled(monkeypatch):
     table = FakeTable()
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id, **_kwargs: {"user_id": user_id})
     monkeypatch.setattr(
         usage_ledger_service.entitlement_service,
@@ -220,7 +220,7 @@ def test_reconciliation_explains_no_usage_without_marking_unreconciled(monkeypat
 
 def test_reconciliation_explains_over_limit_counter(monkeypatch):
     table = FakeTable()
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id, **_kwargs: {"user_id": user_id})
     monkeypatch.setattr(
         usage_ledger_service.entitlement_service,
@@ -267,7 +267,7 @@ def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
     # The ledger writes this summary reads are lifecycle transactions fenced on
     # this row; the double used not to run them.
     table.seed_active_account("student-1")
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id, **_kwargs: {"user_id": user_id})
     monkeypatch.setattr(
         usage_ledger_service.entitlement_service,
@@ -341,7 +341,7 @@ def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
 
 def test_non_question_reconciliation_is_read_only(monkeypatch):
     table = FakeTable()
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     result = usage_ledger_service.reconcile_usage_action(
         student_id="student-1",

@@ -214,8 +214,6 @@ def _grant_item(
 def table(monkeypatch: pytest.MonkeyPatch) -> ConditionalTable:
     fake = ConditionalTable()
     db_table.install(fake)
-    for module in (teacher_support_allowance_service,):
-        monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
     fake.put(
         {
             "PK": f"USER#{PARENT}",

@@ -13,9 +13,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
+from itertools import islice
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import attachment_repo
 
 
@@ -106,7 +106,7 @@ def record_generation_progress(
     never the answer. The command and attempt that wrote the steps go with
     them, so a reader asking about one command never sees another's.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     update_item = getattr(target, "update_item", None)
     if not callable(update_item):
         return False
@@ -145,7 +145,7 @@ def read_generation_progress(
 
     Given a command and attempt, only steps that attempt wrote are returned.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         item = attachment_repo._optional_mapping(
             attachment_repo._get_item(
@@ -191,7 +191,7 @@ def cancel_stale_message_command(
     if command.get("owner_id") != owner_id and command.get("student_id") != owner_id:
         raise attachment_repo.AttachmentRepositoryConflict("conditional_conflict")
     remove_fields = tuple(sorted(attachment_repo.CONVERSATION_PRIVATE_FIELDS))
-    target = table or get_table()
+    target = table or db_table.table()
     hook = getattr(target, "cancel_stale_message_command", None)
     if callable(hook):
         hook(
@@ -218,7 +218,7 @@ def get_message_command(
     *,
     table: object | None = None,
 ) -> dict[str, object] | None:
-    response = attachment_repo._get_item(table or get_table(),
+    response = attachment_repo._get_item(table or db_table.table(),
         Key=message_command_key(conversation_id, idempotency_key), ConsistentRead=True
     )
     return attachment_repo._optional_mapping(response.get("Item"))
@@ -546,7 +546,7 @@ def claim_message_command_and_quota(
     table: object | None = None,
 ) -> MessageCommandResult:
     """Atomically create a message command and charge its daily quota once."""
-    target = table or get_table()
+    target = table or db_table.table()
     fingerprint = str(command["fingerprint"])
     now_epoch = max(0, expires_at - 172800)
     existing = read_message_command_result(
@@ -679,7 +679,7 @@ def claim_message_ai_lease(
     account_fence_generation: int | None = None,
     table: object | None = None,
 ) -> MessageCommandResult:
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         command = get_message_command(conversation_id, idempotency_key, table=target) or {}
     except Exception:
@@ -966,7 +966,7 @@ def record_message_generation_context(
     """
     try:
         response = attachment_repo._update_item(
-            table or get_table(),
+            table or db_table.table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression="SET generation_context=if_not_exists(generation_context, :context)",
             ConditionExpression=(
@@ -1011,7 +1011,7 @@ def reopen_failed_message_command(
     """
     try:
         attachment_repo._update_item(
-            table or get_table(),
+            table or db_table.table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:committed, message_committed_at=:now "
@@ -1059,7 +1059,7 @@ def fail_message_command(
     """
     try:
         attachment_repo._update_item(
-            table or get_table(),
+            table or db_table.table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:failed, failure_category=:category, "
@@ -1105,7 +1105,7 @@ def _leased_command_update(
     """One write the attempt holding an unexpired lease may make; False if it does not."""
     try:
         attachment_repo._update_item(
-            table or get_table(),
+            table or db_table.table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=update_expression,
             ConditionExpression=(
@@ -1218,7 +1218,9 @@ def scan_generation_sweep_commands(
     moment is picked up by the next run, and whatever acts on one does so
     conditionally anyway.
     """
-    target = table or get_table()
+    target = table or db_table.table()
+    if not isinstance(target, attachment_repo._ScanTable):
+        raise attachment_repo.AttachmentRepositoryConflict("dependency_failure")
     request: dict[str, object] = {
         "FilterExpression": (
             "entity_type=:entity AND (#status IN (:committed, :running) OR "
@@ -1237,16 +1239,15 @@ def scan_generation_sweep_commands(
         },
     }
     commands: list[dict[str, object]] = []
-    for _ in range(max_pages):
-        response = attachment_repo._scan(target, **request)
-        items = response.get("Items", [])
-        if not isinstance(items, list) or any(not isinstance(item, Mapping) for item in items):
-            raise attachment_repo.AttachmentRepositoryConflict("dependency_failure")
-        commands.extend(dict(item) for item in items)
-        last = response.get("LastEvaluatedKey")
-        if not last:
-            return commands, True
-        request["ExclusiveStartKey"] = last
+    try:
+        for page in islice(db_table.pages("scan", table=target, **request), max_pages):
+            commands.extend(page.items)
+            if page.last_key is None:
+                return commands, True
+    except db_table.TableUnavailable as exc:
+        if exc.code.startswith("malformed"):
+            raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from None
+        raise
     return commands, False
 
 
@@ -1264,7 +1265,7 @@ def _unsettled_end_update(
     """One write to an ended command still as the sweep read it and not yet settled."""
     try:
         attachment_repo._update_item(
-            table or get_table(),
+            table or db_table.table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=update_expression,
             ConditionExpression=(
@@ -1358,7 +1359,7 @@ def close_stale_lease(
     """
     try:
         attachment_repo._update_item(
-            table or get_table(),
+            table or db_table.table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:terminal, terminal_at=:now_iso "
@@ -1445,7 +1446,7 @@ def reject_message_command_and_compensate(
     table: object | None = None,
 ) -> MessageCommandResult:
     """Terminally reject a pre-bind command and reverse its one quota claim."""
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         command = get_message_command(conversation_id, idempotency_key, table=target)
     except Exception:
@@ -1557,7 +1558,7 @@ def mark_message_command_terminal(
     table: object | None = None,
 ) -> MessageCommandResult:
     try:
-        attachment_repo._update_item(table or get_table(),
+        attachment_repo._update_item(table or db_table.table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:terminal, terminal_at=:now REMOVE leaseOwner, claimedAt, expiresAt"

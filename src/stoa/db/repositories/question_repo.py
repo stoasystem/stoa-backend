@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import struct
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from itertools import islice
 from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Key
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 
 
 type QuestionItem = dict[str, object]
@@ -43,7 +45,7 @@ class _UpdateTable(Protocol):
 
 
 def _table(candidate: object | None = None) -> object:
-    return candidate or get_table()
+    return candidate or db_table.table()
 
 
 def _get_item(table: object, **kwargs: object) -> QuestionItem:
@@ -58,16 +60,20 @@ def _put_item(table: object, **kwargs: object) -> object:
     return table.put_item(**kwargs)
 
 
-def _query(table: object, **kwargs: object) -> QuestionItem:
-    if not isinstance(table, _QueryTable):
+def _pages(
+    read: str, table: object, **request: object
+) -> Iterator[db_table.Page]:
+    """The pages of one read through the table gateway; a malformed answer is unavailable."""
+    if not isinstance(table, _QueryTable if read == "query" else _ScanTable):
         raise account_deletion_repo.AccountDeletionConflict("question dependency unavailable")
-    return _response(table.query(**kwargs))
-
-
-def _scan(table: object, **kwargs: object) -> QuestionItem:
-    if not isinstance(table, _ScanTable):
-        raise account_deletion_repo.AccountDeletionConflict("question dependency unavailable")
-    return _response(table.scan(**kwargs))
+    try:
+        yield from db_table.pages("query" if read == "query" else "scan", table=table, **request)
+    except db_table.TableUnavailable as exc:
+        if exc.code.startswith("malformed"):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "question dependency unavailable"
+            ) from None
+        raise
 
 
 def _update_item(table: object, **kwargs: object) -> QuestionItem:
@@ -108,23 +114,21 @@ def question_meta_census(
     answers False: counting from it would be a sample presented as a total.
     """
     target = _table(table)
-    request: dict[str, object] = {
-        "FilterExpression": "SK = :meta",
-        "ExpressionAttributeValues": {":meta": "META"},
-        "ProjectionExpression": ", ".join(["#s", *QUESTION_CENSUS_FIELDS]),
-        "ExpressionAttributeNames": {"#s": "status"},
-    }
     rows: list[QuestionItem] = []
-    for _page in range(page_budget):
-        result = _scan(target, **request)
-        items = result.get("Items", [])
-        if not isinstance(items, list):
-            raise account_deletion_repo.AccountDeletionConflict("question dependency unavailable")
-        rows.extend(_response(item) for item in items)
-        cursor = result.get("LastEvaluatedKey")
-        if not cursor:
+    for page in islice(
+        _pages(
+            "scan",
+            target,
+            FilterExpression="SK = :meta",
+            ExpressionAttributeValues={":meta": "META"},
+            ProjectionExpression=", ".join(["#s", *QUESTION_CENSUS_FIELDS]),
+            ExpressionAttributeNames={"#s": "status"},
+        ),
+        page_budget,
+    ):
+        rows.extend(_response(item) for item in page.items)
+        if page.last_key is None:
             return rows, True
-        request["ExclusiveStartKey"] = cursor
     return rows, False
 
 
@@ -255,21 +259,31 @@ def list_questions_by_student(
 
 def _student_index_key(row: Mapping[str, object]) -> QuestionItem:
     """The GSI-StudentId position of a row, to resume a query right after it."""
-    return {field: row[field] for field in ("PK", "SK", "student_id", "created_at") if field in row}
+    return {field: row[field] for field in STUDENT_INDEX_KEY if field in row}
+
+
+#: GSI-StudentId continues from its own key as well as the table's.
+STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
 
 
 def list_by_student(
     student_id: str, limit: int = 20, last_key: QuestionItem | None = None
 ) -> QuestionItem:
-    table = _table()
-    kwargs: dict[str, object] = {
-        "IndexName": "GSI-StudentId",
-        "KeyConditionExpression": Key("student_id").eq(student_id),
-        "Limit": limit,
-        "ScanIndexForward": False,
-    }
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    return _query(table, **kwargs)
+    page = next(
+        _pages(
+            "query",
+            _table(),
+            start=last_key or None,
+            key=STUDENT_INDEX_KEY,
+            IndexName="GSI-StudentId",
+            KeyConditionExpression=Key("student_id").eq(student_id),
+            Limit=limit,
+            ScanIndexForward=False,
+        )
+    )
+    result: QuestionItem = {"Items": page.items}
+    if page.last_key is not None:
+        result["LastEvaluatedKey"] = page.last_key
+    return result
 
 

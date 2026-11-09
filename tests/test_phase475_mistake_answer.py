@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from actor_helpers import install_actor_overrides
 from fakes import student_evidence as fake_evidence
 from rule_violation_helpers import assert_violation
+from stoa.db import table as db_table
 from stoa.db.repositories import practice_repo
 from stoa.routers import practice
 from stoa.services import answer_recording, practice_projection_service
@@ -38,7 +39,7 @@ def test_wrong_answer_round_trips_exactly_after_normalization(
     answer: str | list[str],
 ) -> None:
     table = _PutTable()
-    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     stored = practice_repo.put_attempt(
         "student-1",
@@ -77,15 +78,15 @@ def test_invalid_answers_fail_before_repository_access_without_echoing_input(
 ) -> None:
     table_accesses: list[str] = []
 
-    def get_table() -> _PutTable:
-        table_accesses.append("table")
-        return _PutTable()
+    class _WatchedTable(_PutTable):
+        """Every use of the table is noted: none may happen before the answer is judged."""
 
-    monkeypatch.setattr(
-        practice_repo,
-        "get_table",
-        get_table,
-    )
+        def __getattribute__(self, name: str) -> Any:
+            if not name.startswith("__"):
+                table_accesses.append(name)
+            return super().__getattribute__(name)
+
+    db_table.install(_WatchedTable())
 
     with caplog.at_level(logging.WARNING), pytest.raises(
         ValueError, match=error_fragment
