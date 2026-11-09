@@ -24,10 +24,17 @@ from stoa.services import (
     paid_entitlement_service,
     teacher_support_allowance_service,
 )
+from fakes.admission import seed_period_active
 
 
 UTC = timezone.utc
 NOW = datetime(2026, 3, 25, 12, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def _usage_period_active(monkeypatch):
+    """Every student here may ask a teacher; an ended period is #344's own test."""
+    seed_period_active(monkeypatch)
 
 
 class AtomicSupportTable:

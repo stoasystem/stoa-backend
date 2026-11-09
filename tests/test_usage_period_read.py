@@ -3,7 +3,8 @@
 Step 2 of #239 (the「#239 形状定完」shape, decision 14). The student reads their
 effective period through `GET /students/me/entitlement`; a parent reads their own
 and each child's through `GET /parents/me/usage-period`. Both carry the renewal
-contact address. Nothing here refuses anything yet (#344).
+contact address. Refusing a question or a teacher request at expiry is #344's
+(`tests/test_usage_period_enforcement.py`).
 """
 
 from __future__ import annotations
@@ -185,8 +186,8 @@ def test_a_relationship_that_is_not_current_lends_no_period(fake_table, link_row
     assert _period()["state"] == "none"
 
 
-def test_an_expired_period_refuses_nothing_yet(fake_table) -> None:
-    """Reading only: refusing a question at expiry is #344."""
+def test_an_expired_period_allows_no_new_usage(fake_table) -> None:
+    """`newUsageAllowed` is the period alone; admission refuses on it (#344)."""
     _profile(fake_table, STUDENT, "student", "2026-10-01")
 
     entitlement = entitlement_service.resolve_student_entitlement(
@@ -194,7 +195,7 @@ def test_an_expired_period_refuses_nothing_yet(fake_table) -> None:
     )
 
     assert entitlement["usagePeriod"]["state"] == "expired"
-    assert entitlement["newUsageAllowed"] is True
+    assert entitlement["newUsageAllowed"] is False
 
 
 def test_the_period_is_judged_in_the_same_relationship_read(

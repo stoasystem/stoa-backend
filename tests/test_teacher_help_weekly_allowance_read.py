@@ -23,11 +23,18 @@ from actor_helpers import install_actor_overrides
 
 import test_chat_help_request_lifecycle as lifecycle
 from test_chat_help_request_lifecycle import STUDENT
+from fakes.admission import seed_period_active
 
 # A Wednesday in Zurich's winter time: the week turns at Monday 2 November
 # 00:00 in Zurich, which is 23:00 UTC the evening before.
 WEDNESDAY = "2026-10-28T10:00:00+00:00"
 NEXT_MONDAY = "2026-11-01T23:00:00+00:00"
+
+
+@pytest.fixture(autouse=True)
+def _usage_period_active(monkeypatch):
+    """Every student here may ask a teacher; an ended period is #344's own test."""
+    seed_period_active(monkeypatch)
 
 
 @pytest.fixture

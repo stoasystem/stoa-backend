@@ -26,7 +26,6 @@ from stoa.models.user import PublicRegistrationRole, RegisterRequest
 from stoa.services import (
     account_provisioning_service,
     account_verification_service,
-    free_trial_service,
     locale_service,
     password_change_code_service,
     public_identity_service,
@@ -697,11 +696,6 @@ async def confirm_email_verification(
     if command.activation_complete:
         try:
             profile = public_identity_service.get_completed_public_profile(command)
-            if profile.get("role") == PublicRegistrationRole.STUDENT.value:
-                free_trial_service.activate_student_free_trial(
-                    command.user_id,
-                    student_profile=profile,
-                )
         except public_identity_service.PublicIdentityCommandConflict as exc:
             raise _public_identity_conflict() from exc
         except Exception as exc:
@@ -774,11 +768,6 @@ async def confirm_email_verification(
             provider=cognito,
             user_pool_id=settings.cognito_user_pool_id,
         )
-        if profile.get("role") == PublicRegistrationRole.STUDENT.value:
-            free_trial_service.activate_student_free_trial(
-                command.user_id,
-                student_profile=profile,
-            )
     except public_identity_service.PublicIdentityCommandConflict as exc:
         raise _public_identity_conflict() from exc
     except Exception as exc:

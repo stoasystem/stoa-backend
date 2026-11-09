@@ -53,6 +53,24 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "La vérification de ton quota d'IA est temporairement indisponible. Renvoie ce message.",
         "it": "Il controllo della tua quota di IA non è momentaneamente disponibile. Invia di nuovo il messaggio.",
     },
+    "error.usage_period_ended": {
+        "de": (
+            "Deine Nutzungsdauer ist abgelaufen. Fragen und Hilfe durch Lehrpersonen sind "
+            "pausiert; deinen Verlauf und das Üben kannst du weiter nutzen."
+        ),
+        "en": (
+            "Your usage period has ended. Asking questions and teacher help are paused; "
+            "your history and practice stay open."
+        ),
+        "fr": (
+            "Ta période d'utilisation est terminée. Les questions et l'aide des enseignants "
+            "sont en pause ; ton historique et les exercices restent accessibles."
+        ),
+        "it": (
+            "Il tuo periodo di utilizzo è terminato. Le domande e l'aiuto degli insegnanti "
+            "sono in pausa; la cronologia e gli esercizi restano disponibili."
+        ),
+    },
     "error.allowance_unavailable": {
         "de": (
             "Diese Antwort geht nicht verloren, während dein KI-Kontingent abgerechnet wird. "

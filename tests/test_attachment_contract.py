@@ -143,9 +143,14 @@ def test_attachment_error_registry_is_exhaustive_and_retry_is_bounded() -> None:
     assert outage.idempotent_only is True
     assert outage.max_attempts == 2
     assert AskQuestionErrorCode.MESSAGE_IN_PROGRESS.contract.max_attempts == 20
-    assert {contract.client_action for contract in contracts.values()} <= set(
+    # `usage_period_ended` names no action: nothing the client does helps until
+    # an administrator extends the period (#344).
+    assert {contract.client_action for contract in contracts.values()} - {None} <= set(
         AttachmentClientAction
     )
+    assert [code for code, contract in contracts.items() if contract.client_action is None] == [
+        AskQuestionErrorCode.USAGE_PERIOD_ENDED
+    ]
 
 
 def test_missing_and_foreign_errors_are_identical_and_redacted() -> None:

@@ -130,10 +130,9 @@ def test_settings_expose_exact_paid_price_identity_without_compatibility_aliases
     assert "stripe_premium_price_id" not in settings_fields
 
 
-def test_plan_settings_lock_trial_storage_and_sandbox_defaults() -> None:
+def test_plan_settings_lock_storage_and_sandbox_defaults() -> None:
     settings = _settings()
 
-    assert settings.free_trial_days == 14
     assert settings.free_attachment_storage_bytes == FREE_STORAGE_BYTES == 5 * 1024**3
     assert settings.paid_attachment_storage_bytes == PAID_STORAGE_BYTES == 15 * 1024**3
     assert settings.stripe_live_charges_enabled is False
@@ -142,7 +141,6 @@ def test_plan_settings_lock_trial_storage_and_sandbox_defaults() -> None:
 @pytest.mark.parametrize(
     ("field", "value", "error"),
     [
-        ("free_trial_days", 13, "free_trial_days_locked"),
         (
             "free_attachment_storage_bytes",
             FREE_STORAGE_BYTES - 1,
@@ -247,7 +245,6 @@ def test_environment_example_names_every_plan_setting_without_live_secrets() -> 
     assert example["STRIPE_API_KEY"] == ""
     assert example["STRIPE_WEBHOOK_SECRET"] == ""
     assert example["STRIPE_LIVE_CHARGES_ENABLED"].lower() == "false"
-    assert example["FREE_TRIAL_DAYS"] == "14"
     assert example["FREE_ATTACHMENT_STORAGE_BYTES"] == str(5 * 1024**3)
     assert example["PAID_ATTACHMENT_STORAGE_BYTES"] == str(15 * 1024**3)
     assert "sk_live_" not in ENV_EXAMPLE_PATH.read_text(encoding="utf-8")

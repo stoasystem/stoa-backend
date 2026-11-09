@@ -526,6 +526,9 @@ def _naming_the_conversation(refusal: HTTPException, conv_id: str) -> HTTPExcept
     responses={
         # 409 and 503 also come from the identity check, before any
         # conversation exists, with no conversationId to give.
+        # 403 `usage_period_ended` refuses the first message (#344); the
+        # conversation exists and is named. A 403 from the identity check names none.
+        status.HTTP_403_FORBIDDEN: {"model": SecurityErrorResponse | FirstMessageRefusalResponse},
         status.HTTP_409_CONFLICT: {"model": SecurityErrorResponse | FirstMessageRefusalResponse},
         status.HTTP_429_TOO_MANY_REQUESTS: {"model": FirstMessageRefusalResponse},
         status.HTTP_503_SERVICE_UNAVAILABLE: {
@@ -873,7 +876,8 @@ async def request_teacher_help(
 
     A conversation that already has a request answers with it, whatever its
     state. Otherwise a case of the week is spent, the request written and
-    offered to a teacher; `help_requests.ask` does all three.
+    offered to a teacher; `help_requests.ask` does all three, and refuses a new
+    request `usage_period_ended` (403) once the student's usage period has ended.
     """
     student_id = authorized.ref.student_id
     conv = {**authorized.value, "conversation_id": body.conversationId}

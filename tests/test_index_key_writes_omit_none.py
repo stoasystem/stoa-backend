@@ -45,9 +45,16 @@ from stoa.services import (
 )
 from test_curriculum_ops import DRAFT_UNIT, _draft_payload, _operator_user
 from test_conversations import _client as _conversation_client
+from fakes.admission import seed_period_active
 
 
 NOW = "2026-09-26T12:00:00+00:00"
+
+
+@pytest.fixture(autouse=True)
+def _usage_period_active(monkeypatch):
+    """Every student here may ask a teacher; an ended period is #344's own test."""
+    seed_period_active(monkeypatch)
 
 
 def _ledger_rows(table: FakeTable) -> list[dict[str, object]]:

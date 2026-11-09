@@ -17,6 +17,7 @@ on a stale read is refused rather than applied.
 What lives elsewhere, and is called from here:
 - which teacher to offer a request to: `teacher_dispatch_service.plan_dispatch`;
 - the weekly case allowance: `teacher_support_allowance_service`;
+- whether the student's usage period still lets them ask: `usage_period`;
 - telling people: `notification_service`.
 
 The lifecycle (`escalation_status`): `pending` until a teacher takes it, then
@@ -54,7 +55,9 @@ from stoa.services import (
     teacher_dispatch_service,
     teacher_reply_service,
     teacher_support_allowance_service,
+    usage_period,
 )
+from stoa.services.ask_question_errors import AskQuestionErrorCode
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +109,8 @@ class HelpRequestErrorCode(StrEnum):
     HELP_REQUEST_NOT_HELD = "help_request_not_held"
     HELP_REQUEST_CHANGED = "help_request_changed"
     HELP_REQUEST_UNAVAILABLE = "help_request_unavailable"
-    # The student asking (`conversations.py`).
+    # The student asking (`conversations.py`). An ended usage period is refused
+    # with the question's own `usage_period_ended` (`ask`), not a code of ours.
     TEACHER_SUPPORT_ADMISSION_RECOVERABLE = "teacher_support_admission_recoverable"
     TEACHER_SUPPORT_NOT_INCLUDED = "teacher_support_not_included"
     TEACHER_SUPPORT_ALLOWANCE_EXHAUSTED = "teacher_support_allowance_exhausted"
@@ -560,7 +564,10 @@ def ask(
     """Open the conversation's request, spending a case of the week, and offer it.
 
     A conversation that already has a request answers with it, whatever its
-    state: one conversation asks a teacher once (#189 decision 3). The case is
+    state: one conversation asks a teacher once (#189 decision 3). A new
+    request is refused `usage_period_ended` while the student's usage period is
+    not active (#344), judged from one read before the allowance is asked, so no
+    case of the week is spent. The case is
     admitted by the allowance, and the record, the system message that opens
     the request in the conversation and the case are written in one
     transaction behind the student's account fence. The first offer is made
@@ -574,6 +581,10 @@ def ask(
     existing = get(conversation_id, table=store)
     if existing is not None:
         return AskOutcome(None, existing)
+    # One read, no condition in the transaction: an administrator changing the
+    # period at the same moment is decided by what this read found (#239 shape 5).
+    if not usage_period.student_may_ask(student_id, table=store):
+        raise RuleViolation(AskQuestionErrorCode.USAGE_PERIOD_ENDED)
 
     generation = int(
         account_deletion_repo.require_active_account_fence(student_id, table=store)["generation"]

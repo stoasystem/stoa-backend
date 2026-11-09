@@ -12,7 +12,6 @@ from stoa.models.user import SubscriptionTier
 from stoa.services import (
     attachment_service,
     current_relationship,
-    free_trial_service,
     paid_entitlement_service,
     usage_period,
 )
@@ -66,8 +65,9 @@ def resolve_student_entitlement(
     `usagePeriod` is the student's effective usage period (#239): the latest of
     their own and their current parents', judged in this same read - the
     student's profile, the one list of current parents and the parent of
-    record's profile serve both the billing decision and the period. It refuses
-    nothing yet (#344).
+    record's profile serve both the billing decision and the period.
+    `newUsageAllowed` is the period alone (`usage_period.allows_new_usage`):
+    a question is refused at admission when it is False (#344).
     """
     student_profile = student_profile if student_profile is not None else user_repo.get_user(student_id)
     student_profile = student_profile or {}
@@ -94,10 +94,7 @@ def resolve_student_entitlement(
         paid_grant=paid_grant,
     )
     effective_plan = _normalize_tier(decision["effective_plan"])
-    free_trial = free_trial_service.get_free_trial_state(student_profile)
-    new_usage_allowed = free_trial_service.plan_allows_new_usage(
-        effective_plan, free_trial
-    )
+    new_usage_allowed = usage_period.allows_new_usage(usage)
     question_limit = _daily_question_limit(effective_plan, settings)
     chat_limit = _daily_chat_message_limit(effective_plan, settings)
     hint_limit = _daily_hint_limit(effective_plan, settings)
@@ -122,12 +119,10 @@ def resolve_student_entitlement(
         "period": period,
         "blockingReason": decision["blocking_reason"],
         "supportExplanation": decision["support_explanation"],
-        "freeTrial": free_trial.public_projection(),
         "usagePeriod": usage_period.student_view(
             usage, student_id=student_id, today=usage_period.zurich_today(moment)
         ),
         "newUsageAllowed": new_usage_allowed,
-        "action": None if new_usage_allowed else free_trial.action,
         "readAccess": {
             "account": True,
             "learningHistory": True,
