@@ -12,9 +12,24 @@ Topic structure (Mathematik, ZAP Langgymnasium, 6. Primarklasse):
 
 Each topic has 2 units, each unit has 2 lessons, each lesson has 3 challenges.
 Total: 5 topics × 2 units × 2 lessons × 3 challenges = 60 questions.
+
+The seed writes only the fields it owns (SEED_OWNED_FIELDS, per row kind): those
+with a value are SET, those without one are REMOVEd, and every other field on
+the row is left as it is - above all the star map positions that
+scripts/layout_starmap.py writes onto the same rows (stoa-backend#352). When
+every row is written it records the hash of what it wrote, with the commit it
+was run from, in PRACTICE / CURRICULUM_SEED. `--dry-run` prints that hash and
+writes nothing; `--print-hash` prints only the hash, for a deploy to compare.
 """
 import argparse
+import hashlib
+import json
 import os
+import subprocess
+from collections import Counter
+from datetime import datetime, timezone
+from decimal import Decimal
+from pathlib import Path
 
 from stoa.db.repositories import practice_repo
 from stoa.models.practice import DirectionalHintTemplateId
@@ -975,9 +990,9 @@ RETIRED_BUILDERS = (_retired_textaufgaben_data,)
 # subjects; the subject list shows a subject whether or not it has lessons.
 #
 # The stars' prerequisites, drawn from the upstream edges between knowledge
-# points, are written only with --knowledge-base-prerequisites: a prerequisite
-# still locks a star until stoa-backend#125 lands, and a chain of them would
-# keep a student out of most of the map.
+# points, are written only with --knowledge-base-prerequisites. A prerequisite
+# no longer locks a star (stoa-backend#125); it only decides which unlit
+# prerequisites a star reports and where the map recommends starting.
 
 KNOWLEDGE_BASE_PREVIEW = "preview"
 
@@ -1066,16 +1081,86 @@ def prepare_challenge_items(challenges: list[dict]) -> list[dict]:
         prepared.extend((canonical, practice_repo.challenge_pointer(canonical)))
     return prepared
 
-def seed(
-    table_name: str,
-    region: str,
-    dry_run: bool = False,
-    *,
-    profile_name: str = "stoa",
-    account_id: str = DEFAULT_AWS_ACCOUNT_ID,
-    knowledge_base: str | None = None,
-    knowledge_base_prerequisites: bool = False,
-):
+
+# ── What the seed owns ────────────────────────────────────────────────────
+#
+# The seed shares its rows with other writers: scripts/layout_starmap.py puts
+# the star map positions on the subject, topic and unit rows, and an operator
+# may have left a field of their own. So the seed never replaces a row. Each
+# row kind below lists the fields the seed owns; a write SETs the ones the row
+# has a value for, REMOVEs the ones it has none for, and leaves every other
+# field where it is. A row the seed builds with a field outside its list is
+# refused, so a new field has to be added here before it is ever written.
+#
+# The position fields belong to layout_starmap.py alone (its module header lists
+# them) and are in no list here. A field the seed stops writing stays in its
+# list, so that the next run REMOVEs it instead of leaving it behind.
+
+#: What scripts/layout_starmap.py writes; the seed never names any of them.
+POSITION_FIELDS = frozenset(
+    {"x", "y", "radius", "nebula_id", "layout_version", "starmap_layout"}
+)
+
+SEED_OWNED_FIELDS: dict[str, frozenset[str]] = {
+    "SUBJECT": frozenset(
+        {"subject_id", "name", "description", "grade_levels", "accent", "order"}
+    ),
+    "TOPIC": frozenset({
+        "topic_id", "subject_id", "grade_level", "grade_levels", "title",
+        "description", "order", "status", "rollout_state",
+    }),
+    "UNIT": frozenset({
+        "unit_id", "topic_id", "subject_id", "grade_level", "title", "description",
+        "order", "prerequisite_unit_ids", "rollout_state",
+    }),
+    "LESSON": frozenset({
+        "lesson_id", "unit_id", "topic_id", "subject_id", "grade_level", "topic_title",
+        "title", "difficulty", "estimated_minutes", "order", "challenge_count",
+        "rollout_state", "exercise_index",
+    }),
+    # Every field of a challenge row but its key: the row's version is a hash of
+    # all its content fields, so a field left behind would void it. The three
+    # hint fields are no longer written (prepare_challenge_items refuses them)
+    # and are listed so that a row which still has one loses it.
+    "CHALLENGE": frozenset({
+        "challenge_id", "lesson_id", "unit_id", "topic_id", "subject_id",
+        "grade_level", "topic_title", "order", "type", "prompt", "options",
+        "correct_answer", "explanation", "correct_feedback", "incorrect_feedback",
+        "directional_hint_template_id", "skills", "rollout_state",
+        "challenge_content_hash", "challenge_version", "hint_non_derivability_decision",
+        "hint", "hint_approved", "directional_hint_parameters",
+    }),
+    "CHALLENGE_POINTER": frozenset({
+        "entity_type", "challenge_id", "target_pk", "target_sk",
+        "challenge_version", "challenge_content_hash",
+    }),
+}
+
+assert not any(owned & POSITION_FIELDS for owned in SEED_OWNED_FIELDS.values()), (
+    "the position fields belong to scripts/layout_starmap.py"
+)
+
+_KEY_FIELDS = ("PK", "SK")
+_PRACTICE_KINDS = ("SUBJECT", "TOPIC", "UNIT", "LESSON", "CHALLENGE")
+
+#: The row that records what the seed last wrote, read back by a deploy.
+SEED_STAMP_KEY = {"PK": "PRACTICE", "SK": "CURRICULUM_SEED"}
+
+
+def row_kind(row: dict) -> str:
+    """Which SEED_OWNED_FIELDS list a seeded row is written under."""
+    if row["PK"] == practice_repo.CHALLENGE_POINTER_PK:
+        return "CHALLENGE_POINTER"
+    kind = str(row["SK"]).split("#", 1)[0]
+    if row["PK"] != "PRACTICE" or kind not in _PRACTICE_KINDS:
+        raise ValueError(f"the seed writes no row like {row['PK']} / {row['SK']}")
+    return kind
+
+
+def seed_rows(
+    *, knowledge_base: str | None = None, knowledge_base_prerequisites: bool = False
+) -> list[dict]:
+    """Every row the seed writes, holding only the fields it owns, in write order."""
     all_topics, all_units, all_lessons, all_challenges = [], [], [], []
     kb_subjects: list[dict] = []
 
@@ -1092,45 +1177,131 @@ def seed(
         all_topics.extend(kb_topics)
         all_units.extend(kb_units)
 
-    items_to_write = []
-
-    # Subjects
-    subjects = [SUBJECT, *kb_subjects]
-    for subject in subjects:
-        items_to_write.append(
-            {"PK": "PRACTICE", "SK": f"SUBJECT#{subject['subject_id']}", **subject}
-        )
-
-    # Topics
-    for t in all_topics:
-        items_to_write.append({"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **t})
-
-    # Units
-    for u in all_units:
-        items_to_write.append({"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u})
-
+    rows = [
+        {"PK": "PRACTICE", "SK": f"SUBJECT#{subject['subject_id']}", **subject}
+        for subject in (SUBJECT, *kb_subjects)
+    ]
+    rows += [{"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **t} for t in all_topics]
+    rows += [{"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u} for u in all_units]
     # Lessons, each with the index of its exercises the star map reads.
     for lesson in all_lessons:
         index = practice_repo.exercise_index(
             challenge for challenge in all_challenges
             if challenge["lesson_id"] == lesson["lesson_id"]
         )
-        items_to_write.append(
+        rows.append(
             {"PK": "PRACTICE", "SK": f"LESSON#{lesson['lesson_id']}", **lesson,
              "exercise_index": index}
         )
-
     # Validate all IDs before any write, then add canonical rows and direct pointers.
-    items_to_write.extend(prepare_challenge_items(all_challenges))
+    rows.extend(prepare_challenge_items(all_challenges))
+    return rows
 
-    print(f"Items to seed: {len(items_to_write)}")
-    print(f"  Subjects: {len(subjects)} | Topics: {len(all_topics)} | Units: {len(all_units)} | "
-          f"Lessons: {len(all_lessons)} | Challenges: {len(all_challenges)}")
+
+def _owned_values(row: dict) -> dict:
+    """The fields of `row` the seed owns that hold a value, key included."""
+    owned = SEED_OWNED_FIELDS[row_kind(row)]
+    return {
+        field: value for field, value in row.items()
+        if (field in owned or field in _KEY_FIELDS) and value is not None
+    }
+
+
+def seed_update(row: dict) -> dict:
+    """The `update_item` request that makes the stored row agree with `row` on the
+    fields the seed owns, and touches no other field."""
+    kind = row_kind(row)
+    owned = SEED_OWNED_FIELDS[kind]
+    foreign = sorted(set(row) - owned - set(_KEY_FIELDS))
+    if foreign:
+        raise ValueError(f"{row['SK']}: the seed does not own {', '.join(foreign)}")
+    names: dict[str, str] = {}
+    values: dict = {}
+    assignments: list[str] = []
+    removals: list[str] = []
+    for index, field in enumerate(sorted(owned)):
+        names[f"#f{index}"] = field
+        if row.get(field) is None:
+            removals.append(f"#f{index}")
+        else:
+            values[f":f{index}"] = row[field]
+            assignments.append(f"#f{index} = :f{index}")
+    clauses = []
+    if assignments:
+        clauses.append("SET " + ", ".join(assignments))
+    if removals:
+        clauses.append("REMOVE " + ", ".join(removals))
+    request = {
+        "Key": {"PK": row["PK"], "SK": row["SK"]},
+        "UpdateExpression": " ".join(clauses),
+        "ExpressionAttributeNames": names,
+    }
+    if values:
+        request["ExpressionAttributeValues"] = values
+    return request
+
+
+def _json_default(value: object) -> object:
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else format(value.normalize(), "f")
+    raise TypeError(f"not JSON serializable: {type(value).__name__}")
+
+
+def seed_hash(rows: list[dict]) -> str:
+    """sha256 of the fields the seed owns across all its rows, sorted by key.
+
+    Needs no AWS access: a deploy recomputes it from the repository and compares
+    it with the one in PRACTICE / CURRICULUM_SEED. Fields the seed does not own,
+    the star map positions above all, do not count."""
+    owned = sorted((_owned_values(row) for row in rows), key=lambda row: (row["PK"], row["SK"]))
+    encoded = json.dumps(
+        owned, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=_json_default
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def git_state() -> tuple[str, bool]:
+    """The commit the seed runs from, and whether the working tree differs from it."""
+    root = Path(__file__).resolve().parent.parent
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=root, capture_output=True, text=True,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown", True
+    return commit, bool(status)
+
+
+def seed(
+    table_name: str,
+    region: str,
+    dry_run: bool = False,
+    *,
+    profile_name: str = "stoa",
+    account_id: str = DEFAULT_AWS_ACCOUNT_ID,
+    knowledge_base: str | None = None,
+    knowledge_base_prerequisites: bool = False,
+):
+    rows = seed_rows(
+        knowledge_base=knowledge_base,
+        knowledge_base_prerequisites=knowledge_base_prerequisites,
+    )
+    # Build every request first, so a row with a field the seed does not own
+    # stops the run before anything is written.
+    requests = [seed_update(row) for row in rows]
+    digest = seed_hash(rows)
+    counts = Counter(row_kind(row) for row in rows)
+
+    print(f"Items to seed: {len(rows)}")
+    print("  " + " | ".join(f"{kind}: {counts[kind]}" for kind in SEED_OWNED_FIELDS))
+    print(f"Seed hash: {digest}")
 
     if dry_run:
         print("[DRY RUN] Skipping DynamoDB writes.")
-        for item in items_to_write[:3]:
-            print(f"  {item['SK']}: {item.get('title', item.get('name', ''))}")
         return
 
     session = require_sso_operator_session(
@@ -1140,11 +1311,24 @@ def seed(
     )
     dynamodb = session.resource("dynamodb", region_name=region)
     table = dynamodb.Table(table_name)
-    with table.batch_writer() as batch:
-        for item in items_to_write:
-            batch.put_item(Item=item)
+    # One update per row: a batch write can only replace rows whole.
+    for request in requests:
+        table.update_item(**request)
 
-    print(f"Done! {len(items_to_write)} items written to {table_name}.")
+    commit, dirty = git_state()
+    table.put_item(Item={
+        **SEED_STAMP_KEY,
+        "seed_hash": digest,
+        "seeded_at": datetime.now(timezone.utc).isoformat(),
+        "git_commit": commit,
+        "git_dirty": dirty,
+        "knowledge_base": knowledge_base or "off",
+        "knowledge_base_prerequisites": knowledge_base_prerequisites,
+    })
+
+    dirty_note = " (uncommitted changes)" if dirty else ""
+    print(f"Done! {len(rows)} items written to {table_name}, stamped {digest} "
+          f"from {commit}{dirty_note}.")
 
 
 if __name__ == "__main__":
@@ -1156,7 +1340,11 @@ if __name__ == "__main__":
         "--account-id",
         default=os.environ.get("AWS_ACCOUNT_ID", DEFAULT_AWS_ACCOUNT_ID),
     )
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--dry-run", action="store_true", help="print the seed hash, write nothing")
+    parser.add_argument(
+        "--print-hash", action="store_true",
+        help="print only the hash of what the seed would write, and exit",
+    )
     knowledge_base = parser.add_mutually_exclusive_group()
     knowledge_base.add_argument(
         "--knowledge-base", dest="knowledge_base", action="store_const", const="preview",
@@ -1168,15 +1356,21 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--knowledge-base-prerequisites", action="store_true",
-        help="with either of the two, also write the stars' prerequisites (after #125)",
+        help="with either of the two, also write the stars' prerequisites",
     )
     args = parser.parse_args()
-    seed(
-        args.table,
-        args.region,
-        dry_run=args.dry_run,
-        profile_name=args.profile,
-        account_id=args.account_id,
-        knowledge_base=args.knowledge_base,
-        knowledge_base_prerequisites=args.knowledge_base_prerequisites,
-    )
+    if args.print_hash:
+        print(seed_hash(seed_rows(
+            knowledge_base=args.knowledge_base,
+            knowledge_base_prerequisites=args.knowledge_base_prerequisites,
+        )))
+    else:
+        seed(
+            args.table,
+            args.region,
+            dry_run=args.dry_run,
+            profile_name=args.profile,
+            account_id=args.account_id,
+            knowledge_base=args.knowledge_base,
+            knowledge_base_prerequisites=args.knowledge_base_prerequisites,
+        )

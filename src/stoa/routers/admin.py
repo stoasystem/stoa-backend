@@ -990,26 +990,6 @@ class CurriculumLessonVersionResponse(CurriculumVersionResponse):
     publishedVersionId: str | None = None
 
 
-class CurriculumUnitPrerequisitesRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    prerequisite_unit_ids: list[str] = Field(
-        default_factory=list,
-        alias="prerequisiteUnitIds",
-        max_length=50,
-    )
-
-
-class CurriculumUnitResponse(BaseModel):
-    unitId: str
-    subjectId: str
-    topicId: str
-    title: str
-    prerequisiteUnitIds: list[str] = Field(default_factory=list)
-    updatedAt: str | None = None
-    updatedBy: str | None = None
-
-
 class CurriculumWorklistResponse(BaseModel):
     items: list[CurriculumLessonVersionResponse]
     count: int
@@ -1269,18 +1249,6 @@ async def create_curriculum_lesson_draft(
 ):
     """Create an internal lesson-plus-exercises authoring draft."""
     return curriculum_ops_service.create_lesson_draft(body.model_dump(by_alias=False), legacy_user(actor))
-
-
-@router.patch("/curriculum/units/{unit_id}", response_model=CurriculumUnitResponse)
-async def patch_curriculum_unit_prerequisites(
-    unit_id: str,
-    body: CurriculumUnitPrerequisitesRequest,
-    actor: Actor = Depends(admin_operation),
-):
-    """Replace one unit's prerequisite relations; units are created by the seed only."""
-    return curriculum_ops_service.patch_unit_prerequisites(
-        unit_id, body.model_dump(by_alias=False), legacy_user(actor)
-    )
 
 
 @router.post(

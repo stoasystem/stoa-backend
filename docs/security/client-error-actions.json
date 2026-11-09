@@ -929,19 +929,6 @@
         "retryable": false
       }
     },
-    "curriculum_unit_not_found": {
-      "action": null,
-      "domain": "curriculum",
-      "http_status": 404,
-      "message_key": "error.curriculum_unit_not_found",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
     "curriculum_version_not_found": {
       "action": null,
       "domain": "curriculum",

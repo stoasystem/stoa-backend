@@ -18,12 +18,6 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Cette version n’existe plus. Rechargez la liste de travail.",
         "it": "Questa versione non esiste più. Ricarica la lista di lavoro.",
     },
-    "error.curriculum_unit_not_found": {
-        "de": "Diese Lehrplaneinheit existiert nicht mehr. Laden Sie die Arbeitsliste neu.",
-        "en": "This curriculum unit no longer exists. Reload the worklist.",
-        "fr": "Cette unité du programme n’existe plus. Rechargez la liste de travail.",
-        "it": "Questa unità del programma non esiste più. Ricarica la lista di lavoro.",
-    },
     "error.validation_failed": {
         "de": "Der Inhalt hat die Validierung nicht bestanden. Starten Sie die Validierung, um die betroffenen Felder zu sehen.",
         "en": "The content did not pass validation. Run the validation to see which fields are affected.",
