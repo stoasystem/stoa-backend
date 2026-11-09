@@ -210,8 +210,6 @@ def transition(
                 security_audit_repo.append_event_operation(user_id, event),
                 *also,
             ],
-            # The table the fence is read from.
-            table=account_deletion_repo.get_table(),
         )
     except (
         account_deletion_repo.AccountDeletionConflict,

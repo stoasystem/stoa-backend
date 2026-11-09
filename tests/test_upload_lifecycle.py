@@ -36,7 +36,7 @@ from stoa.config import (
     UPLOAD_ROW_RETENTION_SECONDS,
     Settings,
 )
-from stoa.db.repositories import account_deletion_repo, attachment_repo
+from stoa.db.repositories import attachment_repo
 from stoa.jobs import upload_cleanup
 from stoa.jobs.upload_cleanup import cleanup_expired_uploads
 from stoa.models.attachment import UploadIntentRequest, UploadPartUrlRequest, UploadPurpose
@@ -196,7 +196,7 @@ def table(monkeypatch: pytest.MonkeyPatch) -> _Table:
     table = _Table()
     table.seed_active_account(OWNER)
     db_table.install(table)
-    monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+    db_table.install(table)
     return table
 
 

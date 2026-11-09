@@ -8,6 +8,7 @@ import threading
 from collections.abc import Mapping
 from typing import Any, TypeGuard
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import rate_limit
@@ -210,7 +211,7 @@ def test_transaction_puts_payload_bound_operation_and_capped_counter_update() ->
 
 def test_repeating_429_requests_leave_counter_exactly_at_limit(monkeypatch) -> None:
     table = _RateTable(count=2)
-    monkeypatch.setattr(rate_limit, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(rate_limit, "_today_utc", lambda: PERIOD)
 
     for operation_id in ("rejected-1", "rejected-2"):
@@ -364,7 +365,7 @@ def test_same_operation_changed_digest_conflicts_without_mutation() -> None:
 
 def test_hint_adapter_projects_changed_payload_as_structured_conflict(monkeypatch) -> None:
     table = _RateTable()
-    monkeypatch.setattr(rate_limit, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(rate_limit, "_today_utc", lambda: PERIOD)
 
     rate_limit.check_and_record_hint(
@@ -392,7 +393,7 @@ def test_dependency_error_never_exposes_storage_coordinates_or_expressions(
                 "USAGE#private HINT#private ConditionExpression #count = :expected"
             )
 
-    monkeypatch.setattr(rate_limit, "get_table", _UnavailableTable)
+    db_table.install(_UnavailableTable())
     monkeypatch.setattr(rate_limit, "_today_utc", lambda: PERIOD)
 
     try:

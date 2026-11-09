@@ -8,10 +8,8 @@ from decimal import Decimal
 from hashlib import sha256
 from typing import Protocol, runtime_checkable
 
-from botocore.exceptions import ClientError
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -50,16 +48,20 @@ def _table_get_item(table: object, **kwargs: object) -> object:
     return table.get_item(**kwargs)
 
 
-def _table_put_item(table: object, **kwargs: object) -> object:
+def _table_put_item(table: object, **kwargs: object) -> None:
+    """A conditional put through the gateway: a condition that does not hold is
+    `db_table.WriteRefused`, any other answer `db_table.TableUnavailable`."""
     if not isinstance(table, _PutTable):
         raise _malformed_command()
-    return table.put_item(**kwargs)
+    db_table.put(table=table, **kwargs)
 
 
-def _table_update_item(table: object, **kwargs: object) -> object:
+def _table_update_item(table: object, **kwargs: object) -> dict[str, object]:
+    """A conditional update through the gateway, with `_table_put_item`'s outcomes;
+    the attributes it hands back."""
     if not isinstance(table, _UpdateTable):
         raise _malformed_command()
-    return table.update_item(**kwargs)
+    return db_table.update(table=table, **kwargs)
 
 
 class PublicIdentityCommandConflict(RuntimeError):
@@ -259,7 +261,7 @@ def create_or_get_public_identity_command(
         created_at=created_at,
         updated_at=created_at,
     )
-    table = get_table()
+    table = db_table.table()
     if hasattr(getattr(table, "meta", None), "client"):
         try:
             db_table.fenced(
@@ -295,9 +297,7 @@ def create_or_get_public_identity_command(
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
         return command
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
-            raise
+    except db_table.WriteRefused as exc:
         existing = get_public_identity_command(email)
         if existing and existing.fingerprint == fingerprint:
             return existing
@@ -307,7 +307,7 @@ def create_or_get_public_identity_command(
 def get_public_identity_command(email: str) -> PublicIdentityCommandState | None:
     digest = normalized_email_digest(email)
     response = _table_get_item(
-        get_table(),
+        db_table.table(),
         Key={"PK": f"PUBLIC_IDENTITY#{digest}", "SK": "COMMAND"},
         ConsistentRead=True,
     )
@@ -321,7 +321,7 @@ def get_public_identity_command(email: str) -> PublicIdentityCommandState | None
 
 
 def require_command_fence(command: PublicIdentityCommandState) -> int:
-    table = get_table()
+    table = db_table.table()
     if not hasattr(getattr(table, "meta", None), "client"):
         return 1
     fence = account_deletion_repo.require_active_account_fence(
@@ -370,8 +370,8 @@ def advance_public_identity_command(
         assignments.append(f"{name} = :true")
         conditions.append(f"(attribute_not_exists({name}) OR {name} = :false)")
     try:
-        response = _table_update_item(
-            get_table(),
+        attributes = _table_update_item(
+            db_table.table(),
             Key={
                 "PK": f"PUBLIC_IDENTITY#{normalized_email_digest(email)}",
                 "SK": "COMMAND",
@@ -382,10 +382,8 @@ def advance_public_identity_command(
             ExpressionAttributeValues=values,
             ReturnValues="ALL_NEW",
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            raise PublicIdentityCommandConflict("stale public identity command transition") from exc
-        raise
-    return PublicIdentityCommandState.from_item(
-        _string_keyed_mapping(_string_keyed_mapping(response).get("Attributes"))
-    )
+    except db_table.WriteRefused as exc:
+        raise PublicIdentityCommandConflict("stale public identity command transition") from exc
+    if not attributes:
+        raise _malformed_command()
+    return PublicIdentityCommandState.from_item(_string_keyed_mapping(attributes))

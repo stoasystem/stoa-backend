@@ -28,7 +28,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Final
 
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 from stoa.db.repositories import parent_link_repo, user_repo
 
 
@@ -229,7 +229,6 @@ def candidate_pairs(*, table: Any | None = None) -> list[tuple[str, str]]:
     Candidates, not relationships: a job that runs over every family scans
     for them here and asks `judge` about each before acting on one.
     """
-    target = table or get_table()
     request: dict[str, Any] = {
         "FilterExpression": (
             "#entity = :link AND #status = :active AND begins_with(#sk, :child)"
@@ -247,12 +246,8 @@ def candidate_pairs(*, table: Any | None = None) -> list[tuple[str, str]]:
     }
     pairs: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    while True:
-        result = target.scan(**request)
-        rows = result.get("Items")
-        for row in rows if isinstance(rows, list) else []:
-            if not isinstance(row, Mapping):
-                continue
+    for page in db_table.pages("scan", table=table or db_table.table(), **request):
+        for row in page.items:
             parent_id = row.get("parent_id")
             student_id = row.get("student_id")
             if not isinstance(parent_id, str) or not isinstance(student_id, str):
@@ -260,10 +255,7 @@ def candidate_pairs(*, table: Any | None = None) -> list[tuple[str, str]]:
             if (parent_id, student_id) not in seen:
                 seen.add((parent_id, student_id))
                 pairs.append((parent_id, student_id))
-        cursor = result.get("LastEvaluatedKey")
-        if not isinstance(cursor, Mapping) or not cursor:
-            return pairs
-        request["ExclusiveStartKey"] = dict(cursor)
+    return pairs
 
 
 # --- Closing a relationship ---------------------------------------------------

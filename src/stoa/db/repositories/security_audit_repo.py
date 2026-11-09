@@ -9,10 +9,10 @@ import hashlib
 import hmac
 from typing import Protocol, runtime_checkable
 
-from botocore.exceptions import ClientError
 
+from stoa.db import table as db_table
 from stoa.config import ValidatedAuthorizationAuditKey, validate_authorization_audit_keyring
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 
 
 AUTHORIZATION_EVENT_TYPES = frozenset(
@@ -96,10 +96,12 @@ def _get_item(table: object, **kwargs: object) -> AuditItem:
     return _mapping(table.get_item(**kwargs))
 
 
-def _put_item(table: object, **kwargs: object) -> object:
+def _put_item(table: object, **kwargs: object) -> None:
+    """A conditional put through the gateway: a condition that does not hold is
+    `db_table.WriteRefused`, any other answer `db_table.TableUnavailable`."""
     if not isinstance(table, _PutTable):
         raise AuthorizationAuditUnavailable("authorization audit dependency unavailable")
-    return table.put_item(**kwargs)
+    db_table.put(table=table, **kwargs)
 
 
 def _optional_item(value: object) -> AuditItem | None:
@@ -370,7 +372,7 @@ class DynamoAuthorizationAuditSink:
             ), key)
             for key in self.keys
         ]
-        table = get_table()
+        table = db_table.table()
         for fingerprint, event_id, actor_fingerprint, key in candidates[1:]:
             response = _get_item(
                 table,
@@ -437,7 +439,7 @@ class DynamoAuthorizationAuditSink:
         audit_key = next(key for key in self.keys if key.key_id == record.audit_key_id)
         actor_fingerprint = _keyed_fingerprint(audit_key, ("actor", actor_id))
         key = {"PK": f"SECURITY_AUDIT#{actor_fingerprint}", "SK": f"PROBE#{aggregate_id}"}
-        table = get_table()
+        table = db_table.table()
         for _attempt in range(3):
             response = _get_item(table, Key=key, ConsistentRead=True)
             existing = _optional_item(response.get("Item")) or {}
@@ -493,9 +495,9 @@ class DynamoAuthorizationAuditSink:
                     kwargs["ExpressionAttributeValues"] = values
                 _put_item(table, **kwargs)
                 return row
-            except ClientError as exc:
-                if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
-                    raise
+            except db_table.WriteRefused:
+                # Another decision moved the aggregate first: read it again.
+                continue
         raise AuthorizationAuditUnavailable("authorization_probe_concurrent_update")
 
 
@@ -555,14 +557,12 @@ def append_event(
     row = _event_row(stream_id, event)
     try:
         _put_item(
-            table if table is not None else get_table(),
+            table if table is not None else db_table.table(),
             Item=row,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            raise DuplicateSecurityAuditEvent("security audit event already exists") from exc
-        raise
+    except db_table.WriteRefused as exc:
+        raise DuplicateSecurityAuditEvent("security audit event already exists") from exc
     return row
 
 

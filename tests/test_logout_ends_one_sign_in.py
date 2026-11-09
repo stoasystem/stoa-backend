@@ -29,6 +29,7 @@ import pytest
 
 from fakes.dynamodb import FakeTable
 from security.conftest import FakeAsyncJwksTransport
+from stoa.db import table as db_table
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import identity_repo
 from stoa import deps
@@ -192,7 +193,7 @@ def session_app(rsa_jwks_keysets, monkeypatch):
     """One application, one table, one provider, wired the way production wires them."""
     keyset, _ = rsa_jwks_keysets
     table = FakeTable()
-    monkeypatch.setattr(identity_repo, "get_table", lambda: table)
+    db_table.install(table)
     provider = _Provider()
     monkeypatch.setattr(auth, "_get_cognito", lambda _settings: provider)
     repository = _IdentityRepository(keyset.issuer, table)

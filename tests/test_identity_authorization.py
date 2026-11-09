@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from botocore.exceptions import ClientError
+from stoa.db import table as db_table
 from stoa.rule_violation import RuleViolation
 
 import pytest
@@ -408,7 +409,7 @@ def test_capability_grant_version_conflict_and_current_filtering(monkeypatch):
             self.items = pending
 
     table = FakeTable()
-    monkeypatch.setattr(capability_repo, "get_table", lambda: table)
+    db_table.install(table)
     grant = capability_repo.grant_capability(
         user_id="admin-1",
         command_id="command-1",
@@ -499,7 +500,7 @@ def test_break_glass_evidence_records_notification_and_independent_review(monkey
         def put_item(self, **kwargs):
             rows.append(kwargs["Item"])
 
-    monkeypatch.setattr(security_audit_repo, "get_table", lambda: Table())
+    db_table.install(Table())
     notification, review = security_audit_repo.append_break_glass_evidence(
         stream_id="incident-1",
         event_id="event-1",
@@ -701,7 +702,7 @@ def test_identity_binding_conditional_create_cannot_repoint(monkeypatch):
             return {"Item": self.items.get((Key["PK"], Key["SK"]))}
 
     table = FakeTable()
-    monkeypatch.setattr(identity_repo, "get_table", lambda: table)
+    db_table.install(table)
     created = identity_repo.create_identity_binding(
         issuer="https://identity.test/primary",
         subject="subject-1",

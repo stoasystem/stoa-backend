@@ -283,8 +283,12 @@ def test_cross_teacher_help_request_update_is_hidden_before_mutation(monkeypatch
     )
     before = dict(table.rows[("CONV#conv-1", "HELP")])
     monkeypatch.setattr(teachers, "_get_student_name", lambda _id: "Student")
-    for module in (teachers, teacher_dispatch_service, account_deletion_repo):
+    for module in (
+        teachers,
+        teacher_dispatch_service,
+    ):
         monkeypatch.setattr(module, "get_table", lambda table=table: table)
+    db_table.install(table)
 
     other = _client(
         teachers.router, "/teachers", {"sub": "teacher-2", "role": "teacher"}
@@ -342,7 +346,6 @@ def test_help_request_authorization_outage_returns_503_before_mutation(monkeypat
 from fakes.dynamodb import FakeTable  # noqa: E402
 from fakes.learning_session import seed_conversation  # noqa: E402
 
-from stoa.db.repositories import account_deletion_repo, user_repo  # noqa: E402
 
 _TEACHER = "teacher-67"
 _QUESTION = {"question_id": "q-67", "subject": "physics", "status": "escalated"}
@@ -367,8 +370,9 @@ def _availability_table(monkeypatch, **profile_fields) -> FakeTable:
             "generation": 1,
         },
     )
-    for module in (user_repo, account_deletion_repo, teacher_dispatch_service):
+    for module in (teacher_dispatch_service,):
         monkeypatch.setattr(module, "get_table", lambda table=table: table)
+    db_table.install(table)
     return table
 
 

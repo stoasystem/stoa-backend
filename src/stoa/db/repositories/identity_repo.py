@@ -7,10 +7,8 @@ from collections.abc import Mapping
 from hashlib import sha256
 from typing import Protocol, runtime_checkable
 
-from botocore.exceptions import ClientError
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -58,16 +56,19 @@ def _get_item(table: object, **kwargs: object) -> IdentityItem:
     return _response_mapping(table.get_item(**kwargs))
 
 
-def _put_item(table: object, **kwargs: object) -> object:
+def _put_item(table: object, **kwargs: object) -> None:
+    """A put through the gateway: a condition that does not hold is
+    `db_table.WriteRefused`, any other answer `db_table.TableUnavailable`."""
     if not isinstance(table, _PutTable):
         raise ValueError("identity repository dependency is unavailable")
-    return table.put_item(**kwargs)
+    db_table.put(table=table, **kwargs)
 
 
-def _update_item(table: object, **kwargs: object) -> object:
+def _update_item(table: object, **kwargs: object) -> None:
+    """An update through the gateway, with `_put_item`'s outcomes."""
     if not isinstance(table, _UpdateTable):
         raise ValueError("identity repository dependency is unavailable")
-    return table.update_item(**kwargs)
+    db_table.update(table=table, **kwargs)
 
 
 def issuer_hash(issuer: str) -> str:
@@ -102,7 +103,7 @@ def create_identity_binding(
         "created_at": created_at,
         "created_by": created_by,
     }
-    table = get_table()
+    table = db_table.table()
     if hasattr(getattr(table, "meta", None), "client"):
         fence = account_deletion_repo.require_active_account_fence(
             normalized_user_id, table=table
@@ -157,9 +158,7 @@ def create_identity_binding(
             Item=binding,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
-            raise
+    except db_table.WriteRefused as exc:
         existing = get_identity_binding(normalized_issuer, normalized_subject)
         if existing and existing.get("user_id") == normalized_user_id:
             _create_or_repair_identity_inventory(existing, created_at=created_at)
@@ -189,16 +188,14 @@ def _create_or_repair_identity_inventory(
         "binding_pk": binding_pk,
         "created_at": created_at,
     }
-    table = get_table()
+    table = db_table.table()
     try:
         _put_item(
             table,
             Item=inventory,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
-            raise
+    except db_table.WriteRefused as exc:
         response = _get_item(
             table,
             Key={"PK": inventory["PK"], "SK": inventory["SK"]},
@@ -212,7 +209,7 @@ def _create_or_repair_identity_inventory(
 
 def get_identity_binding(issuer: str, subject: str) -> IdentityItem | None:
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key={
             "PK": f"IDENTITY#{issuer_hash(issuer)}#{subject.strip()}",
             "SK": "BINDING",
@@ -238,7 +235,7 @@ def record_session_revocation(issuer: str, subject: str, revoked_before: int) ->
     }
     try:
         _update_item(
-            get_table(),
+            db_table.table(),
             Key=key,
             UpdateExpression="SET revoked_before = :cutoff",
             ConditionExpression=(
@@ -247,9 +244,9 @@ def record_session_revocation(issuer: str, subject: str, revoked_before: int) ->
             ),
             ExpressionAttributeValues={":cutoff": cutoff},
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
-            raise
+    except db_table.WriteRefused:
+        # The binding is gone, or already holds this cut-off or a later one.
+        pass
     return cutoff
 
 
@@ -316,7 +313,7 @@ def get_sign_in_revocation(
     if not origin_jti or not origin_jti.strip():
         return None
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key=_sign_in_identity_key(issuer, subject, origin_jti),
         ConsistentRead=True,
     )
@@ -336,7 +333,7 @@ def record_sign_in_revocation(
     if ttl <= 0:
         raise ValueError("session revocation expiry must be positive")
     _put_item(
-        get_table(),
+        db_table.table(),
         Item={
             **_sign_in_identity_key(issuer, subject, origin_jti),
             "entity_type": "auth_sign_in_revocation",
@@ -362,7 +359,7 @@ def put_sign_in_refresh_token(
     if ttl <= 0:
         raise ValueError("session expiry must be positive")
     _put_item(
-        get_table(),
+        db_table.table(),
         Item={
             **_sign_in_session_key(user_id, origin_jti),
             "entity_type": "auth_sign_in_session",
@@ -385,7 +382,7 @@ def get_sign_in_refresh_token(user_id: str, origin_jti: str) -> str | None:
     if not user_id or not origin_jti or not origin_jti.strip():
         return None
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key=_sign_in_session_key(user_id, origin_jti),
         ConsistentRead=True,
     )
@@ -405,7 +402,7 @@ def discard_sign_in_refresh_token(user_id: str, origin_jti: str) -> None:
     """
     if not user_id or not origin_jti or not origin_jti.strip():
         return
-    table = get_table()
+    table = db_table.table()
     if not isinstance(table, _DeleteTable):
         raise ValueError("identity repository dependency is unavailable")
     table.delete_item(Key=_sign_in_session_key(user_id, origin_jti))
@@ -414,7 +411,7 @@ def discard_sign_in_refresh_token(user_id: str, origin_jti: str) -> None:
 def get_current_capability_grants(user_id: str) -> list[IdentityItem]:
     from stoa.db.repositories import capability_repo
 
-    return capability_repo.get_current_grants(user_id, table_factory=get_table)
+    return capability_repo.get_current_grants(user_id)
 
 
 class DynamoIdentityRepository:

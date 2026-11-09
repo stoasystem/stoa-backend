@@ -118,7 +118,7 @@ class RelationshipWorld:
         self.profiles[student_id]["parent_binding_status"] = status
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> RelationshipWorld:
-        monkeypatch.setattr(parent_link_repo, "get_table", lambda: self.table)
+        db_table.install(self.table)
         monkeypatch.setattr(
             user_repo, "get_user", lambda user_id, **_k: deepcopy(self.profiles.get(user_id))
         )
@@ -396,7 +396,16 @@ def test_the_weekly_job_does_not_run_on_a_revoked_pair(
     # Revoked after the scan read its rows: still discovered, so what keeps the
     # job off it is the job's own judgement.
     world.revoke(PARENT, STUDENT)
-    db_table.install(_discovery_table(rows))
+    # The scan reads the rows as they were; the judgement reads the links as they
+    # are now. Both go through the table gateway (#327), so the scan is handed the
+    # snapshot directly.
+    snapshot = _discovery_table(rows)
+    discover = current_relationship.candidate_pairs
+    monkeypatch.setattr(
+        weekly_reports.current_relationship,
+        "candidate_pairs",
+        lambda **_kwargs: discover(table=snapshot),
+    )
 
     weekly_reports.run_weekly_report_job({"week_start": "2026-06-01"})
 
@@ -615,7 +624,7 @@ def test_account_profile_deletion_completes_when_nothing_is_owed(
 ) -> None:
     """Negative control: the branch must still be able to finish."""
     table = _DeletionTable([])
-    monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     result = _run_profile_branch(table, PARENT, passes=2)
 
@@ -627,7 +636,7 @@ def test_account_profile_deletion_cannot_finish_with_active_new_links(
     monkeypatch: pytest.MonkeyPatch, deleting: str
 ) -> None:
     table = _DeletionTable(_link_rows(PARENT, STUDENT))
-    monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     result = _run_profile_branch(table, deleting, passes=2)
 
@@ -641,7 +650,7 @@ def test_account_profile_deletion_removes_both_link_directions(
     monkeypatch: pytest.MonkeyPatch, deleting: str
 ) -> None:
     table = _DeletionTable(_link_rows(PARENT, STUDENT))
-    monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     _run_profile_branch(table, deleting, passes=1)
 

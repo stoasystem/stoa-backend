@@ -13,6 +13,7 @@ import re
 from typing import Any
 from uuid import uuid4
 
+from stoa.db import table as db_table
 from stoa.rule_violation import RuleViolation
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
 import pytest
@@ -22,12 +23,7 @@ from test_account_provisioning import FakeAccountTable
 from stoa.db.repositories import (
     account_deletion_repo,
     account_email_claim_repo,
-    account_invitation_repo,
     account_number_repo,
-    identity_repo,
-    security_audit_repo,
-    teacher_application_repo,
-    user_repo,
 )
 from stoa.services import (
     account_provisioning_service,
@@ -104,17 +100,7 @@ class TeacherProvider:
 @pytest.fixture
 def table(monkeypatch: pytest.MonkeyPatch) -> TeacherTable:
     fake = TeacherTable()
-    for module in (
-        account_deletion_repo,
-        account_email_claim_repo,
-        account_invitation_repo,
-        account_number_repo,
-        identity_repo,
-        security_audit_repo,
-        teacher_application_repo,
-        user_repo,
-    ):
-        monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
+    db_table.install(fake)
     return fake
 
 

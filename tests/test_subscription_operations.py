@@ -50,6 +50,16 @@ class FakeTable:
         self.items = {}
         self.scan_pages = []
 
+    # `LinkRows` plants and edits link rows through these, as on the shared double:
+    # the link repository reads this same table through the gateway (#327).
+    @property
+    def rows(self):
+        return self.items
+
+    def seed(self, *items):
+        for item in items:
+            self.items[(item["PK"], item["SK"])] = dict(item)
+
     def put_item(self, Item):
         self.items[(Item["PK"], Item["SK"])] = dict(Item)
 
@@ -334,9 +344,9 @@ def _install_fakes(monkeypatch):
     monkeypatch.setattr(entitlement_service.user_repo, "get_user", get_user)
     monkeypatch.setattr(parents.user_repo, "get_user", get_user)
     monkeypatch.setattr(account_operations_service.user_repo, "get_user", get_user)
-    # The relationship every billing reader asks about: a current child link.
-    links = LinkRows()
-    monkeypatch.setattr(parent_link_repo, "get_table", lambda: links.table)
+    # The relationship every billing reader asks about: a current child link,
+    # on the same table, which the link repository reads through the gateway too.
+    links = LinkRows(table)
     links.link("parent-1", "student-1")
 
     sessions: dict[str, dict[str, object]] = {}
@@ -523,7 +533,7 @@ def test_admin_account_operations_surfaces_attention_state(monkeypatch):
     )
     # A link the parent asked for and the student has not yet confirmed: the
     # admin view still shows it, so support can see why the child has no access.
-    LinkRows(parent_link_repo.get_table()).set_status(
+    LinkRows(db_table.table()).set_status(
         "parent-1", "student-1", parent_link_repo.STATUS_PENDING
     )
     client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}))

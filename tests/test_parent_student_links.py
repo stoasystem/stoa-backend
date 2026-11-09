@@ -15,7 +15,6 @@ from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.db import table as db_table
 from stoa.db.repositories import (
     account_deletion_repo,
-    account_number_repo,
     parent_link_repo,
     user_repo,
 )
@@ -59,6 +58,11 @@ class FakeLinkTable:
         return {"Item": deepcopy(item)} if item is not None else {}
 
     def query(self, **kwargs):
+        if "IndexName" in kwargs:
+            # Link rows leave out what the indexes key on, on purpose, and a fence
+            # carries none of it: nothing this table holds is on an index. Reads from
+            # other domains reach this table through the same gateway (#327).
+            return {"Items": []}
         terms = _condition_terms(kwargs["KeyConditionExpression"])
         partition = terms[("PK", "=")]
         prefix = terms[("SK", "begins_with")]
@@ -180,7 +184,7 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeLinkTable:
     fake = FakeLinkTable()
     for user_id in ACCOUNTS:
         fake.seed_account_fence(user_id)
-    monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
+    db_table.install(fake)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(ACCOUNTS.get(user_id)))
     return fake
 
@@ -351,7 +355,7 @@ def test_failed_second_write_leaves_no_half_link(monkeypatch: pytest.MonkeyPatch
     fake = FakeLinkTable(refuse_prefix="STUDENT#")
     for user_id in ACCOUNTS:
         fake.seed_account_fence(user_id)
-    monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
+    db_table.install(fake)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(ACCOUNTS.get(user_id)))
 
     with pytest.raises(parent_link_repo.ParentLinkConflict):
@@ -367,7 +371,7 @@ def test_failed_second_write_leaves_no_half_confirmation(monkeypatch: pytest.Mon
     fake = FakeLinkTable()
     for user_id in ACCOUNTS:
         fake.seed_account_fence(user_id)
-    monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
+    db_table.install(fake)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(ACCOUNTS.get(user_id)))
     parent_link_service.request_link(
         requester_id="parent-a", counterpart_id="student-b", now=NOW
@@ -810,7 +814,7 @@ ACCOUNT_NUMBERS = {"S26-0001": "student-b", "P26-0001": "parent-a"}
 @pytest.fixture
 def wired_table(table: FakeLinkTable, monkeypatch: pytest.MonkeyPatch) -> FakeLinkTable:
     """账号号码的认领行也要在表里，否则 studentNumber 根本解析不出来。"""
-    monkeypatch.setattr(account_number_repo, "get_table", lambda: table)
+    db_table.install(table)
     db_table.install(table)
     for number, account_id in ACCOUNT_NUMBERS.items():
         table.items[(f"ACCOUNT_NUMBER#{number}", "ACCOUNT_NUMBER")] = {

@@ -12,7 +12,6 @@ from typing import Any, Protocol, runtime_checkable
 from boto3.dynamodb.conditions import Attr, Key
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
-from stoa.db.dynamodb import get_table
 
 
 type UserItem = dict[str, object]
@@ -22,16 +21,6 @@ type TransactionOperation = dict[str, Any]
 @runtime_checkable
 class _GetTable(Protocol):
     def get_item(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _QueryTable(Protocol):
-    def query(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _ScanTable(Protocol):
-    def scan(self, **kwargs: object) -> object: ...
 
 
 def _dependency_mapping(value: object) -> UserItem:
@@ -45,18 +34,6 @@ def _get_item(table: object, **kwargs: object) -> UserItem:
     if not isinstance(table, _GetTable):
         raise ValueError("user repository dependency unavailable")
     return _dependency_mapping(table.get_item(**kwargs))
-
-
-def _query(table: object, **kwargs: object) -> UserItem:
-    if not isinstance(table, _QueryTable):
-        raise ValueError("user repository dependency unavailable")
-    return _dependency_mapping(table.query(**kwargs))
-
-
-def _scan(table: object, **kwargs: object) -> UserItem:
-    if not isinstance(table, _ScanTable):
-        raise ValueError("user repository dependency unavailable")
-    return _dependency_mapping(table.scan(**kwargs))
 
 
 PROFILE_WRITE_MAX_ATTEMPTS = 3
@@ -113,7 +90,6 @@ def put_user(item: Mapping[str, object]) -> None:
         account_deletion_repo.materialize_profile_with_fence(
             dict(item), now_iso=_profile_created_at(item)
         ),
-        table=get_table(),
     )
 
 
@@ -134,7 +110,6 @@ def put_user_with_email_claim(
             ),
             claim_operation,
         ],
-        table=get_table(),
     )
 
 
@@ -147,11 +122,15 @@ def get_user(user_id: str, *, table: object | None = None) -> UserItem | None:
     live table for weeks without anyone noticing.
     """
     resp = _get_item(
-        table or get_table(),
+        table or db_table.table(),
         Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
         ConsistentRead=True,
     )
     return _optional_item(resp.get("Item"))
+
+
+# GSI-Email is keyed on the address alone; a page of it ends on the base key and that.
+EMAIL_INDEX_KEY = ("PK", "SK", "email")
 
 
 def _profiles_by_email(email: str) -> list[UserItem]:
@@ -162,20 +141,19 @@ def _profiles_by_email(email: str) -> list[UserItem]:
     before the filter, so a Limit here would drop a profile that happened to sort
     behind an invitation and report a taken address as free.
     """
-    table = get_table()
-    query_kwargs: dict[str, object] = {
-        "IndexName": "GSI-Email",
-        "KeyConditionExpression": Key("email").eq(email),
-        "FilterExpression": Attr("SK").eq("PROFILE"),
-    }
     profiles: list[UserItem] = []
-    while True:
-        resp = _query(table, **query_kwargs)
-        profiles.extend(_items(resp.get("Items", [])))
-        last_key = resp.get("LastEvaluatedKey")
-        if not last_key:
-            return profiles
-        query_kwargs["ExclusiveStartKey"] = last_key
+    try:
+        for page in db_table.pages(
+            "query",
+            key=EMAIL_INDEX_KEY,
+            IndexName="GSI-Email",
+            KeyConditionExpression=Key("email").eq(email),
+            FilterExpression=Attr("SK").eq("PROFILE"),
+        ):
+            profiles.extend(_items(page.items))
+    except db_table.TableUnavailable as exc:
+        raise ValueError("user repository dependency unavailable") from exc
+    return profiles
 
 
 # One census page is one scan call; the answer short-circuits on the first other
@@ -191,23 +169,21 @@ def find_other_active_admin(user_id: str) -> str | None:
     as `active_admin_condition` in the same commit. A census that ran out of pages
     is not evidence that anyone else is active, so it answers None.
     """
-    table = get_table()
-    scan_kwargs: dict[str, object] = {
-        "FilterExpression": "#entity = :profile AND #role = :role",
-        "ExpressionAttributeNames": {"#entity": "SK", "#role": "role"},
-        "ExpressionAttributeValues": {":profile": "PROFILE", ":role": "admin"},
-        "Limit": ADMIN_CENSUS_PAGE_SIZE,
-    }
-    for _page in range(ADMIN_CENSUS_MAX_PAGES):
-        result = _scan(table, **scan_kwargs)
-        for row in _items(result.get("Items", [])):
-            other = str(row.get("user_id") or "")
-            if other and other != user_id and row.get("account_status") == "active":
-                return other
-        cursor = result.get("LastEvaluatedKey")
-        if not cursor:
-            return None
-        scan_kwargs["ExclusiveStartKey"] = cursor
+    census = db_table.pages(
+        "scan",
+        FilterExpression="#entity = :profile AND #role = :role",
+        ExpressionAttributeNames={"#entity": "SK", "#role": "role"},
+        ExpressionAttributeValues={":profile": "PROFILE", ":role": "admin"},
+        Limit=ADMIN_CENSUS_PAGE_SIZE,
+    )
+    try:
+        for page in islice(census, ADMIN_CENSUS_MAX_PAGES):
+            for row in _items(page.items):
+                other = str(row.get("user_id") or "")
+                if other and other != user_id and row.get("account_status") == "active":
+                    return other
+    except db_table.TableUnavailable as exc:
+        raise ValueError("user repository dependency unavailable") from exc
     return None
 
 
@@ -274,7 +250,7 @@ def list_accounts(
     stopped: a short page with a cursor means "keep going", not "that was all".
     Raises `InvalidAccountCursor` for a cursor this function did not produce.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     filter_expr = "#entity = :profile"
     attr_names = {"#entity": "SK"}
     attr_values: dict[str, object] = {":profile": "PROFILE"}
@@ -330,7 +306,7 @@ def profile_role_census(
     for page in islice(
         db_table.pages(
             "scan",
-            table=table or get_table(),
+            table=table or db_table.table(),
             FilterExpression="SK = :profile",
             ExpressionAttributeValues={":profile": "PROFILE"},
             ProjectionExpression="#role",
@@ -415,7 +391,6 @@ def record_sign_in(
             ),
         ],
         any_generation=True,
-        table=get_table(),
     )
 
 
@@ -601,7 +576,7 @@ def update_profile_fields_versioned(
     # A stale ordinary mutation of scrub-owned data is never replayed after a
     # scrub wins.  Unrelated writers retain bounded retry and convergence.
     attempt_limit = 1 if fields & PROFILE_SCRUB_OWNED_FIELDS else max_attempts
-    table = get_table()
+    table = db_table.table()
     for attempt in range(1, attempt_limit + 1):
         profile = get_user(user_id)
         if profile is None:

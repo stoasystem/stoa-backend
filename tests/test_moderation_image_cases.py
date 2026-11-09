@@ -30,7 +30,6 @@ import pytest
 from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.db.repositories import (
-    account_deletion_repo,
     moderation_repo,
     user_repo,
 )
@@ -106,10 +105,6 @@ class _World:
             self.table, conversation_id="conv-other", student_id=OTHER_STUDENT, title="Fractions"
         )
         patch_session_table(monkeypatch, self.table)
-        for module in (
-            account_deletion_repo,
-        ):
-            monkeypatch.setattr(module, "get_table", lambda: self.table)
         db_table.install(self.table)
         monkeypatch.setenv("STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS", "true")
         # The admin reads in the language they stored; no request asked for one

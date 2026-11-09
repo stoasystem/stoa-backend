@@ -12,8 +12,8 @@ from fastapi.testclient import TestClient
 import pytest
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from stoa.db import table as db_table
 from stoa.config import DEVELOPMENT_AUDIT_KEY, Settings
-from stoa.db.repositories import security_audit_repo
 from stoa.db.repositories.security_audit_repo import DynamoAuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import admin, notifications
@@ -207,7 +207,7 @@ class _MemoryTable:
 
 def test_dynamo_sink_rotation_recognizes_old_key_replay_and_redacts(monkeypatch):
     table = _MemoryTable()
-    monkeypatch.setattr(security_audit_repo, "get_table", lambda: table)
+    db_table.install(table)
     values = dict(
         correlation_id="request-rotation",
         actor_id="parent-1",
@@ -243,7 +243,7 @@ def test_dynamo_sink_rotation_recognizes_old_key_replay_and_redacts(monkeypatch)
 
 def test_dynamo_probe_aggregate_is_one_bounded_redacted_window(monkeypatch):
     table = _MemoryTable()
-    monkeypatch.setattr(security_audit_repo, "get_table", lambda: table)
+    db_table.install(table)
     sink = DynamoAuthorizationAuditSink(
         active_key_id="test-v1",
         active_secret=_strong_audit_key(),
@@ -373,7 +373,7 @@ def test_direct_sink_rejects_duplicate_material_before_any_table_access(monkeypa
         table_accessed = True
         raise AssertionError("table must not be accessed")
 
-    monkeypatch.setattr(security_audit_repo, "get_table", unexpected_table_access)
+    monkeypatch.setattr(db_table, "table", unexpected_table_access)
     secret = _strong_audit_key()
     with pytest.raises(Exception, match="authorization_audit_key_unavailable"):
         DynamoAuthorizationAuditSink(

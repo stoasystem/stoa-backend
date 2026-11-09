@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import importlib.util
 from pathlib import Path
 
+from stoa.db import table as db_table
 from stoa.security.reconciliation import (
     GrantCoordinate,
     GrantSnapshot,
@@ -540,7 +541,7 @@ class AuditRepository:
 def _repository_adapter(monkeypatch, table, audit):
     from stoa.db.repositories import capability_repo
 
-    monkeypatch.setattr(capability_repo, "get_table", lambda: table)
+    db_table.install(table)
     local = IdempotentCollaborator()
     provider = IdempotentCollaborator()
     adapter = RepositoryTighteningAdapter(
@@ -622,7 +623,7 @@ def test_duplicate_grant_id_lineages_revoke_replay_restore_and_regrant_safely(
             expected_generation=0,
             table_factory=lambda: table,
         )
-    monkeypatch.setattr(capability_repo, "get_table", lambda: table)
+    db_table.install(table)
     audit = AuditRepository(fail_remove_once=True)
     adapter, _, _ = _repository_adapter(monkeypatch, table, audit)
     checkpoint = MemoryCheckpointStore()

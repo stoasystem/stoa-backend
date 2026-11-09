@@ -16,6 +16,7 @@ from actor_helpers import install_actor_overrides
 # table returns them, which is everything the local one here was written for.
 from fakes.dynamodb import FakeTable, as_stored as _as_stored
 from stoa.config import Settings, get_settings
+from stoa.db import table as db_table
 from stoa.routers import auth
 from stoa.services import locale_service, password_change_code_service as codes
 from rule_violation_helpers import assert_violation
@@ -510,7 +511,7 @@ def password_change_client(monkeypatch):
             "role": "student",
         },
     )
-    monkeypatch.setattr(codes, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(codes.boto3, "client", lambda *_args, **_kwargs: ses)
 
     app = FastAPI()

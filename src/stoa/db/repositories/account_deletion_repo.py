@@ -14,10 +14,9 @@ from collections.abc import Callable, Iterator
 from itertools import islice
 from typing import Any, Iterable, Mapping, Protocol, runtime_checkable
 
-from botocore.exceptions import ClientError
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_email_claim_repo
 
 
@@ -61,10 +60,15 @@ def _get_item(table: object, **kwargs: object) -> AccountDeletionItem:
     return _dependency_mapping(table.get_item(**kwargs))
 
 
-def _update_item(table: object, **kwargs: object) -> object:
+def _update_item(table: object, **kwargs: object) -> dict[str, Any]:
+    """One conditional update through the gateway; the attributes it hands back.
+
+    A condition that does not hold is `db_table.WriteRefused`; anything else the
+    table answers is `db_table.TableUnavailable`.
+    """
     if not isinstance(table, _UpdateTable):
         raise AccountDeletionConflict("account deletion dependency unavailable")
-    return table.update_item(**kwargs)
+    return db_table.update(table=table, **kwargs)
 
 
 class AccountDeletionConflict(RuntimeError):
@@ -326,7 +330,7 @@ def get_account_fence(
     user_id: str, *, table: Any | None = None
 ) -> dict[str, Any] | None:
     response = _get_item(
-        table or get_table(),
+        table or db_table.table(),
         Key=account_fence_key(user_id), ConsistentRead=True
     )
     item = response.get("Item")
@@ -365,7 +369,7 @@ def ensure_active_account_fence(
 ) -> dict[str, Any]:
     """Backfill only one existing active canonical profile; never infer missing as active."""
     now_iso = _valid_lifecycle_timestamp(now_iso)
-    target = table or get_table()
+    target = table or db_table.table()
     existing = get_account_fence(user_id, table=target)
     if existing:
         return require_active_account_fence(user_id, table=target)
@@ -475,7 +479,7 @@ def get_deletion_command(
     user_id: str, command_id: str, *, table: Any | None = None
 ) -> dict[str, Any] | None:
     response = _get_item(
-        table or get_table(),
+        table or db_table.table(),
         Key=deletion_command_key(user_id, command_id), ConsistentRead=True
     )
     item = response.get("Item")
@@ -490,7 +494,7 @@ def begin_account_deletion(
     table: Any | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     now_iso = _valid_lifecycle_timestamp(now_iso)
-    target = table or get_table()
+    target = table or db_table.table()
     current = get_account_fence(user_id, table=target)
     if not current:
         raise AccountDeletionConflict("missing account fence")
@@ -587,7 +591,7 @@ def scan_owned_private_rows(
     """Strong base-table discovery; GSIs never establish deletion completeness."""
     if maximum_pages <= 0 or page_limit <= 0:
         raise AccountDeletionConflict("invalid private row scan bound")
-    target = table or get_table()
+    target = table or db_table.table()
     current = continuation_key(cursor, "private row") if cursor is not None else None
     seen_rows: set[tuple[str, str]] = set()
     seen_cursors: set[tuple[str, str]] = set()
@@ -669,7 +673,7 @@ def continuation_key(value: object, name: str = "continuation") -> dict[str, str
 def get_command_by_id(
     command_id: str, *, table: Any | None = None
 ) -> dict[str, Any] | None:
-    target = table or get_table()
+    target = table or db_table.table()
     hook = getattr(target, "get_command_by_id", None)
     if callable(hook):
         value = hook(command_id)
@@ -689,7 +693,7 @@ def find_deletion_command_for_identity(
 ) -> dict[str, Any] | None:
     """Recover the one replay command after its active binding is terminalized."""
     matches = _scan_commands(
-        table or get_table(),
+        table or db_table.table(),
         filter_expression=(
             "entity_type=:entity AND issuer_hash=:issuer AND subject_hash=:subject"
         ),
@@ -777,7 +781,7 @@ def replace_with_deletion_tombstone(
     table: Any | None = None,
 ) -> None:
     """Replace one private row with a strict noncontent tombstone."""
-    target = table or get_table()
+    target = table or db_table.table()
     pk = _required(item.get("PK"), "PK")
     sk = _required(item.get("SK"), "SK")
     entity = str(item.get("entity_type") or "private_row")
@@ -940,7 +944,7 @@ def scrub_teacher_question_reference(
                     }
                 },
             ],
-            table=table or get_table(),
+            table=table or db_table.table(),
         )
     except AccountDeletionConflict as exc:
         raise AccountDeletionRowConflict(
@@ -1022,7 +1026,7 @@ def replace_teacher_session_with_tombstone(
                     }
                 },
             ],
-            table=table or get_table(),
+            table=table or db_table.table(),
         )
     except AccountDeletionConflict as exc:
         raise AccountDeletionRowConflict(
@@ -1100,7 +1104,7 @@ def delete_owned_row(
     """
     if str(item.get("SK") or "") == "PROFILE":
         raise AccountDeletionConflict("a profile row is tombstoned, never deleted")
-    target = table or get_table()
+    target = table or db_table.table()
     hook = getattr(target, "delete_owned_row", None)
     if callable(hook):
         hook(dict(item), user_id, generation)
@@ -1130,7 +1134,7 @@ def scrub_parent_profile_child(
     parent_id = _required(item.get("user_id"), "parent user_id")
     if parent_id == child_user_id:
         raise AccountDeletionConflict("student profile requires tombstone replacement")
-    target: Any = table or get_table()
+    target: Any = table or db_table.table()
     current = dict(item)
     for attempt in range(1, 4):
         require_deletion_account_fence(child_user_id, generation, table=target)
@@ -1311,7 +1315,7 @@ def terminalize_identity_row(
         "deleted_at": now_iso,
         "version": int(item.get("version") or 1) + 1,
     }
-    target = table or get_table()
+    target = table or db_table.table()
     hook = getattr(target, "replace_with_deletion_tombstone", None)
     if callable(hook):
         hook(dict(item), evidence, user_id, generation)
@@ -1348,7 +1352,7 @@ def create_provider_revoke_debt(
         "operations": ["attributes", "groups", "sessions"],
         "created_at": now_iso,
     }
-    target = table or get_table()
+    target = table or db_table.table()
     hook = getattr(target, "create_provider_revoke_debt", None)
     if callable(hook):
         hook(item)
@@ -1394,7 +1398,7 @@ def complete_provider_revoke_debt(
     table: Any | None = None,
 ) -> None:
     now_iso = _valid_lifecycle_timestamp(now_iso)
-    target = table or get_table()
+    target = table or db_table.table()
     key = {"PK": f"USER#{user_id}", "SK": f"PROVIDER_REVOKE#{generation:020d}"}
     hook = getattr(target, "complete_provider_revoke_debt", None)
     if callable(hook):
@@ -1444,7 +1448,7 @@ def scan_pending_deletion_commands(
 ) -> OwnedPrivatePage:
     # Always the real scan, never a same-named method on the table: discovery
     # is what the sweep's cursor walks (ticket 13).
-    target = table or get_table()
+    target = table or db_table.table()
     page = next(
         sweep_pages(
             "pending command",
@@ -1493,7 +1497,7 @@ def get_deletion_scan_cursor(*, table: Any | None = None) -> DeletionScanCursor:
     write still applies. A version that is not a whole number is refused: the
     next write is conditional on it, so there is nothing safe to write against.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     item = _get_item(target, Key=dict(DELETION_SCAN_CURSOR_KEY), ConsistentRead=True).get(
         "Item"
     )
@@ -1561,14 +1565,14 @@ def advance_deletion_scan_cursor(
         request["ConditionExpression"] = "#version = :expected"
         request["ExpressionAttributeNames"] = {"#version": "version"}
         request["ExpressionAttributeValues"] = {":expected": expected_version}
-    target = table or get_table()
+    target = table or db_table.table()
     if not isinstance(target, _PutTable):
         raise AccountDeletionConflict("account deletion dependency unavailable")
     try:
-        target.put_item(**request)
-    except ClientError as exc:
-        if _conditional(exc):
-            return False
+        db_table.put(table=target, **request)
+    except db_table.WriteRefused:
+        return False
+    except db_table.TableUnavailable as exc:
         raise AccountDeletionConflict("deletion scan cursor unavailable") from exc
     return True
 
@@ -1590,14 +1594,14 @@ def claim_deletion_command(
     now_iso = _valid_lifecycle_timestamp(now_iso)
     # Always the conditional update on the table, never a same-named method:
     # the claim is what lets exactly one run continue a command (ticket 13).
-    target = table or get_table()
+    target = table or db_table.table()
     initial_version = _positive_int(
         stored_int(command.get("command_version") or command.get("version")),
         "command version",
     )
     empty_digest = branch_results_digest({})
     try:
-        response = _update_item(
+        attributes = _update_item(
             target,
             Key={"PK": command["PK"], "SK": command["SK"]},
             UpdateExpression=(
@@ -1627,12 +1631,11 @@ def claim_deletion_command(
             },
             ReturnValues="ALL_NEW",
         )
-    except ClientError as exc:
-        if _conditional(exc):
-            return None
+    except db_table.WriteRefused:
+        return None
+    except db_table.TableUnavailable as exc:
         raise AccountDeletionConflict("deletion claim unavailable") from exc
-    attributes = response.get("Attributes") if isinstance(response, Mapping) else None
-    if not isinstance(attributes, Mapping):
+    if not attributes:
         raise AccountDeletionConflict("malformed deletion claim")
     return _claim_from_command(attributes)
 
@@ -1655,7 +1658,7 @@ def renew_deletion_command_claim(
     now_iso = _valid_lifecycle_timestamp(now_iso)
     # Always the conditional update on the table: the renewal keeps the claim
     # alive, so it is guarded the way the claim is.
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         _update_item(
             target,
@@ -1683,9 +1686,9 @@ def renew_deletion_command_claim(
                 ":one": 1,
             },
         )
-    except ClientError as exc:
-        if _conditional(exc):
-            raise DeletionCommandClaimLost("deletion renewal lost") from exc
+    except db_table.WriteRefused as exc:
+        raise DeletionCommandClaimLost("deletion renewal lost") from exc
+    except db_table.TableUnavailable as exc:
         raise AccountDeletionConflict("deletion renewal unavailable") from exc
     return DeletionCommandClaim(
         command_id=claim.command_id,
@@ -1732,7 +1735,7 @@ def persist_branch_result(
         expected_result_version = prior_result_version
     if expected_result_version != prior_result_version:
         raise DeletionCommandClaimLost("branch result version changed")
-    target = table or get_table()
+    target = table or db_table.table()
     safe_result = {
         key: value
         for key, value in result.items()
@@ -1814,9 +1817,9 @@ def persist_branch_result(
             },
             ExpressionAttributeValues=values,
         )
-    except ClientError as exc:
-        if _conditional(exc):
-            raise DeletionCommandClaimLost("branch result claim lost") from exc
+    except db_table.WriteRefused as exc:
+        raise DeletionCommandClaimLost("branch result claim lost") from exc
+    except db_table.TableUnavailable as exc:
         raise AccountDeletionConflict("branch result unavailable") from exc
     return DeletionCommandClaim(
         command_id=claim.command_id,
@@ -1852,7 +1855,7 @@ def finalize_account_deletion(
     ):
         return dict(command), dict(fence)
 
-    target = table or get_table()
+    target = table or db_table.table()
     loader = getattr(target, "get_deletion_command", None)
     if callable(loader):
         loaded = loader(str(command["user_id"]), str(command["command_id"]))
@@ -2133,10 +2136,3 @@ def _targets_user(item: Mapping[str, Any], user_id: str) -> bool:
 
 def normalized_identity_hash(value: str) -> str:
     return sha256(_required(value, "identity").encode("utf-8")).hexdigest()
-
-
-def _conditional(exc: ClientError) -> bool:
-    return exc.response.get("Error", {}).get("Code") in {
-        "ConditionalCheckFailedException",
-        "TransactionCanceledException",
-    }

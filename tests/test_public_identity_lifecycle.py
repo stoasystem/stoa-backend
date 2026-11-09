@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 from jose import jwt
 import pytest
 
+from stoa.db import table as db_table
 from stoa.db.repositories import identity_repo, public_identity_repo
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import resolve_actor
@@ -63,7 +64,7 @@ class MemoryTable:
 
 def test_public_identity_command_is_immutable_and_idempotent(monkeypatch):
     table = MemoryTable()
-    monkeypatch.setattr(public_identity_repo, "get_table", lambda: table)
+    db_table.install(table)
     command = dict(
         email="Student@Example.test",
         issuer="https://identity.test/primary/",
@@ -97,7 +98,7 @@ def test_interrupted_binding_repairs_only_matching_reverse_inventory(monkeypatch
             return super().put_item(Item=Item, ConditionExpression=ConditionExpression)
 
     table = FailingInventoryTable()
-    monkeypatch.setattr(identity_repo, "get_table", lambda: table)
+    db_table.install(table)
     kwargs = dict(
         issuer="https://identity.test/primary",
         subject="subject-1",
@@ -153,8 +154,8 @@ async def test_register_confirm_converges_one_subject_bound_actor(monkeypatch, r
     table = MemoryTable()
     profiles = {}
     groups = set()
-    monkeypatch.setattr(public_identity_repo, "get_table", lambda: table)
-    monkeypatch.setattr(identity_repo, "get_table", lambda: table)
+    db_table.install(table)
+    db_table.install(table)
     monkeypatch.setattr(
         public_identity_service.user_repo,
         "get_user",
@@ -263,7 +264,7 @@ def test_confirmation_rejects_provider_subject_mismatch_before_activation(monkey
     from stoa.services import public_identity_service
 
     table = MemoryTable()
-    monkeypatch.setattr(public_identity_repo, "get_table", lambda: table)
+    db_table.install(table)
     public_identity_repo.create_or_get_public_identity_command(
         email="student@example.test",
         issuer="https://identity.test/primary",
@@ -302,7 +303,7 @@ def test_registration_resume_rejects_fingerprint_changes_before_mutation(
     from stoa.services import public_identity_service
 
     table = MemoryTable()
-    monkeypatch.setattr(public_identity_repo, "get_table", lambda: table)
+    db_table.install(table)
     command = public_identity_repo.create_or_get_public_identity_command(
         email="student@example.test",
         issuer="https://identity.test/primary",

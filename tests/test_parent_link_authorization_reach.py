@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from stoa.db import table as db_table
 from stoa.routers.conversations import ConversationListPage
 from stoa.db.repositories import parent_link_repo, question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -64,7 +65,7 @@ def table(
     fake = FakeLinkTable()
     for user_id in accounts:
         fake.seed_account_fence(user_id)
-    monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
+    db_table.install(fake)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(accounts.get(user_id)))
     monkeypatch.setattr(question_repo, "list_by_student", lambda *_a, **_k: {"Items": []})
     # The student summary also counts resolved chat help requests (#77).
@@ -243,8 +244,7 @@ def test_链接表连不上时受影响的路由回503而不是500(
 ) -> None:
     """CI 里这些路由曾因新表读不出来而出错，本地有凭据所以没复现。
 
-    夹具打的是 `parent_link_repo.get_table` —— 那是新表唯一的取表点，
-    而它用的是模块级绑定，别处打 `stoa.db.dynamodb.get_table` 的桩都够不着它。
+    桩打在表网关的取表点 `db_table.table` 上 —— 链接表和其余各表都从那里取（#327）。
     读不出来是授权暂时不可用：既不放行，也不是 500。
     """
     from stoa.services import current_relationship
@@ -254,7 +254,7 @@ def test_链接表连不上时受影响的路由回503而不是500(
     def 炸():
         raise RuntimeError("no credentials for the parent link table")
 
-    monkeypatch.setattr(parent_link_repo, "get_table", 炸)
+    monkeypatch.setattr(db_table, "table", 炸)
 
     response = _client().get(path)
 
@@ -268,15 +268,14 @@ def test_链接表连不上时受影响的路由回503而不是500(
 def test_传进来的表才是它读的那张表(monkeypatch):
     """The injection has to be used, not merely accepted.
 
-    `parent_link_repo` binds `get_table` at module level, so a stub installed
-    anywhere else cannot reach it. That is how `pytest` came to send reads to
-    the live table: nothing a test did could stop this function, and the only
-    fix available was a fixture that replaced the binding by name. A table
-    passed in is now the table every read here uses, and the ambient one is
-    not touched at all.
+    `parent_link_repo` once bound `get_table` at module level, so a stub
+    installed anywhere else could not reach it. That is how `pytest` came to
+    send reads to the live table: nothing a test did could stop this function,
+    and the only fix available was a fixture that replaced the binding by name.
+    A table passed in is now the table every read here uses, and the ambient
+    one - the gateway's, since #327 - is not touched at all.
     """
     from stoa.db.dynamodb import get_table as ambient_get_table
-    from stoa.db.repositories import parent_link_repo, user_repo
     from stoa.services import current_relationship
 
     reads: list[tuple[str, str]] = []
@@ -308,8 +307,7 @@ def test_传进来的表才是它读的那张表(monkeypatch):
     def _refuse(*_args, **_kwargs):
         raise AssertionError("the ambient table was reached")
 
-    monkeypatch.setattr(parent_link_repo, "get_table", _refuse)
-    monkeypatch.setattr(user_repo, "get_table", _refuse)
+    monkeypatch.setattr(db_table, "table", _refuse)
 
     verdict = current_relationship.judge("p1", "s1", table=_Injected())
 

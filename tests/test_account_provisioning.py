@@ -27,7 +27,6 @@ from stoa.db.repositories import (
     account_email_claim_repo,
     account_invitation_repo,
     account_number_repo,
-    identity_repo,
     public_identity_repo,
     security_audit_repo,
     user_repo,
@@ -203,16 +202,7 @@ class RecordingProvider:
 @pytest.fixture
 def table(monkeypatch: pytest.MonkeyPatch) -> FakeAccountTable:
     fake = FakeAccountTable()
-    for module in (
-        account_email_claim_repo,
-        account_invitation_repo,
-        account_number_repo,
-        account_deletion_repo,
-        identity_repo,
-        security_audit_repo,
-        user_repo,
-    ):
-        monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
+    db_table.install(fake)
     return fake
 
 
@@ -605,16 +595,7 @@ def test_并发两次认领同一令牌只有一个能建号(monkeypatch: pytest
     """Both callers read `issued` before either writes; only the store can break the tie."""
     gate = threading.Barrier(2, timeout=5)
     fake = FakeAccountTable(claim_gate=gate)
-    for module in (
-        account_email_claim_repo,
-        account_invitation_repo,
-        account_number_repo,
-        account_deletion_repo,
-        identity_repo,
-        security_audit_repo,
-        user_repo,
-    ):
-        monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
+    db_table.install(fake)
 
     issued = _invite(fake)
     fake.gated.clear()
@@ -804,19 +785,8 @@ def test_认领端点在令牌被消费前就拒绝弱密码(monkeypatch: pytest
     """A password the identity pool would refuse must not cost the invitee their token."""
     from fastapi.testclient import TestClient
 
-    from stoa.routers import auth as auth_router
-
     fake = ThrottleAwareTable()
-    for module in (
-        account_invitation_repo,
-        account_number_repo,
-        account_deletion_repo,
-        identity_repo,
-        security_audit_repo,
-        user_repo,
-        auth_router,
-    ):
-        monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
+    db_table.install(fake)
 
     issued = _invite(fake, at=datetime.now(UTC), expiry=3600)
     token = issued["activationToken"]
@@ -1197,16 +1167,7 @@ def test_并发两次同一邮箱同一角色只有一个能建号(monkeypatch: 
     """Both administrators read the address free; only the store can break the tie."""
     gate = threading.Barrier(2, timeout=5)
     fake = FakeAccountTable(email_gate=gate)
-    for module in (
-        account_email_claim_repo,
-        account_invitation_repo,
-        account_number_repo,
-        account_deletion_repo,
-        identity_repo,
-        security_audit_repo,
-        user_repo,
-    ):
-        monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
+    db_table.install(fake)
 
     original = user_repo.get_user_by_email_and_role
     pre_reads: list[object] = []

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from botocore.exceptions import ClientError
-
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db import table as db_table
+from stoa.db.dynamodb import stored_int
 
 
 CLAIM_SK = "ACCOUNT_NUMBER"
@@ -30,7 +29,7 @@ class _PutTable(Protocol):
 
 
 def _table(candidate: object | None = None) -> object:
-    return candidate or get_table()
+    return candidate or db_table.table()
 
 
 def _response(value: object) -> NumberItem:
@@ -45,14 +44,12 @@ def _get_item(table: object, **kwargs: object) -> NumberItem:
     return _response(table.get_item(**kwargs))
 
 
-def _put_item(table: object, **kwargs: object) -> object:
+def _put_item(table: object, **kwargs: object) -> None:
+    """A conditional put through the gateway: a condition that does not hold is
+    `db_table.WriteRefused`, any other answer `db_table.TableUnavailable`."""
     if not isinstance(table, _PutTable):
         raise ValueError("account number dependency unavailable")
-    return table.put_item(**kwargs)
-
-
-def _conditional_failure(exc: ClientError) -> bool:
-    return exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException"
+    db_table.put(table=table, **kwargs)
 
 
 def claim_key(account_number: str) -> dict[str, str]:
@@ -88,10 +85,8 @@ def claim_account_number(
     }
     try:
         _put_item(_table(table), Item=item, ConditionExpression=CLAIM_CONDITION)
-    except ClientError as exc:
-        if _conditional_failure(exc):
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
@@ -144,7 +139,5 @@ def advance_allocation_hint(
             ConditionExpression=HINT_CONDITION,
             ExpressionAttributeValues={":sequence": sequence},
         )
-    except ClientError as exc:
-        if _conditional_failure(exc):
-            return
-        raise
+    except db_table.WriteRefused:
+        return

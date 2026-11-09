@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import account_deletion_service
 from fakes.dynamodb import from_wire
@@ -256,7 +257,7 @@ def test_teacher_identity_scrub_preserves_student_question_and_requires_two_clea
         for key, row in table.rows.items()
         if row.get("entity_type") == "question"
     }
-    monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+    db_table.install(table)
 
     branch = account_deletion_service.BRANCH_HANDLERS["question_ocr_session"]
     command = {"user_id": TEACHER_ID, "generation": GENERATION}

@@ -26,7 +26,6 @@ import pytest
 
 from stoa.db import table as db_table
 from stoa.config import IMAGE_MAX_BYTES, Settings, get_settings
-from stoa.db.repositories import account_deletion_repo
 from stoa.deps import get_actor, get_image_moderation_client, get_s3_client, get_s3_presign_client
 from stoa.routers import files
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -64,7 +63,7 @@ class _Api:
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch, table: FakeTable, s3: MultipartS3) -> None:
         db_table.install(table)
-        monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+        db_table.install(table)
         app = FastAPI()
         app.include_router(files.router, prefix="/files")
         app.dependency_overrides[get_actor] = _actor

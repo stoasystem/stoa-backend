@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 
 
 CLAIM_SK = "EMAIL_CLAIM"
@@ -42,7 +42,7 @@ class _GetTable(Protocol):
 
 
 def _table(candidate: object | None = None) -> object:
-    return candidate or get_table()
+    return candidate or db_table.table()
 
 
 def _response(value: object) -> ClaimItem:

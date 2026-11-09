@@ -10,8 +10,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from stoa.db import table as db_table
 from stoa.config import Settings, get_settings
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import identity_repo, user_repo
 from stoa.deps import (
     get_current_user,
@@ -1241,7 +1241,7 @@ def admit_invitation_claim(request: Request, *, now: datetime | None = None, tab
     moment = int((now or datetime.now(UTC)).timestamp())
     window_start = moment - (moment % INVITATION_CLAIM_WINDOW_SECONDS)
     digest = _claim_source_digest(request)
-    client = table if table is not None else get_table()
+    client = table if table is not None else db_table.table()
     try:
         response = client.update_item(
             Key={
