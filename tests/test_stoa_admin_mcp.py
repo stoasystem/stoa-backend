@@ -105,6 +105,41 @@ def test_handshake_then_tools_list_names_the_catalog() -> None:
     assert tools["get_account"]["inputSchema"]["type"] == "object"
 
 
+def test_write_tools_say_so_and_ask_for_a_rehearsal_first() -> None:
+    replies = _rpc(_server(), INITIALIZE, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+
+    assert "dryRun=true first" in replies[0]["result"]["instructions"]
+    tools = {tool["name"]: tool for tool in replies[1]["result"]["tools"]}
+    hints = {
+        name: (tool["annotations"]["readOnlyHint"], tool["annotations"]["destructiveHint"])
+        for name, tool in tools.items()
+    }
+    assert hints == {
+        "find_accounts": (True, False),
+        "get_account": (True, False),
+        "invite_account": (False, False),
+        "reissue_invitation": (False, True),
+        "revoke_invitation": (False, True),
+    }
+    for name in ("invite_account", "reissue_invitation", "revoke_invitation"):
+        assert "dryRun" in tools[name]["inputSchema"]["required"]
+        assert "confirm with the person" in tools[name]["description"]
+
+
+def test_a_write_call_passes_dry_run_through_unchanged() -> None:
+    lambda_client = FakeLambda({"ok": True, "result": {"dryRun": True}})
+
+    _rpc(
+        _server(lambda_client),
+        _call("revoke_invitation", {"accountNumber": "S26-0001", "dryRun": True}),
+    )
+
+    (invocation,) = lambda_client.invocations
+    call = json.loads(invocation["Payload"])[catalog.OPERATOR_CALL_KEY]
+    assert call["operation"] == "revoke_invitation"
+    assert call["arguments"] == {"accountNumber": "S26-0001", "dryRun": True}
+
+
 def test_an_unknown_protocol_version_gets_the_latest_supported() -> None:
     message = {**INITIALIZE, "params": {**INITIALIZE["params"], "protocolVersion": "1999-01-01"}}
 

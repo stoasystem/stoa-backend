@@ -160,6 +160,36 @@ def invite_account(
     }
 
 
+def check_invitation(
+    *,
+    role: str,
+    email: str,
+    date_of_birth: str | None = None,
+    now: Callable[[], datetime] | None = None,
+) -> dict[str, Any]:
+    """What `invite_account` would open, decided by reads alone (#384).
+
+    The same refusals `invite_account` makes before its first write - the role, the
+    address, the birthday - raised the same way, and the account already holding the
+    `(address, role)` pair, if any, so a rehearsal can name it. Nothing is written.
+
+    The holder is looked up the way an opening is refused: the address index first,
+    then the claim row, which is the guard for accounts the index has not caught up
+    with. The real opening still decides on its own conditional write; this answer
+    can be stale by the time it runs.
+    """
+    clean_role = _role(role)
+    address = _email(email)
+    _date_of_birth(date_of_birth, now=_instant(now))
+    holder = user_repo.get_user_by_email_and_role(address, clean_role)
+    if holder is None:
+        claim = account_email_claim_repo.get_claim(email=address, role=clean_role)
+        account_id = str((claim or {}).get("account_id") or "")
+        if account_id:
+            holder = user_repo.get_user(account_id) or {"user_id": account_id}
+    return {"role": clean_role, "email": address, "holder": holder}
+
+
 def assign_account(
     *,
     actor: dict[str, Any],

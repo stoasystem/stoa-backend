@@ -1,7 +1,6 @@
 """Admin routes — user management, report operations, and platform statistics."""
 from collections.abc import Callable, Mapping
 from datetime import date, datetime, timezone
-from functools import partial
 from typing import Annotated, Any, Literal, Optional
 from uuid import uuid4
 
@@ -58,7 +57,6 @@ from stoa.services import (
     answer_judging,
     current_relationship,
     teacher_support_allowance_service,
-    locale_service,
     notify_service,
     parent_link_service,
     public_identity_service,
@@ -2235,14 +2233,9 @@ def _invitation_delivery(locale: str | None):
     """Mail the invitee in the language the request names, else the default (#374).
 
     Never in the administrator's own screen language: that is who sent the
-    invitation, not who reads it.
+    invitation, not who reads it. The operator calls (#384) mail the same way.
     """
-    candidate = locale or locale_service.DEFAULT_LOCALE
-    try:
-        resolved = locale_service.normalize_locale(candidate)
-    except ValueError:
-        resolved = locale_service.DEFAULT_LOCALE
-    return partial(notify_service.send_account_invitation_email, locale=resolved)
+    return notify_service.account_invitation_delivery(locale)
 
 
 def _record_account_admin_event(

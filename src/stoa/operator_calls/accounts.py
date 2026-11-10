@@ -1,4 +1,4 @@
-"""The account operations an agent may run: both read only (#383).
+"""The account operations an agent may run that only read (#383).
 
 Each answers with the console's own account projection
 (`services.account_listing`), so an agent sees what an administrator sees and
@@ -9,23 +9,13 @@ ever leaves through here.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 
 from stoa.db import table as db_table
 from stoa.db.repositories import account_number_repo, user_repo
 from stoa.operator_calls.catalog import FindAccountsArguments, GetAccountArguments
+from stoa.operator_calls.outcome import Outcome
 from stoa.services import account_listing, usage_period
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
-
-
-@dataclass(frozen=True, slots=True)
-class Outcome:
-    """What an operation answers, and what its audit row says it touched."""
-
-    result: dict[str, object]
-    target_type: str
-    target_id: str
-    evidence: str = ""
 
 
 class AmbiguousAccount(ValueError):
