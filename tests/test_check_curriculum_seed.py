@@ -11,6 +11,7 @@ no stamp, or the stamp could not be read - always with exit code 0.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -66,7 +67,7 @@ def _run(
         return stamp_output
 
     summary_args = ["--summary", str(summary)] if summary is not None else []
-    code = check.main([*argv, *summary_args], run=run, code_hash=_code_hash)
+    code = check.main([*argv, *summary_args], run=run, hasher=_code_hash)
     return code, capsys.readouterr().out, calls
 
 
@@ -125,7 +126,11 @@ def test_a_stamp_in_an_unknown_mode_lags_rather_than_crashing(
 
     assert code == 0
     assert "::warning" in out
-    assert "sideways" in summary.read_text(encoding="utf-8")
+    written = summary.read_text(encoding="utf-8")
+    assert "sideways" in written
+    # No command is suggested that would reseed production in a guessed mode.
+    assert "Run scripts/seed_practice.py" not in written
+    assert "--knowledge-base" not in written
 
 
 def test_no_stamp_row_is_a_warning_that_the_seed_never_ran(
@@ -179,7 +184,7 @@ def test_a_hash_that_cannot_be_computed_still_exits_zero(
         raise ValueError("UNIT#x: the seed does not own colour")
 
     code = check.main(
-        ["--summary", str(summary)], run=lambda _args: _wire(_stamp()), code_hash=broken
+        ["--summary", str(summary)], run=lambda _args: _wire(_stamp()), hasher=broken
     )
     out = capsys.readouterr().out
 
@@ -229,6 +234,22 @@ def test_without_a_summary_file_the_result_still_goes_to_the_log(
     assert "lags the code" in out
 
 
+@pytest.mark.parametrize(
+    ("mode", "flag"), [("preview", "--knowledge-base"), ("live", "--knowledge-base-live")]
+)
+def test_a_table_seeded_with_the_knowledge_base_is_told_to_reseed_with_the_same_flag(
+    mode: str, flag: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    summary = tmp_path / "summary.md"
+    _run(
+        stamp_output=_wire(_stamp(knowledge_base=mode, seed_hash="d" * 64)),
+        summary=summary,
+        capsys=capsys,
+    )
+
+    assert f"Run `scripts/seed_practice.py {flag}`" in summary.read_text(encoding="utf-8")
+
+
 def test_the_summary_defaults_to_the_step_summary_of_the_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -240,6 +261,29 @@ def test_the_summary_defaults_to_the_step_summary_of_the_run(
     written = summary.read_text(encoding="utf-8")
     assert written.startswith("earlier step\n")
     assert "Curriculum seed matches the code" in written
+
+
+def test_the_key_and_the_modes_are_the_seed_s_own() -> None:
+    from boto3.dynamodb.types import TypeSerializer
+
+    from scripts import seed_practice
+
+    serializer = TypeSerializer()
+    assert check.STAMP_KEY == {
+        key: serializer.serialize(value) for key, value in seed_practice.SEED_STAMP_KEY.items()
+    }
+    source = Path(seed_practice.__file__).read_text(encoding="utf-8")
+    for mode, (argument, flag) in check.MODES.items():
+        if mode == check.DEFAULT_MODE:
+            assert argument is None and flag == ""
+            assert 'knowledge_base or "off"' in source
+            continue
+        assert argument == mode
+        assert re.search(
+            rf'"{re.escape(flag)}", dest="knowledge_base", action="store_const", '
+            rf'const="{mode}"',
+            source,
+        ), flag
 
 
 def test_the_real_code_hash_is_the_one_the_seed_prints() -> None:

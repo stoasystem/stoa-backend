@@ -19,7 +19,7 @@ that lags the code must not block a deploy. Recomputing the hash needs no AWS
 access; reading the row is one `GetItem` through the AWS CLI, with the
 environment's credentials in a deploy or an SSO profile for an operator:
 
-    python scripts/check_curriculum_seed.py --profile stoa
+    uv run python scripts/check_curriculum_seed.py --profile stoa
 """
 
 from __future__ import annotations
@@ -37,11 +37,18 @@ from boto3.dynamodb.types import TypeDeserializer
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-TABLE = "stoa-main"
-REGION = "eu-central-2"
+# The same defaults as scripts/seed_practice.py, so both name the same table.
+TABLE = os.environ.get("STOA_TABLE", "stoa-main")
+REGION = os.environ.get("AWS_DEFAULT_REGION", "eu-central-2")
+#: seed_practice.SEED_STAMP_KEY in wire format; a test holds the two together.
 STAMP_KEY = {"PK": {"S": "PRACTICE"}, "SK": {"S": "CURRICULUM_SEED"}}
-#: The stamp's `knowledge_base` value, and what `seed_rows` is called with for it.
-MODES: dict[str, str | None] = {"off": None, "preview": "preview", "live": "live"}
+#: The stamp's `knowledge_base` value, what `seed_rows` is called with for it, and
+#: the seed's flag for it. A test holds these to seed_practice.py's own flags.
+MODES: dict[str, tuple[str | None, str]] = {
+    "off": (None, ""),
+    "preview": ("preview", "--knowledge-base"),
+    "live": ("live", "--knowledge-base-live"),
+}
 #: A stamp written before it recorded a mode, or no stamp at all, means the default run.
 DEFAULT_MODE = "off"
 SEED_COMMAND = "scripts/seed_practice.py"
@@ -70,7 +77,7 @@ def code_hash(mode: str) -> str:
     """The hash `seed_practice.py --print-hash` prints for this knowledge-base mode."""
     import seed_practice
 
-    return seed_practice.seed_hash(seed_practice.seed_rows(knowledge_base=MODES[mode]))
+    return seed_practice.seed_hash(seed_practice.seed_rows(knowledge_base=MODES[mode][0]))
 
 
 def read_stamp(run: Runner, *, table: str, region: str, profile: str | None) -> dict | None:
@@ -115,19 +122,25 @@ def _stamp_lines(stamp: dict) -> list[str]:
 
 
 def _lagging(reason: str, mode: str, digest: str | None, stamp: dict | None) -> Outcome:
-    flag = {"off": "", "preview": " --knowledge-base", "live": " --knowledge-base-live"}
-    command = f"{SEED_COMMAND}{flag.get(mode, '')}"
+    if mode in MODES:
+        command = " ".join(filter(None, (SEED_COMMAND, MODES[mode][1])))
+        advice = f"Run `{command}` against production."
+    else:
+        # Guessing a flag could reseed production in the wrong mode.
+        advice = (
+            f"Find out which mode production is meant to run in, then run `{SEED_COMMAND}`."
+        )
     lines = [
         "## :warning: Curriculum seed lags the code",
         "",
-        f"{reason} Run `{command}` against production.",
+        f"{reason} {advice}",
         "",
         f"- Code hash (knowledge base: {mode}): `{digest or '(not computed)'}`",
     ]
     if stamp is not None:
         lines += _stamp_lines(stamp)
     return Outcome(
-        warning=f"Curriculum seed lags the code: {reason} Run {command} against production.",
+        warning=f"Curriculum seed lags the code: {reason} {advice}",
         summary="\n".join(lines),
     )
 
@@ -156,12 +169,12 @@ def compare(stamp: dict | None, hasher: Hasher) -> Outcome:
         warning=None,
         summary=(
             f"Curriculum seed matches the code (hash `{digest}`, knowledge base: {mode}, "
-            f"seeded from commit `{commit[:12]}`{dirty} at {stamp.get('seeded_at', 'unknown')})."
+            f"seeded from commit `{commit}`{dirty} at {stamp.get('seeded_at', 'unknown')})."
         ),
     )
 
 
-def _failed(what: str, error: BaseException) -> Outcome:
+def _unchecked(what: str, error: BaseException) -> Outcome:
     detail = f"{type(error).__name__}: {error}"
     return Outcome(
         warning=f"Curriculum seed check: {what} ({detail}). This is not a mismatch.",
@@ -183,11 +196,11 @@ def check(
     try:
         stamp = read_stamp(run, table=table, region=region, profile=profile)
     except Exception as error:  # noqa: BLE001 - any read failure is only a warning
-        return _failed("The seed stamp could not be read", error)
+        return _unchecked("The seed stamp could not be read", error)
     try:
         return compare(stamp, hasher)
     except Exception as error:  # noqa: BLE001 - nor may a broken seed fail the deploy
-        return _failed("The code's seed hash could not be computed", error)
+        return _unchecked("The code's seed hash could not be computed", error)
 
 
 def _annotation(text: str) -> str:
@@ -220,11 +233,11 @@ def main(
     argv: Sequence[str] | None = None,
     *,
     run: Runner = _aws_cli,
-    code_hash: Hasher = code_hash,
+    hasher: Hasher = code_hash,
 ) -> int:
     args = parse_args(argv)
     outcome = check(
-        run, code_hash, table=args.table, region=args.region, profile=args.profile
+        run, hasher, table=args.table, region=args.region, profile=args.profile
     )
     print(outcome.summary)
     if outcome.warning is not None:

@@ -161,4 +161,4 @@ knowledge base mode the stamp records, and writes the result to the run summary
 (stoa-backend#355). A table that lags the code, or has no stamp, is a warning
 asking for a seed run; a stamp that could not be read is a warning that says so.
 None of them fails the deploy - the seed stays a hand-run step. An operator runs the
-same check with `python scripts/check_curriculum_seed.py --profile stoa`.
+same check with `uv run python scripts/check_curriculum_seed.py --profile stoa`.
