@@ -143,7 +143,8 @@ SETs the fields it owns (`SEED_OWNED_FIELDS`), REMOVEs the owned fields a row no
 longer has a value for, and leaves every other field alone. The star map positions
 `scripts/layout_starmap.py` writes onto the same subject, topic and unit rows are
 among those, so a re-run keeps the map where it was and needs no new layout; only
-stars the run adds need `layout_starmap.py --apply`. The seed is the only writer of
+stars the run adds need `layout_starmap.py --apply`, which keeps every placed star
+where it is and only places the new ones (stoa-backend#376). The seed is the only writer of
 the curriculum structure and its prerequisites - there is no admin route that edits
 them - so a change goes into the repository and is seeded.
 
