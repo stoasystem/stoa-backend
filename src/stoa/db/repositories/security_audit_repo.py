@@ -33,6 +33,10 @@ SAFE_AUDIT_FIELDS = frozenset(
         "actor_id",
         "actor_fingerprint",
         "actor_role",
+        # #383: an operator call names the agent that made it and whether it was
+        # only a rehearsal; the person behind it is `actor_fingerprint`.
+        "agent_client",
+        "dry_run",
         "target_id",
         "target_type",
         "resource_type",
@@ -203,6 +207,15 @@ def _canonical_parts(parts: Sequence[str]) -> bytes:
 
 def _keyed_fingerprint(key: AuthorizationAuditKey, parts: Sequence[str]) -> str:
     return hmac.new(key.secret, _canonical_parts(parts), hashlib.sha256).hexdigest()
+
+
+def operator_principal_fingerprint(key: AuthorizationAuditKey, principal_arn: str) -> str:
+    """The keyed fingerprint an operator call records for the SSO session behind it.
+
+    The session ARN carries the person's address, so the row keeps this instead
+    (#383). To ask whether a row was a given person's, compute it for their ARN.
+    """
+    return _keyed_fingerprint(key, ("operator_principal", principal_arn))
 
 
 def _decision_event_id(
