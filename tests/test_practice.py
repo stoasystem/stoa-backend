@@ -11,7 +11,7 @@ from stoa.routers import practice
 from stoa.services import answer_recording
 from stoa.security.authorization import AuthorizationFacts
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.declared_authorization import get_authorization_fact_repository
 
 
 def _actor(user_id: str = "student-1") -> Actor:
@@ -50,8 +50,7 @@ def test_practice_catalog_is_explicitly_safe_public(monkeypatch):
         if getattr(route, "path", "") == "/curriculum/catalog"
     )
     dependency = route.dependant.dependencies[0].call
-    assert dependency.safe_public is True
-    assert dependency.authorization_specs
+    assert dependency.authorization_declaration.safe_public is True
 
 
 def test_practice_completion_uses_actor_and_authorized_lesson_once(monkeypatch):

@@ -25,7 +25,7 @@ from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.admission import seed_period_active
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations, practice, students
-from stoa.security import route_authorization
+from stoa.security import declared_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import curriculum_service, message_catalog
 from stoa.services.ask_question import _answering
@@ -118,7 +118,7 @@ def profile_client(monkeypatch):
         "updated_at": "2026-07-15T00:00:00Z",
     }
     writes: list[dict] = []
-    monkeypatch.setattr(route_authorization.user_repo, "get_user", lambda user_id, **_k: dict(profile))
+    monkeypatch.setattr(declared_authorization.user_repo, "get_user", lambda user_id, **_k: dict(profile))
     monkeypatch.setattr(students.user_repo, "get_user", lambda user_id, **_k: dict(profile))
 
     def _update(user_id, **kwargs):
@@ -315,7 +315,7 @@ def test_catalog_progress_and_star_map_speak_the_canonical_subject_id(monkeypatc
     _seeded_table(monkeypatch)
     monkeypatch.setattr(practice, "_actor_locale", lambda _actor: "de")
     monkeypatch.setattr(
-        route_authorization.user_repo,
+        declared_authorization.user_repo,
         "get_user",
         lambda user_id, **_kwargs: {"user_id": user_id, "role": "student", "account_status": "active"},
     )

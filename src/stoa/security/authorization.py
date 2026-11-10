@@ -72,7 +72,6 @@ class AuthorizationPurpose(StrEnum):
     SELF_SERVICE = "self_service"
     PARENT_OVERSIGHT = "parent_oversight"
     TEACHER_HELP = "teacher_help"
-    TEACHER_DISPATCH = "teacher_dispatch"
     AI_TEACHER_TOOLS = "ai_teacher_tools"
     LEARNING_ASSIGNMENT = "learning_assignment"
     ASSIGNMENT_AUTOMATION_PREVIEW = "assignment_automation_preview"
@@ -598,18 +597,11 @@ class AuthorizationPolicy:
                 and actor.role is CanonicalRole.PARENT
             ):
                 allowed = True
-            elif purpose in {
-                AuthorizationPurpose.TEACHER_DISPATCH,
-                AuthorizationPurpose.AI_TEACHER_TOOLS,
-            }:
-                capability = {
-                    AuthorizationPurpose.TEACHER_DISPATCH: "teacher_dispatch_operator",
-                    AuthorizationPurpose.AI_TEACHER_TOOLS: "ai_teacher_tools_operator",
-                }[purpose]
+            elif purpose is AuthorizationPurpose.AI_TEACHER_TOOLS:
                 allowed = bool(
                     _matching_grant(
                         actor,
-                        capability,
+                        "ai_teacher_tools_operator",
                         resource,
                         action,
                         purpose,

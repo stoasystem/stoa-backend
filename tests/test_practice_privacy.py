@@ -22,7 +22,7 @@ from stoa.security.authorization import (
     ResourceType,
     operator_capability_decision,
 )
-from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.declared_authorization import get_authorization_fact_repository
 from actor_helpers import install_actor_overrides
 from fakes import student_evidence as fake_evidence
 

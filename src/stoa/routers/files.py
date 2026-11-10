@@ -35,7 +35,6 @@ from stoa.security.declared_authorization import (
     path,
     service_enforced,
 )
-from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_inventory import explicit_route_classification
@@ -66,21 +65,20 @@ _upload_complete_actor = service_enforced(
 )
 
 
+def _upload_not_found() -> AttachmentDecisionError:
+    return AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+
+
 def _owned_attachment(action: AuthorizationAction, kind: str | None = None):
     """The Actor's own live attachment; one that is not there is `upload_not_found`."""
-    check = authorized(ResourceType.ATTACHMENT, action, path("attachment_id"), _OWN, kind=kind)
-
-    async def dependency(**values: object) -> AuthorizedResource:
-        try:
-            return await check(**values)
-        except SecurityDecisionError as error:
-            if error.code is SecurityErrorCode.RESOURCE_NOT_FOUND:
-                raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from error
-            raise
-
-    setattr(dependency, "__signature__", getattr(check, "__signature__"))
-    setattr(dependency, "authorization_declaration", check.authorization_declaration)
-    return dependency
+    return authorized(
+        ResourceType.ATTACHMENT,
+        action,
+        path("attachment_id"),
+        _OWN,
+        kind=kind,
+        not_found=_upload_not_found,
+    )
 
 
 _attachment_read = _owned_attachment(AuthorizationAction.READ)

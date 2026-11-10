@@ -1,6 +1,6 @@
 """Executable registered-route authorization inventory tests."""
 
-from typing import Annotated, Awaitable, Protocol, cast
+from typing import Annotated
 
 import pytest
 from fastapi import APIRouter, Depends, FastAPI
@@ -10,9 +10,16 @@ from pydantic import BaseModel, Field
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
-    AuthorizationSpec,
     ResourceType,
 )
+from stoa.security.declared_authorization import (
+    SELF,
+    STUDENT_SELF,
+    authorized,
+    path,
+    safe_public as safe_public_declaration,
+)
+from stoa.security.identity import CanonicalRole
 from stoa.security.route_inventory import explicit_route_classification
 
 
@@ -29,12 +36,6 @@ SENSITIVE_ROUTE_FAMILIES = {
     "notifications",
 }
 
-
-class _PolicyDependency(Protocol):
-    authorization_specs: tuple[AuthorizationSpec, ...]
-    safe_public: bool
-
-    def __call__(self, student_id: str) -> Awaitable[str]: ...
 
 REAL_NESTED_IDENTIFIER_ROUTES = {
     ("POST", "/questions/{question_id}/reports"): ("question_id",),
@@ -53,13 +54,17 @@ REAL_NESTED_IDENTIFIER_ROUTES = {
 def test_curriculum_answer_resource_and_identifier_are_inventory_compatible():
     from stoa.security.route_inventory import inventory_application
 
-    from stoa.security.route_authorization import authorized_curriculum_answer_dependency
-
     app = FastAPI()
+    answer_read = authorized(
+        ResourceType.CURRICULUM_ANSWER,
+        AuthorizationAction.READ,
+        path("challenge_id"),
+        {role: AuthorizationPurpose.CURRICULUM_ANSWER_READ for role in CanonicalRole},
+    )
 
     @app.get(
         "/practice/curriculum/challenges/{challenge_id}/answer",
-        dependencies=[Depends(authorized_curriculum_answer_dependency())],
+        dependencies=[Depends(answer_read)],
     )
     def answer(challenge_id: str):
         return {"challengeId": challenge_id}
@@ -92,29 +97,14 @@ def test_registered_curriculum_answer_route_uses_executable_narrow_policy():
     ]
 
 
-async def _resolver(resource_id: str):
-    return {"student_id": resource_id}
-
-
 def _policy_dependency(
     resource_type: ResourceType,
     *,
     safe_public: bool = False,
 ):
-    async def dependency(student_id: str):
-        return student_id
-
-    policy_dependency = cast(_PolicyDependency, dependency)
-    policy_dependency.authorization_specs = (
-        AuthorizationSpec(
-            resource_type,
-            AuthorizationAction.READ,
-            AuthorizationPurpose.SELF_SERVICE,
-            _resolver,
-        ),
-    )
-    policy_dependency.safe_public = safe_public
-    return policy_dependency
+    if safe_public:
+        return safe_public_declaration(resource_type)
+    return authorized(resource_type, AuthorizationAction.READ, path("student_id"), STUDENT_SELF)
 
 
 class NestedIdentifierLeaf(BaseModel):
@@ -262,25 +252,6 @@ def test_nested_non_sensitive_control_stays_non_sensitive_and_identifiers_dedupl
     assert inventory[("POST", "/public/safe")].identifiers == ()
     assert inventory[("POST", "/public/safe")].sensitive is False
     assert inventory[("POST", "/public/deduplicated")].identifiers == ("student_id",)
-
-
-def test_safe_public_marker_without_executable_spec_cannot_classify_route():
-    from stoa.security.route_inventory import validate_application_inventory
-
-    app = FastAPI()
-
-    async def metadata_free_dependency(student_id: str):
-        return student_id
-
-    metadata_free_dependency.safe_public = True
-
-    @app.get("/catalog/{student_id}")
-    def endpoint(student_id: str, _: str = Depends(metadata_free_dependency)):
-        return student_id
-
-    failures = validate_application_inventory(app)
-    assert len(failures) == 1
-    assert "no executable authorization" in failures[0].reason
 
 
 @pytest.mark.parametrize(
@@ -509,20 +480,7 @@ def test_event_id_and_push_token_body_mutations_require_actor_owner_policy():
 def test_notification_identifier_rejects_unrelated_executable_spec():
     from stoa.security.route_inventory import validate_application_inventory
 
-    async def resolver(resource_id: str):
-        return {"student_id": resource_id}
-
-    async def wrong_dependency():
-        return None
-
-    wrong_dependency.authorization_specs = (
-        AuthorizationSpec(
-            ResourceType.STUDENT,
-            AuthorizationAction.READ,
-            AuthorizationPurpose.SELF_SERVICE,
-            resolver,
-        ),
-    )
+    wrong_dependency = authorized(ResourceType.STUDENT, AuthorizationAction.READ, SELF, STUDENT_SELF)
     app = FastAPI()
 
     @app.get("/notifications/{event_id}")
@@ -589,23 +547,15 @@ def test_admin_body_target_provider_is_executable_exact_and_projected(monkeypatc
 def test_metadata_on_endpoint_without_dependency_is_rejected():
     from stoa.security.route_inventory import validate_application_inventory
 
-    async def resolver(resource_id: str):
-        return {"student_id": resource_id}
-
     app = FastAPI()
 
     @app.get("/students/{student_id}/metadata-only")
     def metadata_only(student_id: str):
         return {"studentId": student_id}
 
-    metadata_only.authorization_specs = (
-        AuthorizationSpec(
-            ResourceType.STUDENT,
-            AuthorizationAction.READ,
-            AuthorizationPurpose.SELF_SERVICE,
-            resolver,
-        ),
-    )
+    metadata_only.authorization_declaration = authorized(  # type: ignore[attr-defined]
+        ResourceType.STUDENT, AuthorizationAction.READ, path("student_id"), STUDENT_SELF
+    ).authorization_declaration
     failures = validate_application_inventory(app)
     assert any("not attached to a dependency" in failure.reason for failure in failures)
 

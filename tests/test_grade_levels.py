@@ -23,7 +23,7 @@ from fakes.dynamodb import FakeTable, as_stored
 
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import students
-from stoa.security import route_authorization
+from stoa.security import declared_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.main import RequestLocaleMiddleware
 from stoa.services import ask_answer, learning_profile_service, locale_service, message_catalog
@@ -235,7 +235,7 @@ def profile_client(monkeypatch):
     }
     writes: list[dict] = []
     monkeypatch.setattr(
-        route_authorization.user_repo, "get_user", lambda user_id, **_kwargs: dict(profile)
+        declared_authorization.user_repo, "get_user", lambda user_id, **_kwargs: dict(profile)
     )
     monkeypatch.setattr(students.user_repo, "get_user", lambda user_id, **_kwargs: dict(profile))
 
@@ -340,7 +340,7 @@ def test_text_stored_before_the_dropdown_is_still_read(
         "updated_at": "2026-07-15T00:00:00Z",
     }
     monkeypatch.setattr(
-        route_authorization.user_repo, "get_user", lambda user_id, **_kwargs: dict(profile)
+        declared_authorization.user_repo, "get_user", lambda user_id, **_kwargs: dict(profile)
     )
     monkeypatch.setattr(students.user_repo, "get_user", lambda user_id, **_kwargs: dict(profile))
 

@@ -32,7 +32,7 @@ from stoa.deps import get_actor
 from stoa.routers import practice
 from stoa.security.authorization import AuthorizationFacts
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.declared_authorization import get_authorization_fact_repository
 from stoa.services import (
     answer_recording,
     knowledge_map_service,

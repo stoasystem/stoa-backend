@@ -40,7 +40,7 @@ from stoa.security.authorization import (
 from stoa.security.declared_authorization import LIVE, authorized, path, service_enforced
 from stoa.security.identity import Actor
 from stoa.security.request_correlation import get_request_correlation_id
-from stoa.security.route_authorization import STUDENT_SELF
+from stoa.security.declared_authorization import STUDENT_SELF
 from stoa.security.route_inventory import explicit_route_classification
 from stoa.services import rate_limit, upload_code_service
 

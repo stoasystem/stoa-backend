@@ -53,7 +53,7 @@ from stoa.security.attachment_errors import (
     AttachmentErrorCode,
 )
 from stoa.security.request_correlation import get_request_correlation_id
-from stoa.security.route_authorization import CONVERSATION_CONTENT_READ, STUDENT_SELF
+from stoa.security.declared_authorization import CONVERSATION_CONTENT_READ, STUDENT_SELF
 from stoa.services import (
     ask_question,
     attachment_service,

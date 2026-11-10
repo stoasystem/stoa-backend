@@ -443,7 +443,7 @@ def test_a_teacher_assigned_to_the_student_cannot_write_a_request_they_do_not_ho
     # it but not write it. The write they used to get could strand a request
     # offered to someone else, or reopen a resolved one.
     from stoa.security.authorization import AuthorizationFacts, TeacherAuthorizationFacts
-    from stoa.security.route_authorization import get_authorization_fact_repository
+    from stoa.security.declared_authorization import get_authorization_fact_repository
 
     _dispatch_to(table, TEACHER)
     if held:
@@ -732,7 +732,7 @@ def test_a_conversation_the_students_deletion_tombstoned_counts_as_gone(table):
 
 def _student_client() -> TestClient:
     from stoa.routers import conversations
-    from stoa.security.route_authorization import get_authorization_fact_repository
+    from stoa.security.declared_authorization import get_authorization_fact_repository
 
     app = FastAPI()
     app.include_router(conversations.router, prefix="/conversations")

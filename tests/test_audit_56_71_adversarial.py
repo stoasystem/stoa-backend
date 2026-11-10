@@ -20,7 +20,7 @@ from fakes.dynamodb import FakeTable
 from stoa.db import table as db_table
 from stoa.db.repositories import practice_repo
 from stoa.routers import practice
-from stoa.security import route_authorization
+from stoa.security import declared_authorization
 from stoa.services import curriculum_service, student_evidence
 from stoa.services import knowledge_map_service as km
 from stoa.services import knowledge_mastery_service as mastery
@@ -92,7 +92,7 @@ def _practice_client(
     app.include_router(practice.router, prefix="/practice")
     install_actor_overrides(app, user)
     monkeypatch.setattr(
-        route_authorization.user_repo,
+        declared_authorization.user_repo,
         "get_user",
         lambda user_id, **_kw: {
             "user_id": user_id,

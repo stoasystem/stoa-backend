@@ -15,7 +15,7 @@ from stoa.security.declared_authorization import authorized, path
 from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import Actor
 from stoa.security.request_correlation import get_request_correlation_id
-from stoa.security.route_authorization import QUESTION_CONTENT_READ
+from stoa.security.declared_authorization import QUESTION_CONTENT_READ
 from stoa.services import moderation_service
 
 router = APIRouter()

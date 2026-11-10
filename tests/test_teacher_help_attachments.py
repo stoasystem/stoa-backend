@@ -26,7 +26,7 @@ from fakes.learning_session import seed_message
 from stoa import aws
 from stoa.aws import Kind
 from stoa.routers import files, teachers
-from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.declared_authorization import get_authorization_fact_repository
 from stoa.services import help_requests
 from test_chat_help_request_lifecycle import (
     CONV,

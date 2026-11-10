@@ -118,7 +118,7 @@ def _speaks(table: FakeTable, teacher: str, locale: str) -> None:
 
 def _student() -> TestClient:
     from stoa.routers import conversations
-    from stoa.security.route_authorization import get_authorization_fact_repository
+    from stoa.security.declared_authorization import get_authorization_fact_repository
 
     app = FastAPI()
     app.include_router(conversations.teacher_help_router, prefix="/teacher-help")

@@ -81,7 +81,7 @@ def _request_writes(table: FakeTable) -> tuple[int, int]:
 
 def _student() -> TestClient:
     from stoa.routers import conversations
-    from stoa.security.route_authorization import get_authorization_fact_repository
+    from stoa.security.declared_authorization import get_authorization_fact_repository
 
     app = FastAPI()
     app.include_router(conversations.router, prefix="/conversations")
@@ -363,7 +363,7 @@ def test_the_status_route_reports_a_withdrawn_request(table) -> None:
 
 def test_another_student_cannot_withdraw_it(table) -> None:
     from stoa.routers import conversations
-    from stoa.security.route_authorization import get_authorization_fact_repository
+    from stoa.security.declared_authorization import get_authorization_fact_repository
 
     app = FastAPI()
     app.include_router(conversations.teacher_help_router, prefix="/teacher-help")
@@ -423,7 +423,7 @@ def test_an_offer_made_by_a_sweep_meanwhile_is_withdrawn_with_the_request(
 
 def test_a_parent_cannot_withdraw_their_childs_request(table) -> None:
     from stoa.routers import conversations
-    from stoa.security.route_authorization import get_authorization_fact_repository
+    from stoa.security.declared_authorization import get_authorization_fact_repository
     from stoa.services import current_relationship, parent_link_service
 
     parent = "parent-of-student-66"

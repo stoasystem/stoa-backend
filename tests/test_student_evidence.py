@@ -22,7 +22,7 @@ from fakes import student_evidence as fake_evidence
 from fakes.dynamodb import FakeTable
 from stoa.db import table as db_table
 from stoa.routers import practice
-from stoa.security import route_authorization
+from stoa.security import declared_authorization
 from stoa.services import (
     adaptive_learning_service,
     curriculum_service,
@@ -121,7 +121,7 @@ def _client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     install_actor_overrides(app, {"sub": STUDENT, "role": "student"})
     monkeypatch.setattr(practice, "_actor_locale", lambda _actor: "de")
     monkeypatch.setattr(
-        route_authorization.user_repo,
+        declared_authorization.user_repo,
         "get_user",
         lambda user_id, **_kw: {"user_id": user_id, "role": "student", "account_status": "active"},
     )
