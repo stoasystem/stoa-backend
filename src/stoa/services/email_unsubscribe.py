@@ -36,6 +36,7 @@ from urllib.parse import quote
 from stoa import config
 from stoa.config import validate_authorization_audit_keyring
 from stoa.services import locale_service, message_catalog
+from stoa.services.email_layout import FOOTER_MARK
 from stoa.services.notification_errors import NotificationErrorCode, NotificationViolation
 
 _KEY_LABEL = b"stoa.email-unsubscribe.v1"
@@ -139,13 +140,20 @@ def footer_html(user_id: str, kind: EmailKind, locale: str | None) -> str:
     action = escape(message_catalog.text("email.unsubscribe.action", lang))
     link = escape(page_url(user_id, kind), quote=True)
     return (
-        '<p style="font-size:12px;color:#6b7280">'
-        f'{reason} <a href="{link}">{action}</a></p>'
+        '<p style="margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;">'
+        f'{reason} <a href="{link}" style="color:#8a817c;">{action}</a></p>'
     )
 
 
 def with_footer(html: str, footer: str) -> str:
-    """The footer at the end of the body: before `</body>` when there is one."""
+    """The unsubscribe line in the email's footer.
+
+    An email in the STOA frame marks where its footer ends (#374); anything else
+    takes the line before `</body>`, or at the very end.
+    """
+    mark = html.rfind(FOOTER_MARK)
+    if mark != -1:
+        return html[:mark] + footer + html[mark:]
     index = html.lower().rfind("</body>")
     if index == -1:
         return html + footer

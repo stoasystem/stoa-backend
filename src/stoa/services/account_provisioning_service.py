@@ -551,6 +551,7 @@ def _issue_invitation(
                 activation_token=token,
                 expires_at=expires_at.isoformat(),
                 full_name=full_name,
+                role=role,
             )
             delivered = True
         except Exception:

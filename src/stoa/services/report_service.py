@@ -2,7 +2,6 @@
 
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
-from html import escape
 from itertools import islice
 import json
 import logging
@@ -25,6 +24,7 @@ from stoa.db.repositories import (
 )
 from stoa.services import (
     current_relationship,
+    email_layout,
     locale_service,
     message_catalog,
     notification_service,
@@ -654,63 +654,75 @@ def render_weekly_report_html(
     *,
     locale: str | None = None,
 ) -> str:
-    """The report a parent is emailed, its frame in `locale` (the default when None).
+    """The report a parent is emailed, in the STOA frame (#374), in `locale`.
 
     Only the frame is translated here; the summary, recommendations and topics are
-    generated content and arrive in whatever language they were generated in.
+    generated content and arrive in whatever language they were generated in. The
+    unsubscribe line is added when the report is sent (#363), so the stored copy
+    can be resent as it is.
     """
     lang = locale or locale_service.DEFAULT_LOCALE
 
     def copy(key: str, **values: Any) -> str:
-        return escape(message_catalog.text(f"email.weekly_report.{key}", lang, **values))
+        return message_catalog.text(f"email.weekly_report.{key}", lang, **values)
 
     student = payload.get("student", {})
     week = payload.get("week", {})
-    student_name = student.get("name") or message_catalog.text(
-        "email.weekly_report.student_fallback", lang
-    )
-    week_range = _week_range_text(week, lang)
+    student_name = student.get("name") or copy("student_fallback")
     recommendations = generated_content.get("recommendations", [])
-    weak_topics = generated_content.get("weakTopics", [])
-    portal_link = _parent_portal_link(student.get("id", ""), week.get("start", ""))
     if not isinstance(recommendations, list):
         recommendations = [str(recommendations)]
-
-    recommendation_items = "".join(f"<li>{escape(str(item))}</li>" for item in recommendations)
-    weak_topic_items = "".join(
-        f"<li><strong>{escape(str(topic.get('topic', '')))}</strong>: {escape(str(topic.get('note', '')))}</li>"
-        for topic in weak_topics
-    )
+    weak_topics = generated_content.get("weakTopics", [])
     teacher_note = generated_content.get("teacherNote")
-    teacher_note_html = (
-        f"<p><strong>{copy('teacher_note')}</strong> {escape(teacher_note)}</p>"
-        if teacher_note
-        else ""
-    )
 
-    return f"""<!doctype html>
-<html lang="{escape(lang, quote=True)}">
-  <body>
-    <h1>{copy('title', student=student_name)}</h1>
-    <p><strong>{copy('week')}</strong> {escape(week_range)}</p>
-    <p>{escape(str(generated_content.get("summary", "")))}</p>
-    <h2>{copy('recommendations')}</h2>
-    <ul>{recommendation_items}</ul>
-    <h2>{copy('weak_topics')}</h2>
-    <ul>{weak_topic_items}</ul>
-    {teacher_note_html}
-    <p><a href="{escape(portal_link)}">{copy('portal_link')}</a></p>
-  </body>
-</html>"""
+    blocks: list[email_layout.Block] = [
+        email_layout.Paragraph(copy("intro")),
+        email_layout.LabeledParagraph(copy("week"), _week_range_text(week, lang)),
+        email_layout.Paragraph(str(generated_content.get("summary", ""))),
+    ]
+    if recommendations:
+        blocks += [
+            email_layout.Subheading(copy("recommendations")),
+            email_layout.Bullets(tuple(str(item) for item in recommendations)),
+        ]
+    if weak_topics:
+        blocks += [
+            email_layout.Subheading(copy("weak_topics")),
+            email_layout.Items(
+                tuple(
+                    (str(topic.get("topic", "")), str(topic.get("note", "")))
+                    for topic in weak_topics
+                )
+            ),
+        ]
+    if teacher_note:
+        blocks.append(email_layout.LabeledParagraph(copy("teacher_note"), str(teacher_note)))
+    blocks.append(
+        email_layout.Action(
+            copy("portal_link"),
+            _parent_portal_link(student.get("id", ""), week.get("start", "")),
+        )
+    )
+    return email_layout.render(
+        subject=copy("subject", student=student_name),
+        title=copy("title", student=student_name),
+        greeting=email_layout.greeting((payload.get("parent") or {}).get("name"), lang),
+        blocks=blocks,
+        locale=lang,
+        footer_reason=None,
+    ).html
 
 
 def _week_range_text(week: dict[str, Any], locale: str) -> str:
     start, end = week.get("start"), week.get("end")
     if start and end:
         return message_catalog.text(
-            "email.weekly_report.week_range", locale, start=start, end=end
+            "email.weekly_report.week_range",
+            locale,
+            start=email_layout.format_date(start, locale),
+            end=email_layout.format_date(end, locale),
         )
-    return str(start or end or "")
+    return email_layout.format_date(start or end or "", locale)
 
 
 def _parse_iso_datetime(value: Any) -> datetime | None:
