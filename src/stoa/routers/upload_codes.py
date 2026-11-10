@@ -16,7 +16,8 @@ from fastapi.responses import StreamingResponse
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.deps import get_actor
 from stoa.models.upload_code import (
     UploadCodeCompleteRequest,
@@ -79,7 +80,7 @@ def _source_digest(request: Request) -> str:
 async def issue_upload_code(
     authorized: AuthorizedResource = Depends(_conversation_respond),
     actor: Actor = Depends(get_actor),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """A one-time code a phone can put one image into this conversation with.
@@ -99,7 +100,7 @@ async def read_upload_code(
     code_id: str,
     authorized: AuthorizedResource = Depends(_conversation_read),
     actor: Actor = Depends(get_actor),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Where the phone has got to; `uploadId` to attach once the image has passed."""
@@ -113,7 +114,7 @@ async def preview_upload_code_photo(
     code_id: str,
     authorized: AuthorizedResource = Depends(_conversation_read),
     actor: Actor = Depends(get_actor),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """The photo the phone put in, once it has passed, for the student to confirm.
@@ -141,7 +142,7 @@ async def preview_upload_code_photo(
 )
 async def issue_unbound_upload_code(
     actor: Actor = Depends(get_actor),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """A one-time code a phone can put one image in with, before there is a conversation.
@@ -172,7 +173,7 @@ _reserved_upload_preview = service_enforced(
 async def read_unbound_upload_code(
     upload_id: str,
     actor: Actor = Depends(_reserved_upload_status),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Where the phone has got with a code made for no conversation, by its upload."""
@@ -183,7 +184,7 @@ async def read_unbound_upload_code(
 async def preview_unbound_upload_code_photo(
     upload_id: str,
     actor: Actor = Depends(_reserved_upload_preview),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """The photo the phone put in, once it has passed, for the student to confirm."""
@@ -208,7 +209,7 @@ async def preview_unbound_upload_code_photo(
 async def redeem_upload_code(
     body: UploadCodeRedeemRequest,
     request: Request,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Spend a code on one image upload into the conversation it was made in."""
@@ -226,7 +227,7 @@ async def sign_upload_code_part(
     part_number: int,
     body: UploadCodePartRequest,
     request: Request,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Sign the URL the phone puts one part on, straight to S3 (ADR-004)."""
@@ -247,7 +248,7 @@ async def sign_upload_code_part(
 async def complete_upload_code(
     body: UploadCodeCompleteRequest,
     request: Request,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Finish the upload; the image is moderated before it counts (#138)."""

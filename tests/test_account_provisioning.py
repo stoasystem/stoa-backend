@@ -754,14 +754,15 @@ def test_半途失败的账号无法被继续推进(
 def _password_claim_app(provider: RecordingProvider) -> Any:
     from fastapi import FastAPI
 
-    from stoa.config import Settings, get_settings
+    from stoa.config import Settings
+    from stoa import config
     from stoa.routers import auth as auth_router
 
     app = FastAPI()
     app.include_router(auth_router.router, prefix="/auth")
-    app.dependency_overrides[get_settings] = lambda: Settings(
+    config.install(Settings(
         cognito_user_pool_id="eu-central-2_test", aws_region="eu-central-2"
-    )
+    ))
     app.dependency_overrides[auth_router.get_account_identity_provider] = lambda: provider
     return app
 

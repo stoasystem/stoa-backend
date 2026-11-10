@@ -14,7 +14,8 @@ import pytest
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db.repositories import attachment_repo
 from stoa.deps import get_actor
 from stoa.models import attachment as attachment_models
@@ -417,9 +418,9 @@ def _client(
     app.include_router(files.router, prefix="/files")
     app.dependency_overrides[get_actor] = lambda: actor or _actor()
     aws.install({Kind.S3: s3 if s3 is not None else object()})
-    app.dependency_overrides[get_settings] = lambda: Settings(
+    config.install(Settings(
         s3_images_bucket=PRIVATE_CANARIES[0]
-    )
+    ))
     return TestClient(app)
 
 

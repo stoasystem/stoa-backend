@@ -11,7 +11,7 @@ from botocore.config import Config
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import get_settings
+from stoa import config
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "stoa"
 
@@ -97,7 +97,7 @@ def test_an_installed_double_is_returned_and_the_request_recorded() -> None:
     [request] = aws.requests()
     assert request.kind is Kind.SES
     assert request.service == "ses"
-    assert request.region == get_settings().aws_region
+    assert request.region == config.settings().aws_region
 
 
 def test_installs_add_up() -> None:
@@ -147,15 +147,15 @@ def test_api_region_kinds(kind: Kind, service: str) -> None:
     aws.install({kind: object()})
     aws.client(kind)
     [request] = aws.requests()
-    assert (request.service, request.region) == (service, get_settings().aws_region)
+    assert (request.service, request.region) == (service, config.settings().aws_region)
 
 
 def test_bounded_configs_are_kept() -> None:
     reminder = aws.KINDS[Kind.SES_DISPATCH_REMINDER].config
     generation = aws.KINDS[Kind.LAMBDA_GENERATION].config
-    for config in (reminder, generation):
-        assert (config.connect_timeout, config.read_timeout) == (2, 3)
-        assert config.retries == {"max_attempts": 1, "mode": "standard"}
+    for bounded in (reminder, generation):
+        assert (bounded.connect_timeout, bounded.read_timeout) == (2, 3)
+        assert bounded.retries == {"max_attempts": 1, "mode": "standard"}
 
 
 # ── Real clients ──────────────────────────────────────────────────────────────
@@ -187,7 +187,7 @@ def test_building_a_real_client_leaves_the_kinds_config_as_written(credentials: 
 
 
 def test_a_presigned_url_names_the_buckets_regional_virtual_host(credentials: None) -> None:
-    region = get_settings().aws_region
+    region = config.settings().aws_region
     url = aws.client(Kind.S3_PRESIGN).generate_presigned_url(
         "put_object", Params={"Bucket": "stoa-images", "Key": "a/b.png"}, ExpiresIn=60
     )
@@ -200,11 +200,11 @@ def test_a_presigned_url_names_the_buckets_regional_virtual_host(credentials: No
 def test_the_moderation_client_keeps_its_region_timeouts_and_retries(credentials: None) -> None:
     moderation = aws.client(Kind.REKOGNITION_MODERATION)
 
-    assert moderation.meta.region_name == get_settings().image_moderation_region
-    config = moderation.meta.config
-    assert (config.connect_timeout, config.read_timeout) == (2, 5)
-    assert config.retries["mode"] == "standard"
-    assert config.retries["total_max_attempts"] == 2
+    assert moderation.meta.region_name == config.settings().image_moderation_region
+    built = moderation.meta.config
+    assert (built.connect_timeout, built.read_timeout) == (2, 5)
+    assert built.retries["mode"] == "standard"
+    assert built.retries["total_max_attempts"] == 2
 
 
 def test_the_websocket_client_talks_to_its_endpoint(credentials: None) -> None:

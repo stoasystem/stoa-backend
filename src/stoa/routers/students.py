@@ -26,7 +26,7 @@ from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.declared_authorization import SELF, authorized, path
 from stoa.security.declared_authorization import STUDENT_CONTENT_READ, STUDENT_SELF
-from stoa.config import settings
+from stoa import config
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
 from stoa.services import (
     allowance_service,
@@ -445,7 +445,7 @@ async def get_my_entitlement(
     """
     entitlement = entitlement_service.resolve_student_entitlement(
         actor.user_id,
-        settings=settings,
+        settings=config.settings(),
         student_profile=dict(user_repo.get_user(actor.user_id) or {}),
     )
     limits = entitlement.get("limits") or {}
@@ -464,7 +464,7 @@ async def get_my_entitlement(
             daysLeft=period.get("daysLeft"),
             paidBy=period.get("paidBy"),
         ),
-        renewalContactEmail=settings.renewal_contact_email,
+        renewalContactEmail=config.settings().renewal_contact_email,
     )
 
 

@@ -13,7 +13,7 @@ from typing import Mapping
 
 import boto3
 
-from stoa.config import settings
+from stoa import config
 from stoa.services.bedrock_token_count_service import (
     ProviderTokenCountUnavailable,
     RUNTIME_ACTION,
@@ -60,10 +60,10 @@ def _git_source_sha() -> str:
 
 
 def _configuration_values() -> tuple[str, str, str, str]:
-    inference_profile_id = settings.bedrock_model_id.strip()
+    inference_profile_id = config.settings().bedrock_model_id.strip()
     model_id = foundation_model_id_for_profile(inference_profile_id)
-    region = settings.aws_region.strip()
-    environment = settings.environment.strip()
+    region = config.settings().aws_region.strip()
+    environment = config.settings().environment.strip()
     if not region or not environment:
         raise PreflightVerificationError("configuration_unavailable")
     return environment, region, model_id, inference_profile_id

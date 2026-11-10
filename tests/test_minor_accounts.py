@@ -23,13 +23,13 @@ from audit_helpers import MemoryAuthorizationAuditSink
 from test_account_provisioning import FakeAccountTable, RecordingProvider
 from test_parent_student_links import FakeLinkTable
 
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db.repositories import (
     parent_link_repo,
     user_repo,
 )
 from stoa.deps import get_actor, get_authorization_audit_sink
-from stoa.models import user as user_model
 from stoa.routers import students
 from stoa.security.authorization import CurrentAuthorizationFactRepository
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -450,7 +450,7 @@ def test_成年阈值默认是十八岁() -> None:
     # 18 is written out by hand here. Asserting against the constant instead
     # would make this agree with whatever the constant happens to say.
     assert Settings().adult_age_years == 18
-    assert get_settings().adult_age_years == 18
+    assert config.settings().adult_age_years == 18
 
 
 def test_成年阈值来自配置而不是写死在判定里(
@@ -467,8 +467,8 @@ def test_成年阈值来自配置而不是写死在判定里(
     )
     assert code == "link_requires_administrator"
 
-    lowered = get_settings().model_copy(update={"adult_age_years": 16})
-    monkeypatch.setattr(user_model, "get_settings", lambda: lowered)
+    lowered = config.settings().model_copy(update={"adult_age_years": 16})
+    config.install(lowered)
 
     parent_link_service.request_link(
         requester_id="student-b", counterpart_id="parent-a", now=NOW

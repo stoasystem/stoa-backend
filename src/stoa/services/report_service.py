@@ -14,7 +14,7 @@ from boto3.dynamodb.conditions import Attr, Key
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import settings
+from stoa import config
 from stoa.db import table as db_table
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -282,7 +282,7 @@ def generate_weekly_report_content(
     body = json.dumps(
         {
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": min(settings.bedrock_max_tokens, 1200),
+            "max_tokens": min(config.settings().bedrock_max_tokens, 1200),
             "temperature": 0.2,
             "system": _REPORT_SYSTEM_PROMPT,
             "messages": [
@@ -295,7 +295,7 @@ def generate_weekly_report_content(
     )
 
     try:
-        response = client.invoke_model(modelId=settings.bedrock_model_id, body=body)
+        response = client.invoke_model(modelId=config.settings().bedrock_model_id, body=body)
         result = json.loads(response["body"].read())
         raw_text = result["content"][0]["text"]
         return parse_generated_report_json(raw_text)

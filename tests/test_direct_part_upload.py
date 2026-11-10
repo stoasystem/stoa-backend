@@ -27,7 +27,8 @@ import pytest
 from stoa import aws
 from stoa.aws import Kind
 from stoa.db import table as db_table
-from stoa.config import IMAGE_MAX_BYTES, Settings, get_settings
+from stoa.config import IMAGE_MAX_BYTES, Settings
+from stoa import config
 from stoa.deps import get_actor
 from stoa.routers import files
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -74,7 +75,7 @@ class _Api:
             Kind.S3_PRESIGN: s3,
             Kind.REKOGNITION_MODERATION: FakeRekognition(),
         })
-        app.dependency_overrides[get_settings] = lambda: Settings(s3_images_bucket=BUCKET)
+        config.install(Settings(s3_images_bucket=BUCKET))
         self.client = TestClient(app)
         self.request_sizes: list[int] = []
         self.client.event_hooks["request"].append(
@@ -211,7 +212,7 @@ def test_the_production_signer_uses_the_regional_endpoint_and_signs_the_part(mon
     # Real clients, built from these credentials (the fixture installs nothing).
     aws.install(None)
     signer = aws.client(Kind.S3_PRESIGN)
-    region = get_settings().aws_region
+    region = config.settings().aws_region
 
     url = signer.generate_presigned_url(
         ClientMethod="upload_part",

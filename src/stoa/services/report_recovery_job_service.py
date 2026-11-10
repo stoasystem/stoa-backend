@@ -19,7 +19,7 @@ from uuid import uuid4
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import settings
+from stoa import config
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import report_repo
 from stoa.rule_violation import registered_code, render_message
@@ -394,7 +394,7 @@ def invoke_weekly_report_job(job_id: str, *, job_type: str = RESEND_JOB_TYPE) ->
     payload = {"job": _worker_event_name(job_type), "job_id": job_id}
     client = aws.client(Kind.LAMBDA)
     response = client.invoke(
-        FunctionName=settings.weekly_report_function_name,
+        FunctionName=config.settings().weekly_report_function_name,
         InvocationType="Event",
         Payload=json.dumps(payload, separators=(",", ":")).encode(),
     )

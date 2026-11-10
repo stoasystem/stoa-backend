@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from stoa import config
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
 from stoa.db.repositories import billing_fact_repo
 from stoa.services import subscription_service
 from stoa.security.route_inventory import explicit_route_classification
@@ -108,7 +108,7 @@ def _construct_event_then_register_provider_event(
 @explicit_route_classification("public", "provider-signature authenticated webhook")
 async def handle_stripe_webhook(
     request: Request,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ) -> dict[str, Any]:
     """Receive Stripe webhook events using the raw request body.
 

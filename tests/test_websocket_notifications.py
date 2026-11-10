@@ -1,6 +1,7 @@
 import hashlib
 
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+from stoa import config
 
 from stoa.config import Settings
 from stoa.services import notification_service, websocket_service
@@ -337,7 +338,7 @@ def test_readiness_status_distinguishes_live_rollout_modes(monkeypatch):
     ]
 
     for settings_kwargs, expected_mode in scenarios:
-        monkeypatch.setattr(websocket_service, "settings", Settings(**settings_kwargs))
+        config.install(Settings(**settings_kwargs))
 
         status = websocket_service.readiness_status()
 

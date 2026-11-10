@@ -11,7 +11,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from stoa.config import settings
+from stoa import config
 from stoa.db.repositories import practice_repo
 from stoa.deps import get_actor
 from stoa.security.authorization import (
@@ -179,9 +179,9 @@ def _optional_string_field(
 
 
 def _hint_limit_for_student(student_id: str) -> int:
-    entitlement = entitlement_service.resolve_student_entitlement(student_id, settings=settings)
+    entitlement = entitlement_service.resolve_student_entitlement(student_id, settings=config.settings())
     limits = entitlement.get("limits") or {}
-    return int(limits.get("dailyHintLimit") or settings.daily_hint_limit)
+    return int(limits.get("dailyHintLimit") or config.settings().daily_hint_limit)
 
 
 # ── Response helpers ────────────────────────────────────────────────────────

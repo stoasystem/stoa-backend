@@ -9,7 +9,8 @@ import pytest
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.main import app
 from stoa.models import error as error_models
 from stoa.routers import auth
@@ -226,7 +227,7 @@ def _auth_settings() -> Settings:
 def _auth_client() -> TestClient:
     bare = FastAPI()
     bare.include_router(auth.router, prefix="/auth")
-    bare.dependency_overrides[get_settings] = _auth_settings
+    config.install(_auth_settings())
     return TestClient(bare)
 
 

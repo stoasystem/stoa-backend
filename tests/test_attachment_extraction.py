@@ -15,6 +15,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 import pytest
 
 from stoa.config import Settings
+from stoa import config
 from stoa.security.attachment_errors import AttachmentErrorCode
 from stoa.services import ai_service, ask_answer, attachment_service
 from stoa.services.attachment_service import extract_message_attachment_context
@@ -362,7 +363,7 @@ def test_ai_private_telemetry_excludes_input_output_and_provider_canaries(
         "PROVIDER-REQUEST-ID-PRIVATE-CANARY",
         "ANSWER-OUTPUT-PRIVATE-CANARY",
         "bedrock-model-private",
-        ai_service.settings.bedrock_model_id,
+        config.settings().bedrock_model_id,
     ):
         assert canary not in rendered
     assert "event_category=prompt_injection_neutralized" in rendered

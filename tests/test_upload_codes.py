@@ -35,9 +35,10 @@ from PIL import Image
 import pytest
 
 from stoa import aws
+from stoa import config
 from stoa.aws import Kind
 from stoa.config import UPLOAD_INTENT_TTL_SECONDS, Settings
-from stoa.deps import get_actor, get_authorization_audit_sink, get_settings
+from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations, upload_codes
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -158,7 +159,7 @@ class _Api:
             Kind.S3_PRESIGN: self.s3,
             Kind.REKOGNITION_MODERATION: self.moderation,
         })
-        app.dependency_overrides[get_settings] = lambda: self.settings
+        config.install(self.settings)
         self.client = TestClient(app, raise_server_exceptions=False)
 
     # -- the computer --------------------------------------------------------------

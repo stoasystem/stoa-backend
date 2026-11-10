@@ -18,7 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from stoa.config import Settings, settings
+from stoa.config import Settings
+from stoa import config
 from stoa.routers import auth
 from stoa.services import rate_limit
 from stoa.services.rate_limit import ProxyTopologyError, client_source_digest
@@ -52,7 +53,7 @@ class _StubRequest:
 
 
 def test_出厂声明的是零层代理() -> None:
-    assert settings.trusted_proxy_hops == 0
+    assert config.settings().trusted_proxy_hops == 0
     assert Settings.model_fields["trusted_proxy_hops"].default == 0
 
 
@@ -153,7 +154,7 @@ def test_层数不是非负整数_拒绝() -> None:
 
 def test_不传层数时用配置声明的那个值() -> None:
     assert client_source_digest(_StubRequest("198.51.100.7")) == client_source_digest(
-        _StubRequest("198.51.100.7"), trusted_proxy_hops=settings.trusted_proxy_hops
+        _StubRequest("198.51.100.7"), trusted_proxy_hops=config.settings().trusted_proxy_hops
     )
 
 

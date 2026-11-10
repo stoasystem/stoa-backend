@@ -40,7 +40,8 @@ from typing import Any
 import boto3
 from botocore.config import Config
 
-from stoa.config import Settings, get_settings
+from stoa import config as configuration
+from stoa.config import Settings
 
 
 class Kind(StrEnum):
@@ -177,7 +178,7 @@ def client(
     spec = KINDS[kind]
     if spec.needs_endpoint and not endpoint_url:
         raise ValueError(f"an AWS client of kind {kind.value!r} needs an endpoint_url")
-    resolved_region = region or spec.region(get_settings())
+    resolved_region = region or spec.region(configuration.settings())
     resolved_config = _merged(spec.config, config)
     installed = _installed
     if installed is not None:

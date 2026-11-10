@@ -13,7 +13,7 @@ from uuid import uuid4
 from stoa import aws
 from stoa.aws import Kind
 from stoa.db import table as db_table
-from stoa.config import get_settings
+from stoa import config
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -609,7 +609,7 @@ def _identity_cross_account_branch(
 
 
 def _revoke_provider_identity(user_id: str, generation: int, username: str) -> None:
-    settings = get_settings()
+    settings = config.settings()
     provider = aws.client(Kind.COGNITO)
     account_deletion_repo.require_deletion_account_fence(user_id, generation)
     try:
@@ -709,7 +709,7 @@ def _question_ocr_session_branch(
 def _attachments_branch(
     *, command: Mapping[str, Any], previous: Mapping[str, Any]
 ) -> BranchResult:
-    settings = get_settings()
+    settings = config.settings()
     result = attachment_service.purge_student_attachments(
         str(command["user_id"]),
         account_fence_generation=int(command["generation"]),
@@ -782,7 +782,7 @@ def _moderation_support_branch(
             if item.get("SK") == "SUMMARY" and item.get("image_object_key"):
                 # A refused image goes before the case that points to it (#139);
                 # if it cannot, the case keeps its coordinates for the next pass.
-                settings = get_settings()
+                settings = config.settings()
                 s3 = s3 or aws.client(Kind.S3)
                 moderation_service.delete_case_image(item, s3=s3, settings=settings)
             moderation_repo.scrub_moderation_row(
@@ -913,7 +913,7 @@ def _report_artifacts_branch(
         str(command["user_id"]), cursor=cursor, maximum_pages=1
     )
     s3 = aws.client(Kind.S3)
-    bucket = get_settings().report_artifacts_bucket
+    bucket = config.settings().report_artifacts_bucket
     debt: dict[str, int] = {}
     processed = 0
     selected = 0
@@ -994,7 +994,7 @@ def _conversation_messages_branch(
     debt: dict[str, int] = {}
     processed = 0
     now_iso = datetime.now(UTC).isoformat()
-    settings = get_settings()
+    settings = config.settings()
     s3 = aws.client(Kind.S3)
     released_conversations: set[str] = set()
     for item in page.items:

@@ -13,7 +13,8 @@ from typing import Any
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, settings
+from stoa.config import Settings
+from stoa import config
 from stoa.services import moderation_service
 
 
@@ -42,7 +43,7 @@ def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, int]:
     s3 = aws.client(Kind.S3)
     summary = run(
         s3=s3,
-        settings_obj=settings,
+        settings_obj=config.settings(),
         now=_now(),
         limit=min(max(int(event.get("limit", 100)), 1), 500),
     )

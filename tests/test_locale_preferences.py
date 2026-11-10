@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.deps import get_current_user
 from stoa.routers import auth
 from stoa.services import locale_service
@@ -23,7 +24,7 @@ def _settings() -> Settings:
 def _client(user: dict | None = None) -> TestClient:
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
-    app.dependency_overrides[get_settings] = _settings
+    config.install(_settings())
     app.dependency_overrides[get_current_user] = lambda: user or {"sub": "student-1", "role": "student"}
     return TestClient(app)
 

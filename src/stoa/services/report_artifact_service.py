@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import settings
+from stoa import config
 from stoa.db.repositories import account_deletion_repo, report_repo
 
 REPORT_ARTIFACT_PREFIX = "weekly-reports"
@@ -73,7 +73,7 @@ def write_report_artifacts(
 ) -> None:
     """Write JSON then HTML report artifacts to the private reports bucket."""
     s3 = aws.client(Kind.S3)
-    bucket = settings.report_artifacts_bucket
+    bucket = config.settings().report_artifacts_bucket
     s3.put_object(
         Bucket=bucket,
         Key=keys.json_key,
@@ -108,7 +108,7 @@ def write_fenced_report_artifacts(
 ) -> dict[str, dict[str, str]]:
     """Write exact versioned artifacts only through durable owner intents."""
     s3 = aws.client(Kind.S3)
-    bucket = settings.report_artifacts_bucket
+    bucket = config.settings().report_artifacts_bucket
     operation = operation_id or uuid4().hex
     now_iso = datetime.now(UTC).isoformat()
     bodies = (
@@ -165,7 +165,7 @@ def write_fenced_report_artifacts(
 def delete_report_artifacts(keys: ReportArtifactKeys) -> None:
     """Best-effort delete both JSON and HTML artifacts from the private reports bucket."""
     s3 = aws.client(Kind.S3)
-    bucket = settings.report_artifacts_bucket
+    bucket = config.settings().report_artifacts_bucket
     for key in (keys.json_key, keys.html_key):
         _delete_report_artifact(bucket, key, s3_client=s3)
 
@@ -174,7 +174,7 @@ def get_report_json(s3_key: str) -> dict[str, Any]:
     """Read and decode a JSON report artifact from the private reports bucket."""
     key = _validate_json_artifact_key(s3_key)
     s3 = aws.client(Kind.S3)
-    response = s3.get_object(Bucket=settings.report_artifacts_bucket, Key=key)
+    response = s3.get_object(Bucket=config.settings().report_artifacts_bucket, Key=key)
     body = response["Body"].read()
     if isinstance(body, bytes):
         body = body.decode()
@@ -188,7 +188,7 @@ def get_report_html(s3_key: str) -> str:
     """Read and decode an HTML report artifact from the private reports bucket."""
     key = _validate_html_artifact_key(s3_key)
     s3 = aws.client(Kind.S3)
-    response = s3.get_object(Bucket=settings.report_artifacts_bucket, Key=key)
+    response = s3.get_object(Bucket=config.settings().report_artifacts_bucket, Key=key)
     body = response["Body"].read()
     if isinstance(body, bytes):
         return body.decode()
@@ -206,7 +206,7 @@ def run_report_artifact_s3_smoke(
         event.get("student_id") or REPORT_ARTIFACT_SMOKE_STUDENT_ID,
         week_start,
     )
-    bucket = settings.report_artifacts_bucket
+    bucket = config.settings().report_artifacts_bucket
     s3 = aws.client(Kind.S3)
     body = {
         "marker": REPORT_ARTIFACT_SMOKE_MARKER,

@@ -11,7 +11,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db.repositories.checkout_command_repo import (
     CheckoutCommandDisposition,
     CheckoutCommandResult,
@@ -536,7 +537,7 @@ def _app(settings: Settings) -> FastAPI:
     app = FastAPI()
     app.include_router(parents.router, prefix="/parents")
     install_actor_overrides(app, {"sub": PARENT_ID, "role": "parent"})
-    app.dependency_overrides[get_settings] = lambda: settings
+    config.install(settings)
     return app
 
 

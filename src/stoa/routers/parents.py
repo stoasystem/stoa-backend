@@ -14,7 +14,8 @@ from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db import table as db_table
 from stoa.db.repositories import (
     asked_knowledge_repo,
@@ -634,7 +635,7 @@ class StripeBillingReconciliationProvider:
 
 
 def get_billing_reconciliation_provider(
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ) -> billing_reconciliation_service.BillingReconciliationProvider:
     """Build a retrieval-only provider; it has no create or expire capability."""
     return StripeBillingReconciliationProvider(settings)
@@ -1138,7 +1139,7 @@ async def list_my_children(
 @router.get("/me/usage-period", response_model=ParentUsagePeriodResponse)
 async def get_my_usage_period(
     actor: Actor = Depends(_parent_account_read),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ):
     """The parent's own usage period, each current child's, and whom to ask to renew.
 
@@ -1169,7 +1170,7 @@ async def get_my_usage_period(
 @router.get("/me/subscription", response_model=ParentSubscriptionResponse)
 async def get_my_subscription(
     actor: Actor = Depends(_parent_account_read),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ):
     """Return the authenticated parent's current plan and MVP plan options.
 
@@ -1196,7 +1197,7 @@ async def create_my_subscription_checkout(
         ),
     ],
     actor: Actor = Depends(_parent_account_create),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ):
     """Create or resume one durable sandbox checkout command.
 
@@ -1296,7 +1297,7 @@ async def supersede_my_subscription_checkout(
         ),
     ],
     actor: Actor = Depends(_parent_account_create),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ):
     """Confirm one plan change before invoking the guarded supersession flow.
 
@@ -1391,7 +1392,7 @@ async def get_my_subscription_billing(
 async def get_my_account_operations(
     day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     actor: Actor = Depends(_parent_account_read),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ):
     """Return a consolidated parent account operations summary."""
     return account_operations_service.build_parent_operations_summary(
@@ -1409,7 +1410,7 @@ async def get_my_account_operations(
 async def create_my_subscription_request(
     body: ParentSubscriptionRequestCreate,
     actor: Actor = Depends(_parent_account_create),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ):
     """Submit a manual subscription request for internal admin processing.
 

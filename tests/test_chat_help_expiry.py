@@ -20,7 +20,7 @@ from typing import Any
 from fakes.dynamodb import FakeTable
 import pytest
 
-from stoa.config import settings
+from stoa import config
 from stoa.services import help_requests, message_catalog, notification_service
 
 import test_chat_help_request_lifecycle as lifecycle
@@ -46,7 +46,7 @@ def _after(seconds: int) -> str:
 @pytest.fixture
 def table(monkeypatch) -> FakeTable:
     built = lifecycle.build_table(monkeypatch)
-    monkeypatch.setattr(settings, "teacher_help_expiry_seconds", DAY)
+    config.install(config.settings().model_copy(update={"teacher_help_expiry_seconds": DAY}))
     return built
 
 
@@ -98,7 +98,9 @@ def test_a_second_notice_for_the_same_request_is_refused_by_the_store(
     table, monkeypatch
 ) -> None:
     # The notice's id is the request's, so even a repeat call stores one event.
-    monkeypatch.setenv("STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS", "true")
+    config.install(
+        config.settings().model_copy(update={"stoa_enable_best_effort_notifications": True})
+    )
     _nobody_available(table)
     _sweep(_after(DAY + 60))
     first = [
@@ -187,7 +189,7 @@ def test_an_expired_request_cannot_then_be_withdrawn(table, notices) -> None:
 
 
 def test_the_limit_is_configurable(table, notices, monkeypatch) -> None:
-    monkeypatch.setattr(settings, "teacher_help_expiry_seconds", 3600)
+    config.install(config.settings().model_copy(update={"teacher_help_expiry_seconds": 3600}))
     _nobody_available(table)
     assert _sweep(_after(3500))["conversationsExpired"] == []
     assert _sweep(_after(3700))["conversationsExpired"] == [CONV]

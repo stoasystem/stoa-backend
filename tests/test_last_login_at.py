@@ -29,7 +29,8 @@ from test_account_admin_endpoints import (
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db.repositories.identity_repo import DynamoIdentityRepository
 from stoa.deps import get_identity_repository, get_jwks_key_provider
 from stoa.security.jwks import JwksKeyProvider
@@ -94,13 +95,13 @@ def signed_in_client(table: AccountAdminTable, rsa_jwks_keysets, monkeypatch):
     )
     aws.install({Kind.COGNITO: _Provider(_token(keyset))})
     app = _app(_admin_user())
-    app.dependency_overrides[get_settings] = lambda: Settings(
+    config.install(Settings(
         aws_region="eu-central-2",
         cognito_user_pool_id="eu-central-2_test",
         cognito_student_client_id="student-client",
         cognito_allowed_issuers=[keyset.issuer],
         cognito_access_client_ids=["student-client"],
-    )
+    ))
     app.dependency_overrides[get_jwks_key_provider] = lambda: JwksKeyProvider(
         FakeAsyncJwksTransport({keyset.issuer: keyset.jwks}),
         ttl_seconds=3600,

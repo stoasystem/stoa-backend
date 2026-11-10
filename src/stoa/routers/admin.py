@@ -12,7 +12,8 @@ from starlette.responses import Response
 from stoa import aws
 from stoa.aws import Kind
 from stoa.db import table as db_table
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.deps import legacy_user
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -339,7 +340,7 @@ def provision_privileged_admin(
     payload: AdminProvisionCommand,
     actor: Actor = Depends(admin_operation),
     provider: Any = Depends(get_privileged_identity_provider),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ) -> dict[str, Any]:
     return privileged_identity_service.provision_admin(
         actor=actor,
@@ -355,7 +356,7 @@ def change_privileged_admin_status(
     payload: AdminStatusCommand,
     actor: Actor = Depends(admin_operation),
     provider: Any = Depends(get_privileged_identity_provider),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ) -> dict[str, Any]:
     return privileged_identity_service.change_admin_status(
         actor=actor,
@@ -1137,7 +1138,7 @@ async def get_moderation_case(
 async def get_moderation_case_image(
     case_id: str,
     actor: Actor = Depends(admin_operation),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ):
     """The image moderation refused, for an `image_upload` case. Admins only."""
     data, media_type = moderation_service.read_case_image(
@@ -2343,7 +2344,7 @@ def list_ending_usage_periods(
 # ---------------------------------------------------------------------------
 
 
-def get_account_identity_provider(settings: Settings = Depends(get_settings)) -> Any:
+def get_account_identity_provider(settings: Settings = Depends(config.settings)) -> Any:
     """Role-neutral account creator; the teacher adapter already speaks this shape."""
     return CognitoTeacherIdentityProvider(
         aws.client(Kind.COGNITO),
@@ -2476,7 +2477,7 @@ def _guard_peer_admin_credentials(
 def invite_account(
     payload: AccountInvitationRequest,
     actor: Actor = Depends(admin_operation),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ) -> dict[str, Any]:
     """Open one account in `invited` state and mail its single-use activation link."""
     expiry = (
@@ -2499,7 +2500,7 @@ def invite_account(
 def assign_account(
     payload: AccountAssignmentRequest,
     actor: Actor = Depends(admin_operation),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     provider: Any = Depends(get_account_identity_provider),
 ) -> dict[str, Any]:
     """Open one active account and hand its initial password back exactly once."""
@@ -2577,7 +2578,7 @@ def reset_account_password(
     user_id: str,
     payload: AccountPasswordResetRequest,
     actor: Actor = Depends(admin_operation),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     provider: Any = Depends(get_account_password_administrator),
 ) -> dict[str, Any]:
     """Set one temporary password the account must replace at its next sign-in.
@@ -2934,7 +2935,7 @@ async def list_subscription_billing(
     parent_id: Optional[str] = Query(default=None),
     billing_status: Optional[str] = Query(default=None),
     billing_provider: Optional[str] = Query(default=None),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     actor: Actor = Depends(admin_operation),
 ):
     """List provider billing records for admin visibility.
@@ -2957,7 +2958,7 @@ async def list_subscription_billing(
 async def list_subscription_accounting_export(
     limit: int = Query(default=100, ge=1, le=500),
     parent_id: Optional[str] = Query(default=None),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     actor: Actor = Depends(admin_operation),
 ):
     """List redacted provider billing rows for Swiss accounting handoff.
@@ -2975,7 +2976,7 @@ async def list_subscription_accounting_export(
 
 @router.get("/subscriptions/billing/provider-readiness", response_model=SubscriptionProviderReadinessResponse)
 async def get_subscription_provider_readiness(
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     actor: Actor = Depends(admin_operation),
 ):
     """Inspect redacted live provider readiness without creating provider mutations.
@@ -2988,7 +2989,7 @@ async def get_subscription_provider_readiness(
 
 @router.get("/subscriptions/billing/rollout-controls", response_model=SubscriptionRolloutControlsResponse)
 async def get_subscription_rollout_controls(
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     actor: Actor = Depends(admin_operation),
 ):
     """Inspect effective checkout/refund rollout controls.
@@ -3002,7 +3003,7 @@ async def get_subscription_rollout_controls(
 @router.patch("/subscriptions/billing/rollout-controls", response_model=SubscriptionRolloutControlsResponse)
 async def update_subscription_rollout_controls(
     body: SubscriptionRolloutControlsUpdateRequest,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     actor: Actor = Depends(admin_operation),
 ):
     """Update checkout/refund rollout controls for new live-changing operations.
@@ -3022,7 +3023,7 @@ async def update_subscription_rollout_controls(
 @router.get("/subscriptions/billing/{parent_id}", response_model=SubscriptionBillingResponse)
 async def get_subscription_billing(
     parent_id: str,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     actor: Actor = Depends(admin_operation),
 ):
     """Open one parent provider billing record with recent event history.
@@ -3037,7 +3038,7 @@ async def get_subscription_billing(
 async def get_student_usage_summary(
     student_id: str,
     day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     actor: Actor = Depends(admin_operation),
 ):
     """Return a privacy-safe student quota usage summary for support."""
@@ -3102,7 +3103,7 @@ async def get_account_verification_support(
 async def get_parent_account_operations(
     parent_id: str,
     day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     actor: Actor = Depends(admin_operation),
 ):
     """Return support-grade parent account operations detail."""
@@ -3122,7 +3123,7 @@ async def get_parent_account_operations(
 async def execute_subscription_refund(
     parent_id: str,
     body: SubscriptionRefundExecutionRequest,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     actor: Actor = Depends(admin_operation),
 ):
     """Execute a gated provider refund for an eligible billing record.

@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from stoa.services import notification_service
+from stoa import config
 from test_chat_help_request_lifecycle import (
     CONV,
     STUDENT,
@@ -118,7 +119,9 @@ def test_a_refused_reply_tells_nobody(table, sent) -> None:
 def test_the_notifications_reach_the_store_once_each(table, monkeypatch) -> None:
     # Through the real store: a target the store refused would be swallowed by
     # create_event_safe and the student would hear nothing, unseen.
-    monkeypatch.setenv("STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS", "true")
+    config.install(
+        config.settings().model_copy(update={"stoa_enable_best_effort_notifications": True})
+    )
     _dispatch_to(table, TEACHER)
     assert _set_status(_client(), "in_progress").status_code == 200
     assert _reply(_client()).status_code in {200, 201}

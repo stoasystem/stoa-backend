@@ -12,9 +12,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from stoa.config import (
     Settings,
     ValidatedAuthorizationAuditKey,
-    get_settings,
     validate_authorization_audit_keyring,
 )
+from stoa import config
 from stoa.db.repositories.identity_repo import DynamoIdentityRepository
 from stoa.db.repositories import account_deletion_repo
 from stoa.db.repositories.security_audit_repo import (
@@ -61,7 +61,7 @@ def _configured_authorization_audit_sink(
 
 
 def get_authorization_audit_sink(
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ) -> AuthorizationAuditSink:
     """Construct the durable audit sink only from validated settings."""
     try:
@@ -105,7 +105,7 @@ def _configured_jwks_provider(
     )
 
 
-def get_jwks_key_provider(settings: Settings = Depends(get_settings)) -> JwksKeyProvider:
+def get_jwks_key_provider(settings: Settings = Depends(config.settings)) -> JwksKeyProvider:
     return _configured_jwks_provider(
         settings.allowed_cognito_issuers,
         settings.cognito_jwks_connect_timeout_seconds,
@@ -118,7 +118,7 @@ def get_jwks_key_provider(settings: Settings = Depends(get_settings)) -> JwksKey
 
 async def get_verified_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     key_provider: JwksKeyProvider = Depends(get_jwks_key_provider),
 ) -> VerifiedAccessToken:
     return await verify_access_token(

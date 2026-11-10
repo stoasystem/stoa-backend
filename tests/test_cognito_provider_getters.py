@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import get_settings
+from stoa import config
 from stoa.deps import get_actor, get_authorization_audit_sink, get_verified_token
 from stoa.routers import admin, teacher_applications
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
@@ -92,7 +92,7 @@ def test_teacher_activation_resolves_its_identity_provider(monkeypatch, cognito_
         assert isinstance(seen["provider"], _Cognito)
     assert seen["verified_email"] == "teacher@stoa.test"
     assert [(r.kind, r.region) for r in cognito_clients()] == [
-        (Kind.COGNITO, get_settings().aws_region)
+        (Kind.COGNITO, config.settings().aws_region)
     ] * 2
 
 
@@ -120,7 +120,7 @@ def test_provisioning_an_admin_resolves_its_identity_provider(monkeypatch, cogni
     assert response.json() == {"status": "provisioned"}
     assert isinstance(seen["provider"], _Cognito)
     assert [(r.kind, r.region) for r in cognito_clients()] == [
-        (Kind.COGNITO, get_settings().aws_region)
+        (Kind.COGNITO, config.settings().aws_region)
     ]
 
 
@@ -148,5 +148,5 @@ def test_changing_an_admins_status_resolves_its_identity_provider(monkeypatch, c
     assert seen["target_id"] == "target-1"
     assert isinstance(seen["provider"], _Cognito)
     assert [(r.kind, r.region) for r in cognito_clients()] == [
-        (Kind.COGNITO, get_settings().aws_region)
+        (Kind.COGNITO, config.settings().aws_region)
     ]

@@ -25,7 +25,8 @@ from stoa.routers import billing as billing_routes
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.routers import admin, auth, billing, parents, students
 from stoa.security.route_inventory import (
     explicit_route_classification,
@@ -246,7 +247,7 @@ def _settings() -> Settings:
 
 def _client(role: str, *, raise_server_exceptions: bool = True) -> TestClient:
     app = _full_app()
-    app.dependency_overrides[get_settings] = _settings
+    config.install(_settings())
     install_actor_overrides(
         app,
         {

@@ -36,7 +36,7 @@ from datetime import datetime
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import settings
+from stoa import config
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import allowance_repo
 from stoa.models.allowance import ProviderUsageEvidence
@@ -126,7 +126,7 @@ def admit(student_id: str, command_draft: Mapping[str, object]) -> Admitted:
     )
     return Admitted(
         daily_limit=(
-            settings.daily_chat_message_limit if daily_limit is None else daily_limit
+            config.settings().daily_chat_message_limit if daily_limit is None else daily_limit
         ),
         attachment_plan=str(entitlement.get("effectivePlan") or "free_trial"),
         identity=identity,
@@ -149,7 +149,7 @@ def identity_of_unstamped(command: Mapping[str, object]) -> dict[str, object]:
 def _read_entitlement(student_id: str) -> Mapping[str, object]:
     """The student's eligibility: the one place a question reads it."""
     entitlement = entitlement_service.resolve_student_entitlement(
-        student_id, settings=settings
+        student_id, settings=config.settings()
     )
     if not isinstance(entitlement, Mapping):
         raise _unavailable()
@@ -591,7 +591,7 @@ class MeteredModel:
                 request_body,
                 model_id=foundation_model_id,
                 inference_profile_id=inference_profile_id,
-                region=ai_service.settings.aws_region,
+                region=config.settings().aws_region,
                 runtime_client=runtime_client,
             )
             parsed_body = json.loads(request_body)

@@ -7,7 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.deps import get_verified_token
 from stoa.security.authorization import AuthorizationAction, AuthorizationPurpose, ResourceType
 from stoa.security.declared_authorization import authorized, operator, path
@@ -102,7 +103,7 @@ def get_teacher_identity_provider() -> Any:
 
 
 def get_teacher_account_provider(
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ) -> Any:
     return CognitoTeacherIdentityProvider(
         aws.client(Kind.COGNITO),
@@ -159,7 +160,7 @@ def review(
     application_id: str,
     payload: TeacherReviewRequest,
     actor: Actor = Depends(_application_reviewer),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ) -> dict[str, Any]:
     return teacher_application_service.review_application(
         actor=_reviewer(actor),
@@ -176,7 +177,7 @@ def reissue(
     application_id: str,
     payload: TeacherReissueRequest,
     actor: Actor = Depends(_application_reviewer),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ) -> dict[str, Any]:
     return teacher_application_service.reissue_invitation(
         actor=_reviewer(actor),
@@ -192,7 +193,7 @@ def reissue(
 )
 def claim(
     payload: TeacherActivationClaimRequest,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     provider: Any = Depends(get_teacher_account_provider),
 ) -> dict[str, Any]:
     issuer = public_identity_service.canonical_public_issuer(settings.allowed_cognito_issuers)

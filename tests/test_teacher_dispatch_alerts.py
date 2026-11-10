@@ -26,6 +26,7 @@ import pytest
 
 from actor_helpers import install_actor_overrides
 from stoa import aws
+from stoa import config
 from stoa.aws import Kind
 from stoa.jobs import dispatch_reconciler
 
@@ -71,7 +72,9 @@ class RecordingSes:
 def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     built = lifecycle.build_table(monkeypatch)
     lifecycle.keep_waiting(monkeypatch)
-    monkeypatch.setenv("STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS", "true")
+    config.install(
+        config.settings().model_copy(update={"stoa_enable_best_effort_notifications": True})
+    )
     built.rows[(f"USER#{TEACHER}", "PROFILE")]["email"] = TEACHER_EMAIL
     built.rows[(f"USER#{OTHER_TEACHER}", "PROFILE")]["email"] = OTHER_TEACHER_EMAIL
     built.rows[(f"USER#{STUDENT}", "PROFILE")]["full_name"] = STUDENT_NAME

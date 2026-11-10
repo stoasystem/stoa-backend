@@ -11,7 +11,7 @@ import struct
 from typing import Any, Mapping
 
 from stoa.db import table as db_table
-from stoa.config import settings
+from stoa import config
 from stoa.db.repositories import account_deletion_repo
 from stoa.services.rate_limit_errors import RateLimitErrorCode, RateLimitViolation
 
@@ -534,7 +534,7 @@ def client_source_digest(request: Any, *, trusted_proxy_hops: int | None = None)
     short, or one whose nearest entry is not the peer we observe, means the
     topology is not the configured one, and that refuses rather than guesses.
     """
-    hops = settings.trusted_proxy_hops if trusted_proxy_hops is None else trusted_proxy_hops
+    hops = config.settings().trusted_proxy_hops if trusted_proxy_hops is None else trusted_proxy_hops
     if isinstance(hops, bool) or not isinstance(hops, int) or hops < 0:
         raise ProxyTopologyError("trusted proxy depth must be a non-negative integer")
 
@@ -687,6 +687,6 @@ def check_and_record_hint(
         ),
         payload_digest=_payload_digest("hint", challenge_id),
         quota_period=period,
-        limit=limit if limit is not None else settings.daily_hint_limit,
+        limit=limit if limit is not None else config.settings().daily_hint_limit,
     )
     return _counter_receipt_or_raise(result, "hint")

@@ -7,7 +7,8 @@ from types import SimpleNamespace
 from rule_violation_helpers import assert_violation
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.routers import admin, auth
 from actor_helpers import install_actor_overrides
 
@@ -26,7 +27,7 @@ def _settings() -> Settings:
 def _auth_client() -> TestClient:
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
-    app.dependency_overrides[get_settings] = _settings
+    config.install(_settings())
     return TestClient(app)
 
 

@@ -5,7 +5,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db import table as db_table
 from stoa.db.repositories import report_repo
 from stoa.routers import admin
@@ -27,7 +28,7 @@ def _app_for_user(user: dict, settings: Settings | None = None) -> FastAPI:
     app.include_router(admin.router, prefix="/admin")
     install_actor_overrides(app, user)
     if settings is not None:
-        app.dependency_overrides[get_settings] = lambda: settings
+        config.install(settings)
     return app
 
 

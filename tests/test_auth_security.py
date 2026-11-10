@@ -18,7 +18,8 @@ from security.conftest import (
 )
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.deps import (
     get_actor,
     get_current_user,
@@ -324,14 +325,14 @@ def test_t472_01_sec001_public_registration_rejects_privilege_without_mutation(
     monkeypatch.setattr(auth.user_repo, "put_user", database_mutations.append)
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
-    app.dependency_overrides[get_settings] = lambda: Settings(
+    config.install(Settings(
         aws_region="eu-central-2",
         cognito_user_pool_id="offline-pool",
         cognito_student_client_id="student-client",
         cognito_parent_client_id="parent-client",
         cognito_teacher_client_id="teacher-client",
         cognito_admin_client_id="admin-client",
-    )
+    ))
 
     response = TestClient(app).post(
         "/auth/register",
@@ -364,14 +365,14 @@ def test_t472_01_registration_rejects_extra_or_nested_role_selectors_before_call
     monkeypatch.setattr(auth.user_repo, "put_user", repository_calls.append)
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
-    app.dependency_overrides[get_settings] = lambda: Settings(
+    config.install(Settings(
         aws_region="eu-central-2",
         cognito_user_pool_id="offline-pool",
         cognito_student_client_id="student-client",
         cognito_parent_client_id="parent-client",
         cognito_teacher_client_id="teacher-client",
         cognito_admin_client_id="admin-client",
-    )
+    ))
     payload = {
         "email": "attacker@example.com",
         "password": "ValidPass123!",
@@ -419,14 +420,14 @@ def test_t472_01_confirmation_rejects_non_public_registration_commands_without_m
     )
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
-    app.dependency_overrides[get_settings] = lambda: Settings(
+    config.install(Settings(
         aws_region="eu-central-2",
         cognito_user_pool_id="offline-pool",
         cognito_student_client_id="student-client",
         cognito_parent_client_id="parent-client",
         cognito_teacher_client_id="teacher-client",
         cognito_admin_client_id="admin-client",
-    )
+    ))
 
     response = TestClient(app).post(
         "/auth/email-verification/confirm",
@@ -629,7 +630,7 @@ def _logout_app(keyset, repository):
     async def protected(actor=Depends(get_actor)):
         return {"userId": actor.user_id}
 
-    app.dependency_overrides[get_settings] = lambda: _logout_settings(keyset)
+    config.install(_logout_settings(keyset))
     app.dependency_overrides[get_jwks_key_provider] = lambda: provider
     app.dependency_overrides[get_identity_repository] = lambda: repository
     return app
