@@ -53,8 +53,9 @@ class RejectingSes:
 
 
 def _sent_code(ses: RecordingSes) -> str:
-    html = ses.sent[-1]["Message"]["Body"]["Html"]["Data"]
-    match = re.search(r"<strong>(\d{6})</strong>", html)
+    # The code stands on a line of its own in the plain-text part (#374).
+    text = ses.sent[-1]["Message"]["Body"]["Text"]["Data"]
+    match = re.search(r"(?m)^(\d{6})$", text)
     assert match, "the delivered email must carry the code"
     return match.group(1)
 
@@ -352,8 +353,8 @@ def test_a_failed_send_never_carries_the_code_or_the_address_outward():
             "user-1", "learner@example.com", now=BASE_TIME, table=table
         )
 
-    attempted = rejecting.attempts[-1]["Message"]["Body"]["Html"]["Data"]
-    code = re.search(r"<strong>(\d{6})</strong>", attempted).group(1)
+    attempted = rejecting.attempts[-1]["Message"]["Body"]["Text"]["Data"]
+    code = re.search(r"(?m)^(\d{6})$", attempted).group(1)
     chain = f"{raised.value!r}{raised.value.__cause__!r}{raised.value.__context__!r}"
     assert code not in chain
     assert "learner@example.com" not in chain
@@ -401,9 +402,9 @@ def test_the_quota_refund_only_gives_back_the_send_that_failed():
     ("locale", "subject_marker", "body_marker"),
     [
         ("de", "Bestätigungscode", "Passwort"),
-        ("en", "Verification code", "verification code"),
-        ("fr", "Code de vérification", "mot de passe"),
-        ("it", "Codice di verifica", "password"),
+        ("en", "verification code", "verification code"),
+        ("fr", "code de vérification", "mot de passe"),
+        ("it", "codice di verifica", "password"),
     ],
 )
 def test_the_code_email_is_written_in_the_account_language(locale, subject_marker, body_marker):
@@ -424,16 +425,17 @@ def test_the_code_email_is_written_in_the_account_language(locale, subject_marke
 
 def test_every_supported_language_has_its_own_code_email():
     """Four languages, four distinct mails — no locale may quietly share another's."""
-    subjects = {locale: codes._template(locale)[0] for locale in sorted(codes._EMAIL_TEMPLATES)}
-    assert set(subjects) == {"de", "en", "fr", "it"}
-    assert len(set(subjects.values())) == 4
-    assert len({codes._template(locale)[1] for locale in subjects}) == 4
+    mails = {locale: codes.code_email("123456", locale=locale) for locale in sorted(locale_service.SUPPORTED_LOCALES)}
+    assert set(mails) == {"de", "en", "fr", "it"}
+    assert len({mail.subject for mail in mails.values()}) == 4
+    assert len({mail.html for mail in mails.values()}) == 4
 
 
 def test_an_unknown_language_falls_back_to_the_product_default():
-    assert codes._template(None) == codes._template(locale_service.DEFAULT_LOCALE)
-    assert codes._template("zz") == codes._template(locale_service.DEFAULT_LOCALE)
-    assert codes._template("it-CH") == codes._template("it")
+    default = codes.code_email("123456", locale=locale_service.DEFAULT_LOCALE)
+    assert codes.code_email("123456", locale=None) == default
+    assert codes.code_email("123456", locale="zz") == default
+    assert codes.code_email("123456", locale="it-CH") == codes.code_email("123456", locale="it")
 
 
 def test_send_quota_is_per_account():
@@ -731,7 +733,7 @@ def test_the_endpoint_mails_in_the_language_stored_on_the_account(
         == 200
     )
 
-    assert "Codice di verifica" in ses.sent[-1]["Message"]["Subject"]["Data"]
+    assert "codice di verifica" in ses.sent[-1]["Message"]["Subject"]["Data"]
 
 
 def test_摘要成本不会被悄悄调低():

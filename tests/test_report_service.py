@@ -11,7 +11,7 @@ from stoa import config
 from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import Settings
-from stoa.services import message_catalog, report_service
+from stoa.services import email_layout, message_catalog, report_service
 
 
 @pytest.fixture(autouse=True)
@@ -657,7 +657,10 @@ def test_store_and_send_weekly_report_emails_parent_only(monkeypatch):
     assert "Student" in body
     # A parent with no stored language reads the default one (#278).
     assert message_catalog.text(
-        "email.weekly_report.week_range", "de", start="2026-06-01", end="2026-06-07"
+        "email.weekly_report.week_range",
+        "de",
+        start=email_layout.format_date("2026-06-01", "de"),
+        end=email_layout.format_date("2026-06-07", "de"),
     ) in body
     assert generated_report_content()["summary"] in body
     assert "Practice fractions for ten minutes." in body
@@ -696,7 +699,11 @@ def test_the_weekly_report_email_is_in_the_parents_language(monkeypatch, locale)
     assert f'<html lang="{locale}">' in body
     assert copy("title", student="Student") in body
     assert copy("week") in body
-    assert copy("week_range", start="2026-06-01", end="2026-06-07") in body
+    assert copy(
+        "week_range",
+        start=email_layout.format_date("2026-06-01", locale),
+        end=email_layout.format_date("2026-06-07", locale),
+    ) in body
     assert copy("recommendations") in body
     assert copy("weak_topics") in body
     assert copy("portal_link") in body

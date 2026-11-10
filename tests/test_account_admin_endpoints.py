@@ -24,7 +24,7 @@ from stoa.db.repositories import (
     parent_link_repo,
 )
 from stoa.routers import admin, auth, parents, students
-from stoa.services import notify_service
+from stoa.services import locale_service, message_catalog, notify_service
 from stoa.security.route_inventory import explicit_route_classification, inventory_application
 from stoa.services import (
     account_numbering_service,
@@ -1429,30 +1429,41 @@ def test_邀请端点真的把信交给了SES并带上激活链接(
 def test_四语邮件各自成文且用对了变音字符() -> None:
     subjects = {}
     for locale in ("de", "fr", "it", "en"):
-        subject, body = notify_service.account_invitation_message(
+        email = notify_service.account_invitation_message(
             activation_token="tok", expires_at="2026-03-04T09:00:00+00:00", locale=locale
         )
-        subjects[locale] = subject
-        assert "/activate?token=tok" in body
+        subjects[locale] = email.subject
+        assert "/activate?token=tok" in email.html
+        assert "/activate?token=tok" in email.text
     assert len(set(subjects.values())) == 4
-    assert subjects["de"] == "STOA – Ihr Konto freischalten"
-    assert "eröffnet" in notify_service.account_invitation_message(
-        activation_token="tok", expires_at="x", locale="de"
-    )[1]
+    assert subjects["de"] == message_catalog.text("email.account_invitation.subject", "de")
+    # Swiss time and a month in words, never the raw timestamp (#374).
+    de = notify_service.account_invitation_message(
+        activation_token="tok", expires_at="2026-03-04T09:00:00+00:00", locale="de"
+    )
+    assert "4. März 2026, 10:00" in de.text
+    assert "2026-03-04T09" not in de.html
     assert "é" in notify_service.account_invitation_message(
         activation_token="tok", expires_at="x", locale="fr"
-    )[1]
+    ).html
 
 
-def test_邮件模板是角色中立的_不说教师(
+def test_没给角色时邮件不点角色_给了角色只说那一个角色(
 ) -> None:
-    for locale in ("de", "fr", "it", "en"):
-        subject, body = notify_service.account_invitation_message(
-            activation_token="tok", expires_at="x", locale=locale
+    role_words = {
+        role: message_catalog.text(f"email.account_invitation.role.{role}", "de")
+        for role in ("student", "parent", "teacher", "admin")
+    }
+    plain = notify_service.account_invitation_message(
+        activation_token="tok", expires_at="x", locale="de"
+    )
+    assert not any(line in plain.text for line in role_words.values())
+    for role, line in role_words.items():
+        email = notify_service.account_invitation_message(
+            activation_token="tok", expires_at="x", locale="de", role=role
         )
-        text = f"{subject} {body}".lower()
-        for word in ("lehrperson", "teacher", "enseignant", "insegnante"):
-            assert word not in text, (locale, word)
+        assert line in email.text
+        assert [other for other in role_words.values() if other in email.text] == [line]
 
 
 def test_发信失败不谎称已送达_账号仍然建成(
@@ -1482,4 +1493,45 @@ def test_未指定语言时用默认德语_不崩(table: AccountAdminTable, ses:
     )
 
     assert response.status_code == 200, response.text
-    assert ses.sent[0]["Message"]["Subject"]["Data"] == "STOA – Ihr Konto freischalten"
+    assert ses.sent[0]["Message"]["Subject"]["Data"] == message_catalog.text(
+        "email.account_invitation.subject", "de"
+    )
+
+
+def test_管理员界面是英语时_邀请信仍用默认德语(table: AccountAdminTable, ses: RecordingSes) -> None:
+    """Who sent the invitation does not decide its language; the invitee's does (#374)."""
+    client = TestClient(_app(_admin_user()))
+
+    locale_service.set_request_locale("en")
+    try:
+        # The administrator's screen speaks English; the delivery still picks German.
+        assert admin._invitation_delivery(None).keywords["locale"] == "de"
+        response = client.post(
+            "/admin/users/invitations", json={"role": "student", "email": "neu@stoa.test"}
+        )
+    finally:
+        locale_service.set_request_locale(None)
+
+    assert response.status_code == 200, response.text
+    assert ses.sent[0]["Message"]["Subject"]["Data"] == message_catalog.text(
+        "email.account_invitation.subject", "de"
+    )
+
+
+def test_邀请信带纯文本版本_回复地址是有人看的邮箱_并说出角色(
+    table: AccountAdminTable, ses: RecordingSes
+) -> None:
+    client = TestClient(_app(_admin_user()))
+
+    response = client.post(
+        "/admin/users/invitations",
+        json={"role": "parent", "email": "neu@stoa.test", "fullName": "Anna Muster", "locale": "de"},
+    )
+
+    assert response.status_code == 200, response.text
+    message = ses.sent[0]
+    assert message["ReplyToAddresses"] == ["info@stoaedu.ch"]
+    text = message["Message"]["Body"]["Text"]["Data"]
+    assert "Guten Tag Anna Muster" in text
+    assert message_catalog.text("email.account_invitation.role.parent", "de") in text
+    assert response.json()["activationToken"] in text

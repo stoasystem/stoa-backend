@@ -1,4 +1,4 @@
-"""The three emails that used to speak one language each (#278).
+"""The emails that used to speak one language each (#278), now in one frame (#374).
 
 Assertions name catalog keys, never sentences: the wording can change without
 these tests, the language a recipient is written to cannot.
@@ -13,7 +13,7 @@ import pytest
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.services import locale_service, message_catalog, notify_service
+from stoa.services import email_layout, locale_service, message_catalog, notify_service
 from stoa.services.message_catalog import emails as email_catalog
 
 LOCALES = sorted(locale_service.SUPPORTED_LOCALES)
@@ -67,38 +67,46 @@ def test_the_teacher_activation_email_is_in_the_candidates_language(locale):
     assert message["Subject"]["Data"] == message_catalog.text(
         "email.teacher_activation.subject", locale
     )
-    assert _activation("greeting", locale, name="Candidate Teacher") in body
+    assert f'<html lang="{locale}">' in body
+    assert escape(email_layout.greeting("Candidate Teacher", locale)) in body
     assert _activation("intro", locale) in body
     assert _activation("action", locale) in body
-    assert _activation("expiry", locale, expires="2026-07-21T12:00:00+00:00") in body
+    # The expiry reads as a Zurich date, not as the raw timestamp (#374).
+    expires = email_layout.format_datetime("2026-07-21T12:00:00+00:00", locale)
+    assert "14:00" in expires
+    assert escape(
+        message_catalog.text("email.account_invitation.expiry", locale, expires=expires)
+    ) in body
+    assert "2026-07-21T12:00" not in body
     assert "/teacher-activate?token=token%2Fwith%2Bchars" in body
+    assert "Candidate Teacher" in message["Body"]["Text"]["Data"]
 
 
 @pytest.mark.parametrize("locale", LOCALES)
 def test_a_nameless_candidate_is_greeted_without_a_name(locale):
-    _, body = notify_service.teacher_invitation_message(
+    email = notify_service.teacher_invitation_message(
         activation_token="t", expires_at="2026-07-21", full_name="  ", locale=locale
     )
-    assert body.startswith(f"<p>{_activation('greeting_anonymous', locale)}</p>")
+    assert escape(email_layout.greeting(None, locale)) in email.html
 
 
 @pytest.mark.parametrize("locale", [None, "", "xx"])
 def test_a_candidate_without_a_usable_language_gets_the_default_one(locale):
-    subject, body = notify_service.teacher_invitation_message(
+    email = notify_service.teacher_invitation_message(
         activation_token="t", expires_at="2026-07-21", locale=locale
     )
-    assert subject == message_catalog.text(
+    assert email.subject == message_catalog.text(
         "email.teacher_activation.subject", locale_service.DEFAULT_LOCALE
     )
-    assert _activation("intro", locale_service.DEFAULT_LOCALE) in body
+    assert _activation("intro", locale_service.DEFAULT_LOCALE) in email.html
 
 
 def test_a_name_cannot_inject_markup_into_the_activation_email():
-    _, body = notify_service.teacher_invitation_message(
+    email = notify_service.teacher_invitation_message(
         activation_token="t", expires_at="2026-07-21", full_name="<b>x</b>", locale="fr"
     )
-    assert "<b>" not in body
-    assert "&lt;b&gt;x&lt;/b&gt;" in body
+    assert "<b>" not in email.html
+    assert "&lt;b&gt;x&lt;/b&gt;" in email.html
 
 
 @pytest.mark.parametrize("locale", LOCALES)

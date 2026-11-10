@@ -12,11 +12,8 @@ from decimal import Decimal
 import hashlib
 import secrets
 
-from stoa import aws
-from stoa.aws import Kind
 from stoa.db import table as db_table
-from stoa import config
-from stoa.services import locale_service
+from stoa.services import email_layout, locale_service, message_catalog, notify_service
 
 
 CODE_DIGITS = 6
@@ -335,48 +332,8 @@ def _record_failed_attempt(client, key: dict[str, str], stored: dict) -> None:
         pass
 
 
-_EMAIL_TEMPLATES: dict[str, tuple[str, str]] = {
-    "de": (
-        "STOA - Bestätigungscode für Ihr neues Passwort",
-        "<p>Hallo,</p>"
-        "<p>für die Änderung Ihres STOA-Passworts lautet Ihr "
-        "Bestätigungscode:</p><p><strong>{code}</strong></p>"
-        "<p>Der Code ist {minutes} Minuten lang und nur einmal gültig.</p>"
-        "<p>Wenn Sie das nicht angefordert haben, ändern Sie Ihr "
-        "Passwort nicht und melden Sie sich bei uns.</p>",
-    ),
-    "en": (
-        "STOA - Verification code for your new password",
-        "<p>Hello,</p>"
-        "<p>here is your verification code for changing your STOA "
-        "password:</p><p><strong>{code}</strong></p>"
-        "<p>The code is valid for {minutes} minutes and can be used once.</p>"
-        "<p>If you did not request this, do not change your password and "
-        "get in touch with us.</p>",
-    ),
-    "fr": (
-        "STOA - Code de vérification pour votre nouveau mot de passe",
-        "<p>Bonjour,</p>"
-        "<p>voici votre code de vérification pour modifier votre mot de passe "
-        "STOA :</p><p><strong>{code}</strong></p>"
-        "<p>Le code est valable {minutes} minutes et ne peut servir qu'une fois.</p>"
-        "<p>Si vous n'êtes pas à l'origine de cette demande, ne modifiez pas "
-        "votre mot de passe et contactez-nous.</p>",
-    ),
-    "it": (
-        "STOA - Codice di verifica per la tua nuova password",
-        "<p>Ciao,</p>"
-        "<p>ecco il tuo codice di verifica per modificare la password "
-        "STOA:</p><p><strong>{code}</strong></p>"
-        "<p>Il codice è valido per {minutes} minuti e può essere usato una sola volta.</p>"
-        "<p>Se non hai richiesto tu questa modifica, non cambiare la password "
-        "e contattaci.</p>",
-    ),
-}
-
-
-def _template(locale: str | None) -> tuple[str, str]:
-    """Pick the account's language, falling back to the product default.
+def code_email(code: str, *, locale: str | None = None) -> email_layout.Rendered:
+    """The password code email in the account's language (#374).
 
     The fallback is `locale_service.DEFAULT_LOCALE`, the same one the API
     answers in when a profile carries no preference, so a mail never lands in
@@ -384,26 +341,33 @@ def _template(locale: str | None) -> tuple[str, str]:
     """
 
     try:
-        resolved = locale_service.normalize_locale(locale)
+        lang = locale_service.normalize_locale(locale)
     except ValueError:
-        resolved = locale_service.DEFAULT_LOCALE
-    return _EMAIL_TEMPLATES.get(resolved, _EMAIL_TEMPLATES[locale_service.DEFAULT_LOCALE])
+        lang = locale_service.DEFAULT_LOCALE
+
+    def copy(key: str, **values: object) -> str:
+        return message_catalog.text(f"email.password_code.{key}", lang, **values)
+
+    return email_layout.render(
+        subject=copy("subject"),
+        title=copy("title"),
+        greeting=email_layout.greeting(None, lang),
+        blocks=[
+            email_layout.Paragraph(copy("intro")),
+            email_layout.Code(code),
+            email_layout.Paragraph(copy("expiry", minutes=CODE_TTL_SECONDS // 60)),
+            email_layout.Paragraph(copy("not_you"), small=True),
+        ],
+        locale=lang,
+        footer_reason=copy("footer"),
+        questions=False,
+    )
 
 
 def send_code_email(recipient: str, code: str, *, locale: str | None = None) -> None:
     """Deliver the code to the account's own mailbox and nowhere else."""
 
-    ses = aws.client(Kind.SES)
-    minutes = CODE_TTL_SECONDS // 60
-    subject, body = _template(locale)
-    ses.send_email(
-        Source=config.settings().notification_email_sender,
-        Destination={"ToAddresses": [recipient]},
-        Message={
-            "Subject": {"Data": subject},
-            "Body": {"Html": {"Data": body.format(code=code, minutes=minutes)}},
-        },
-    )
+    notify_service.send_one_off_email(recipient, code_email(code, locale=locale))
 
 
 def issue(

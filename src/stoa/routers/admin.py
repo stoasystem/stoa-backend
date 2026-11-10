@@ -2361,7 +2361,12 @@ def _account_issuer(settings: Settings) -> str:
 
 
 def _invitation_delivery(locale: str | None):
-    candidate = locale or locale_service.request_locale() or locale_service.DEFAULT_LOCALE
+    """Mail the invitee in the language the request names, else the default (#374).
+
+    Never in the administrator's own screen language: that is who sent the
+    invitation, not who reads it.
+    """
+    candidate = locale or locale_service.DEFAULT_LOCALE
     try:
         resolved = locale_service.normalize_locale(candidate)
     except ValueError:

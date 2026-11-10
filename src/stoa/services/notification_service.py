@@ -18,6 +18,7 @@ from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
 from stoa.services import (
+    email_layout,
     email_unsubscribe,
     learning_profile_service,
     locale_service,
@@ -1551,7 +1552,7 @@ def send_digest(
             payload = {
                 "deliveryId": delivery_id,
                 "recipientEmail": recipient_email,
-                "subject": message_catalog.text("email.notification_digest.title", locale),
+                "subject": message_catalog.text("email.notification_digest.subject", locale),
                 "html": _digest_email_html(canonical_items, locale, _user_id(user)),
                 "recipientUserId": _user_id(user),
                 "items": canonical_items,
@@ -2025,15 +2026,37 @@ def _send_push_provider(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _digest_email_html(items: list[dict[str, Any]], locale: str, user_id: str) -> str:
-    rows = "".join(
-        f"<li><strong>{_html_escape(item.get('title'))}</strong>: {_html_escape(item.get('summary'))}</li>"
-        for item in items
+    """The digest in the STOA frame (#374), its unsubscribe line in the footer (#363).
+
+    It goes to students too, so it greets nobody by name.
+    """
+    email = email_layout.render(
+        subject=message_catalog.text("email.notification_digest.subject", locale),
+        title=message_catalog.text("email.notification_digest.title", locale),
+        greeting=email_layout.greeting(None, locale),
+        blocks=[
+            email_layout.Paragraph(message_catalog.text("email.notification_digest.intro", locale)),
+            email_layout.Items(
+                tuple(
+                    (str(item.get("title") or ""), str(item.get("summary") or ""))
+                    for item in items
+                )
+            ),
+            email_layout.Action(
+                message_catalog.text("email.notification_digest.action", locale),
+                config.settings().app_base_url.rstrip("/") + "/",
+            ),
+        ],
+        locale=locale,
+        footer_reason=None,
+        questions=False,
     )
-    heading = _html_escape(message_catalog.text("email.notification_digest.title", locale))
-    footer = email_unsubscribe.footer_html(
-        user_id, email_unsubscribe.EmailKind.NOTIFICATION_DIGEST, locale
+    return email_unsubscribe.with_footer(
+        email.html,
+        email_unsubscribe.footer_html(
+            user_id, email_unsubscribe.EmailKind.NOTIFICATION_DIGEST, locale
+        ),
     )
-    return f"<h1>{heading}</h1><ul>{rows}</ul>{footer}"
 
 
 def _redacted_provider_result(value: Any) -> dict[str, Any]:
@@ -2078,15 +2101,6 @@ def _redacted_text(value: str) -> str:
     return value[:200]
 
 
-def _html_escape(value: Any) -> str:
-    text = _safe_text(value)
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&#x27;")
-    )
 
 
 def _visible_to_user(item: dict[str, Any], *, user_id: str, role: str) -> bool:

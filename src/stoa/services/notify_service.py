@@ -1,41 +1,78 @@
 """SQS + SES — teacher queue and email notifications."""
 from datetime import UTC, datetime
-from html import escape
 from urllib.parse import quote
 from uuid import uuid4
 from stoa import aws
 from stoa.aws import Kind
 from stoa import config
 from stoa.db.repositories import account_deletion_repo, report_repo
-from stoa.services import email_unsubscribe, locale_service, message_catalog
+from stoa.services import email_layout, email_unsubscribe, locale_service, message_catalog
 from stoa.services.email_unsubscribe import EmailKind
 
 
 def teacher_invitation_message(
     *, activation_token: str, expires_at: str, full_name: str = "", locale: str | None = None
-) -> tuple[str, str]:
-    """Render the subject and HTML body of one teacher activation email in one language.
+) -> email_layout.Rendered:
+    """The teacher activation email in one language (#374).
 
     `locale` is the language the candidate applied in; a candidate who named none is
     written to in the default one.
     """
     base = config.settings().app_base_url.rstrip("/")
     link = f"{base}/teacher-activate?token={quote(activation_token, safe='')}"
-    lang = locale or locale_service.DEFAULT_LOCALE
-    name = full_name.strip()
-    greeting = (
-        message_catalog.text("email.teacher_activation.greeting", lang, name=escape(name))
-        if name
-        else message_catalog.text("email.teacher_activation.greeting_anonymous", lang)
+    lang = _lang(locale)
+
+    def copy(key: str, **values: object) -> str:
+        return message_catalog.text(f"email.teacher_activation.{key}", lang, **values)
+
+    return email_layout.render(
+        subject=copy("subject"),
+        title=copy("title"),
+        greeting=email_layout.greeting(full_name, lang),
+        blocks=[
+            email_layout.Paragraph(copy("intro")),
+            email_layout.Paragraph(copy("next_step")),
+            email_layout.Action(copy("action"), link),
+            email_layout.Paragraph(
+                message_catalog.text(
+                    "email.account_invitation.expiry",
+                    lang,
+                    expires=email_layout.format_datetime(expires_at, lang),
+                ),
+                small=True,
+            ),
+        ],
+        locale=lang,
+        footer_reason=copy("footer"),
     )
-    action = escape(message_catalog.text("email.teacher_activation.action", lang))
-    body = (
-        f"<p>{greeting}</p>"
-        f"<p>{escape(message_catalog.text('email.teacher_activation.intro', lang))}</p>"
-        f'<p><a href="{escape(link, quote=True)}">{action}</a></p>'
-        f"<p>{escape(message_catalog.text('email.teacher_activation.expiry', lang, expires=expires_at))}</p>"
+
+
+def _lang(locale: str | None) -> str:
+    try:
+        return locale_service.normalize_locale(locale)
+    except ValueError:
+        return locale_service.DEFAULT_LOCALE
+
+
+def send_one_off_email(recipient: str, email: email_layout.Rendered) -> dict:
+    """Send one email that is not a notification: activation links and codes.
+
+    These carry no unsubscribe line, so they stay on SES v1 `SendEmail`. Both parts
+    go out, HTML and plain text, with Reply-To naming a mailbox somebody reads.
+    """
+    settings = config.settings()
+    return aws.client(Kind.SES).send_email(
+        Source=settings.notification_email_sender,
+        Destination={"ToAddresses": [recipient]},
+        ReplyToAddresses=[settings.notification_email_reply_to],
+        Message={
+            "Subject": {"Data": email.subject, "Charset": "UTF-8"},
+            "Body": {
+                "Html": {"Data": email.html, "Charset": "UTF-8"},
+                "Text": {"Data": email.text, "Charset": "UTF-8"},
+            },
+        },
     )
-    return message_catalog.text("email.teacher_activation.subject", lang), body
 
 
 def send_notification_email(
@@ -52,15 +89,20 @@ def send_notification_email(
 
     SES v1 `SendEmail` cannot set headers, so notification emails go through
     SESv2 `SendEmail` with `Content.Simple.Headers`; `ses` is an SESv2 client.
-    The body is sent as given: the caller has already put the footer in it.
+    The body is sent as given: the caller has already put the footer in it. The
+    plain-text part is read off that HTML (#374).
     """
     return ses.send_email(
         FromEmailAddress=sender,
         Destination={"ToAddresses": [recipient]},
+        ReplyToAddresses=[config.settings().notification_email_reply_to],
         Content={
             "Simple": {
                 "Subject": {"Data": subject, "Charset": "UTF-8"},
-                "Body": {"Html": {"Data": html, "Charset": "UTF-8"}},
+                "Body": {
+                    "Html": {"Data": html, "Charset": "UTF-8"},
+                    "Text": {"Data": email_layout.to_text(html), "Charset": "UTF-8"},
+                },
                 "Headers": email_unsubscribe.headers(recipient_user_id, kind),
             }
         },
@@ -81,20 +123,14 @@ def send_teacher_invitation_email(
     in the candidate's hands. Callers must treat a raised exception as undelivered and
     re-issue rather than assume the candidate can still activate.
     """
-    subject, body = teacher_invitation_message(
-        activation_token=activation_token,
-        expires_at=expires_at,
-        full_name=full_name,
-        locale=locale,
-    )
-    ses = aws.client(Kind.SES)
-    ses.send_email(
-        Source="noreply@stoaedu.ch",
-        Destination={"ToAddresses": [recipient]},
-        Message={
-            "Subject": {"Data": subject},
-            "Body": {"Html": {"Data": body}},
-        },
+    send_one_off_email(
+        recipient,
+        teacher_invitation_message(
+            activation_token=activation_token,
+            expires_at=expires_at,
+            full_name=full_name,
+            locale=locale,
+        ),
     )
 
 
@@ -113,15 +149,14 @@ def send_weekly_report_email(
     *,
     subject: str | None = None,
 ) -> None:
-    """Send the weekly report to a parent via SES."""
-    ses = aws.client(Kind.SES)
-    ses.send_email(
-        Source="noreply@stoaedu.ch",
-        Destination={"ToAddresses": [parent_email]},
-        Message={
-            "Subject": {"Data": subject or weekly_report_subject(None, None)},
-            "Body": {"Html": {"Data": report_html}},
-        },
+    """Send the weekly report to a parent via SES, without an unsubscribe line."""
+    send_one_off_email(
+        parent_email,
+        email_layout.Rendered(
+            subject=subject or weekly_report_subject(None, None),
+            html=report_html,
+            text=email_layout.to_text(report_html),
+        ),
     )
 
 
@@ -169,7 +204,7 @@ def send_fenced_weekly_report_email(
     try:
         response = send_notification_email(
             ses,
-            sender="noreply@stoaedu.ch",
+            sender=config.settings().notification_email_sender,
             recipient=parent_email,
             recipient_user_id=recipient_user_id,
             kind=EmailKind.WEEKLY_REPORT,
@@ -181,73 +216,46 @@ def send_fenced_weekly_report_email(
     return report_repo.classify_report_delivery_outcome(response=response, error=error)
 
 
-# Role-neutral activation copy. Each locale carries its own subject, greeting and body
-# so an invited student, parent, teacher or admin reads the same message in their own
-# language. The teacher review flow has its own copy, in `message_catalog.emails`.
-ACCOUNT_INVITATION_COPY = {
-    "de": {
-        "subject": "STOA – Ihr Konto freischalten",
-        "greeting": "Hallo {name},",
-        "greeting_anonymous": "Hallo,",
-        "intro": "für Sie wurde ein STOA-Konto eröffnet. Über den folgenden Link legen Sie Ihr Passwort fest und schalten das Konto frei:",
-        "action": "Konto freischalten",
-        "expiry": "Der Link ist einmalig verwendbar und gültig bis {expires}.",
-        "ignore": "Wenn Sie dieses Konto nicht erwartet haben, können Sie diese Nachricht ignorieren.",
-    },
-    "fr": {
-        "subject": "STOA – Activez votre compte",
-        "greeting": "Bonjour {name},",
-        "greeting_anonymous": "Bonjour,",
-        "intro": "un compte STOA a été ouvert pour vous. Le lien ci-dessous vous permet de définir votre mot de passe et d'activer le compte :",
-        "action": "Activer le compte",
-        "expiry": "Ce lien est à usage unique et valable jusqu'au {expires}.",
-        "ignore": "Si vous n'attendiez pas ce compte, vous pouvez ignorer ce message.",
-    },
-    "it": {
-        "subject": "STOA – Attiva il tuo account",
-        "greeting": "Ciao {name},",
-        "greeting_anonymous": "Ciao,",
-        "intro": "è stato aperto un account STOA per te. Con il link seguente puoi impostare la password e attivare l'account:",
-        "action": "Attiva l'account",
-        "expiry": "Il link è utilizzabile una sola volta ed è valido fino al {expires}.",
-        "ignore": "Se non ti aspettavi questo account, puoi ignorare questo messaggio.",
-    },
-    "en": {
-        "subject": "STOA – Activate your account",
-        "greeting": "Hello {name},",
-        "greeting_anonymous": "Hello,",
-        "intro": "a STOA account has been opened for you. Use the link below to choose your password and activate the account:",
-        "action": "Activate account",
-        "expiry": "The link can be used once and is valid until {expires}.",
-        "ignore": "If you were not expecting this account, you can ignore this message.",
-    },
-}
-
-ACCOUNT_INVITATION_DEFAULT_LOCALE = "de"
-
-
 def account_invitation_message(
-    *, activation_token: str, expires_at: str, full_name: str = "", locale: str | None = None
-) -> tuple[str, str]:
-    """Render the subject and HTML body of one activation email in one language."""
-    copy = ACCOUNT_INVITATION_COPY.get(
-        str(locale or "").strip().lower(),
-        ACCOUNT_INVITATION_COPY[ACCOUNT_INVITATION_DEFAULT_LOCALE],
-    )
+    *,
+    activation_token: str,
+    expires_at: str,
+    full_name: str = "",
+    locale: str | None = None,
+    role: str | None = None,
+) -> email_layout.Rendered:
+    """The activation email of an invited account, in one language (#374).
+
+    `role` adds one line on what the account is for; without one the email names
+    no role. `locale` falls back to the default (German), never to the language of
+    whoever sent the invitation.
+    """
+    lang = _lang(locale)
     base = config.settings().app_base_url.rstrip("/")
     link = f"{base}/activate?token={quote(activation_token, safe='')}"
-    name = full_name.strip()
-    greeting = (
-        copy["greeting"].format(name=escape(name)) if name else copy["greeting_anonymous"]
+
+    def copy(key: str, **values: object) -> str:
+        return message_catalog.text(f"email.account_invitation.{key}", lang, **values)
+
+    role_key = f"email.account_invitation.role.{str(role or '').strip().lower()}"
+    blocks: list[email_layout.Block] = [email_layout.Paragraph(copy("intro"))]
+    if role_key in message_catalog.TEXT:
+        blocks.append(email_layout.Paragraph(message_catalog.text(role_key, lang)))
+    blocks += [
+        email_layout.Paragraph(copy("next_step")),
+        email_layout.Action(copy("action"), link),
+        email_layout.Paragraph(
+            copy("expiry", expires=email_layout.format_datetime(expires_at, lang)), small=True
+        ),
+    ]
+    return email_layout.render(
+        subject=copy("subject"),
+        title=copy("title"),
+        greeting=email_layout.greeting(full_name, lang),
+        blocks=blocks,
+        locale=lang,
+        footer_reason=copy("footer"),
     )
-    body = (
-        f"<p>{greeting}</p>"
-        f"<p>{copy['intro']}</p>"
-        f'<p><a href="{escape(link, quote=True)}">{copy["action"]}</a></p>'
-        f"<p>{copy['expiry'].format(expires=escape(expires_at))}</p>"
-        f"<p>{copy['ignore']}</p>"
-    )
-    return copy["subject"], body
 
 
 def send_account_invitation_email(
@@ -257,26 +265,22 @@ def send_account_invitation_email(
     expires_at: str,
     full_name: str = "",
     locale: str | None = None,
+    role: str | None = None,
 ) -> None:
     """Deliver one single-use activation link to an invited account of any role.
 
     The token is readable only at issue time. A raised exception means undelivered:
     the caller must reissue rather than assume the invitee can still activate.
     """
-    subject, body = account_invitation_message(
-        activation_token=activation_token,
-        expires_at=expires_at,
-        full_name=full_name,
-        locale=locale,
-    )
-    ses = aws.client(Kind.SES)
-    ses.send_email(
-        Source=config.settings().notification_email_sender,
-        Destination={"ToAddresses": [recipient]},
-        Message={
-            "Subject": {"Data": subject},
-            "Body": {"Html": {"Data": body}},
-        },
+    send_one_off_email(
+        recipient,
+        account_invitation_message(
+            activation_token=activation_token,
+            expires_at=expires_at,
+            full_name=full_name,
+            locale=locale,
+            role=role,
+        ),
     )
 
 
@@ -288,24 +292,37 @@ def dispatch_reminder_message(
     Only the subject's name and a link into STOA: the email leaves STOA, so nothing
     the student wrote, sent or is called goes with it.
     """
+    lang = _lang(locale)
     base = config.settings().app_base_url.rstrip("/")
     link = f"{base}/teacher/requests/{quote(request_id, safe='')}"
-    subject_line = message_catalog.text(
-        "teacher_help.dispatched.email.subject", locale, minutes=minutes
+
+    def copy(key: str, **values: object) -> str:
+        return message_catalog.text(f"teacher_help.dispatched.{key}", lang, **values)
+
+    email = email_layout.render(
+        subject=copy("email.subject", minutes=minutes),
+        title=copy("title"),
+        greeting=email_layout.greeting(None, lang),
+        blocks=[
+            email_layout.Paragraph(copy("email.intro")),
+            email_layout.Paragraph(
+                message_catalog.text(
+                    "email.dispatch_reminder.subject_line", lang, subject=subject_name
+                )
+            ),
+            email_layout.Paragraph(copy("email.deadline", minutes=minutes)),
+            email_layout.Action(copy("email.action"), link),
+            email_layout.Paragraph(copy("email.footer"), small=True),
+        ],
+        locale=lang,
+        footer_reason=None,
+        questions=False,
     )
-    summary = message_catalog.text(
-        "teacher_help.dispatched.summary", locale, subject=subject_name, minutes=minutes
+    html = email_unsubscribe.with_footer(
+        email.html,
+        email_unsubscribe.footer_html(recipient_user_id, EmailKind.DISPATCH_REMINDER, lang),
     )
-    body = (
-        f"<p>{escape(message_catalog.text('teacher_help.dispatched.email.intro', locale))}</p>"
-        f"<p>{escape(summary)}</p>"
-        f"<p>{escape(message_catalog.text('teacher_help.dispatched.email.deadline', locale, minutes=minutes))}</p>"
-        f'<p><a href="{escape(link, quote=True)}">'
-        f"{escape(message_catalog.text('teacher_help.dispatched.email.action', locale))}</a></p>"
-        f"<p>{escape(message_catalog.text('teacher_help.dispatched.email.footer', locale))}</p>"
-        + email_unsubscribe.footer_html(recipient_user_id, EmailKind.DISPATCH_REMINDER, locale)
-    )
-    return subject_line, body
+    return email.subject, html
 
 
 def send_dispatch_reminder_email(

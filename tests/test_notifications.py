@@ -1,4 +1,5 @@
 import re
+from html import escape
 from decimal import Decimal
 
 import pytest
@@ -606,8 +607,9 @@ def test_the_digest_email_is_in_the_recipients_language(monkeypatch, locale):
 
     assert result["status"] == "sent"
     heading = message_catalog.text("email.notification_digest.title", locale)
-    assert sent[0]["subject"] == heading
-    assert sent[0]["html"].startswith(f"<h1>{notification_service._html_escape(heading)}</h1>")
+    assert sent[0]["subject"] == message_catalog.text("email.notification_digest.subject", locale)
+    assert f">{escape(heading)}</h1>" in sent[0]["html"]
+    assert f'<html lang="{locale}">' in sent[0]["html"]
     title, summary = notification_service._teacher_requested_message({"subject": "math"}, locale)
     assert sent[0]["items"][0]["title"] == title
     assert sent[0]["items"][0]["summary"] == summary
