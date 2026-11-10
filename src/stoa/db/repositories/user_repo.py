@@ -337,6 +337,11 @@ def get_user_by_email(email: str) -> UserItem | None:
     return profiles[0] if profiles else None
 
 
+def get_users_by_email(email: str) -> list[UserItem]:
+    """Every account on this address; one person may hold one per role."""
+    return _profiles_by_email(email)
+
+
 def get_user_by_email_and_role(email: str, role: str) -> UserItem | None:
     """The account this address holds in this role, if any.
 

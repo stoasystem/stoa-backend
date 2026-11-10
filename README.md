@@ -31,6 +31,23 @@ aws sts get-caller-identity --profile stoa
 The live operator scripts default to `--profile stoa` and fail before provider access when the
 caller is an IAM User, root, a non-SSO role, or the wrong AWS account.
 
+### Admin operations for agents (`stoa-admin` MCP)
+
+`scripts/stoa_admin_mcp.py` is a local stdio MCP server that lets Claude Code, Codex and other
+agents run listed admin operations on your SSO identity, without the web console's password
+(#380). Add it once, from the repository root:
+
+```bash
+claude mcp add stoa-admin -- .venv/Scripts/python scripts/stoa_admin_mcp.py
+```
+
+Log in with `aws sso login --sso-session stoa`; the server uses the profile
+`AdministratorAccess-562923011260` unless `STOA_ADMIN_MCP_PROFILE` or `AWS_PROFILE` names another.
+Each call invokes the `stoa-api` function's `production` alias directly, which verifies the SSO
+identity with STS, runs only the operations in `src/stoa/operator_calls/catalog.py`, and records
+each call in the security audit stream of `operator:agent_mcp`. Tool output never carries
+activation tokens or passwords.
+
 ## Project Structure
 
 ```

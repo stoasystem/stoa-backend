@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from mangum import Mangum
 
 from stoa import config
+from stoa.operator_calls.catalog import OPERATOR_CALL_KEY
 from stoa.rule_violation import CorrelationMiddleware, install_rule_violation_handler
 from stoa.security.errors import redacted_validation_errors
 from stoa.services import locale_service, runtime_budget_service
@@ -171,4 +172,22 @@ install_authorization_openapi(app)
 
 
 # AWS Lambda handler via Mangum
-handler = Mangum(app, lifespan="off")
+http_handler = Mangum(app, lifespan="off")
+
+
+def handler(event, context):
+    """Every invocation of the API function: HTTP through Mangum, operator calls apart.
+
+    #383: an agent's operator call is a direct invocation carrying
+    `catalog.OPERATOR_CALL_KEY` at its top level, which API Gateway never puts
+    there. Only a principal allowed to invoke the function can send one, and
+    the operator entry still verifies who it is before anything runs.
+    """
+    if isinstance(event, dict) and OPERATOR_CALL_KEY in event:
+        from stoa.operator_calls import entry
+
+        return entry.handle(
+            event[OPERATOR_CALL_KEY],
+            invoked_function_arn=getattr(context, "invoked_function_arn", ""),
+        )
+    return http_handler(event, context)

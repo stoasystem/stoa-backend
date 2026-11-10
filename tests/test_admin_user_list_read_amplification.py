@@ -25,6 +25,7 @@ from fakes.dynamodb import FakeTable
 from stoa.db import table as db_table
 from stoa.db.repositories import parent_link_repo
 from stoa.routers import admin
+from stoa.services import account_listing
 
 PARENTS = 200
 CHILDREN_PER_PARENT = 3
@@ -150,7 +151,7 @@ def test_不取关联时同一页只剩扫描(
     also what the numbers above have to beat if this route is ever made to batch its
     reads.
     """
-    monkeypatch.setattr(admin, "_linked_counterparts", lambda profile: [])
+    monkeypatch.setattr(account_listing, "_linked_counterparts", lambda profile: [])
 
     response = _client().get("/admin/users?limit=200")
 
