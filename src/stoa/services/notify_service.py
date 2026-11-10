@@ -7,7 +7,8 @@ from stoa import aws
 from stoa.aws import Kind
 from stoa import config
 from stoa.db.repositories import account_deletion_repo, report_repo
-from stoa.services import locale_service, message_catalog
+from stoa.services import email_unsubscribe, locale_service, message_catalog
+from stoa.services.email_unsubscribe import EmailKind
 
 
 def teacher_invitation_message(
@@ -35,6 +36,35 @@ def teacher_invitation_message(
         f"<p>{escape(message_catalog.text('email.teacher_activation.expiry', lang, expires=expires_at))}</p>"
     )
     return message_catalog.text("email.teacher_activation.subject", lang), body
+
+
+def send_notification_email(
+    ses,
+    *,
+    sender: str,
+    recipient: str,
+    recipient_user_id: str,
+    kind: EmailKind,
+    subject: str,
+    html: str,
+) -> dict:
+    """Send one notification email with its `List-Unsubscribe` headers (#363).
+
+    SES v1 `SendEmail` cannot set headers, so notification emails go through
+    SESv2 `SendEmail` with `Content.Simple.Headers`; `ses` is an SESv2 client.
+    The body is sent as given: the caller has already put the footer in it.
+    """
+    return ses.send_email(
+        FromEmailAddress=sender,
+        Destination={"ToAddresses": [recipient]},
+        Content={
+            "Simple": {
+                "Subject": {"Data": subject, "Charset": "UTF-8"},
+                "Body": {"Html": {"Data": html, "Charset": "UTF-8"}},
+                "Headers": email_unsubscribe.headers(recipient_user_id, kind),
+            }
+        },
+    )
 
 
 def send_teacher_invitation_email(
@@ -99,6 +129,8 @@ def send_fenced_weekly_report_email(
     parent_email: str,
     report_html: str,
     *,
+    recipient_user_id: str,
+    locale: str | None,
     owner_id: str,
     generation: int,
     report_id: str,
@@ -106,9 +138,17 @@ def send_fenced_weekly_report_email(
     operation_id: str | None = None,
     table=None,
 ) -> str:
-    """Send once only after durable intent, claim, and immediate fence checks."""
+    """Send once only after durable intent, claim, and immediate fence checks.
+
+    `recipient_user_id` is the parent's account: the unsubscribe line and headers
+    stop their weekly report email, in their `locale` (#363).
+    """
     operation = operation_id or uuid4().hex
-    subject_value = subject or weekly_report_subject(None, None)
+    subject_value = subject or weekly_report_subject(None, locale)
+    report_html = email_unsubscribe.with_footer(
+        report_html,
+        email_unsubscribe.footer_html(recipient_user_id, EmailKind.WEEKLY_REPORT, locale),
+    )
     now_iso = datetime.now(UTC).isoformat()
     intent = report_repo.register_report_email_intent(
         owner_id=owner_id,
@@ -123,17 +163,18 @@ def send_fenced_weekly_report_email(
     )
     report_repo.claim_report_email_intent(intent, lease_id=uuid4().hex, table=table)
     account_deletion_repo.require_active_account_fence(owner_id, generation, table=table)
-    ses = aws.client(Kind.SES)
+    ses = aws.client(Kind.SES_NOTIFICATION)
     response = None
     error = None
     try:
-        response = ses.send_email(
-            Source="noreply@stoaedu.ch",
-            Destination={"ToAddresses": [parent_email]},
-            Message={
-                "Subject": {"Data": subject_value},
-                "Body": {"Html": {"Data": report_html}},
-            },
+        response = send_notification_email(
+            ses,
+            sender="noreply@stoaedu.ch",
+            recipient=parent_email,
+            recipient_user_id=recipient_user_id,
+            kind=EmailKind.WEEKLY_REPORT,
+            subject=subject_value,
+            html=report_html,
         )
     except Exception as exc:
         error = exc
@@ -240,7 +281,7 @@ def send_account_invitation_email(
 
 
 def dispatch_reminder_message(
-    *, subject_name: str, request_id: str, minutes: int, locale: str
+    *, recipient_user_id: str, subject_name: str, request_id: str, minutes: int, locale: str
 ) -> tuple[str, str]:
     """Render the subject and HTML body of one dispatch reminder in one language (#141).
 
@@ -262,6 +303,7 @@ def dispatch_reminder_message(
         f'<p><a href="{escape(link, quote=True)}">'
         f"{escape(message_catalog.text('teacher_help.dispatched.email.action', locale))}</a></p>"
         f"<p>{escape(message_catalog.text('teacher_help.dispatched.email.footer', locale))}</p>"
+        + email_unsubscribe.footer_html(recipient_user_id, EmailKind.DISPATCH_REMINDER, locale)
     )
     return subject_line, body
 
@@ -269,6 +311,7 @@ def dispatch_reminder_message(
 def send_dispatch_reminder_email(
     recipient: str,
     *,
+    recipient_user_id: str,
     subject_name: str,
     request_id: str,
     minutes: int,
@@ -276,15 +319,20 @@ def send_dispatch_reminder_email(
 ) -> None:
     """Remind the teacher an offer went to that it is waiting for them (#141)."""
     subject_line, body = dispatch_reminder_message(
-        subject_name=subject_name, request_id=request_id, minutes=minutes, locale=locale
+        recipient_user_id=recipient_user_id,
+        subject_name=subject_name,
+        request_id=request_id,
+        minutes=minutes,
+        locale=locale,
     )
     # Bounded well inside the request's 29 seconds (`aws.DISPATCH_REMINDER_SES_CONFIG`).
     ses = aws.client(Kind.SES_DISPATCH_REMINDER)
-    ses.send_email(
-        Source=config.settings().notification_email_sender,
-        Destination={"ToAddresses": [recipient]},
-        Message={
-            "Subject": {"Data": subject_line},
-            "Body": {"Html": {"Data": body}},
-        },
+    send_notification_email(
+        ses,
+        sender=config.settings().notification_email_sender,
+        recipient=recipient,
+        recipient_user_id=recipient_user_id,
+        kind=EmailKind.DISPATCH_REMINDER,
+        subject=subject_line,
+        html=body,
     )

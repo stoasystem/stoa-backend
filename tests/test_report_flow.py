@@ -57,6 +57,11 @@ class FakeDataTable:
     def __getattr__(self, name):
         return getattr(self.rest, name)
 
+    def get_item(self, **kwargs):
+        # Spelled out: a repository's table protocol does not see `__getattr__`.
+        # The parent's notification preferences are read before the email (#363).
+        return self.rest.get_item(**kwargs)
+
     def scan(self, **kwargs):
         # The job's one discovery scan: active parent-side link rows.
         self.scans.append(kwargs)

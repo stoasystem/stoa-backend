@@ -155,6 +155,10 @@ class Settings(BaseSettings):
     # Origin used to build links inside outbound email. Must be an exact origin so a
     # misconfigured value cannot redirect an activation link to an attacker host.
     app_base_url: str = "https://app.stoaedu.ch"
+    # Origin of this API, for the RFC 8058 one-click unsubscribe address in the
+    # `List-Unsubscribe` header of notification emails (#363): a mail client POSTs
+    # to it directly, so it cannot go through the frontend.
+    api_base_url: str = "https://api.stoaedu.ch"
 
     # AWS
     aws_region: str = "eu-central-2"

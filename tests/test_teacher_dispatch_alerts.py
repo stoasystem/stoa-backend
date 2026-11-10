@@ -165,11 +165,11 @@ def _sweep() -> dict[str, Any]:
 
 
 def _body(mail: dict[str, Any]) -> str:
-    return mail["Message"]["Body"]["Html"]["Data"]
+    return mail["Content"]["Simple"]["Body"]["Html"]["Data"]
 
 
 def _subject_line(mail: dict[str, Any]) -> str:
-    return mail["Message"]["Subject"]["Data"]
+    return mail["Content"]["Simple"]["Subject"]["Data"]
 
 
 # --- Each offer reaches the offered teacher ---
@@ -276,6 +276,31 @@ def test_with_the_email_switched_off_only_the_notification_remains(table, ses) -
 
     assert len(_offers(TEACHER)) == 1
     assert ses.sent == []
+
+
+def test_the_one_click_header_switches_the_reminder_email_off(table, ses) -> None:
+    """#363: the `List-Unsubscribe` address works without signing in."""
+    from urllib.parse import urlparse
+
+    _on_duty(table, TEACHER)
+    _ask_for_a_teacher()
+    [mail] = ses.sent
+    headers = {h["Name"]: h["Value"] for h in mail["Content"]["Simple"]["Headers"]}
+    assert headers["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+    address = urlparse(headers["List-Unsubscribe"].strip("<>"))
+
+    from stoa.routers import notifications
+
+    app = FastAPI()
+    app.include_router(notifications.router, prefix="/notifications")
+    clicked = TestClient(app).post(
+        f"{address.path}?{address.query}",
+        content="List-Unsubscribe=One-Click",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert clicked.status_code == 200, clicked.text
+    # The same switch as in settings, whose effect the test above pins.
+    assert _teacher().get("/notifications/preferences").json()["dispatchEmail"] is False
 
 
 def test_the_notification_cannot_be_switched_off(table, ses) -> None:

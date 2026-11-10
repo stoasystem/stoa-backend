@@ -25,6 +25,12 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Le parent n'est plus lié à cet élève : le rapport n'est pas renvoyé.",
         "it": "Il genitore non è più collegato a questo allievo: il rapporto non viene reinviato.",
     },
+    "error.report_recipient_unsubscribed": {
+        "de": "Der Elternteil hat die Wochenberichte per E-Mail abbestellt. Der Bericht wird nicht erneut gesendet.",
+        "en": "The parent unsubscribed from weekly report emails, so the report is not resent.",
+        "fr": "Le parent s'est désabonné des rapports hebdomadaires par e-mail : le rapport n'est pas renvoyé.",
+        "it": "Il genitore ha disattivato i rapporti settimanali via e-mail: il rapporto non viene reinviato.",
+    },
     "error.report_recipient_email_missing": {
         "de": "Im Profil des Elternteils ist keine E-Mail-Adresse hinterlegt. Der Bericht kann nicht erneut gesendet werden.",
         "en": "The parent's profile has no email address, so the report cannot be resent.",

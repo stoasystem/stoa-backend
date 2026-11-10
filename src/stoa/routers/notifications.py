@@ -14,6 +14,7 @@ from stoa.security.authorization import (
 )
 from stoa.security.declared_authorization import SELF, TOKEN, authorized, path
 from stoa.security.identity import Actor, CanonicalRole
+from stoa.security.route_inventory import explicit_route_classification
 from stoa.services import locale_service, notification_service
 
 
@@ -75,6 +76,7 @@ class NotificationPreferenceUpdate(BaseModel):
     # Each part left out keeps what is stored.
     preferences: dict[str, dict[str, bool]] | None = None
     dispatchEmail: bool | None = None
+    weeklyReportEmail: bool | None = None
 
 
 class NotificationDigestSendRequest(BaseModel):
@@ -119,6 +121,9 @@ class NotificationPreferenceResponse(BaseModel):
     # The reminder email sent with each offer of a help request (#141). The bell
     # notification for the same offer cannot be switched off.
     dispatchEmail: bool
+    # The parent's weekly report email (#363). Off, the report is still made
+    # and readable in STOA; only the email stops.
+    weeklyReportEmail: bool
     supportedCategories: list[str]
     supportedChannels: list[str]
     updatedAt: str | None = None
@@ -189,8 +194,40 @@ async def update_notification_preferences(
     actor: Actor = Depends(_own(ResourceType.NOTIFICATION_PREFERENCE, AuthorizationAction.UPDATE)),
 ):
     return notification_service.update_preferences(
-        actor.user_id, body.preferences, dispatch_email=body.dispatchEmail
+        actor.user_id,
+        body.preferences,
+        dispatch_email=body.dispatchEmail,
+        weekly_report_email=body.weeklyReportEmail,
     )
+
+
+class EmailSubscriptionResponse(BaseModel):
+    # Which kind of email the link was for: weekly_report, dispatch_reminder or
+    # notification_digest. Nothing names the person or their address.
+    kind: str
+    subscribed: bool
+
+
+@router.post("/email-unsubscribe", response_model=EmailSubscriptionResponse)
+@explicit_route_classification("public", "signed unsubscribe link from a notification email")
+async def unsubscribe_from_email(token: str = Query(..., max_length=2048)):
+    """Stop one kind of notification email for the person the link was sent to (#363).
+
+    Answers the frontend's unsubscribe page and the RFC 8058 one-click POST a
+    mail client sends to the `List-Unsubscribe` address (its form body,
+    `List-Unsubscribe=One-Click`, is not read). The signed token in the query
+    is the credential: it names one person and one kind of email. A link that
+    is broken, altered, for another kind or no longer signed by a key we hold is
+    refused with `email_unsubscribe_link_invalid`.
+    """
+    return notification_service.set_email_subscription(token, subscribed=False)
+
+
+@router.post("/email-resubscribe", response_model=EmailSubscriptionResponse)
+@explicit_route_classification("public", "signed unsubscribe link from a notification email")
+async def resubscribe_to_email(token: str = Query(..., max_length=2048)):
+    """Undo an unsubscribe from the same link (#363)."""
+    return notification_service.set_email_subscription(token, subscribed=True)
 
 
 @router.get("/digest-preview", response_model=NotificationDigestPreviewResponse)
