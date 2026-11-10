@@ -8,13 +8,18 @@
 
 and the answer is `{"ok": true, "result": ...}` or
 `{"ok": false, "error": {"code": ..., "message": ...}}`. Nothing a caller sends
-is echoed back, and an error message never carries a stored value.
+is echoed back, and an error message carries no stored value beyond account
+numbers and states.
 
 Order matters. The caller is verified before anything else, so an unverified
 caller learns nothing, not even which operations exist. Every verified call then
 leaves exactly one row in the security audit stream of `operator:agent_mcp`,
 refusals included; a read's result is only handed back once its row is written.
 An operation that cannot be recorded does not answer.
+
+An operation that changes data (#384) takes `dryRun`. Its rehearsal only reads; its
+real run writes, and its row is written after it, so a real run whose row then fails
+has happened all the same, and the answer says so instead of claiming nothing ran.
 """
 
 from __future__ import annotations
@@ -30,28 +35,25 @@ from pydantic import BaseModel, ValidationError
 
 from stoa import config
 from stoa.db.repositories import security_audit_repo
-from stoa.operator_calls import accounts, caller_identity, catalog
+from stoa.operator_calls import accounts, caller_identity, catalog, invitations
+from stoa.operator_calls.outcome import OperatorCallRefused, Outcome
 from stoa.rule_violation import RuleViolation
 
 
 logger = logging.getLogger(__name__)
 
-Runner = Callable[[Any], accounts.Outcome]
+Runner = Callable[[Any], Outcome]
 
 RUNNERS: Mapping[str, Runner] = {
     "find_accounts": accounts.find_accounts,
     "get_account": accounts.get_account,
+    "invite_account": invitations.invite_account,
+    "reissue_invitation": invitations.reissue_invitation,
+    "revoke_invitation": invitations.revoke_invitation,
 }
 
 _AGENT_PATTERN = re.compile(r"[^A-Za-z0-9._-]")
 _FUNCTION_ARN = re.compile(r"^arn:aws[a-z-]*:lambda:[a-z0-9-]+:(\d{12}):function:")
-
-
-class OperatorCallRefused(Exception):
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
 
 
 def _error(code: str, message: str) -> dict[str, object]:
@@ -165,7 +167,11 @@ def handle(
     except OperatorCallRefused as refused:
         return _error(refused.code, refused.message)
 
-    def record(result_code: str, outcome: accounts.Outcome | None = None) -> None:
+    def record(
+        result_code: str,
+        outcome: Outcome | None = None,
+        refused: OperatorCallRefused | None = None,
+    ) -> None:
         _record(
             key=key,
             principal_arn=principal_arn,
@@ -173,13 +179,14 @@ def handle(
             action=action,
             dry_run=dry_run,
             result_code=result_code,
-            target_type=outcome.target_type if outcome else "",
-            target_id=outcome.target_id if outcome else "",
+            target_type=outcome.target_type if outcome else (refused.target_type if refused else ""),
+            target_id=outcome.target_id if outcome else (refused.target_id if refused else ""),
             evidence=outcome.evidence if outcome else "",
             correlation_id=correlation_id,
             now=now(),
         )
 
+    refusal: OperatorCallRefused | None = None
     try:
         if spec is None or name not in RUNNERS:
             raise OperatorCallRefused(
@@ -189,27 +196,35 @@ def handle(
                 + ".",
             )
         arguments = _arguments(spec, raw_arguments)
+        # The validated switch is what the operation obeys, so it is what is recorded.
+        dry_run = getattr(arguments, "dryRun", False) is True
         outcome = RUNNERS[name](arguments)
-    except OperatorCallRefused as refused:
-        code, message, outcome = refused.code, refused.message, None
+    except OperatorCallRefused as declined:
+        code, message, refusal = declined.code, declined.message, declined
     except accounts.AmbiguousAccount as exc:
-        code, message, outcome = "ambiguous_account", str(exc), None
+        code, message = "ambiguous_account", str(exc)
     except RuleViolation as violation:
         code = str(violation.code.value)
-        message, outcome = f"Refused: {code}.", None
+        message = f"Refused: {code}."
     except Exception:  # noqa: BLE001 - the answer must not carry the failure's detail
         logger.exception("operator call %s failed (%s)", action, correlation_id)
-        code, message, outcome = "failed", f"The operation failed; see logs for {correlation_id}.", None
+        code, message = "failed", f"The operation failed; see logs for {correlation_id}."
     else:
         try:
             record("ok", outcome)
         except Exception:  # noqa: BLE001
             logger.exception("operator call %s not recorded (%s)", action, correlation_id)
+            if spec is not None and spec.effect is catalog.Effect.WRITE and not dry_run:
+                return _error(
+                    "audit_unavailable",
+                    "The operation ran but could not be recorded, so no result is given; "
+                    "check the account with get_account before trying again.",
+                )
             return _error("audit_unavailable", "The call could not be recorded, so no result is given.")
         return {"ok": True, "result": outcome.result, "correlationId": correlation_id}
 
     try:
-        record(code)
+        record(code, refused=refusal)
     except Exception:  # noqa: BLE001
         logger.exception("operator refusal %s not recorded (%s)", action, correlation_id)
     return _error(code, message)

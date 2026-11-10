@@ -1,4 +1,4 @@
-"""#383: operator calls - an agent's admin operations on an operator's SSO identity."""
+"""#383, #384: operator calls - an agent's admin operations on an operator's SSO identity."""
 
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ from typing import Any
 import pytest
 
 from stoa import main
-from stoa.db.repositories import security_audit_repo
+from stoa.db.repositories import account_email_claim_repo, security_audit_repo
 from stoa.operator_calls import caller_identity, catalog, entry
 from stoa.security.identity import AccountStatus, CanonicalRole
-from stoa.services import usage_period
+from stoa.services import account_provisioning_service, notify_service, usage_period
 
 
 ACCOUNT_ID = "562923011260"
@@ -101,6 +101,9 @@ def test_the_operation_list_is_exactly_this() -> None:
     assert {spec.name: spec.effect for spec in catalog.OPERATIONS} == {
         "find_accounts": catalog.Effect.READ,
         "get_account": catalog.Effect.READ,
+        "invite_account": catalog.Effect.WRITE,
+        "reissue_invitation": catalog.Effect.WRITE,
+        "revoke_invitation": catalog.Effect.WRITE,
     }
     assert set(entry.RUNNERS) == set(catalog.OPERATIONS_BY_NAME)
 
@@ -110,7 +113,11 @@ def test_every_write_operation_rehearses_and_asks_first() -> None:
         schema = spec.input_schema()
         if spec.effect is catalog.Effect.WRITE:
             assert "dryRun" in schema["properties"], spec.name
+            # Never defaulted: every write call says which of the two it is.
+            assert "dryRun" in schema["required"], spec.name
+            assert schema["properties"]["dryRun"]["type"] == "boolean", spec.name
             assert "confirm" in spec.description.lower(), spec.name
+            assert spec.description.startswith("Changes data."), spec.name
         else:
             assert spec.description.startswith("Read only."), spec.name
 
@@ -470,3 +477,445 @@ def test_the_default_audit_key_comes_from_the_configured_keyring() -> None:
 
     assert key.key_id
     assert key.secret
+
+
+# -- invitations (#384) ---------------------------------------------------------------
+
+
+ADDRESS = "new.student@stoa.test"
+ADMIN_ACTOR = {
+    "user_id": "admin-1",
+    "role": "admin",
+    "account_status": "active",
+    "capabilities": {"admin_identity_manager": True},
+}
+
+
+@pytest.fixture
+def mailbox(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    """Every activation email the console's own delivery was asked to send."""
+    sent: list[dict[str, Any]] = []
+
+    def send(recipient: str, **kwargs: Any) -> None:
+        sent.append({"recipient": recipient, **kwargs})
+
+    monkeypatch.setattr(notify_service, "send_account_invitation_email", send)
+    return sent
+
+
+def _rows(table) -> dict[tuple[str, str], dict[str, Any]]:
+    return {key: dict(row) for key, row in table.rows.items()}
+
+
+def _business_rows_added(table, before) -> set[tuple[str, str]]:
+    return {
+        key
+        for key in table.rows
+        if key not in before and key[0] != f"SECURITY_AUDIT#{catalog.OPERATOR_ACTOR_ID}"
+    }
+
+
+def _invitations(table) -> list[dict[str, Any]]:
+    return [
+        row for (pk, _sk), row in table.rows.items() if pk.startswith("ACCOUNT_INVITATION#")
+    ]
+
+
+def _assert_no_secrets(answer: dict, table) -> None:
+    assert not [k for k in _keys(answer) if any(word in k.lower() for word in SECRET_WORDS)]
+    text = str(answer)
+    for row in _invitations(table):
+        assert str(row["token_digest"]) not in text
+
+
+def _invite(**overrides: Any) -> dict:
+    arguments = {"role": "student", "email": ADDRESS, "fullName": "Alex Muster", "dryRun": False}
+    arguments.update(overrides)
+    answer = _call("invite_account", arguments)
+    assert answer["ok"] is True, answer
+    return answer["result"]
+
+
+def test_admin_is_not_an_invitable_role() -> None:
+    roles = catalog.InviteAccountArguments.model_json_schema()["properties"]["role"]["enum"]
+    assert set(roles) == {"student", "parent", "teacher"}
+
+
+def test_a_dry_run_invitation_writes_and_sends_nothing(fake_table, mailbox) -> None:
+    before = _rows(fake_table)
+
+    answer = _call(
+        "invite_account", {"role": "student", "email": " New.Student@stoa.test ", "dryRun": True}
+    )
+
+    assert answer["ok"] is True, answer
+    assert answer["result"] == {
+        "dryRun": True,
+        "summary": (
+            "Would create a student account in state invited and send a German activation "
+            f"email to {ADDRESS}. Its account number is allocated when it runs. Nothing was "
+            "created or sent."
+        ),
+        "role": "student",
+        "email": ADDRESS,
+        "accountStatus": "invited",
+        "emailLanguage": "de",
+        "expirySeconds": account_provisioning_service.DEFAULT_INVITATION_SECONDS,
+    }
+    assert mailbox == []
+    assert {key: fake_table.rows[key] for key in before} == before
+    assert _business_rows_added(fake_table, before) == set()
+    (row,) = _audit_rows(fake_table)
+    assert row["action"] == "invite_account"
+    assert row["dry_run"] is True
+    assert row["result_code"] == "ok"
+    assert ADDRESS not in str(row)
+    _assert_no_secrets(answer, fake_table)
+
+
+def test_a_real_invitation_opens_the_account_and_mails_it_as_the_console_does(
+    fake_table, mailbox
+) -> None:
+    result = _invite(locale="fr")
+
+    assert set(result) == {
+        "dryRun",
+        "summary",
+        "userId",
+        "accountNumber",
+        "role",
+        "accountStatus",
+        "invitationId",
+        "invitationStatus",
+        "invitationDelivered",
+        "emailLanguage",
+        "expiresAt",
+    }
+    assert result["dryRun"] is False
+    assert result["role"] == "student"
+    assert result["accountStatus"] == "invited"
+    assert result["accountNumber"].startswith("S")
+    assert result["invitationStatus"] == "issued"
+    assert result["invitationDelivered"] is True
+    assert result["summary"] == (
+        f"Created student account {result['accountNumber']} in state invited and sent a "
+        "French activation email."
+    )
+    (mail,) = mailbox
+    assert mail["recipient"] == ADDRESS
+    assert mail["locale"] == "fr"
+    assert mail["role"] == "student"
+    assert mail["activation_token"] not in str(result)
+
+    profile = fake_table.rows[(f"USER#{result['userId']}", "PROFILE")]
+    assert profile["created_by"] == "operator:agent_mcp"
+    assert profile["account_status"] == "invited"
+    (invitation,) = _invitations(fake_table)
+    assert invitation["invited_by"] == "operator:agent_mcp"
+    assert invitation["invitation_id"] == result["invitationId"]
+    service_rows = [
+        row
+        for (pk, _sk), row in fake_table.rows.items()
+        if pk == f"SECURITY_AUDIT#{result['userId']}"
+    ]
+    assert {row["event_type"] for row in service_rows} == {"account_invitation_issued"}
+    assert {row["actor_id"] for row in service_rows} == {"operator:agent_mcp"}
+    (row,) = _audit_rows(fake_table)
+    assert row["dry_run"] is False
+    assert row["target_id"] == result["userId"]
+    assert row["evidence_reference"] == f"account-invitation:{result['invitationId']}"
+    _assert_no_secrets({"result": result}, fake_table)
+
+
+def test_get_account_then_shows_the_invited_account(fake_table, mailbox) -> None:
+    result = _invite()
+
+    account = _call("get_account", {"accountNumber": result["accountNumber"]})["result"]
+
+    assert account["userId"] == result["userId"]
+    assert account["accountStatus"] == "invited"
+    assert account["invitationId"] == result["invitationId"]
+
+
+def test_a_delivery_failure_is_said_not_hidden(fake_table, monkeypatch) -> None:
+    def down(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("SES unavailable")
+
+    monkeypatch.setattr(notify_service, "send_account_invitation_email", down)
+
+    result = _invite()
+
+    assert result["invitationDelivered"] is False
+    assert "could not send the activation email" in result["summary"]
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_an_address_already_held_in_that_role_is_refused_by_number(
+    fake_table, mailbox, dry_run
+) -> None:
+    fake_table.seed(_profile("parent-2", "parent", "P26-0002", email="held@stoa.test"))
+    before = _rows(fake_table)
+
+    answer = _call(
+        "invite_account", {"role": "parent", "email": "Held@stoa.test", "dryRun": dry_run}
+    )
+
+    verb = "Would be refused" if dry_run else "Refused"
+    tense = "would be" if dry_run else "was"
+    assert answer == {
+        "ok": False,
+        "error": {
+            "code": "account_exists",
+            "message": f"{verb}: this address already holds a parent account (P26-0002, "
+            f"active). Nothing {tense} created or sent.",
+        },
+    }
+    assert mailbox == []
+    assert _business_rows_added(fake_table, before) == set()
+    (row,) = _audit_rows(fake_table)
+    assert row["result_code"] == "account_exists"
+    assert row["dry_run"] is dry_run
+    assert row["target_id"] == "parent-2"
+
+
+def test_the_claim_row_refuses_even_before_the_address_index_has_caught_up(
+    fake_table, mailbox
+) -> None:
+    # The profile does not carry the address in the index yet; the claim row does.
+    profile = _profile("student-9", "student", "S26-0009")
+    profile.pop("email")
+    fake_table.seed(
+        profile,
+        account_email_claim_repo.claim_item(
+            email=ADDRESS, role="student", account_id="student-9", created_at="2026-01-01"
+        ),
+    )
+
+    answer = _call("invite_account", {"role": "student", "email": ADDRESS, "dryRun": True})
+
+    assert answer["error"]["code"] == "account_exists"
+    assert "(S26-0009, active)" in answer["error"]["message"]
+    assert mailbox == []
+
+
+def test_the_same_address_in_another_role_is_free(fake_table, mailbox) -> None:
+    fake_table.seed(_profile("parent-2", "parent", "P26-0002", email="held@stoa.test"))
+
+    answer = _call("invite_account", {"role": "teacher", "email": "held@stoa.test", "dryRun": True})
+
+    assert answer["ok"] is True
+    assert answer["result"]["role"] == "teacher"
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"role": "student", "email": ADDRESS},
+        {"role": "student", "email": ADDRESS, "dryRun": "true"},
+        {"role": "student", "email": ADDRESS, "dryRun": 1},
+        {"role": "admin", "email": ADDRESS, "dryRun": True},
+        {"role": "student", "email": ADDRESS, "dryRun": True, "locale": "es"},
+        {"role": "student", "email": ADDRESS, "dryRun": True, "activationToken": "x"},
+    ],
+)
+def test_an_invitation_must_say_dry_run_or_not_and_stay_in_its_lane(
+    fake_table, mailbox, arguments
+) -> None:
+    answer = _call("invite_account", arguments)
+
+    assert answer["error"]["code"] == "invalid_arguments"
+    assert ADDRESS not in str(answer)
+    assert mailbox == []
+    assert _business_rows_added(fake_table, {}) == set()
+
+
+def test_an_invalid_birthday_is_refused_in_the_dry_run_too(fake_table, mailbox) -> None:
+    answer = _call(
+        "invite_account",
+        {"role": "student", "email": ADDRESS, "dateOfBirth": "2026-02-30", "dryRun": True},
+    )
+
+    assert answer["error"] == {
+        "code": "date_of_birth_invalid",
+        "message": "Refused: date_of_birth_invalid.",
+    }
+
+
+@pytest.mark.parametrize("key", ["invitationId", "accountNumber"])
+def test_a_dry_run_reissue_reports_the_invitation_and_changes_nothing(
+    fake_table, mailbox, key
+) -> None:
+    invited = _invite()
+    mailbox.clear()
+    before = _rows(fake_table)
+
+    answer = _call("reissue_invitation", {key: invited[key], "dryRun": True})
+
+    assert answer["ok"] is True, answer
+    result = answer["result"]
+    assert result["dryRun"] is True
+    assert result["invitationId"] == invited["invitationId"]
+    assert result["invitationStatus"] == "issued"
+    assert result["expired"] is False
+    assert result["accountNumber"] == invited["accountNumber"]
+    assert result["accountStatus"] == "invited"
+    assert result["emailLanguage"] == "de"
+    assert result["summary"].startswith(
+        f"Now: invitation {invited['invitationId']} is issued; student account "
+        f"{invited['accountNumber']} is invited. Would retire this invitation"
+    )
+    assert mailbox == []
+    assert {key: fake_table.rows[key] for key in before} == before
+    assert _business_rows_added(fake_table, before) == set()
+    assert _audit_rows(fake_table)[-1]["dry_run"] is True
+    _assert_no_secrets(answer, fake_table)
+
+
+def test_a_real_reissue_retires_the_old_link_and_mails_a_new_one(fake_table, mailbox) -> None:
+    invited = _invite()
+    mailbox.clear()
+
+    answer = _call(
+        "reissue_invitation",
+        {"accountNumber": invited["accountNumber"], "locale": "it", "dryRun": False},
+    )
+
+    assert answer["ok"] is True, answer
+    result = answer["result"]
+    assert result["replacedInvitationId"] == invited["invitationId"]
+    assert result["invitationId"] != invited["invitationId"]
+    assert result["accountNumber"] == invited["accountNumber"]
+    assert result["userId"] == invited["userId"]
+    assert result["invitationDelivered"] is True
+    (mail,) = mailbox
+    assert mail["recipient"] == ADDRESS and mail["locale"] == "it"
+    assert mail["activation_token"] not in str(answer)
+    statuses = {row["invitation_id"]: row["status"] for row in _invitations(fake_table)}
+    assert statuses == {invited["invitationId"]: "revoked", result["invitationId"]: "issued"}
+    new_row = next(
+        row for row in _invitations(fake_table) if row["invitation_id"] == result["invitationId"]
+    )
+    assert new_row["invited_by"] == "operator:agent_mcp"
+    _assert_no_secrets(answer, fake_table)
+
+
+def test_a_used_invitation_is_not_reissued(fake_table, mailbox) -> None:
+    invited = _invite()
+    (row,) = _invitations(fake_table)
+    row["status"] = "used"
+    mailbox.clear()
+
+    answer = _call("reissue_invitation", {"invitationId": invited["invitationId"], "dryRun": True})
+
+    assert answer["error"]["code"] == "invitation_already_used"
+    assert answer["error"]["message"] == (
+        f"Would be refused: invitation {invited['invitationId']} is used; student account "
+        f"{invited['accountNumber']} is invited. A used invitation cannot be reissued."
+    )
+    assert mailbox == []
+
+
+def test_an_administrator_invitation_is_not_reissued_by_an_agent(fake_table, mailbox) -> None:
+    issued = account_provisioning_service.invite_account(
+        actor=ADMIN_ACTOR, role="admin", email="new.admin@stoa.test"
+    )
+
+    for dry_run in (True, False):
+        answer = _call(
+            "reissue_invitation", {"invitationId": issued["invitationId"], "dryRun": dry_run}
+        )
+        assert answer["error"]["code"] == "role_not_provisionable"
+    assert {row["status"] for row in _invitations(fake_table)} == {"issued"}
+
+
+def test_a_dry_run_revoke_reports_the_invitation_and_changes_nothing(fake_table, mailbox) -> None:
+    invited = _invite()
+    before = _rows(fake_table)
+
+    answer = _call("revoke_invitation", {"invitationId": invited["invitationId"], "dryRun": True})
+
+    assert answer["ok"] is True, answer
+    assert answer["result"]["dryRun"] is True
+    assert answer["result"]["invitationStatus"] == "issued"
+    assert answer["result"]["accountNumber"] == invited["accountNumber"]
+    assert "Would revoke this invitation" in answer["result"]["summary"]
+    assert {key: fake_table.rows[key] for key in before} == before
+    assert _business_rows_added(fake_table, before) == set()
+    _assert_no_secrets(answer, fake_table)
+
+
+def test_a_real_revoke_retires_the_invitation_and_keeps_the_account(fake_table, mailbox) -> None:
+    invited = _invite()
+
+    answer = _call(
+        "revoke_invitation", {"accountNumber": invited["accountNumber"].lower(), "dryRun": False}
+    )
+
+    assert answer["ok"] is True, answer
+    result = answer["result"]
+    assert result["invitationId"] == invited["invitationId"]
+    assert result["invitationStatus"] == "revoked"
+    assert result["accountStatus"] == "invited"
+    (row,) = _invitations(fake_table)
+    assert row["status"] == "revoked"
+    revoked = [
+        event
+        for (pk, _sk), event in fake_table.rows.items()
+        if pk == f"SECURITY_AUDIT#{invited['userId']}"
+        and event["event_type"] == "account_invitation_revoked"
+    ]
+    assert [event["actor_id"] for event in revoked] == ["operator:agent_mcp"]
+    assert _audit_rows(fake_table)[-1]["target_id"] == invited["userId"]
+    _assert_no_secrets(answer, fake_table)
+
+    again = _call("revoke_invitation", {"invitationId": invited["invitationId"], "dryRun": True})
+    assert again["error"]["code"] == "invitation_not_revocable"
+    assert f"invitation {invited['invitationId']} is revoked" in again["error"]["message"]
+    by_number = _call(
+        "revoke_invitation", {"accountNumber": invited["accountNumber"], "dryRun": True}
+    )
+    assert by_number["error"] == {
+        "code": "invitation_not_found",
+        "message": f"Account {invited['accountNumber']} (invited) has no open invitation.",
+    }
+
+
+@pytest.mark.parametrize(
+    ("operation", "arguments", "code"),
+    [
+        (
+            "revoke_invitation",
+            {"invitationId": "accountinvite_nope", "dryRun": True},
+            "invitation_not_found",
+        ),
+        ("reissue_invitation", {"accountNumber": "S26-9999", "dryRun": True}, "account_not_found"),
+        ("revoke_invitation", {"dryRun": True}, "invalid_arguments"),
+        (
+            "revoke_invitation",
+            {"invitationId": "a", "accountNumber": "S26-0001", "dryRun": True},
+            "invalid_arguments",
+        ),
+    ],
+)
+def test_invitation_refusals_are_recorded(fake_table, operation, arguments, code) -> None:
+    answer = _call(operation, arguments)
+
+    assert answer["error"]["code"] == code
+    assert _audit_rows(fake_table)[0]["result_code"] == code
+
+
+def test_a_real_write_whose_row_fails_says_it_ran(fake_table, mailbox, monkeypatch) -> None:
+    real_append = security_audit_repo.append_event
+
+    def operator_rows_fail(stream_id, event, **kwargs):
+        if stream_id == catalog.OPERATOR_ACTOR_ID:
+            raise RuntimeError("audit table down")
+        return real_append(stream_id, event, **kwargs)
+
+    monkeypatch.setattr(security_audit_repo, "append_event", operator_rows_fail)
+
+    answer = _call("invite_account", {"role": "student", "email": ADDRESS, "dryRun": False})
+
+    assert answer["error"]["code"] == "audit_unavailable"
+    assert "ran but could not be recorded" in answer["error"]["message"]
+    assert len(mailbox) == 1

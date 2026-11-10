@@ -63,8 +63,10 @@ DEFAULT_ACCOUNT_ID = "562923011260"
 INSTRUCTIONS = (
     "Admin operations on the production STOA back office, run on the operator's AWS "
     "SSO identity and recorded in the audit trail as an agent call. Read-only tools "
-    "change nothing. If a call says the SSO session is missing or expired, ask the "
-    f"person to {SSO_LOGIN_HINT}; never ask for a password."
+    "change nothing. A tool that changes data takes dryRun: always call it with "
+    "dryRun=true first, show the person what it would do, and call it with "
+    "dryRun=false only after they confirm. If a call says the SSO session is missing "
+    f"or expired, ask the person to {SSO_LOGIN_HINT}; never ask for a password."
 )
 
 
@@ -137,7 +139,7 @@ def tool_definitions() -> list[dict[str, Any]]:
             "annotations": {
                 "title": spec.title,
                 "readOnlyHint": spec.effect is catalog.Effect.READ,
-                "destructiveHint": False,
+                "destructiveHint": spec.destructive,
                 "openWorldHint": False,
             },
         }

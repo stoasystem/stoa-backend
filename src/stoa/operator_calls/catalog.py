@@ -83,6 +83,74 @@ class FindAccountsArguments(_Arguments):
     )
 
 
+# What an agent may open by invitation. Administrators are not on it: opening one
+# stays with the console and the bootstrap script (#380, decision 3).
+InvitableRole = Literal["student", "parent", "teacher"]
+# The languages an activation email is written in (`locale_service.SUPPORTED_LOCALES`).
+EmailLocale = Literal["de", "en", "fr", "it"]
+
+DRY_RUN_DESCRIPTION = (
+    "true: only report what would happen; nothing is created, sent or changed. "
+    "false: do it. Run with true first and show the person the answer."
+)
+_EXPIRY_DESCRIPTION = (
+    "How long the activation link stays valid, in seconds (60 to 1209600). "
+    "Default 259200 (three days)."
+)
+_LOCALE_DESCRIPTION = "Language of the activation email. Default de (German)."
+_INVITATION_ID_DESCRIPTION = (
+    "The invitation id, e.g. accountinvite_..., as get_account shows it."
+)
+_INVITED_ACCOUNT_NUMBER_DESCRIPTION = (
+    "Account number of an invited account (e.g. S26-0001); its open invitation is used."
+)
+
+
+class InviteAccountArguments(_Arguments):
+    role: InvitableRole
+    email: str = Field(min_length=3, max_length=320)
+    fullName: str = Field(default="", max_length=120)
+    dateOfBirth: str | None = Field(
+        default=None, max_length=32, description="YYYY-MM-DD, if known."
+    )
+    expirySeconds: int | None = Field(
+        default=None, ge=60, le=1209600, description=_EXPIRY_DESCRIPTION
+    )
+    locale: EmailLocale | None = Field(default=None, description=_LOCALE_DESCRIPTION)
+    dryRun: bool = Field(strict=True, description=DRY_RUN_DESCRIPTION)
+
+
+class _InvitationKey(_Arguments):
+    invitationId: str | None = Field(
+        default=None, min_length=1, max_length=128, description=_INVITATION_ID_DESCRIPTION
+    )
+    accountNumber: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=32,
+        description=_INVITED_ACCOUNT_NUMBER_DESCRIPTION,
+    )
+
+    @model_validator(mode="after")
+    def _exactly_one_key(self) -> "_InvitationKey":
+        given = [value for value in (self.invitationId, self.accountNumber) if value]
+        if len(given) != 1:
+            raise ValueError("name exactly one of invitationId or accountNumber")
+        return self
+
+
+class ReissueInvitationArguments(_InvitationKey):
+    expirySeconds: int | None = Field(
+        default=None, ge=60, le=1209600, description=_EXPIRY_DESCRIPTION
+    )
+    locale: EmailLocale | None = Field(default=None, description=_LOCALE_DESCRIPTION)
+    dryRun: bool = Field(strict=True, description=DRY_RUN_DESCRIPTION)
+
+
+class RevokeInvitationArguments(_InvitationKey):
+    dryRun: bool = Field(strict=True, description=DRY_RUN_DESCRIPTION)
+
+
 class GetAccountArguments(_Arguments):
     userId: str | None = Field(default=None, min_length=1, max_length=128)
     accountNumber: str | None = Field(default=None, min_length=1, max_length=32)
@@ -103,6 +171,8 @@ class OperationSpec:
     title: str
     description: str
     arguments: type[BaseModel]
+    # Takes something away that the person may still need (an invitation link).
+    destructive: bool = False
 
     def input_schema(self) -> dict[str, Any]:
         return self.arguments.model_json_schema()
@@ -134,6 +204,58 @@ OPERATIONS: tuple[OperationSpec, ...] = (
             "period and who pays for it. Every call is recorded in the audit trail."
         ),
         arguments=GetAccountArguments,
+    ),
+    OperationSpec(
+        name="invite_account",
+        effect=Effect.WRITE,
+        title="Invite a STOA account",
+        description=(
+            "Changes data. Before calling, confirm with the person: show them the role, "
+            "email address and email language, run with dryRun=true first, and only "
+            "call with dryRun=false once they have said yes to that answer. Opens one "
+            "student, parent or teacher account in state invited and emails its "
+            "single-use activation link, as the admin console's invitation does. A dry "
+            "run says what would be created and sent, or why it would be refused (for "
+            "example the address already holds an account of that role, named by its "
+            "account number). Answers with the account number, userId, role, status "
+            "and invitation id; never the activation link. Every call, dry runs "
+            "included, is recorded in the audit trail."
+        ),
+        arguments=InviteAccountArguments,
+    ),
+    OperationSpec(
+        name="reissue_invitation",
+        effect=Effect.WRITE,
+        title="Reissue a STOA invitation",
+        description=(
+            "Changes data. Before calling, confirm with the person: run with "
+            "dryRun=true first, show them the answer, and only call with dryRun=false "
+            "once they have said yes. Replaces the open invitation of an account that "
+            "is still invited (named by invitationId or accountNumber): the old "
+            "activation link stops working and a new one is emailed; the account and "
+            "its number stay. A dry run reports the invitation's current state and "
+            "whether it can be reissued. Answers with the account number, userId, "
+            "role, status and the new invitation id; never the activation link. Every "
+            "call, dry runs included, is recorded in the audit trail."
+        ),
+        arguments=ReissueInvitationArguments,
+        destructive=True,
+    ),
+    OperationSpec(
+        name="revoke_invitation",
+        effect=Effect.WRITE,
+        title="Revoke a STOA invitation",
+        description=(
+            "Changes data. Before calling, confirm with the person: run with "
+            "dryRun=true first, show them the answer, and only call with dryRun=false "
+            "once they have said yes. Retires an unused invitation (named by "
+            "invitationId or accountNumber) so its activation link stops working; the "
+            "account itself stays invited. A dry run reports the invitation's current "
+            "state and whether it can be revoked. Every call, dry runs included, is "
+            "recorded in the audit trail."
+        ),
+        arguments=RevokeInvitationArguments,
+        destructive=True,
     ),
 )
 

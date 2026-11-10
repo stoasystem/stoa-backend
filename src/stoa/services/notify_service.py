@@ -1,5 +1,7 @@
 """SQS + SES — teacher queue and email notifications."""
 from datetime import UTC, datetime
+from functools import partial
+from typing import Callable
 from urllib.parse import quote
 from uuid import uuid4
 from stoa import aws
@@ -282,6 +284,23 @@ def send_account_invitation_email(
             role=role,
         ),
     )
+
+
+def account_invitation_locale(locale: str | None) -> str:
+    """The language an invitee is written to: the one named, else the default (#374).
+
+    Never the language of whoever sends the invitation; that is who sent it, not who
+    reads it. An unknown or malformed name falls back to the default too.
+    """
+    try:
+        return locale_service.normalize_locale(locale or locale_service.DEFAULT_LOCALE)
+    except ValueError:
+        return locale_service.DEFAULT_LOCALE
+
+
+def account_invitation_delivery(locale: str | None) -> Callable[..., None]:
+    """How an administrator's invitation is mailed, by the console and by an agent (#384)."""
+    return partial(send_account_invitation_email, locale=account_invitation_locale(locale))
 
 
 def dispatch_reminder_message(
