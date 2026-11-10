@@ -34,6 +34,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import settings
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import allowance_repo
@@ -570,10 +572,8 @@ class MeteredModel:
             if self._deadline_monotonic is None
             else self._deadline_monotonic - self._clock()
         )
-        runtime_client = self._runtime_client or ai_service.boto3.client(
-            "bedrock-runtime",
-            region_name=ai_service.settings.aws_region,
-            config=ai_service.bedrock_runtime_config(remaining),
+        runtime_client = self._runtime_client or aws.client(
+            Kind.BEDROCK_RUNTIME, config=ai_service.bedrock_runtime_config(remaining)
         )
         self._runtime_client = runtime_client
         try:

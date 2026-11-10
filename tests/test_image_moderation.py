@@ -25,15 +25,11 @@ from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import Settings
-from stoa.deps import (
-    get_actor,
-    get_image_moderation_client,
-    get_s3_client,
-    get_s3_presign_client,
-    get_settings,
-)
+from stoa.deps import get_actor, get_settings
 from stoa.routers import files
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from fakes.dynamodb import FakeTable
@@ -95,9 +91,11 @@ class _Api:
         app = FastAPI()
         app.include_router(files.router, prefix="/files")
         app.dependency_overrides[get_actor] = lambda: self.actor
-        app.dependency_overrides[get_s3_client] = lambda: self.s3
-        app.dependency_overrides[get_s3_presign_client] = lambda: self.s3
-        app.dependency_overrides[get_image_moderation_client] = lambda: moderation
+        aws.install({
+            Kind.S3: self.s3,
+            Kind.S3_PRESIGN: self.s3,
+            Kind.REKOGNITION_MODERATION: moderation,
+        })
         app.dependency_overrides[get_settings] = lambda: settings or Settings(s3_images_bucket=BUCKET)
         self.client = TestClient(app)
 
@@ -408,9 +406,8 @@ def test_the_production_client_calls_rekognition_in_frankfurt(monkeypatch) -> No
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "not-a-secret")
     monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", "/nonexistent")
     monkeypatch.setenv("AWS_CONFIG_FILE", "/nonexistent")
-    get_image_moderation_client.cache_clear()
-    client = get_image_moderation_client()
-    get_image_moderation_client.cache_clear()
+    aws.install(None)
+    client = aws.client(Kind.REKOGNITION_MODERATION)
 
     assert client.meta.service_model.service_name == "rekognition"
     assert client.meta.region_name == "eu-central-1"
@@ -431,9 +428,8 @@ STANDARD_BACKOFF_CAP_SECONDS = 20
 def test_the_production_client_gives_up_well_inside_the_gateway_limit(monkeypatch) -> None:
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIDEXAMPLE")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "not-a-secret")
-    get_image_moderation_client.cache_clear()
-    config = get_image_moderation_client().meta.config
-    get_image_moderation_client.cache_clear()
+    aws.install(None)
+    config = aws.client(Kind.REKOGNITION_MODERATION).meta.config
 
     attempts = config.retries["total_max_attempts"]
     backoff = sum(min(2 ** retry, STANDARD_BACKOFF_CAP_SECONDS) for retry in range(attempts - 1))

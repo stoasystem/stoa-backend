@@ -15,6 +15,8 @@ from actor_helpers import install_actor_overrides
 # The shared double already evaluates conditions and stores numbers the way the
 # table returns them, which is everything the local one here was written for.
 from fakes.dynamodb import FakeTable, as_stored as _as_stored
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
 from stoa.db import table as db_table
 from stoa.routers import auth
@@ -64,7 +66,8 @@ def test_code_is_six_digits_and_never_stored_in_the_clear():
     table = FakeTable()
     ses = RecordingSes()
 
-    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    aws.install({Kind.SES: ses})
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table)
 
     code = _sent_code(ses)
     assert len(code) == 6 and code.isdigit()
@@ -77,7 +80,8 @@ def test_code_is_six_digits_and_never_stored_in_the_clear():
 def test_code_is_single_use():
     table = FakeTable()
     ses = RecordingSes()
-    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    aws.install({Kind.SES: ses})
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table)
     code = _sent_code(ses)
 
     codes.verify_and_consume("user-1", code, now=BASE_TIME, table=table)
@@ -89,7 +93,8 @@ def test_code_is_single_use():
 def test_code_expires_after_ten_minutes():
     table = FakeTable()
     ses = RecordingSes()
-    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    aws.install({Kind.SES: ses})
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table)
     code = _sent_code(ses)
 
     codes.verify_and_consume(
@@ -98,7 +103,8 @@ def test_code_expires_after_ten_minutes():
 
     table.rows.clear()
     ses.sent.clear()
-    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    aws.install({Kind.SES: ses})
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table)
     code = _sent_code(ses)
     with pytest.raises(codes.PasswordChangeCodeRejected):
         codes.verify_and_consume(
@@ -109,7 +115,8 @@ def test_code_expires_after_ten_minutes():
 def test_a_wrong_code_is_rejected_and_bounded_by_attempts():
     table = FakeTable()
     ses = RecordingSes()
-    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    aws.install({Kind.SES: ses})
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table)
     code = _sent_code(ses)
     wrong = f"{(int(code) + 1) % 1000000:06d}"
 
@@ -165,7 +172,8 @@ def test_consumption_is_bound_to_the_challenge_that_was_verified():
     table = ReplacingTable(
         owner="user-1", replacement="654321", at=BASE_TIME + timedelta(seconds=1)
     )
-    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    aws.install({Kind.SES: ses})
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table)
     first = _sent_code(ses)
 
     with pytest.raises(codes.PasswordChangeCodeRejected):
@@ -185,7 +193,8 @@ def test_a_failed_attempt_is_not_charged_to_a_replacement_challenge():
     table = ReplacingTable(
         owner="user-1", replacement="654321", at=BASE_TIME + timedelta(seconds=1)
     )
-    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    aws.install({Kind.SES: ses})
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table)
     first = _sent_code(ses)
     wrong = f"{(int(first) + 1) % 1000000:06d}"
 
@@ -199,7 +208,8 @@ def test_a_failed_attempt_is_not_charged_to_a_replacement_challenge():
 def test_consumption_rechecks_attempt_budget_at_commit():
     ses = RecordingSes()
     table = BudgetSpendingTable(spend_to=codes.MAX_VERIFY_ATTEMPTS)
-    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    aws.install({Kind.SES: ses})
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table)
     code = _sent_code(ses)
 
     with pytest.raises(codes.PasswordChangeCodeRejected):
@@ -212,7 +222,8 @@ def test_a_concurrent_failed_attempt_still_leaves_the_right_code_usable():
     """Negative control: only an exhausted budget may refuse the commit."""
     ses = RecordingSes()
     table = BudgetSpendingTable(spend_to=codes.MAX_VERIFY_ATTEMPTS - 1)
-    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    aws.install({Kind.SES: ses})
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table)
     code = _sent_code(ses)
 
     codes.verify_and_consume("user-1", code, now=BASE_TIME, table=table)
@@ -226,7 +237,8 @@ def test_a_wrong_guess_does_not_stop_the_right_code_that_follows():
     """Negative control: the ordinary retry an account makes after a typo."""
     table = FakeTable()
     ses = RecordingSes()
-    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    aws.install({Kind.SES: ses})
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table)
     code = _sent_code(ses)
     wrong = f"{(int(code) + 1) % 1000000:06d}"
 
@@ -240,30 +252,30 @@ def test_sends_are_limited_to_five_per_rolling_hour():
     ses = RecordingSes()
 
     for minute in range(codes.MAX_SENDS_PER_WINDOW):
+        aws.install({Kind.SES: ses})
         codes.issue(
             "user-1",
             "learner@example.com",
             now=BASE_TIME + timedelta(minutes=minute),
             table=table,
-            ses_client=ses,
         )
 
     with pytest.raises(codes.PasswordChangeCodeRateLimited):
+        aws.install({Kind.SES: ses})
         codes.issue(
             "user-1",
             "learner@example.com",
             now=BASE_TIME + timedelta(minutes=59),
             table=table,
-            ses_client=ses,
         )
     assert len(ses.sent) == codes.MAX_SENDS_PER_WINDOW
 
+    aws.install({Kind.SES: ses})
     codes.issue(
         "user-1",
         "learner@example.com",
         now=BASE_TIME + timedelta(minutes=61),
         table=table,
-        ses_client=ses,
     )
     assert len(ses.sent) == codes.MAX_SENDS_PER_WINDOW + 1
 
@@ -272,22 +284,22 @@ def test_a_refused_send_never_reaches_ses_or_replaces_the_live_code():
     table = FakeTable()
     ses = RecordingSes()
     for minute in range(codes.MAX_SENDS_PER_WINDOW):
+        aws.install({Kind.SES: ses})
         codes.issue(
             "user-1",
             "learner@example.com",
             now=BASE_TIME + timedelta(minutes=minute),
             table=table,
-            ses_client=ses,
         )
     live = dict(table.rows[("PASSWORD_CHANGE_CODE#user-1", "CURRENT")])
 
     with pytest.raises(codes.PasswordChangeCodeRateLimited):
+        aws.install({Kind.SES: ses})
         codes.issue(
             "user-1",
             "learner@example.com",
             now=BASE_TIME + timedelta(minutes=10),
             table=table,
-            ses_client=ses,
         )
 
     assert len(ses.sent) == codes.MAX_SENDS_PER_WINDOW
@@ -302,19 +314,20 @@ def test_a_failed_send_charges_nothing_and_leaves_the_live_code_alone():
     """
     table = FakeTable()
     ses = RecordingSes()
-    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    aws.install({Kind.SES: ses})
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table)
     live_code = _sent_code(ses)
     live_row = dict(table.rows[("PASSWORD_CHANGE_CODE#user-1", "CURRENT")])
     quota_row = dict(table.rows[("PASSWORD_CHANGE_QUOTA#user-1", "WINDOW")])
 
     for minute in range(1, 4):
         with pytest.raises(codes.PasswordChangeCodeDeliveryFailed):
+            aws.install({Kind.SES: RejectingSes()})
             codes.issue(
                 "user-1",
                 "learner@example.com",
                 now=BASE_TIME + timedelta(minutes=minute),
                 table=table,
-                ses_client=RejectingSes(),
             )
 
     assert table.rows[("PASSWORD_CHANGE_CODE#user-1", "CURRENT")] == live_row
@@ -333,8 +346,9 @@ def test_a_failed_send_never_carries_the_code_or_the_address_outward():
     rejecting = RejectingSes()
 
     with pytest.raises(codes.PasswordChangeCodeDeliveryFailed) as raised:
+        aws.install({Kind.SES: rejecting})
         codes.issue(
-            "user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=rejecting
+            "user-1", "learner@example.com", now=BASE_TIME, table=table
         )
 
     attempted = rejecting.attempts[-1]["Message"]["Body"]["Html"]["Data"]
@@ -349,35 +363,36 @@ def test_the_quota_refund_only_gives_back_the_send_that_failed():
     table = FakeTable()
     ses = RecordingSes()
     for minute in range(codes.MAX_SENDS_PER_WINDOW - 1):
+        aws.install({Kind.SES: ses})
         codes.issue(
             "user-1",
             "learner@example.com",
             now=BASE_TIME + timedelta(minutes=minute),
             table=table,
-            ses_client=ses,
         )
 
     with pytest.raises(codes.PasswordChangeCodeDeliveryFailed):
+        aws.install({Kind.SES: RejectingSes()})
         codes.issue(
             "user-1",
             "learner@example.com",
             now=BASE_TIME + timedelta(minutes=10),
             table=table,
-            ses_client=RejectingSes(),
         )
 
     assert (
         len(table.rows[("PASSWORD_CHANGE_QUOTA#user-1", "WINDOW")]["sends"])
         == codes.MAX_SENDS_PER_WINDOW - 1
     )
+    aws.install({Kind.SES: ses})
     codes.issue(
         "user-1", "learner@example.com",
-        now=BASE_TIME + timedelta(minutes=11), table=table, ses_client=ses,
+        now=BASE_TIME + timedelta(minutes=11), table=table,
     )
     with pytest.raises(codes.PasswordChangeCodeRateLimited):
         codes.issue(
             "user-1", "learner@example.com",
-            now=BASE_TIME + timedelta(minutes=12), table=table, ses_client=ses,
+            now=BASE_TIME + timedelta(minutes=12), table=table,
         )
 
 
@@ -394,9 +409,10 @@ def test_the_code_email_is_written_in_the_account_language(locale, subject_marke
     table = FakeTable()
     ses = RecordingSes()
 
+    aws.install({Kind.SES: ses})
     codes.issue(
         "user-1", "learner@example.com",
-        locale=locale, now=BASE_TIME, table=table, ses_client=ses,
+        locale=locale, now=BASE_TIME, table=table,
     )
 
     sent = ses.sent[-1]["Message"]
@@ -423,12 +439,14 @@ def test_send_quota_is_per_account():
     table = FakeTable()
     ses = RecordingSes()
     for minute in range(codes.MAX_SENDS_PER_WINDOW):
+        aws.install({Kind.SES: ses})
         codes.issue(
             "user-1", "one@example.com", now=BASE_TIME + timedelta(minutes=minute),
-            table=table, ses_client=ses,
+            table=table,
         )
 
-    codes.issue("user-2", "two@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    aws.install({Kind.SES: ses})
+    codes.issue("user-2", "two@example.com", now=BASE_TIME, table=table)
 
     assert len(ses.sent) == codes.MAX_SENDS_PER_WINDOW + 1
 
@@ -443,8 +461,9 @@ def test_issuing_a_code_writes_it_to_no_log(caplog):
     table = FakeTable()
     ses = RecordingSes()
     with caplog.at_level("DEBUG"):
+        aws.install({Kind.SES: ses})
         codes.issue(
-            "user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses
+            "user-1", "learner@example.com", now=BASE_TIME, table=table
         )
     code = _sent_code(ses)
 
@@ -501,7 +520,7 @@ def password_change_client(monkeypatch):
     table = FakeTable()
     ses = RecordingSes()
     provider = FakeCognito()
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: provider)
+    aws.install({Kind.COGNITO: provider})
     monkeypatch.setattr(
         auth.user_repo,
         "get_user",
@@ -512,7 +531,7 @@ def password_change_client(monkeypatch):
         },
     )
     db_table.install(table)
-    monkeypatch.setattr(codes.boto3, "client", lambda *_args, **_kwargs: ses)
+    aws.install({Kind.SES: ses})
 
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
@@ -650,14 +669,14 @@ def test_a_mail_provider_outage_answers_503_and_costs_the_account_nothing(
     live_code = _sent_code(ses)
     live_row = dict(table.rows[("PASSWORD_CHANGE_CODE#user-1", "CURRENT")])
 
-    monkeypatch.setattr(codes.boto3, "client", lambda *_a, **_k: RejectingSes())
+    aws.install({Kind.SES: RejectingSes()})
     for _ in range(codes.MAX_SENDS_PER_WINDOW + 2):
         failed = client.post("/auth/password-change/request", json=body)
         assert failed.status_code == 503
         assert failed.json()["detail"]["code"] == "password_change_code_delivery_failed"
 
     assert table.rows[("PASSWORD_CHANGE_CODE#user-1", "CURRENT")] == live_row
-    monkeypatch.setattr(codes.boto3, "client", lambda *_a, **_k: ses)
+    aws.install({Kind.SES: ses})
     assert client.post("/auth/password-change/request", json=body).status_code == 200
 
     # The code from before the outage is still the one that was mailed out.
@@ -676,7 +695,7 @@ def test_a_mail_provider_outage_answers_503_and_costs_the_account_nothing(
 
 def test_a_failed_send_leaks_nothing_through_the_response(password_change_client, monkeypatch):
     client, _table, _ses, _provider = password_change_client
-    monkeypatch.setattr(codes.boto3, "client", lambda *_a, **_k: RejectingSes())
+    aws.install({Kind.SES: RejectingSes()})
 
     failed = client.post(
         "/auth/password-change/request", json={"currentPassword": "OldPass123"}

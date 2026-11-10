@@ -11,6 +11,8 @@ import re
 
 import pytest
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.services import locale_service, message_catalog, notify_service
 from stoa.services.message_catalog import emails as email_catalog
 
@@ -51,13 +53,13 @@ class _FakeSES:
 @pytest.mark.parametrize("locale", LOCALES)
 def test_the_teacher_activation_email_is_in_the_candidates_language(locale):
     ses = _FakeSES()
+    aws.install({Kind.SES: ses})
     notify_service.send_teacher_invitation_email(
         "candidate@example.test",
         activation_token="token/with+chars",
         expires_at="2026-07-21T12:00:00+00:00",
         full_name="Candidate Teacher",
         locale=locale,
-        ses_client=ses,
     )
 
     message = ses.emails[0]["Message"]

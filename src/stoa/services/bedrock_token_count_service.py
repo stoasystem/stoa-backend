@@ -7,11 +7,12 @@ from enum import StrEnum
 import json
 from typing import Mapping, Protocol
 
-import boto3
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 from botocore.httpsession import URLLib3Session
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.models.allowance import MAX_EXACT_COUNT
 
 
@@ -133,7 +134,7 @@ class SigV4MantleCountTokensClient:
         model_id: str,
         payload: Mapping[str, object],
     ) -> Mapping[str, object]:
-        session = self._session or boto3.Session()
+        session = self._session or aws.session()
         get_credentials = getattr(session, "get_credentials", None)
         if not callable(get_credentials):
             raise ProviderTokenCountUnavailable()
@@ -225,9 +226,8 @@ def count_input_tokens_with_evidence(
             return TokenCountResult(count, MANTLE_ACTION, request_id.strip())
 
         _parse_invoke_body(request_body)
-        selected_runtime_client = runtime_client or boto3.client(
-            "bedrock-runtime",
-            region_name=region,
+        selected_runtime_client = runtime_client or aws.client(
+            Kind.BEDROCK_RUNTIME, region=region
         )
         count_tokens = getattr(selected_runtime_client, "count_tokens", None)
         if not callable(count_tokens):

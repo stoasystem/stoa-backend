@@ -4,8 +4,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import IMAGE_MAX_BYTES, Settings, get_settings
-from stoa.deps import get_actor, get_s3_client
+from stoa.deps import get_actor
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.routers import files
@@ -24,7 +26,7 @@ def _client(monkeypatch, *, actor: Actor | None = None) -> TestClient:
     app.include_router(files.router, prefix="/files")
     app.dependency_overrides[get_settings] = lambda: Settings(s3_images_bucket="images-bucket")
     app.dependency_overrides[get_actor] = lambda: actor or _actor()
-    app.dependency_overrides[get_s3_client] = lambda: object()
+    aws.install({Kind.S3: object(), Kind.REKOGNITION_MODERATION: object()})
     return TestClient(app)
 
 

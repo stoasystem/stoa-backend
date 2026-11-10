@@ -5,9 +5,11 @@ import pytest
 
 from fakes import student_evidence as fake_evidence
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.jobs import weekly_reports
-from stoa.services import notify_service, report_service
+from stoa.services import report_service
 
 
 @pytest.fixture(autouse=True)
@@ -21,7 +23,7 @@ def _fenced_report_provider_compat(monkeypatch):
         report_service.report_artifact_service,
         "write_fenced_report_artifacts",
         lambda keys, json_artifact, html_artifact, **kwargs: report_service.report_artifact_service.write_report_artifacts(
-            keys, json_artifact, html_artifact, s3_client=kwargs.get("s3_client")
+            keys, json_artifact, html_artifact
         ),
     )
     monkeypatch.setattr(
@@ -32,7 +34,6 @@ def _fenced_report_provider_compat(monkeypatch):
                 parent_email,
                 report_html,
                 subject=kwargs.get("subject"),
-                ses_client=kwargs.get("ses_client"),
             )
             or "accepted"
         ),
@@ -271,17 +272,11 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
     monkeypatch.setattr(report_service.report_repo, "put_report", put_report)
     monkeypatch.setattr(report_service.report_repo, "update_report_status", update_report_status)
 
-    def fake_boto_client(service_name, **kwargs):
-        if service_name == "bedrock-runtime":
-            return FailingBedrockClient(events)
-        if service_name == "s3":
-            return s3
-        if service_name == "ses":
-            return ses
-        raise AssertionError(f"unexpected boto client {service_name}")
-
-    monkeypatch.setattr(report_service.boto3, "client", fake_boto_client)
-    monkeypatch.setattr(notify_service.boto3, "client", fake_boto_client)
+    aws.install({
+        Kind.BEDROCK_RUNTIME: FailingBedrockClient(events),
+        Kind.S3: s3,
+        Kind.SES: ses,
+    })
 
     result = weekly_reports.run_weekly_report_job({"week_start": "2026-06-01"})
 
@@ -348,11 +343,10 @@ def test_store_and_send_weekly_report_does_not_write_metadata_or_email_when_s3_f
     s3 = RecordingS3Client(events, fail_on_call=2)
     ses = RecordingSESClient(events)
     with pytest.raises(RuntimeError, match="s3 unavailable"):
+        aws.install({Kind.S3: s3, Kind.SES: ses})
         report_service.store_and_send_weekly_report(
             _sample_report_payload(),
             _generated_report_content(),
-            s3_client=s3,
-            ses_client=ses,
         )
 
     assert [event[0] for event in events] == ["s3", "s3", "s3_delete"]

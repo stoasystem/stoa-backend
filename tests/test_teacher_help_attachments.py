@@ -23,7 +23,8 @@ import pytest
 
 from actor_helpers import install_actor_overrides
 from fakes.learning_session import seed_message
-from stoa.deps import get_s3_client
+from stoa import aws
+from stoa.aws import Kind
 from stoa.routers import files, teachers
 from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import help_requests
@@ -128,7 +129,7 @@ def _client(user_id: str, role: str = "teacher", s3: _S3 | None = None) -> TestC
     app = FastAPI()
     app.include_router(teachers.router, prefix="/teachers")
     app.include_router(files.router, prefix="/files")
-    app.dependency_overrides[get_s3_client] = lambda: s3 or _S3()
+    aws.install({Kind.S3: s3 or _S3()})
     install_actor_overrides(app, {"sub": user_id, "role": role})
     # The helper's fact stand-in grants a teacher whatever they ask for; who may
     # read is the point here, so the facts are loaded from the table.

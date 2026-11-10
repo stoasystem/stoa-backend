@@ -25,8 +25,9 @@ from fakes.dynamodb import FakeTable
 import pytest
 
 from actor_helpers import install_actor_overrides
+from stoa import aws
+from stoa.aws import Kind
 from stoa.jobs import dispatch_reconciler
-from stoa.services import notify_service
 
 import test_chat_help_request_lifecycle as lifecycle
 from test_chat_help_request_lifecycle import (
@@ -55,7 +56,6 @@ class RecordingSes:
     def __init__(self) -> None:
         self.sent: list[dict[str, Any]] = []
         self.failure: Exception | None = None
-        self.built_with: list[dict[str, Any]] = []
 
     def send_email(self, **kwargs: Any) -> dict[str, Any]:
         if self.failure is not None:
@@ -81,14 +81,9 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
 
 
 @pytest.fixture
-def ses(monkeypatch: pytest.MonkeyPatch) -> RecordingSes:
+def ses() -> RecordingSes:
     client = RecordingSes()
-
-    def build(*_args: Any, **kwargs: Any) -> RecordingSes:
-        client.built_with.append(kwargs)
-        return client
-
-    monkeypatch.setattr(notify_service.boto3, "client", build)
+    aws.install({Kind.SES_DISPATCH_REMINDER: client})
     return client
 
 
@@ -339,8 +334,8 @@ def test_the_email_gives_up_well_inside_the_students_request(table, ses) -> None
 
     _ask_for_a_teacher()
 
-    [built] = ses.built_with
-    config = built["config"]
+    [built] = [r for r in aws.requests() if r.kind is Kind.SES_DISPATCH_REMINDER]
+    config = built.config
     assert config.connect_timeout <= 2
     assert config.read_timeout <= 3
     assert config.retries["max_attempts"] == 1

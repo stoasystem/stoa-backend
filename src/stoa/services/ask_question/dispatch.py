@@ -21,9 +21,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-import boto3
-from botocore.config import Config
-
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import settings
 from stoa.services.ask_question import _answering
 from stoa.services.ask_question._answering import CommittedMessage
@@ -71,20 +70,10 @@ def _generation_worker_name() -> str:
     return settings.conversation_generation_function_name.strip()
 
 
-# Bounded well inside the request's 29 seconds: a slow or throttled invoke
-# leaves the stored command to the sweep, not the student to a gateway timeout.
-_GENERATION_INVOKE_CONFIG = Config(
-    connect_timeout=2,
-    read_timeout=3,
-    retries={"max_attempts": 1, "mode": "standard"},
-)
-
-
 def _invoke_generation_worker(event: dict[str, object]) -> None:
     """Hand one command to the worker; returns once Lambda has queued it."""
-    client = boto3.client(
-        "lambda", region_name=settings.aws_region, config=_GENERATION_INVOKE_CONFIG
-    )
+    # Bounded well inside the request's 29 seconds (`aws.GENERATION_INVOKE_CONFIG`).
+    client = aws.client(Kind.LAMBDA_GENERATION)
     client.invoke(
         FunctionName=_generation_worker_name(),
         InvocationType="Event",

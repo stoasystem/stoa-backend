@@ -41,10 +41,11 @@ from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.bedrock import FakeBedrock
+from stoa import aws
+from stoa.aws import Kind
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.services import ask_answer
-from stoa.services.ask_question import _answering
 from fakes.ask_question import AtomicAllowanceTable
 
 LOCALES = sorted(ANSWERS)
@@ -482,7 +483,7 @@ def test_the_sections_come_through_the_real_model_path(
     answer, label = ANSWERS[locale]
     provider = _CapturingBedrockClient(answer)
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    monkeypatch.setattr(_answering.ai_service.boto3, "client", lambda *_a, **_k: provider)
+    aws.install({Kind.BEDROCK_RUNTIME: provider})
     client = _client()
 
     response = _send(client, "key-1", language=locale)

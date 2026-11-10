@@ -20,9 +20,10 @@ import logging
 import re
 import time
 from typing import Any, Callable, Generic, Mapping, TypeVar
-import boto3
 from botocore.config import Config
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import settings
 from stoa.models.allowance import MAX_EXACT_COUNT, ProviderUsageEvidence
 from stoa.security.private_telemetry import emit_private_event
@@ -585,10 +586,8 @@ def invoke_answer(
         if callable(bind_deadline):
             bind_deadline(deadline_monotonic, clock)
     if client is None:
-        client = boto3.client(
-            "bedrock-runtime",
-            region_name=settings.aws_region,
-            config=bedrock_runtime_config(remaining),
+        client = aws.client(
+            Kind.BEDROCK_RUNTIME, config=bedrock_runtime_config(remaining)
         )
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",

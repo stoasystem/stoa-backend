@@ -10,9 +10,10 @@ import re
 from collections.abc import Mapping
 from typing import Any, Protocol, runtime_checkable
 
-import boto3
 from boto3.dynamodb.conditions import Attr, Key
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import settings
 from stoa.db import table as db_table
 from stoa.db.repositories import (
@@ -274,11 +275,10 @@ def parse_generated_report_json(raw_text: str) -> dict[str, Any]:
 
 def generate_weekly_report_content(
     payload: dict[str, Any],
-    bedrock_client: Any | None = None,
 ) -> dict[str, Any]:
     """Generate parent-facing weekly report content with deterministic fallback."""
     report_input = build_bedrock_report_input(payload)
-    client = bedrock_client or boto3.client("bedrock-runtime", region_name=settings.aws_region)
+    client = aws.client(Kind.BEDROCK_RUNTIME)
     body = json.dumps(
         {
             "anthropic_version": "bedrock-2023-05-31",
@@ -359,8 +359,6 @@ def store_and_send_weekly_report(
     payload: dict[str, Any],
     generated_content: dict[str, Any],
     *,
-    s3_client: Any | None = None,
-    ses_client: Any | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Store report artifacts and metadata before attempting parent email."""
@@ -386,7 +384,6 @@ def store_and_send_weekly_report(
         owner_id=str(report_item["student_id"]),
         generation=generation,
         report_id=str(report_item["report_id"]),
-        s3_client=s3_client,
     )
     report_repo.put_report(report_item)
     logger.info(
@@ -419,7 +416,6 @@ def store_and_send_weekly_report(
             generation=generation,
             report_id=str(report_item["report_id"]),
             subject=notify_service.weekly_report_subject(report_item["student_name"], locale),
-            ses_client=ses_client,
         )
         if delivery_outcome != "accepted":
             raise RuntimeError(delivery_outcome)

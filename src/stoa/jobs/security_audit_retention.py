@@ -11,8 +11,8 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
-import boto3
-
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, settings
 from stoa.services import security_audit_retention
 
@@ -35,7 +35,7 @@ def run(
 
 def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, Any]:
     event = event or {}
-    s3 = boto3.client("s3", region_name=settings.aws_region)
+    s3 = aws.client(Kind.S3)
     summary = run(
         s3=s3,
         settings_obj=settings,

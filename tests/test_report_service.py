@@ -6,6 +6,8 @@ import pytest
 
 from fakes import student_evidence as fake_evidence
 from fakes.links import LinkRows
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.services import message_catalog, report_service
@@ -31,7 +33,7 @@ def _fenced_report_provider_compat(monkeypatch):
         report_service.report_artifact_service,
         "write_fenced_report_artifacts",
         lambda keys, json_artifact, html_artifact, **kwargs: report_service.report_artifact_service.write_report_artifacts(
-            keys, json_artifact, html_artifact, s3_client=kwargs.get("s3_client")
+            keys, json_artifact, html_artifact
         ),
     )
     monkeypatch.setattr(
@@ -42,7 +44,6 @@ def _fenced_report_provider_compat(monkeypatch):
                 parent_email,
                 report_html,
                 subject=kwargs.get("subject"),
-                ses_client=kwargs.get("ses_client"),
             )
             or "accepted"
         ),
@@ -498,7 +499,8 @@ def test_generate_weekly_report_content_invokes_bedrock_with_structured_input():
         )
     )
 
-    content = report_service.generate_weekly_report_content(sample_report_payload(), bedrock_client=client)
+    aws.install({Kind.BEDROCK_RUNTIME: client})
+    content = report_service.generate_weekly_report_content(sample_report_payload())
 
     assert content["summary"] == "Student made steady progress."
     assert len(client.calls) == 1
@@ -512,7 +514,8 @@ def test_generate_weekly_report_content_invokes_bedrock_with_structured_input():
 def test_generate_weekly_report_content_falls_back_on_malformed_output():
     client = FakeBedrockClient(text="not json")
 
-    content = report_service.generate_weekly_report_content(sample_report_payload(), bedrock_client=client)
+    aws.install({Kind.BEDROCK_RUNTIME: client})
+    content = report_service.generate_weekly_report_content(sample_report_payload())
 
     assert content["summary"].startswith("During 2026-06-01 to 2026-06-07")
     assert content["weakTopics"][0] == {"topic": "topic-0", "note": "Seen in 0 weekly signal(s)."}
@@ -531,7 +534,8 @@ def test_generate_weekly_report_content_falls_back_on_bedrock_error():
     }
     payload["weakTopics"] = []
 
-    content = report_service.generate_weekly_report_content(payload, bedrock_client=client)
+    aws.install({Kind.BEDROCK_RUNTIME: client})
+    content = report_service.generate_weekly_report_content(payload)
 
     assert content == {
         "summary": "No weekly learning activity was recorded for Student during 2026-06-01 to 2026-06-07.",
@@ -571,11 +575,10 @@ def test_store_and_send_weekly_report_writes_artifacts_before_email(monkeypatch)
 
     s3 = FakeS3Client(events)
     ses = FakeSESClient(events)
+    aws.install({Kind.S3: s3, Kind.SES: ses})
     result = report_service.store_and_send_weekly_report(
         sample_report_payload(),
         generated_report_content(),
-        s3_client=s3,
-        ses_client=ses,
         now=datetime(2026, 6, 8, tzinfo=timezone.utc),
     )
 
@@ -621,11 +624,10 @@ def test_store_and_send_weekly_report_rejects_production_placeholder_bucket(monk
 
     s3 = FakeS3Client(events)
     with pytest.raises(ValueError, match="S3_REPORTS_BUCKET"):
+        aws.install({Kind.S3: s3, Kind.SES: FakeSESClient(events)})
         report_service.store_and_send_weekly_report(
             sample_report_payload(),
             generated_report_content(),
-            s3_client=s3,
-            ses_client=FakeSESClient(events),
         )
 
     assert events == []
@@ -638,11 +640,10 @@ def test_store_and_send_weekly_report_emails_parent_only(monkeypatch):
     monkeypatch.setattr(report_service.report_repo, "update_report_status", lambda report_id, status, **fields: None)
 
     ses = FakeSESClient()
+    aws.install({Kind.S3: FakeS3Client(), Kind.SES: ses})
     report_service.store_and_send_weekly_report(
         sample_report_payload(),
         generated_report_content(),
-        s3_client=FakeS3Client(),
-        ses_client=ses,
     )
 
     email = ses.emails[0]
@@ -674,11 +675,10 @@ def test_the_weekly_report_email_is_in_the_parents_language(monkeypatch, locale)
     )
 
     ses = FakeSESClient()
+    aws.install({Kind.S3: FakeS3Client(), Kind.SES: ses})
     report_service.store_and_send_weekly_report(
         sample_report_payload(),
         generated_report_content(),
-        s3_client=FakeS3Client(),
-        ses_client=ses,
     )
 
     def copy(key, **values):
@@ -727,11 +727,13 @@ def test_store_and_send_weekly_report_marks_email_failed_after_storage(monkeypat
         or status_updates.append((report_id, status, fields)),
     )
 
+    aws.install({
+        Kind.S3: FakeS3Client(events),
+        Kind.SES: FakeSESClient(events, error=RuntimeError("ses unavailable")),
+    })
     result = report_service.store_and_send_weekly_report(
         sample_report_payload(),
         generated_report_content(),
-        s3_client=FakeS3Client(events),
-        ses_client=FakeSESClient(events, error=RuntimeError("ses unavailable")),
     )
 
     assert [event[0] for event in events] == ["s3", "s3", "put_report", "ses", "update"]

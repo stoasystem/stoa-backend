@@ -19,6 +19,8 @@ from fakes.learning_session import seed_conversation
 import pytest
 
 from actor_helpers import install_actor_overrides
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.routers import teachers
 from stoa.services import help_requests
@@ -859,6 +861,8 @@ def test_deleting_the_student_removes_the_teachers_replies_from_their_conversati
 
     # The real branch, over the real scan, runs until it seals (#78: it used to
     # re-scan its own tombstones and never finish).
+    # The branch takes an S3 client up front; these messages carry no attachments.
+    aws.install({Kind.S3: object()})
     results, previous = [], {}
     for _ in range(8):
         result = branch(command={"user_id": STUDENT, "generation": 1}, previous=previous)

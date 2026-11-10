@@ -27,19 +27,15 @@ from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.db.repositories import (
     moderation_repo,
     user_repo,
 )
-from stoa.deps import (
-    get_actor,
-    get_image_moderation_client,
-    get_s3_client,
-    get_s3_presign_client,
-    get_settings,
-)
+from stoa.deps import get_actor, get_settings
 from stoa.jobs import moderation_image_retention
 from stoa.routers import admin, files, notifications
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -129,9 +125,11 @@ class _World:
         student = FastAPI()
         student.include_router(files.router, prefix="/files")
         student.dependency_overrides[get_actor] = lambda: _actor(STUDENT, CanonicalRole.STUDENT)
-        student.dependency_overrides[get_s3_client] = lambda: self.s3
-        student.dependency_overrides[get_s3_presign_client] = lambda: self.s3
-        student.dependency_overrides[get_image_moderation_client] = lambda: self.moderation
+        aws.install({
+            Kind.S3: self.s3,
+            Kind.S3_PRESIGN: self.s3,
+            Kind.REKOGNITION_MODERATION: self.moderation,
+        })
         student.dependency_overrides[get_settings] = lambda: self.settings
         self.student = TestClient(student)
 
@@ -140,7 +138,7 @@ class _World:
         app.include_router(admin.router, prefix="/admin")
         app.include_router(notifications.admin_router, prefix="/admin")
         install_actor_overrides(app, user)
-        app.dependency_overrides[get_s3_client] = lambda: self.s3
+        aws.install({Kind.S3: self.s3})
         app.dependency_overrides[get_settings] = lambda: self.settings
         return TestClient(app)
 
@@ -413,7 +411,7 @@ def test_a_reopened_case_keeps_its_image(world) -> None:
 def test_the_retention_job_is_reached_from_its_schedule(world, monkeypatch) -> None:
     _upload_id, case = _blocked(world)
     _handle(world, case["case_id"])
-    monkeypatch.setattr(moderation_image_retention.boto3, "client", lambda *_a, **_k: world.s3)
+    aws.install({Kind.S3: world.s3})
     monkeypatch.setattr(moderation_image_retention, "settings", world.settings)
     later = datetime.now(UTC) + timedelta(days=91)
     monkeypatch.setattr(moderation_image_retention, "_now", lambda: later)
@@ -440,7 +438,7 @@ def test_account_deletion_removes_the_image_and_the_case(world, monkeypatch) -> 
             }
         )
     )
-    monkeypatch.setattr(account_deletion_service.boto3, "client", lambda *_a, **_k: world.s3)
+    aws.install({Kind.S3: world.s3})
     monkeypatch.setattr(account_deletion_service, "get_settings", lambda: world.settings)
 
     previous: dict[str, Any] = {}
@@ -471,7 +469,7 @@ def test_a_lost_image_keeps_account_deletion_waiting(world, monkeypatch) -> None
         raise ClientError({"Error": {"Code": "InternalError", "Message": "x"}}, "DeleteObject")
 
     world.s3.delete_object = refuse
-    monkeypatch.setattr(account_deletion_service.boto3, "client", lambda *_a, **_k: world.s3)
+    aws.install({Kind.S3: world.s3})
     monkeypatch.setattr(account_deletion_service, "get_settings", lambda: world.settings)
 
     result = account_deletion_service._moderation_support_branch(
@@ -580,7 +578,7 @@ def test_a_run_that_could_not_delete_fails_so_the_schedule_retries_and_alarms(wo
         raise ClientError({"Error": {"Code": "AccessDenied", "Message": "x"}}, "DeleteObject")
 
     world.s3.delete_object = refuse
-    monkeypatch.setattr(moderation_image_retention.boto3, "client", lambda *_a, **_k: world.s3)
+    aws.install({Kind.S3: world.s3})
     monkeypatch.setattr(moderation_image_retention, "settings", world.settings)
     later = datetime.now(UTC) + timedelta(days=91)
     monkeypatch.setattr(moderation_image_retention, "_now", lambda: later)

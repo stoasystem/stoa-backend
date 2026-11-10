@@ -48,6 +48,8 @@ from fakes.ask_question import (
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.bedrock import Unsent
+from stoa import aws
+from stoa.aws import Kind
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.security.attachment_errors import AttachmentDecisionError
@@ -365,7 +367,7 @@ def test_the_worker_handler_ships_in_the_lambda_package() -> None:
 def _metered(monkeypatch: pytest.MonkeyPatch, on_invocation):
     provider = _Provider(text=_COMPLETE, stop_reason="end_turn")
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    monkeypatch.setattr(ai_service.boto3, "client", lambda *_a, **_k: provider)
+    aws.install({Kind.BEDROCK_RUNTIME: provider})
     return _admission.meter(_command()).model(on_invocation), provider
 
 

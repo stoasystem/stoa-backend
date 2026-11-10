@@ -8,8 +8,8 @@ from datetime import UTC, datetime
 import logging
 from typing import Any
 
-import boto3
-
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, settings
 from stoa.db import table as db_table
 from stoa.services import uploads
@@ -137,7 +137,7 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, int | str |
     event = event or {}
     remaining = getattr(context, "get_remaining_time_in_millis", None)
     result = cleanup_expired_uploads(
-        s3=boto3.client("s3", region_name=settings.aws_region),
+        s3=aws.client(Kind.S3),
         settings_obj=settings,
         batch_limit=event.get("batchLimit", DEFAULT_BATCH_LIMIT),
         page_limit=event.get("pageLimit", DEFAULT_PAGE_LIMIT),

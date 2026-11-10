@@ -5,14 +5,15 @@ from functools import partial
 from typing import Annotated, Any, Literal, Optional
 from uuid import uuid4
 
-import boto3
 from fastapi import APIRouter, Body, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from starlette.responses import Response
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import Settings, get_settings
-from stoa.deps import get_s3_client, legacy_user
+from stoa.deps import legacy_user
 from stoa.db.repositories import (
     account_deletion_repo,
     account_invitation_repo,
@@ -329,8 +330,8 @@ class CapabilityTransitionCommand(BaseModel):
     changed_at: str
 
 
-def get_privileged_identity_provider(settings: Settings = Depends(get_settings)) -> Any:
-    return boto3.client("cognito-idp", region_name=settings.aws_region)
+def get_privileged_identity_provider() -> Any:
+    return aws.client(Kind.COGNITO)
 
 
 @router.post("/privileged-identities/admins")
@@ -1136,12 +1137,11 @@ async def get_moderation_case(
 async def get_moderation_case_image(
     case_id: str,
     actor: Actor = Depends(admin_operation),
-    s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
 ):
     """The image moderation refused, for an `image_upload` case. Admins only."""
     data, media_type = moderation_service.read_case_image(
-        case_id, s3=s3, settings=settings
+        case_id, s3=aws.client(Kind.S3), settings=settings
     )
     return Response(
         content=data,
@@ -2346,13 +2346,13 @@ def list_ending_usage_periods(
 def get_account_identity_provider(settings: Settings = Depends(get_settings)) -> Any:
     """Role-neutral account creator; the teacher adapter already speaks this shape."""
     return CognitoTeacherIdentityProvider(
-        boto3.client("cognito-idp", region_name=settings.aws_region),
+        aws.client(Kind.COGNITO),
         user_pool_id=settings.cognito_user_pool_id,
     )
 
 
-def get_account_password_administrator(settings: Settings = Depends(get_settings)) -> Any:
-    return boto3.client("cognito-idp", region_name=settings.aws_region)
+def get_account_password_administrator() -> Any:
+    return aws.client(Kind.COGNITO)
 
 
 def _account_issuer(settings: Settings) -> str:

@@ -29,6 +29,8 @@ import pytest
 
 from fakes.dynamodb import FakeTable
 from security.conftest import FakeAsyncJwksTransport
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import identity_repo
@@ -195,7 +197,7 @@ def session_app(rsa_jwks_keysets, monkeypatch):
     table = FakeTable()
     db_table.install(table)
     provider = _Provider()
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: provider)
+    aws.install({Kind.COGNITO: provider})
     repository = _IdentityRepository(keyset.issuer, table)
 
     app = FastAPI()

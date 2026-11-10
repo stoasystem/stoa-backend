@@ -20,6 +20,8 @@ import pytest
 
 import test_chat_help_request_lifecycle as lifecycle
 from fakes.learning_session import seed_message
+from stoa import aws
+from stoa.aws import Kind
 from stoa.services import account_deletion_service as service
 
 COMMAND_ID = "cmd-e2e"
@@ -81,7 +83,7 @@ def table(monkeypatch):
 
 
 def test_a_student_with_a_conversation_and_practice_can_be_deleted(table, monkeypatch):
-    monkeypatch.setattr(service.boto3, "client", lambda *_args, **_kwargs: _ExternalClient())
+    aws.install({Kind.S3: _ExternalClient(), Kind.COGNITO: _ExternalClient()})
     seal = service.load_private_store_seal()
     results: dict = {}
     command = {"user_id": lifecycle.STUDENT, "generation": 1, "command_id": COMMAND_ID, "branch_results": results}

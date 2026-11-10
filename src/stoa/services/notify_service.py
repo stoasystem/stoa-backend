@@ -3,8 +3,8 @@ from datetime import UTC, datetime
 from html import escape
 from urllib.parse import quote
 from uuid import uuid4
-import boto3
-from botocore.config import Config
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import settings
 from stoa.db.repositories import account_deletion_repo, report_repo
 from stoa.services import locale_service, message_catalog
@@ -44,7 +44,6 @@ def send_teacher_invitation_email(
     expires_at: str,
     full_name: str = "",
     locale: str | None = None,
-    ses_client=None,
 ) -> None:
     """Deliver a single-use teacher activation link to the reviewed candidate.
 
@@ -58,7 +57,7 @@ def send_teacher_invitation_email(
         full_name=full_name,
         locale=locale,
     )
-    ses = ses_client or boto3.client("ses", region_name=settings.aws_region)
+    ses = aws.client(Kind.SES)
     ses.send_email(
         Source="noreply@stoaedu.ch",
         Destination={"ToAddresses": [recipient]},
@@ -83,10 +82,9 @@ def send_weekly_report_email(
     report_html: str,
     *,
     subject: str | None = None,
-    ses_client=None,
 ) -> None:
     """Send the weekly report to a parent via SES."""
-    ses = ses_client or boto3.client("ses", region_name=settings.aws_region)
+    ses = aws.client(Kind.SES)
     ses.send_email(
         Source="noreply@stoaedu.ch",
         Destination={"ToAddresses": [parent_email]},
@@ -106,7 +104,6 @@ def send_fenced_weekly_report_email(
     report_id: str,
     subject: str | None = None,
     operation_id: str | None = None,
-    ses_client=None,
     table=None,
 ) -> str:
     """Send once only after durable intent, claim, and immediate fence checks."""
@@ -126,7 +123,7 @@ def send_fenced_weekly_report_email(
     )
     report_repo.claim_report_email_intent(intent, lease_id=uuid4().hex, table=table)
     account_deletion_repo.require_active_account_fence(owner_id, generation, table=table)
-    ses = ses_client or boto3.client("ses", region_name=settings.aws_region)
+    ses = aws.client(Kind.SES)
     response = None
     error = None
     try:
@@ -219,7 +216,6 @@ def send_account_invitation_email(
     expires_at: str,
     full_name: str = "",
     locale: str | None = None,
-    ses_client=None,
 ) -> None:
     """Deliver one single-use activation link to an invited account of any role.
 
@@ -232,7 +228,7 @@ def send_account_invitation_email(
         full_name=full_name,
         locale=locale,
     )
-    ses = ses_client or boto3.client("ses", region_name=settings.aws_region)
+    ses = aws.client(Kind.SES)
     ses.send_email(
         Source=settings.notification_email_sender,
         Destination={"ToAddresses": [recipient]},
@@ -270,16 +266,6 @@ def dispatch_reminder_message(
     return subject_line, body
 
 
-# Bounded well inside the request's 29 seconds: the first offer is sent from
-# the student's own request, and a slow SES must cost the email, not the
-# student's response to an offer already written.
-DISPATCH_REMINDER_SES_CONFIG = Config(
-    connect_timeout=2,
-    read_timeout=3,
-    retries={"max_attempts": 1, "mode": "standard"},
-)
-
-
 def send_dispatch_reminder_email(
     recipient: str,
     *,
@@ -287,15 +273,13 @@ def send_dispatch_reminder_email(
     request_id: str,
     minutes: int,
     locale: str,
-    ses_client=None,
 ) -> None:
     """Remind the teacher an offer went to that it is waiting for them (#141)."""
     subject_line, body = dispatch_reminder_message(
         subject_name=subject_name, request_id=request_id, minutes=minutes, locale=locale
     )
-    ses = ses_client or boto3.client(
-        "ses", region_name=settings.aws_region, config=DISPATCH_REMINDER_SES_CONFIG
-    )
+    # Bounded well inside the request's 29 seconds (`aws.DISPATCH_REMINDER_SES_CONFIG`).
+    ses = aws.client(Kind.SES_DISPATCH_REMINDER)
     ses.send_email(
         Source=settings.notification_email_sender,
         Destination={"ToAddresses": [recipient]},

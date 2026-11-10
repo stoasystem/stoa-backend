@@ -2,10 +2,11 @@
 
 from typing import Any
 
-import boto3
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
 from stoa.deps import get_verified_token
 from stoa.security.authorization import AuthorizationAction, AuthorizationPurpose, ResourceType
@@ -96,15 +97,15 @@ def _reviewer(actor: Actor) -> dict[str, Any]:
     }
 
 
-def get_teacher_identity_provider(settings: Settings = Depends(get_settings)) -> Any:
-    return boto3.client("cognito-idp", region_name=settings.aws_region)
+def get_teacher_identity_provider() -> Any:
+    return aws.client(Kind.COGNITO)
 
 
 def get_teacher_account_provider(
     settings: Settings = Depends(get_settings),
 ) -> Any:
     return CognitoTeacherIdentityProvider(
-        boto3.client("cognito-idp", region_name=settings.aws_region),
+        aws.client(Kind.COGNITO),
         user_pool_id=settings.cognito_user_pool_id,
     )
 

@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, Path
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import (
     asked_knowledge_repo,
@@ -17,7 +19,7 @@ from stoa.db.repositories import (
     user_repo,
 )
 from stoa.db import table as db_table
-from stoa.deps import get_actor, get_s3_client
+from stoa.deps import get_actor
 from stoa.models.attachment import AttachmentSummary, ReplyImageReference
 from stoa.security.attachment_errors import (
     AttachmentDecisionError,
@@ -984,13 +986,12 @@ def _asked_topics(conversation_id: str) -> list[str]:
 @router.get("/me/help-requests/{request_id}/attachments/{attachment_id}/content")
 async def download_help_request_attachment(
     loaded: _HelpRequestAttachment = Depends(_help_request_attachment_dependency),
-    s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """The content of an attachment the student sent in this help request (#140)."""
     prepared = attachment_service.prepare_saved_attachment_download(
-        dict(loaded.attachment), s3=s3, settings=settings
+        dict(loaded.attachment), s3=aws.client(Kind.S3), settings=settings
     )
     return StreamingResponse(
         prepared.iter_bytes(),

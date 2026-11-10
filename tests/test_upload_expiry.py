@@ -17,6 +17,8 @@ from typing import Any
 
 import pytest
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import UPLOAD_INTENT_TTL_SECONDS, UPLOAD_ROW_RETENTION_SECONDS, Settings
 from stoa.jobs import upload_cleanup
 from stoa.services import uploads
@@ -183,7 +185,7 @@ def test_the_scheduled_event_runs_the_sweep(monkeypatch: pytest.MonkeyPatch, cle
     monkeypatch.setattr(
         upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
     )
-    monkeypatch.setattr(upload_cleanup.boto3, "client", lambda *_a, **_k: MultipartS3(BUCKET))
+    aws.install({Kind.S3: MultipartS3(BUCKET)})
 
     class Context:
         def get_remaining_time_in_millis(self) -> int:
@@ -204,7 +206,7 @@ def test_each_run_logs_its_counts_without_the_cursor(
     monkeypatch.setattr(
         upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
     )
-    monkeypatch.setattr(upload_cleanup.boto3, "client", lambda *_a, **_k: MultipartS3(BUCKET))
+    aws.install({Kind.S3: MultipartS3(BUCKET)})
 
     with caplog.at_level("INFO", logger=upload_cleanup.__name__):
         result = upload_cleanup.handler(
@@ -289,7 +291,7 @@ def test_the_account_deletion_function_runs_the_sweep_by_name(
     monkeypatch.setattr(
         upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
     )
-    monkeypatch.setattr(upload_cleanup.boto3, "client", lambda *_a, **_k: MultipartS3(BUCKET))
+    aws.install({Kind.S3: MultipartS3(BUCKET)})
     monkeypatch.setattr(
         account_deletion,
         "run_pending_deletions",

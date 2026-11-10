@@ -34,17 +34,11 @@ from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import UPLOAD_INTENT_TTL_SECONDS, Settings
-from stoa.deps import (
-    get_actor,
-    get_authorization_audit_sink,
-    get_image_moderation_client,
-    get_s3_client,
-    get_s3_presign_client,
-    get_settings,
-)
+from stoa.deps import get_actor, get_authorization_audit_sink, get_settings
 from stoa.routers import conversations, upload_codes
-from stoa.services.ask_question import _answering
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import attachment_service, upload_code_service
@@ -126,11 +120,7 @@ class _Api:
         # The answer is asked of the model behind the real allowance, on its own table.
         self.model = FakeBedrock(answer=ANSWER)
         _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-        monkeypatch.setattr(
-            _answering.boto3,
-            "client",
-            lambda name, *_a, **_k: self.model if name == "bedrock-runtime" else self.s3,
-        )
+        aws.install({Kind.BEDROCK_RUNTIME: self.model, Kind.S3: self.s3})
         seed_plan(monkeypatch)
         self.profiles = {
             student: {"user_id": student, "role": "student", "account_status": "active"}
@@ -163,9 +153,11 @@ class _Api:
 
         app.dependency_overrides[get_actor] = actor
         app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
-        app.dependency_overrides[get_s3_client] = lambda: self.s3
-        app.dependency_overrides[get_s3_presign_client] = lambda: self.s3
-        app.dependency_overrides[get_image_moderation_client] = lambda: self.moderation
+        aws.install({
+            Kind.S3: self.s3,
+            Kind.S3_PRESIGN: self.s3,
+            Kind.REKOGNITION_MODERATION: self.moderation,
+        })
         app.dependency_overrides[get_settings] = lambda: self.settings
         self.client = TestClient(app, raise_server_exceptions=False)
 

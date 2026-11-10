@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -24,6 +25,8 @@ from fakes.ask_question import (
     _run_message_command,
 )
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from stoa import aws
+from stoa.aws import Kind
 from stoa.services import ai_service, runtime_budget_service
 from stoa.services.ask_question import _admission, _answering
 from fakes.ask_question import AtomicAllowanceTable
@@ -74,15 +77,12 @@ class _Provider:
         return {"body": events(), "ResponseMetadata": {"RequestId": "invoke-1"}}
 
 
-def _factory(monkeypatch: pytest.MonkeyPatch, provider: _Provider) -> list[dict[str, Any]]:
-    built: list[dict[str, Any]] = []
-
-    def factory(*_args: Any, **kwargs: Any) -> _Provider:
-        built.append(kwargs)
-        return provider
-
-    monkeypatch.setattr(ai_service.boto3, "client", factory)
-    return built
+def _factory(
+    monkeypatch: pytest.MonkeyPatch, provider: _Provider
+) -> Callable[[], list[aws.Request]]:
+    """Install `provider` as the Bedrock runtime; returns what was asked of `stoa.aws`."""
+    aws.install({Kind.BEDROCK_RUNTIME: provider})
+    return aws.requests
 
 
 def _answer(client: Any, clock: _Clock, deadline: float) -> Any:
@@ -169,8 +169,8 @@ def test_the_allowance_wrapper_uses_the_same_transport_limits(
     result = _answer(client, clock, deadline=20.0)
 
     assert result.content == ANSWER
-    assert len(built) == 1
-    config = built[0]["config"]
+    assert len(built()) == 1
+    config = built()[0].config
     assert config.connect_timeout == 5
     assert config.read_timeout == 15  # 20 seconds left, less the 5-second margin
     assert config.retries["total_max_attempts"] == 1

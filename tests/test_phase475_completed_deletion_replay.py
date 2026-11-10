@@ -9,6 +9,8 @@ from fastapi import BackgroundTasks, FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa import deps
 from stoa.db.repositories import account_deletion_repo
@@ -283,11 +285,11 @@ def test_completed_deletion_replays_stored_receipt_without_new_effects(
     monkeypatch.setattr(
         db_table, "transact", fail_if_called("repository transaction")
     )
-    monkeypatch.setattr(
-        account_deletion_service.boto3,
-        "client",
-        fail_if_called("provider client"),
-    )
+    class FailingProviderClient:
+        def __getattr__(self, _name: str) -> Any:
+            return fail_if_called("provider client")
+
+    aws.install({kind: FailingProviderClient() for kind in Kind})
     for branch_id in account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS:
         monkeypatch.setitem(
             account_deletion_service.BRANCH_HANDLERS,

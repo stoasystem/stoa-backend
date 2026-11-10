@@ -26,6 +26,8 @@ from actor_helpers import install_actor_overrides
 from audit_helpers import MemoryAuthorizationAuditSink
 from test_account_provisioning import FakeAccountTable
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import (
@@ -278,7 +280,7 @@ def test_重置后登录成功并且回执带着这条义务(
     client.post("/admin/users/student-9/password-reset", json={"reason": "support"})
 
     fake = FakeCognito()
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: fake)
+    aws.install({Kind.COGNITO: fake})
 
     async def resolve_token(*_args: Any, **_kwargs: Any):
         return SimpleNamespace(user_id=TEST_USER), user_repo.get_user(TEST_USER)
@@ -304,7 +306,7 @@ def test_没有被重置的账号登录回执里这条是假(
 ) -> None:
     """Negative control on the projection itself: it is not always true."""
     _seed_profile(table)
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: FakeCognito())
+    aws.install({Kind.COGNITO: FakeCognito()})
 
     async def resolve_token(*_args: Any, **_kwargs: Any):
         return SimpleNamespace(user_id=TEST_USER), user_repo.get_user(TEST_USER)
@@ -552,7 +554,7 @@ def _confirm(
     cognito: FakeCognito,
     code_accepted: bool = True,
 ) -> TestClient:
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: cognito)
+    aws.install({Kind.COGNITO: cognito})
 
     def verify_and_consume(user_id: str, code: str) -> None:
         if not code_accepted:

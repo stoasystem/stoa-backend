@@ -4,12 +4,14 @@ from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings
 from stoa.db.repositories import user_repo
 from stoa.deps import get_actor, get_current_user
 from stoa.routers import parents, students
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services import ai_service, ask_answer, learning_profile_service
+from stoa.services import ask_answer, learning_profile_service
 from actor_helpers import install_actor_overrides
 from fakes import student_evidence as fake_evidence
 
@@ -83,7 +85,7 @@ def test_ai_prompt_context_differs_for_language_subject(monkeypatch):
                 },
             }
 
-    monkeypatch.setattr(ai_service.boto3, "client", lambda *args, **kwargs: FakeBedrock())
+    aws.install({Kind.BEDROCK_RUNTIME: FakeBedrock()})
 
     answer = ask_answer.answer(
         ask_answer.Asked(content="Correct this sentence"),

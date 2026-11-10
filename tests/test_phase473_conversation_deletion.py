@@ -13,6 +13,8 @@ from fakes.ask_question import DELETION_NOW as NOW
 from fakes.ask_question import PRIVATE_CONVERSATION as CONVERSATION_ID
 from fakes.ask_question import _private_message as _message
 from fakes.dynamodb import from_wire
+from stoa import aws
+from stoa.aws import Kind
 from stoa.db.repositories import attachment_repo
 from stoa.services import account_deletion_service, attachment_service, learning_session
 
@@ -228,6 +230,7 @@ def test_conversation_branch_releases_associations_before_scrub_and_requires_lat
         "scrub_conversation_private_row",
         lambda *_args, **_kwargs: order.append("scrub"),
     )
+    aws.install({Kind.S3: object()})  # the release itself is replaced above
     previous: dict[str, Any] = {}
     results = []
     for _ in range(4):

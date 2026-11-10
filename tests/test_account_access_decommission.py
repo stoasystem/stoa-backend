@@ -9,6 +9,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
+from stoa import aws
+from stoa.aws import Kind
 from stoa.config import Settings, get_settings
 from stoa.routers import auth
 from rule_violation_helpers import assert_violation
@@ -43,7 +45,7 @@ class _RecordingCognito:
 
 def _auth_client(monkeypatch) -> tuple[TestClient, _RecordingCognito]:
     provider = _RecordingCognito()
-    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: provider)
+    aws.install({Kind.COGNITO: provider})
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
     app.dependency_overrides[get_settings] = _settings
