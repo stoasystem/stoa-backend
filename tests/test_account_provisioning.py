@@ -809,6 +809,46 @@ def test_认领端点在令牌被消费前就拒绝弱密码(monkeypatch: pytest
     assert strong.json()["status"] == "active"
 
 
+def test_认领成功返回该账号登录用的邮箱(table: FakeAccountTable) -> None:
+    """The activation page signs a stale session out and prefills this address (#392).
+
+    Compared with the stored profile, not just the invitation: the address on the
+    login form has to be the one the account actually signs in with.
+    """
+    issued = _invite(table, email="invitee@example.ch")
+
+    activated = _claim(token=issued["activationToken"])
+
+    profile = user_repo.get_user(issued["userId"])
+    assert profile is not None
+    assert activated["email"] == "invitee@example.ch"
+    assert activated["email"] == profile["email"]
+
+
+def test_认领端点把邮箱带到响应里(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The route's response model must not filter the address out on the way (#392)."""
+    from fastapi.testclient import TestClient
+
+    fake = ThrottleAwareTable()
+    db_table.install(fake)
+
+    issued = _invite(fake, at=datetime.now(UTC), expiry=3600, email="routed@example.ch")
+    client = TestClient(_password_claim_app(RecordingProvider()))
+
+    response = client.post(
+        "/auth/invitations/claim",
+        json={"token": issued["activationToken"], "password": "Startpass1"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "active",
+        "userId": issued["userId"],
+        "role": "student",
+        "accountNumber": issued["accountNumber"],
+        "email": "routed@example.ch",
+    }
+
+
 def test_改密与认领共用同一处密码复杂度定义() -> None:
     """Two copies of a policy drift; this pins them to one definition."""
     from stoa.routers import auth as auth_router

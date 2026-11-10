@@ -60,6 +60,21 @@ class TeacherActivationClaimRequest(BaseModel):
     password: str = Field(min_length=12, max_length=256)
 
 
+class TeacherActivationResponse(BaseModel):
+    """The teacher account an invitation activated, from either activation route.
+
+    `email` is the address the teacher signs in with, so the activation page can
+    offer that sign-in even when the browser holds another account's session (#392).
+    """
+
+    status: str
+    userId: str
+    applicationId: str
+    applicationVersion: int
+    evidenceReference: str | None = None
+    email: str
+
+
 _REVIEWER = "teacher_identity_reviewer"
 _IDENTITY_MANAGEMENT = {CanonicalRole.ADMIN: AuthorizationPurpose.IDENTITY_MANAGEMENT}
 
@@ -187,7 +202,7 @@ def reissue(
     )
 
 
-@router.post("/activation/claim")
+@router.post("/activation/claim", response_model=TeacherActivationResponse)
 @explicit_route_classification(
     "public", "invitation-gated teacher account creation and activation"
 )
@@ -205,7 +220,7 @@ def claim(
     )
 
 
-@router.post("/activation/consume")
+@router.post("/activation/consume", response_model=TeacherActivationResponse)
 @explicit_route_classification("public", "verified invitation activation command")
 def activate(
     payload: TeacherActivationRequest,

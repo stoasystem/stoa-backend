@@ -318,6 +318,9 @@ def claim_invitation(
         "userId": account_id,
         "role": role,
         "accountNumber": str(invitation.get("account_number") or ""),
+        # The page that just activated may be open in a browser signed in as someone
+        # else; the address lets it offer the sign-in for this account (#392).
+        "email": address,
     }
 
 
