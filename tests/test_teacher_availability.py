@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from stoa.db import table as db_table
 from stoa.routers import conversations, teachers
-from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.declared_authorization import get_authorization_fact_repository
 from stoa.services import teacher_dispatch_service
 from actor_helpers import install_actor_overrides
 

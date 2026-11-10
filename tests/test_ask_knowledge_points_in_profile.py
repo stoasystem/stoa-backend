@@ -46,7 +46,7 @@ from stoa.jobs import conversation_generation
 from stoa.routers import adaptive, conversations, parents, students
 from stoa.security.authorization import CurrentAuthorizationFactRepository
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.declared_authorization import get_authorization_fact_repository
 from stoa.services import (
     account_deletion_service,
     adaptive_learning_service,

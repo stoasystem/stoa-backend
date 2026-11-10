@@ -14,7 +14,7 @@ from stoa.security.identity import (
     CanonicalRole,
     CapabilityGrant,
 )
-from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.declared_authorization import get_authorization_fact_repository
 from stoa.services.current_relationship import SOURCE_LINK, Standing, Verdict
 
 

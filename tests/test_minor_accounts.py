@@ -33,7 +33,7 @@ from stoa.models import user as user_model
 from stoa.routers import students
 from stoa.security.authorization import CurrentAuthorizationFactRepository
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.declared_authorization import get_authorization_fact_repository
 from stoa.services import (
     account_provisioning_service,
     current_relationship,

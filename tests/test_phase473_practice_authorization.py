@@ -30,7 +30,7 @@ from stoa.security.authorization import (
 )
 from stoa.security.errors import SecurityErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.security.route_authorization import (
+from stoa.security.declared_authorization import (
     get_authorization_fact_repository,
     get_authorization_policy,
 )

@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 from actor_helpers import install_actor_overrides
 
 from stoa.routers import practice
-from stoa.security import route_authorization
+from stoa.security import declared_authorization
 
 
 def _client(user: dict[str, Any]) -> TestClient:
@@ -54,10 +54,10 @@ def _sky(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     # failure that looks like an authorization outage.
     monkeypatch.setattr(practice, "_actor_locale", lambda _actor: "de")
     # The authorization dependency resolves the student through the profile
-    # (`route_authorization.py:144`); without a stand-in that is a live table
+    # (`declared_authorization._student_account_loader`); without a stand-in that is a live table
     # read, which the socket guard turns into an authorization outage.
     monkeypatch.setattr(
-        route_authorization.user_repo,
+        declared_authorization.user_repo,
         "get_user",
         lambda user_id, **_kwargs: {
             "user_id": user_id,
@@ -237,7 +237,7 @@ def test_the_year_group_on_the_student_s_profile_reaches_the_read_model(
     """The profile the authorization dependency already read; no second read (#310)."""
     seen: list[Any] = []
     monkeypatch.setattr(
-        route_authorization.user_repo,
+        declared_authorization.user_repo,
         "get_user",
         lambda user_id, **_kwargs: {
             "user_id": user_id,
@@ -284,7 +284,7 @@ def test_the_subjects_ticked_on_the_profile_reach_the_read_model_from_the_same_r
             **stored,
         }
 
-    monkeypatch.setattr(route_authorization.user_repo, "get_user", get_user)
+    monkeypatch.setattr(declared_authorization.user_repo, "get_user", get_user)
     monkeypatch.setattr(
         practice.knowledge_map_service,
         "knowledge_map",

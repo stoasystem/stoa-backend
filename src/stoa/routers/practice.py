@@ -46,10 +46,10 @@ from stoa.models.practice import (
     PracticeHintResponse,
     PrivilegedPracticeAnswer,
 )
-from stoa.security.route_authorization import (
+from stoa.security.declared_authorization import (
     STUDENT_CONTENT_READ,
     STUDENT_SELF,
-    safe_public_dependency,
+    safe_public,
 )
 from stoa.services import (
     answer_recording,
@@ -70,7 +70,7 @@ from stoa.services.practice_errors import PracticeErrorCode as _P, PracticeViola
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-_catalog_access = safe_public_dependency(ResourceType.PRACTICE)
+_catalog_access = safe_public(ResourceType.PRACTICE)
 _practice_read = authorized(ResourceType.PRACTICE, AuthorizationAction.READ, SELF, STUDENT_SELF)
 _practice_update = authorized(
     ResourceType.PRACTICE, AuthorizationAction.UPDATE, SELF, STUDENT_SELF

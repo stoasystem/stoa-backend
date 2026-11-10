@@ -25,7 +25,7 @@ from pydantic import BaseModel
 
 from stoa.models.error import RuleViolationResponse, UnauthenticatedResponse
 from stoa.security.admin_authorization import AdminRoutePolicy, AdminTargetProvider
-from stoa.security.authorization import AuthorizationSpec, ResourceType
+from stoa.security.authorization import ResourceType
 from stoa.security.declared_authorization import (
     AuthorizationDeclaration,
     OperatorSource,
@@ -250,15 +250,18 @@ def _target_projection(provider: AdminTargetProvider | None) -> dict[str, object
     }
 
 
-def _inventory_spec(
-    spec: AuthorizationSpec,
-    capability: str | None = None,
-) -> InventorySpec:
-    return InventorySpec(
-        spec.resource_type.value,
-        spec.action.value,
-        spec.purpose.value,
-        capability,
+#: Metadata the inventory read before every route declared through
+#: `declared_authorization` (#350). Set by hand it would claim a check nobody
+#: makes, so a route that carries it fails the gate.
+PASTED_METADATA = ("authorization_specs", "required_capability", "safe_public")
+
+
+def _pasted_metadata(route: APIRoute) -> tuple[str, ...]:
+    calls = [route.endpoint, *(dependant.call for dependant in _walk_dependants(route.dependant))]
+    return tuple(
+        name
+        for name in PASTED_METADATA
+        if any(call is not None and hasattr(call, name) for call in calls)
     )
 
 
@@ -305,6 +308,11 @@ def _family(path: str) -> str:
 
 
 def _classify_route(route: APIRoute, method: str) -> tuple[str, tuple[InventorySpec, ...]]:
+    pasted = _pasted_metadata(route)
+    if pasted:
+        raise ValueError(
+            f"pasted {', '.join(pasted)}: declare through stoa.security.declared_authorization"
+        )
     specs: list[InventorySpec] = []
     admin_policies: list[AdminRoutePolicy] = []
     safe_public = False
@@ -315,15 +323,12 @@ def _classify_route(route: APIRoute, method: str) -> tuple[str, tuple[InventoryS
     enforced_here = False
     for dependant in _walk_dependants(route.dependant):
         call = dependant.call
-        safe_public = safe_public or bool(getattr(call, "safe_public", False))
-        capability = getattr(call, "required_capability", None)
-        pasted = getattr(call, "authorization_specs", ())
-        specs.extend(_inventory_spec(spec, capability) for spec in pasted)
-        enforced_here = enforced_here or bool(pasted)
         declaration = declaration_of(call)
         if declaration is not None:
             specs.extend(_declared_inventory_specs(declaration))
-            if declaration.service_entry is not None:
+            if declaration.safe_public:
+                safe_public = True
+            elif declaration.service_entry is not None:
                 service_enforced = True
             else:
                 enforced_here = True
@@ -606,9 +611,7 @@ def validate_application_inventory(app: FastAPI) -> tuple[InventoryFailure, ...]
     for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
-        endpoint_metadata = getattr(route.endpoint, "authorization_specs", ()) or getattr(
-            route.endpoint, "authorization_declaration", None
-        )
+        endpoint_metadata = getattr(route.endpoint, "authorization_declaration", None)
         graph_calls = {dependant.call for dependant in _walk_dependants(route.dependant)}
         if endpoint_metadata and route.endpoint not in graph_calls - {route.dependant.call}:
             failures.append(

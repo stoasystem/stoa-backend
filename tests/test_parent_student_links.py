@@ -22,7 +22,7 @@ from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import parents, students
 from stoa.security.authorization import CurrentAuthorizationFactRepository
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.declared_authorization import get_authorization_fact_repository
 from stoa.services import current_relationship, parent_link_service
 from rule_violation_helpers import assert_violation
 from fakes import student_evidence as fake_evidence

@@ -25,7 +25,7 @@ from stoa.security.authorization import (
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.declared_authorization import SELF, authorized, path
-from stoa.security.route_authorization import STUDENT_CONTENT_READ, STUDENT_SELF
+from stoa.security.declared_authorization import STUDENT_CONTENT_READ, STUDENT_SELF
 from stoa.config import settings
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
 from stoa.services import (

@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from fakes import student_evidence as fake_evidence
 from stoa.routers import practice
-from stoa.security import route_authorization
+from stoa.security import declared_authorization
 from actor_helpers import install_actor_overrides
 
 
@@ -252,7 +252,7 @@ def test_curriculum_exercise_include_answers_is_ignored(monkeypatch):
 def test_curriculum_progress_uses_existing_practice_records(monkeypatch):
     _install_practice_content(monkeypatch)
     monkeypatch.setattr(
-        route_authorization.user_repo,
+        declared_authorization.user_repo,
         "get_user",
         lambda user_id, **_kwargs: {
             "user_id": user_id,

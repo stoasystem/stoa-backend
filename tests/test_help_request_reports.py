@@ -23,7 +23,7 @@ import pytest
 from actor_helpers import install_actor_overrides
 from fakes.learning_session import seed_message
 from stoa.routers import questions
-from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.declared_authorization import get_authorization_fact_repository
 from stoa.services import moderation_service
 from test_chat_help_request_lifecycle import (
     CONV,

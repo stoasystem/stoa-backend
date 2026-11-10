@@ -35,7 +35,12 @@ A route that loads first and decides after (a list, a batch, an id in a body)
 calls `authorize_loaded` instead (or `authorize_id`, for an id in a body) and
 declares itself with `loaded_declaration`.
 A route whose check lives in a service declares `service_enforced("<entry>")`,
-so the inventory says where the check is instead of claiming one here.
+so the inventory says where the check is instead of claiming one here, and a
+route that serves the same catalogue to everyone declares `safe_public`.
+
+This module is the only one that attaches authorization metadata to a
+dependency; the route inventory reads nothing else, and fails a route that
+carries metadata pasted on by hand (#350).
 
 An id that cannot be taken where the declaration says is a program error: it
 is logged, recorded and answered with a 500, and never falls back to the
@@ -68,6 +73,7 @@ from stoa.security.authorization import (
     AuthorizationPurpose,
     AuthorizationSpec,
     AuthorizedResource,
+    CurrentAuthorizationFactRepository,
     PolicyDecision,
     ResourceRef,
     ResourceType,
@@ -78,13 +84,18 @@ from stoa.security.authorization import (
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.security.request_correlation import get_request_correlation_id
-from stoa.security.route_authorization import (
-    valid_loaded_curriculum_answer,
-    get_authorization_fact_repository,
-    get_authorization_policy,
-)
 
 logger = logging.getLogger(__name__)
+
+
+def get_authorization_fact_repository() -> AuthorizationFactRepository:
+    """The current facts every decision reads; tests override this dependency."""
+    return CurrentAuthorizationFactRepository()
+
+
+def get_authorization_policy() -> AuthorizationPolicy:
+    """Provide the request policy through an overridable clock boundary."""
+    return AuthorizationPolicy()
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +133,23 @@ DeclaredPurpose = AuthorizationPurpose | GrantedPurpose
 PurposeMap = Mapping[CanonicalRole, DeclaredPurpose]
 ResourceLoader = Callable[[str, Actor], Awaitable[AuthorizedResource | None]]
 Dependency = TypeVar("Dependency", bound=Callable[..., Any])
+
+#: The purpose tables routes share.
+STUDENT_SELF: PurposeMap = {CanonicalRole.STUDENT: AuthorizationPurpose.SELF_SERVICE}
+STUDENT_CONTENT_READ: PurposeMap = {
+    CanonicalRole.STUDENT: AuthorizationPurpose.SELF_SERVICE,
+    CanonicalRole.PARENT: AuthorizationPurpose.PARENT_OVERSIGHT,
+    CanonicalRole.TEACHER: AuthorizationPurpose.LEARNING_ASSIGNMENT,
+    CanonicalRole.ADMIN: AuthorizationPurpose.SUPPORT,
+}
+#: A question and a conversation are read under the same purposes.
+QUESTION_CONTENT_READ: PurposeMap = {
+    CanonicalRole.STUDENT: AuthorizationPurpose.SELF_SERVICE,
+    CanonicalRole.PARENT: AuthorizationPurpose.PARENT_OVERSIGHT,
+    CanonicalRole.TEACHER: AuthorizationPurpose.TEACHER_HELP,
+    CanonicalRole.ADMIN: AuthorizationPurpose.SUPPORT,
+}
+CONVERSATION_CONTENT_READ: PurposeMap = dict(QUESTION_CONTENT_READ)
 
 
 # ---------------------------------------------------------------------------
@@ -203,6 +231,7 @@ class AuthorizationDeclaration:
     purposes: tuple[tuple[CanonicalRole, DeclaredPurpose], ...]
     source: IdSource | None
     service_entry: str | None = None
+    safe_public: bool = False
 
     @property
     def capability(self) -> str | None:
@@ -240,6 +269,8 @@ def _declaration(
     source: IdSource | None,
     purposes: PurposeMap,
     service_entry: str | None = None,
+    *,
+    safe_public: bool = False,
 ) -> AuthorizationDeclaration:
     if not purposes:
         raise ValueError("an authorization declaration names at least one role's purpose")
@@ -249,6 +280,7 @@ def _declaration(
         tuple((CanonicalRole(role), _declared_purpose(p)) for role, p in purposes.items()),
         source,
         service_entry,
+        safe_public,
     )
 
 
@@ -341,6 +373,32 @@ def _practice_item_loader(read: Callable[[str, Actor], Mapping[str, object] | No
         return AuthorizedResource(ResourceRef(ResourceType.PRACTICE, item_id, actor.user_id), item)
 
     return load
+
+
+def valid_loaded_curriculum_answer(
+    item: Mapping[str, object] | None, challenge_id: str
+) -> bool:
+    """Validate direct-resolver identity and exact authorization coordinates."""
+    if not isinstance(item, Mapping) or item.get("challenge_id") != challenge_id:
+        return False
+    content_hash = item.get("challenge_content_hash")
+    version = item.get("challenge_version")
+    if (
+        not isinstance(content_hash, str)
+        or len(content_hash) != 64
+        or any(character not in "0123456789abcdef" for character in content_hash)
+        or version != f"sha256:{content_hash}"
+    ):
+        return False
+    for field_name in ("course_id", "class_id"):
+        value = item.get(field_name)
+        if not isinstance(value, str) or not value.strip():
+            return False
+    for field_name in ("lesson_id", "subject_id", "grade_level"):
+        value = item.get(field_name)
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            return False
+    return True
 
 
 async def _load_curriculum_answer(challenge_id: str, _actor: Actor) -> AuthorizedResource | None:
@@ -866,11 +924,14 @@ def authorized(
     purposes: PurposeMap,
     *,
     kind: str | None = None,
+    not_found: Callable[[], Exception] | None = None,
 ):
     """The FastAPI dependency that authorizes one declared resource.
 
     It returns the loaded `AuthorizedResource` for ``path``/``query`` sources
-    and the `Actor` for ``SELF`` and ``operator``.
+    and the `Actor` for ``SELF`` and ``operator``. ``not_found`` is the error a
+    route answers instead of the entry's own not-found refusal (which is
+    recorded all the same).
     """
     declaration = _declaration(resource_type, action, source, purposes)
     if isinstance(source, PathSource | QuerySource) or kind is not None:
@@ -880,11 +941,8 @@ def authorized(
     else:
         load_by_id = None
 
-    async def dependency(
-        request: Request,
-        actor: Actor,
-        context: AuthorizationContext,
-        **_parsed: object,
+    async def decide(
+        request: Request, actor: Actor, context: AuthorizationContext
     ) -> AuthorizedResource | Actor:
         if isinstance(source, OperatorSource):
             return await _authorize_operator(request, actor, declaration, source, context)
@@ -915,6 +973,19 @@ def authorized(
                 )
         assert resource_id is not None
         return await _decide_by_id(actor, declaration, load_by_id, resource_id, context)
+
+    async def dependency(
+        request: Request,
+        actor: Actor,
+        context: AuthorizationContext,
+        **_parsed: object,
+    ) -> AuthorizedResource | Actor:
+        try:
+            return await decide(request, actor, context)
+        except SecurityDecisionError as error:
+            if not_found is not None and error.code is SecurityErrorCode.RESOURCE_NOT_FOUND:
+                raise not_found() from error
+            raise
 
     parameters = [
         inspect.Parameter("request", inspect.Parameter.KEYWORD_ONLY, annotation=Request),
@@ -1064,3 +1135,26 @@ def service_enforced(
 
     setattr(dependency, "authorization_declaration", declaration)
     return dependency
+
+
+def safe_public(resource_type: ResourceType):
+    """An authenticated route that serves the same catalogue to everyone.
+
+    Nothing personal is read, so nothing is decided or recorded: the
+    dependency hands over the Actor, and the inventory classifies the route
+    ``safe-public``.
+    """
+    declaration = _declaration(
+        resource_type,
+        AuthorizationAction.READ,
+        None,
+        {role: AuthorizationPurpose.SELF_SERVICE for role in CanonicalRole},
+        safe_public=True,
+    )
+
+    async def dependency(actor: Actor = Depends(get_actor)) -> Actor:
+        return actor
+
+    setattr(dependency, "authorization_declaration", declaration)
+    return dependency
+

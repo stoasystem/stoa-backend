@@ -35,7 +35,7 @@ from fakes.bedrock import FakeBedrock
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.main import RequestLocaleMiddleware
 from stoa.routers import conversations, students
-from stoa.security import route_authorization
+from stoa.security import declared_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import ask_answer, learning_profile_service, locale_service, message_catalog
 
@@ -109,7 +109,7 @@ def _actor(user_id="student-1", role=CanonicalRole.STUDENT):
 def _profile_app(monkeypatch, profile: dict[str, Any], actor: Actor):
     writes: list[dict] = []
     monkeypatch.setattr(
-        route_authorization.user_repo, "get_user", lambda user_id, **_kwargs: dict(profile)
+        declared_authorization.user_repo, "get_user", lambda user_id, **_kwargs: dict(profile)
     )
     monkeypatch.setattr(students.user_repo, "get_user", lambda user_id, **_kwargs: dict(profile))
 

@@ -33,11 +33,12 @@ from stoa.security.authorization import (
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 from stoa.security.request_correlation import get_request_correlation_id
-from stoa.security.route_authorization import (
+from stoa.security.declared_authorization import (
     STUDENT_CONTENT_READ,
-    authorized_student_dependency,
+    authorized,
     get_authorization_fact_repository,
 )
+from stoa.security.declared_authorization import path as path_source
 from stoa.services import notification_service
 
 
@@ -386,7 +387,6 @@ def test_direct_sink_rejects_duplicate_material_before_any_table_access(monkeypa
 
 def test_all_production_authorization_call_sites_use_recording_gateway():
     roots = [
-        Path("src/stoa/security/route_authorization.py"),
         Path("src/stoa/security/declared_authorization.py"),
         *Path("src/stoa/routers").glob("*.py"),
     ]
@@ -401,22 +401,13 @@ def test_all_production_authorization_call_sites_use_recording_gateway():
                         keywords = {item.arg for item in call.keywords}
                         if not {"correlation_id", "audit_sink"} <= keywords:
                             missing.append(f"{path}:{call.lineno}:authorize_and_resolve")
-                    if (
-                        isinstance(call.func, ast.Name)
-                        and call.func.id == "authorize_teacher_loaded_resource"
-                    ):
-                        keywords = {item.arg for item in call.keywords}
-                        if not {"correlation_id", "audit_sink"} <= keywords:
-                            missing.append(
-                                f"{path}:{call.lineno}:authorize_teacher_loaded_resource"
-                            )
                 has_evaluate = any(
                     isinstance(call.func, ast.Attribute) and call.func.attr == "evaluate"
                     for call in calls
                 )
                 has_gateway = any(
                     isinstance(call.func, ast.Name)
-                    and call.func.id in {"record_authorization_decision", "_record_or_raise"}
+                    and call.func.id == "record_authorization_decision"
                     for call in calls
                 )
                 if has_evaluate and not has_gateway and path.name != "authorization.py":
@@ -498,9 +489,8 @@ def _generated_student_app(monkeypatch, *, sink, facts):
     )
     effects = []
     app = FastAPI()
-    dependency = authorized_student_dependency(
-        action=AuthorizationAction.READ,
-        purposes=STUDENT_CONTENT_READ,
+    dependency = authorized(
+        ResourceType.STUDENT, AuthorizationAction.READ, path_source("student_id"), STUDENT_CONTENT_READ
     )
 
     @app.get("/students/{student_id}")

@@ -40,7 +40,7 @@ from stoa.security.declared_authorization import (
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
-from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.security.declared_authorization import get_authorization_fact_repository
 from stoa.security.route_inventory import inventory_application, validate_application_inventory
 
 
