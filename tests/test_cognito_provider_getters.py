@@ -60,10 +60,19 @@ def _admin_app() -> FastAPI:
 
 def test_teacher_activation_resolves_its_identity_provider(monkeypatch, cognito_clients):
     seen: dict[str, Any] = {}
+    # The route declares its success body (#392), so the stub answers with one.
+    activated = {
+        "status": "active",
+        "userId": "teacher_1",
+        "applicationId": "application_1",
+        "applicationVersion": 1,
+        "evidenceReference": "teacher-activation:command_1",
+        "email": "teacher@stoa.test",
+    }
 
     def activate_from_invitation(**kwargs: Any) -> dict[str, Any]:
         seen.update(kwargs)
-        return {"status": "activated"}
+        return activated
 
     monkeypatch.setattr(
         teacher_applications.teacher_application_service,
@@ -88,7 +97,7 @@ def test_teacher_activation_resolves_its_identity_provider(monkeypatch, cognito_
             json={"invitation_token": "t" * 32},
         )
         assert response.status_code == 200, response.text
-        assert response.json() == {"status": "activated"}
+        assert response.json() == activated
         assert isinstance(seen["provider"], _Cognito)
     assert seen["verified_email"] == "teacher@stoa.test"
     assert [(r.kind, r.region) for r in cognito_clients()] == [

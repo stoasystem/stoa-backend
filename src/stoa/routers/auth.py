@@ -1192,6 +1192,20 @@ class InvitationClaimRequest(BaseModel):
         return enforce_password_complexity(value)
 
 
+class InvitationClaimResponse(BaseModel):
+    """The account a token was exchanged for.
+
+    `email` is the address the account signs in with, so the activation page can
+    offer that sign-in even when the browser holds another account's session (#392).
+    """
+
+    status: str
+    userId: str
+    role: str
+    accountNumber: str
+    email: str
+
+
 def get_account_identity_provider(settings: Settings = Depends(config.settings)) -> Any:
     return CognitoTeacherIdentityProvider(
         aws.client(Kind.COGNITO),
@@ -1254,7 +1268,7 @@ def admit_invitation_claim(request: Request, *, now: datetime | None = None, tab
         raise _invitation_claim_rate_limited()
 
 
-@router.post("/invitations/claim")
+@router.post("/invitations/claim", response_model=InvitationClaimResponse)
 @explicit_route_classification(
     "public", "invitation-gated account activation for every provisionable role"
 )

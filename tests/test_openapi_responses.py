@@ -81,6 +81,24 @@ def _schema_of(schema: dict, path: str, method: str) -> dict:
     return schema["paths"][path][method]["responses"]["200"]["content"]["application/json"]["schema"]
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/auth/invitations/claim",
+        "/teacher-applications/activation/claim",
+        "/teacher-applications/activation/consume",
+    ],
+)
+def test_activation_routes_declare_the_signed_in_address(path):
+    """The frontend prefills its login form from `email` after activating (#392)."""
+    schema = _schema()
+    body = _body(schema, path, "post", "200")
+
+    assert body["properties"]["email"]["type"] == "string"
+    assert "email" in body["required"]
+    assert {"status", "userId"} <= set(body["required"])
+
+
 def test_generation_progress_declares_the_unknown_command_conflict():
     schema = _schema()
     body = _body(schema, "/conversations/{conv_id}/generation", "get", "409")

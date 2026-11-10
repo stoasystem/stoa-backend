@@ -535,6 +535,9 @@ def _resume_activation(command: dict[str, Any], *, provider: Any, now: datetime)
         "applicationId": command["application_id"],
         "applicationVersion": command["application_version"],
         "evidenceReference": completed.get("evidence_reference"),
+        # The address the teacher signs in with, so the activation page can offer that
+        # sign-in even when the browser holds another account's session (#392).
+        "email": command["verified_email"],
     }
 
 

@@ -492,6 +492,35 @@ def test_供应商失败后重试续做同一个账号而不是开第二个(
     assert len([key for key in table.rows if key[0].startswith("ACCOUNT_NUMBER#")]) == 1
 
 
+def test_教师激活两条路径都返回登录用的邮箱(
+    table: TeacherTable, delivered: list[dict[str, Any]]
+) -> None:
+    """Claim and the signed-in resume both hand back the address the teacher signs in with.
+
+    The activation page uses it to sign a stale session out and prefill the login
+    form (#392), so the resumed path must carry it as well as the first attempt.
+    """
+    activated = _activate(_approve(delivered))
+    assert activated["email"] == CANDIDATE
+    assert activated["email"] == _profile(table, activated["userId"])["email"]
+
+    other = "second@example.ch"
+    token = _approve(delivered, email=other)
+    provider = TeacherProvider(group_failures=1)
+    with pytest.raises(RuleViolation):
+        _activate(token, provider=provider)
+    resumed = teacher_application_service.activate_from_invitation(
+        token=token,
+        verified_email=other.upper(),
+        issuer=ISSUER,
+        subject="sub-resumed",
+        provider=provider,
+        now=lambda: _moment(120),
+    )
+    assert resumed["status"] == "active"
+    assert resumed["email"] == other
+
+
 # ---------------------------------------------------------------------------
 # 009 带出来的补充判据：删号必须把地址还回去
 # ---------------------------------------------------------------------------
