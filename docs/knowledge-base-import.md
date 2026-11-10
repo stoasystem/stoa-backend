@@ -154,3 +154,11 @@ owns, rows sorted by key), `seeded_at`, the `git_commit` it ran from and `git_di
 `PK=PRACTICE, SK=CURRICULUM_SEED`. `--dry-run` prints the hash it would record, and
 `--print-hash` prints only that hash, needing no AWS access: run it with the same
 flags to check whether the table still holds what the repository seeds.
+
+Every production deploy does that check after the release is live:
+`scripts/check_curriculum_seed.py` reads the stamp, recomputes the hash in the
+knowledge base mode the stamp records, and writes the result to the run summary
+(stoa-backend#355). A table that lags the code, or has no stamp, is a warning
+asking for a seed run; a stamp that could not be read is a warning that says so.
+None of them fails the deploy - the seed stays a hand-run step. An operator runs the
+same check with `python scripts/check_curriculum_seed.py --profile stoa`.

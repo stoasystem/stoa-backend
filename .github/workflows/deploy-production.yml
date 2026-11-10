@@ -214,6 +214,21 @@ jobs:
             --local-dist dist \
             --output-dir "${RUNNER_TEMP}/release-record"
 
+      # Compares the curriculum seed in this commit with the seed stamp in the
+      # table (PRACTICE / CURRICULUM_SEED) and warns when the table lags
+      # (stoa-backend#355). It never fails the deploy: the seed is run by hand,
+      # so a lagging table is for an operator to act on, and the release is
+      # already live. The script exits 0 whatever it finds; continue-on-error
+      # covers it not starting at all. One GetItem, which is all the role may do
+      # on the table.
+      - name: Compare curriculum seed with the table
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          if ! uv run --frozen python scripts/check_curriculum_seed.py; then
+            echo "::warning title=Curriculum seed::The seed check did not run, so the table was not compared with the code."
+          fi
+
       - name: Publish release record to run summary
         if: always()
         run: |
