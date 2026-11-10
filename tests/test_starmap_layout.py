@@ -9,6 +9,8 @@ the same answer every time the script is run.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 from itertools import combinations
 from typing import Any
@@ -332,7 +334,9 @@ def test_adding_a_unit_leaves_the_other_nebulae_where_they_were(
             assert _stars(after)[unit_id] == star
 
 
-def test_a_new_topic_forces_a_whole_new_layout(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_new_topic_gets_a_nebula_without_moving_the_others(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     table = _table(monkeypatch, _made_up_rows({"a": 2, "b": 2}))
     before = layout_starmap.run("math", apply=True).layout
 
@@ -341,11 +345,18 @@ def test_a_new_topic_forces_a_whole_new_layout(monkeypatch: pytest.MonkeyPatch) 
         if row["SK"] == "TOPIC#c":
             row["order"] = 3
     table.seed(*added)
-    after = layout_starmap.run("math", apply=True).layout
+    report = layout_starmap.run("math", apply=True)
+    after = report.layout
 
-    assert after.layout_version != before.layout_version
-    assert after.relayout_reason
+    assert report.problems == []
+    assert after.layout_version == before.layout_version
     assert [n.topic_id for n in after.nebulae] == ["a", "b", "c"]
+    for topic_id in ("a", "b"):
+        assert _centres(after)[topic_id] == _centres(before)[topic_id]
+    assert {k: v for k, v in _stars(after).items() if not k.startswith("c-")} == _stars(before)
+    assert layout_starmap.validate_layout(after) == []
+    stored = table.rows[("PRACTICE", "SUBJECT#math")]["starmap_layout"]["nebula_centres"]
+    assert sorted(stored) == ["a", "b", "c"]
 
 
 def test_relayout_on_demand_bumps_the_version(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -439,3 +450,222 @@ def test_a_report_only_run_writes_nothing(monkeypatch: pytest.MonkeyPatch) -> No
     assert report.applied is False
     assert table.calls["update_item"] == 0
     assert table.calls["put_item"] == 0
+
+
+# ── Keeping the placed stars (stoa-backend#376) ───────────────────────────
+
+
+def _new_star(topic_id: str, unit_id: str, *, order: int = 0) -> list[dict[str, Any]]:
+    """A unit with one active lesson in the seed's `mathematics` subject.
+
+    `order` 0 sorts it before the stars already there: a full layout would put it
+    at the centre of its nebula and push the others out, so keeping them is
+    something the default mode has to do on purpose.
+    """
+    return [
+        {
+            "PK": "PRACTICE",
+            "SK": f"UNIT#{unit_id}",
+            "unit_id": unit_id,
+            "topic_id": topic_id,
+            "subject_id": "mathematics",
+            "title": unit_id,
+            "order": order,
+        },
+        {
+            "PK": "PRACTICE",
+            "SK": f"LESSON#{unit_id}-l1",
+            "lesson_id": f"{unit_id}-l1",
+            "unit_id": unit_id,
+            "topic_id": topic_id,
+            "subject_id": "mathematics",
+            "title": unit_id,
+            "order": 1,
+        },
+    ]
+
+
+_NEW_STARS = {"brueche": 2, "geometrie": 1, "gleichungen": 1, "prozentrechnung": 1}
+
+
+def _placed_seed_table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
+    """The ten ZAP stars placed and written, plus new stars with lessons and no place."""
+    table = _table(monkeypatch, _seed_rows())
+    placed = layout_starmap.run("math", apply=True)
+    assert placed.problems == [] and len(placed.layout.stars) == 10
+    for topic_id, count in sorted(_NEW_STARS.items()):
+        for index in range(1, count + 1):
+            table.seed(*_new_star(topic_id, f"{topic_id}-kb{index}"))
+    return table
+
+
+def _layout_fields(table: FakeTable) -> dict[str, dict[str, object]]:
+    """Every position field the layout owns, per row, as the table stores it."""
+    fields = ("x", "y", "radius", "nebula_id", "layout_version", "starmap_layout")
+    return {
+        str(sk): {name: row[name] for name in fields if name in row}
+        for (_pk, sk), row in table.rows.items()
+        if str(sk).split("#")[0] in {"SUBJECT", "TOPIC", "UNIT", "SKILL"}
+    }
+
+
+def test_the_default_keeps_every_placed_star_and_places_only_the_new_ones(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    table = _placed_seed_table(monkeypatch)
+    before = _layout_fields(table)
+    old_units = sorted(
+        sk for sk, fields in before.items() if sk.startswith("UNIT#") and "x" in fields
+    )
+    assert len(old_units) == 10
+
+    report = layout_starmap.run("math", apply=True)
+
+    assert report.problems == []
+    assert report.applied is True
+    after = _layout_fields(table)
+    for sort_key in old_units:
+        assert after[sort_key] == before[sort_key], sort_key
+    for sort_key, fields in before.items():
+        if sort_key.startswith("TOPIC#") and "x" in fields:
+            assert (after[sort_key]["x"], after[sort_key]["y"]) == (fields["x"], fields["y"])
+
+    new_units = [f"{t}-kb{i}" for t, n in sorted(_NEW_STARS.items()) for i in range(1, n + 1)]
+    assert sorted(report.layout.added_stars) == sorted(new_units)
+    gap = layout_starmap.STAR_MIN_GAP * report.layout.transform.scale
+    old_points = [(float(after[sk]["x"]), float(after[sk]["y"])) for sk in old_units]
+    for unit_id in new_units:
+        row = after[f"UNIT#{unit_id}"]
+        assert row["nebula_id"] == unit_id.split("-kb")[0]
+        point = (float(row["x"]), float(row["y"]))
+        for other in old_points:
+            assert math.dist(point, other) >= gap, unit_id
+        nebula = after[f"TOPIC#{row['nebula_id']}"]
+        centre = (float(nebula["x"]), float(nebula["y"]))
+        assert math.dist(point, centre) <= float(nebula["radius"])
+    assert layout_starmap.validate_layout(report.layout) == []
+
+
+def test_keeping_the_placed_stars_gives_the_same_answer_twice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = [dict(row) for row in _placed_seed_table(monkeypatch).rows.values()]
+
+    first_table = _table(monkeypatch, [dict(row) for row in rows])
+    first = layout_starmap.run("math", apply=True)
+    second_table = _table(monkeypatch, [dict(row) for row in rows])
+    second = layout_starmap.run("math", apply=True)
+
+    assert first.writes
+    assert _stars(first.layout) == _stars(second.layout)
+    assert _centres(first.layout) == _centres(second.layout)
+    assert first.writes == second.writes
+    assert _layout_fields(first_table) == _layout_fields(second_table)
+
+    again = layout_starmap.run("math", apply=True)
+    assert again.writes == []
+    assert again.layout.added_stars == ()
+
+
+def test_stars_that_do_not_fit_write_nothing_and_exit_non_zero(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    table = _table(monkeypatch, _seed_rows())
+    layout_starmap.run("math", apply=True)
+    for index in range(1, 9):
+        table.seed(*_new_star("brueche", f"brueche-kb{index}"))
+    before = _layout_fields(table)
+    writes_before = table.calls["update_item"]
+
+    monkeypatch.setattr("sys.argv", ["layout_starmap.py", "--apply"])
+    code = layout_starmap.main()
+
+    assert code != 0
+    assert table.calls["update_item"] == writes_before
+    assert _layout_fields(table) == before
+    printed = capsys.readouterr().out
+    assert "brueche-kb1" in printed
+    assert "--relayout" in printed
+
+
+def test_explicit_relayout_still_recomputes_the_whole_map(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    table = _placed_seed_table(monkeypatch)
+    before = _layout_fields(table)
+
+    report = layout_starmap.run("math", apply=True, relayout=True)
+
+    assert report.problems == []
+    assert report.layout.recomputed is True
+    assert report.layout.relayout_reason == "relayout requested"
+    assert report.layout.layout_version == "L2"
+    after = _layout_fields(table)
+    assert any(
+        after[sk] != fields for sk, fields in before.items() if sk.startswith("UNIT#") and "x" in fields
+    )
+
+
+def _fingerprint(report: layout_starmap.Report) -> str:
+    layout = report.layout
+    blob = {
+        "version": layout.layout_version,
+        "reason": layout.relayout_reason,
+        "nebulae": [[n.topic_id, n.x, n.y, n.radius] for n in layout.nebulae],
+        "stars": [[s.unit_id, s.nebula_id, s.x, s.y] for s in layout.stars],
+        "skills": [[p.skill_id, p.x, p.y] for p in layout.skill_points],
+        "writes": [[sort_key, sorted(attributes)] for sort_key, attributes in report.writes],
+    }
+    return hashlib.sha256(json.dumps(blob, sort_keys=True).encode()).hexdigest()
+
+
+def test_relayout_matches_what_it_computed_before_376(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`--relayout` is the old full layout, digit for digit.
+
+    The fingerprints were taken from origin/main 2e7ab899, before the default
+    changed; a full layout that drifts from them has changed behaviour.
+    """
+    rows = _made_up_rows(
+        {"a": 3, "b": 2, "c": 4},
+        prerequisites={"b-u1": ["a-u1"]},
+        skills={"s1": "a-u1", "s2": "c-u2"},
+    )
+    table = _table(monkeypatch, rows)
+    first = layout_starmap.run("math", apply=True, relayout=True)
+    table.seed(*_made_up_rows({"d": 2})[1:])
+    second = layout_starmap.run("math", apply=True, relayout=True)
+    _table(monkeypatch, _seed_rows())
+    seed = layout_starmap.run("math", relayout=True)
+
+    assert _fingerprint(first) == "c879807549e1a44d13a7fa6bae928eed6ac7c0db3a35589234721e913c4cb8aa"
+    assert _fingerprint(second) == "ddfe61cd432e8ec854ac23c677201affce869bf168784d6105510826aaa9f427"
+    assert _fingerprint(seed) == "6879b570e7aa92ab47cfb62cb53119ccbfa6d6cbcfba9fd7d5aa7c5507f84aa2"
+
+
+def test_the_default_subject_math_finds_the_seeded_mathematics_subject(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The seed writes `mathematics`; `--subject` defaults to `math`. Both are one subject."""
+    assert seed_practice.SUBJECT["subject_id"] == "mathematics"
+    table = _table(monkeypatch, _seed_rows())
+    monkeypatch.setattr("sys.argv", ["layout_starmap.py", "--apply"])
+
+    assert layout_starmap.main() == 0
+    subject_row = table.rows[("PRACTICE", "SUBJECT#mathematics")]
+    assert subject_row["starmap_layout"]["layout_version"] == "L1"
+    assert layout_starmap.run("mathematics").writes == []
+
+
+def test_placed_rows_without_a_layout_record_ask_for_a_relayout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    table = _table(monkeypatch, _made_up_rows({"a": 2, "b": 2}))
+    layout_starmap.run("math", apply=True)
+    table.rows[("PRACTICE", "SUBJECT#math")].pop("starmap_layout")
+    writes_before = table.calls["update_item"]
+
+    report = layout_starmap.run("math", apply=True)
+
+    assert report.problems and "--relayout" in report.problems[0]
+    assert report.applied is False
+    assert table.calls["update_item"] == writes_before

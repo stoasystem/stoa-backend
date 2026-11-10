@@ -31,6 +31,10 @@ raw frame.
 
 ## How it is computed
 
+This is the full computation: the first layout of a subject, and `--relayout`.
+Once stars are placed, the default run keeps them and places only new ones
+(see "Stability rules").
+
 1. **Input.** Topics, units and lessons for the subject. A unit with **zero
    active lessons is not laid out**, and a topic left with no unit gets no
    nebula. Topics are sorted by `(order, topic_id)` and units by
@@ -75,26 +79,66 @@ Same input, same output, digit for digit:
 
 ## Stability rules
 
-These are what keep an existing map from jumping when content changes.
+These are what keep an existing map from jumping when content changes. Students
+learn where their stars are, so a star that is on the map stays where it is
+unless someone asks, by name, for the whole map to be recomputed
+(stoa-backend#376).
 
-1. **Nebula centres carry over.** The stored raw centres and the stored
-   normalising transform are reused. They are recomputed only when the set of
-   topics changes (a topic added or removed), when `--relayout` is passed, or
-   when carrying them over would break a rule (below).
-2. **A unit change re-spirals one nebula.** Adding or removing a unit changes the
-   stars and skill points of that nebula, and its radius. Every other nebula's
-   centre, radius and stars come out identical.
-3. **A change in cross-topic prerequisite counts does not move anything.** It
-   only changes the nebula links the read model draws (stoa-backend#59
-   `links[]`).
-4. **The frame is not recomputed per run.** The scale and shift are fixed when
-   the layout is recomputed in full and stored in `starmap_layout`. Normalising
-   to the current bounding box each time would shift the whole map whenever one
-   star appeared.
-5. **Growth escalates to a full recompute.** If a nebula grows past its clearance
-   with a neighbour, or past the stored frame, the incremental result is
-   discarded, the layout is recomputed in full, `layout_version` goes up, and the
-   reason is written to `starmap_layout.relayout_reason`.
+### Default: keep the placed stars
+
+Without `--relayout` the script runs in **keep-placed** mode (`--keep-placed`
+names it explicitly; it is the default for both the report and `--apply`):
+
+1. **A placed star does not move.** A unit row with `x`, `y` and a `nebula_id`
+   that is still its topic keeps all three, and its `layout_version`, digit for
+   digit. Its row is not written at all.
+2. **A placed nebula does not move.** A topic row with `x`, `y` and `radius` keeps
+   its centre. Its radius only grows, and only when it gains stars.
+3. **A new star goes into the first free slot of its nebula's spiral.** The
+   spiral is the one a full layout draws (rule 4 of "How it is computed"), and
+   because the radius grows with the square root of the count, the n-th slot
+   sits `STAR_FILL * NEBULA_RADIUS_PER_STAR * sqrt(n)` raw units from the centre
+   whatever the count: a slot does not move when the nebula grows. Slots are
+   tried innermost first; one that is closer than `STAR_MIN_GAP` (0.5 raw units,
+   the spacing a full spiral keeps) to any star already in the nebula is skipped.
+   So new stars land after the stars that are there, whatever their `order`. A
+   star whose lessons went dark keeps its row and its slot, so it comes back to
+   the same place. The nebula's radius becomes the larger of its stored radius,
+   `NEBULA_RADIUS_PER_STAR * sqrt(stars)` and what its outermost star needs.
+   A new star's skill points get the offsets a full layout would give them; a
+   skill point already placed keeps its position.
+4. **A new nebula finds a centre without moving any other.** A topic with no
+   position gets the point nearest the nebulae it shares prerequisite edges with
+   (the middle of the map when it has none), searched on a
+   `CENTRE_GRID_STEPS` grid over the frame, where its whole disc fits in `[0, 1]`
+   and it keeps `NEBULA_CLEARANCE` from every placed nebula, including dark ones.
+   Its raw centre is added to `starmap_layout.nebula_centres`.
+5. **The frame and `layout_version` stay.** New positions are in the stored frame
+   (`starmap_layout.transform`); the version is not raised.
+6. **What does not fit is not forced.** If a nebula would grow to within the
+   clearance of a neighbour, a new nebula has no free space, or a point would
+   leave the frame, the script names the nebula and the stars that do not fit,
+   says `--relayout` is needed, **writes nothing** and exits 1. It never falls
+   back to a full recompute on its own.
+7. **Rows that carry positions with no layout record are refused.** If unit or
+   topic rows have positions but the subject row has no `starmap_layout` for the
+   current seed, new stars cannot be put in the same frame; the script asks for
+   `--relayout` and writes nothing.
+
+When nothing of the subject is placed yet (the first layout), keep-placed has
+nothing to keep and computes the whole map, as `--relayout` would.
+
+Re-running is idempotent in this mode too: a second run finds every star placed
+and writes nothing.
+
+### `--relayout`: recompute the whole map
+
+`--relayout` recomputes every nebula centre, the frame and every star from
+scratch, exactly as the script did before #376: nebula placement, radii, spiral
+and normalisation as in "How it is computed", with units in `(order, unit_id)`
+order. **Every star can move.** It raises `layout_version` and writes
+`relayout_reason`. Use it on purpose, when keep-placed reports that the new
+stars do not fit, or when the map is to be redrawn.
 
 Re-run the script after a curriculum change that adds stars; the result belongs
 in the seed and migration checklist. Re-running `scripts/seed_practice.py` alone
@@ -104,14 +148,18 @@ the position fields above (stoa-backend#352).
 ## Running it
 
 ```bash
-python scripts/layout_starmap.py                 # report only, writes nothing
-python scripts/layout_starmap.py --subject math
-python scripts/layout_starmap.py --relayout      # recompute every nebula centre
-python scripts/layout_starmap.py --apply         # write the rows
+python scripts/layout_starmap.py                        # report only, writes nothing
+python scripts/layout_starmap.py --apply                # keep placed stars, place new ones
+python scripts/layout_starmap.py --relayout             # report a full recompute
+python scripts/layout_starmap.py --relayout --apply     # recompute and move every star
 ```
 
-Default is report only. The table and region come from the application settings,
-so `DYNAMODB_TABLE_NAME` and `AWS_REGION` select which table is read and written.
+Default is report only, and the report shows what `--apply` would write; it exits
+1 when the new stars do not fit. `--subject` defaults to `math`, which is the
+subject the seed writes as `mathematics`: subjects are compared by
+`curriculum_service.subject_key`, which maps the alias. The table and region come
+from the application settings, so `DYNAMODB_TABLE_NAME` and `AWS_REGION` select
+which table is read and written.
 
 Skill rows are stoa-backend#58 and may not exist yet. When there are none, the
 layout is computed and written without them; it is not an error.
