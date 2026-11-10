@@ -477,7 +477,7 @@ class Settings(BaseSettings):
     notification_email_reply_to: str = "info@stoaedu.ch"
     # The logo at the top of every email (#374). Mail clients fetch it themselves,
     # so it must be a stable public HTTPS address.
-    email_logo_url: str = "https://stoaedu.ch/img/logo/logo2.png"
+    email_logo_url: str = "https://app.stoaedu.ch/email/stoa-logo.png"
     notification_email_digest_template: str = "notification_digest_v1"
     notification_email_send_enabled: bool = False
     notification_push_provider: str = ""
