@@ -208,6 +208,24 @@ def test_the_live_release_is_verified_after_the_aliases_move() -> None:
     assert "|| true" not in command
 
 
+def test_the_curriculum_seed_is_compared_after_the_release_and_only_warns() -> None:
+    """stoa-backend#355: a table that lags the code is a warning, never a failure."""
+    _, workflow = _workflow()
+    steps = _steps(workflow["jobs"]["deploy"])
+    names = [step.get("name") for step in steps]
+    verify = names.index("Verify live production release")
+    compare = names.index("Compare curriculum seed with the table")
+    assert compare == verify + 1
+    step = steps[compare]
+    assert step["continue-on-error"] is True
+    command = step["run"]
+    assert "scripts/check_curriculum_seed.py" in command
+    assert "set -e" not in command and "set -euo" not in command
+    assert "::warning" in command
+    # It reads the stamp through the script and writes nothing.
+    assert not re.search(r"\baws\s+dynamodb\b", command)
+
+
 def test_the_release_record_is_kept_whatever_the_check_found() -> None:
     _, workflow = _workflow()
     steps = _steps(workflow["jobs"]["deploy"])
