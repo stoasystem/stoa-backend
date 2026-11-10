@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from dynamodb_expression_assertions import assert_expression_placeholders_closed
 
 from stoa.db import table as db_table
-from stoa.config import settings
+from stoa import config
 from stoa.routers import analytics
 
 
@@ -88,7 +88,7 @@ def _counter_keys(table: _AnalyticsTable) -> set[str]:
 
 
 def _tuned(**overrides: Any) -> Any:
-    return settings.model_copy(update=overrides)
+    return config.settings().model_copy(update=overrides)
 
 
 # ---------------------------------------------------------------------------
@@ -120,10 +120,10 @@ def test_出厂额度放行一整个窗口的正常用量(table: _AnalyticsTable
     """
     request = _StubRequest("198.51.100.7")
 
-    for _ in range(settings.analytics_ingest_max_events_per_window):
+    for _ in range(config.settings().analytics_ingest_max_events_per_window):
         analytics.admit_analytics_event(request, now=NOW, table=table)
 
-    assert sum(table.counters.values()) == settings.analytics_ingest_max_events_per_window
+    assert sum(table.counters.values()) == config.settings().analytics_ingest_max_events_per_window
 
     with pytest.raises(Exception) as refusal:
         analytics.admit_analytics_event(request, now=NOW, table=table)
@@ -138,7 +138,7 @@ def test_出厂额度放行一整个窗口的正常用量(table: _AnalyticsTable
 def test_分桶按网关观测到的地址_换sessionId换不来新额度(
     table: _AnalyticsTable, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(analytics, "settings", _tuned(analytics_ingest_max_events_per_window=2))
+    config.install(_tuned(analytics_ingest_max_events_per_window=2))
     client = _client()
 
     statuses = [
@@ -162,10 +162,10 @@ def test_不同来源地址各自计数(table: _AnalyticsTable) -> None:
 def test_窗口滚过之后重新放行(
     table: _AnalyticsTable, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(analytics, "settings", _tuned(analytics_ingest_max_events_per_window=1))
+    config.install(_tuned(analytics_ingest_max_events_per_window=1))
     request = _StubRequest("198.51.100.7")
     later = datetime.fromtimestamp(
-        NOW.timestamp() + settings.analytics_ingest_window_seconds, tz=UTC
+        NOW.timestamp() + config.settings().analytics_ingest_window_seconds, tz=UTC
     )
 
     analytics.admit_analytics_event(request, now=NOW, table=table)
@@ -184,7 +184,7 @@ def test_窗口滚过之后重新放行(
 def test_超额时拒绝且不写事件行(
     table: _AnalyticsTable, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(analytics, "settings", _tuned(analytics_ingest_max_events_per_window=1))
+    config.install(_tuned(analytics_ingest_max_events_per_window=1))
     client = _client()
 
     assert client.post("/analytics/events", json=_event()).status_code == 202
@@ -192,7 +192,7 @@ def test_超额时拒绝且不写事件行(
 
     assert refused.status_code == 429
     assert refused.json()["detail"]["code"] == "analytics_ingest_rate_limited"
-    assert refused.headers["retry-after"] == str(settings.analytics_ingest_window_seconds)
+    assert refused.headers["retry-after"] == str(config.settings().analytics_ingest_window_seconds)
     assert len(table.puts) == 1
 
 
@@ -225,10 +225,10 @@ def test_嵌套结构与超长字符串与超量字段都被挡在行外(table: 
     payload: dict[str, Any] = {
         "nested": {"a": 1},
         "listed": [1, 2, 3],
-        "long": "x" * (settings.analytics_payload_max_value_length + 50),
+        "long": "x" * (config.settings().analytics_payload_max_value_length + 50),
     }
     payload.update(
-        {f"key{index}": index for index in range(settings.analytics_payload_max_entries + 10)}
+        {f"key{index}": index for index in range(config.settings().analytics_payload_max_entries + 10)}
     )
 
     _client().post("/analytics/events", json=_event(payload=payload))
@@ -236,8 +236,8 @@ def test_嵌套结构与超长字符串与超量字段都被挡在行外(table: 
     stored = table.puts[0]
     assert "nested" not in stored["payload"]
     assert "listed" not in stored["payload"]
-    assert len(stored["payload"]["long"]) == settings.analytics_payload_max_value_length
-    assert len(stored["payload"]) <= settings.analytics_payload_max_entries
+    assert len(stored["payload"]["long"]) == config.settings().analytics_payload_max_value_length
+    assert len(stored["payload"]) <= config.settings().analytics_payload_max_entries
     assert stored["payload_truncated"] is True
 
 
@@ -257,10 +257,10 @@ def test_计数写的是带TTL的固定窗口行(table: _AnalyticsTable) -> None
     analytics.admit_analytics_event(_StubRequest("198.51.100.7"), now=NOW, table=table)
 
     call = table.update_calls[0]
-    window = int(NOW.timestamp()) - int(NOW.timestamp()) % settings.analytics_ingest_window_seconds
+    window = int(NOW.timestamp()) - int(NOW.timestamp()) % config.settings().analytics_ingest_window_seconds
     assert call["Key"]["PK"].startswith("SOURCEWINDOW#ANALYTICS-EVENTS#")
     assert call["Key"]["SK"] == f"WINDOW#{window}"
     assert call["ExpressionAttributeValues"][":expires"] == (
-        window + 2 * settings.analytics_ingest_window_seconds
+        window + 2 * config.settings().analytics_ingest_window_seconds
     )
     assert call["ReturnValues"] == "UPDATED_NEW"

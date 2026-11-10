@@ -18,7 +18,8 @@ from test_account_provisioning import FakeAccountTable, RecordingProvider
 from stoa import aws
 from stoa.aws import Kind
 from stoa.db import table as db_table
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db.repositories import (
     parent_link_repo,
 )
@@ -211,7 +212,7 @@ def _app(
     app.include_router(parents.router, prefix="/parents")
     app.include_router(students.router, prefix="/students")
     install_actor_overrides(app, user)
-    app.dependency_overrides[get_settings] = _settings
+    config.install(_settings())
     app.dependency_overrides[admin.get_account_identity_provider] = lambda: (
         provider or RecordingProvider()
     )

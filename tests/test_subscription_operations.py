@@ -10,7 +10,8 @@ from fastapi.testclient import TestClient
 from botocore.exceptions import ClientError
 
 from fakes.dynamodb import from_wire
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from fakes.links import LinkRows
 from stoa.db import table as db_table
 from stoa.db.repositories import parent_link_repo
@@ -219,7 +220,7 @@ def _app_for_user(user: dict, settings: Settings | None = None) -> FastAPI:
     app.include_router(admin.router, prefix="/admin")
     app.include_router(billing.router, prefix="/billing")
     install_actor_overrides(app, user)
-    app.dependency_overrides[get_settings] = lambda: settings or _settings()
+    config.install(settings or _settings())
     return app
 
 

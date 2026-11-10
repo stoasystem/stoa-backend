@@ -15,7 +15,7 @@ import pytest
 from botocore.exceptions import ClientError, EndpointConnectionError
 
 from fakes.dynamodb import FakeTable
-from stoa.config import settings
+from stoa import config
 from stoa.db import table as db_table
 
 Kind = db_table.ReasonKind
@@ -189,7 +189,7 @@ def test_the_client_is_built_once_in_the_configured_region(monkeypatch) -> None:
     finally:
         db_table.client.cache_clear()
     assert first.meta.service_model.service_name == "dynamodb"
-    assert first.meta.region_name == settings.aws_region
+    assert first.meta.region_name == config.settings().aws_region
 
 
 def test_something_with_no_transaction_entry_is_unavailable() -> None:

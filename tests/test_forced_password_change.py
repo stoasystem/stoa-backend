@@ -29,7 +29,8 @@ from test_account_provisioning import FakeAccountTable
 from stoa import aws
 from stoa.aws import Kind
 from stoa.db import table as db_table
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db.repositories import (
     user_repo,
 )
@@ -221,7 +222,7 @@ def _signed_in_app(app: FastAPI, *, role: str = "student", user_id: str = TEST_U
     `get_actor` itself is deliberately left alone, because the gate under test
     lives inside it. A test that overrode it would prove nothing.
     """
-    app.dependency_overrides[get_settings] = _settings
+    config.install(_settings())
     app.dependency_overrides[get_verified_token] = lambda: VerifiedAccessToken(
         issuer="https://identity.test",
         subject="subject-1",
@@ -239,7 +240,7 @@ def _admin_app(table: FakeAccountTable, password_provider: Any) -> FastAPI:
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
     install_actor_overrides(app, {"sub": "admin-1", "role": "admin", "accountStatus": "active"})
-    app.dependency_overrides[get_settings] = _settings
+    config.install(_settings())
     app.dependency_overrides[admin.get_account_password_administrator] = (
         lambda: password_provider
     )
@@ -291,7 +292,7 @@ def test_重置后登录成功并且回执带着这条义务(
 
     login_app = FastAPI()
     login_app.include_router(auth.router, prefix="/auth")
-    login_app.dependency_overrides[get_settings] = _settings
+    config.install(_settings())
     login = TestClient(login_app).post(
         "/auth/login", json={"email": TEST_EMAIL, "password": "TempPass123"}
     )
@@ -317,7 +318,7 @@ def test_没有被重置的账号登录回执里这条是假(
 
     login_app = FastAPI()
     login_app.include_router(auth.router, prefix="/auth")
-    login_app.dependency_overrides[get_settings] = _settings
+    config.install(_settings())
     login = TestClient(login_app).post(
         "/auth/login", json={"email": TEST_EMAIL, "password": "OwnPass123"}
     )

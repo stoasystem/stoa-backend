@@ -28,6 +28,7 @@ from PIL import Image
 import pytest
 
 from stoa import aws
+from stoa import config
 from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import Settings
@@ -35,7 +36,7 @@ from stoa.db.repositories import (
     moderation_repo,
     user_repo,
 )
-from stoa.deps import get_actor, get_settings
+from stoa.deps import get_actor
 from stoa.jobs import moderation_image_retention
 from stoa.routers import admin, files, notifications
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -102,7 +103,6 @@ class _World:
         )
         patch_session_table(monkeypatch, self.table)
         db_table.install(self.table)
-        monkeypatch.setenv("STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS", "true")
         # The admin reads in the language they stored; no request asked for one
         # (an earlier test can leave its request's language bound).
         locale_service.set_request_locale(None)
@@ -121,7 +121,10 @@ class _World:
         )
         self.s3 = MultipartS3(BUCKET)
         self.moderation = FakeRekognition(labels)
-        self.settings = Settings(s3_images_bucket=BUCKET)
+        # Best-effort notifications are off outside production unless switched on.
+        self.settings = Settings(
+            s3_images_bucket=BUCKET, stoa_enable_best_effort_notifications=True
+        )
         student = FastAPI()
         student.include_router(files.router, prefix="/files")
         student.dependency_overrides[get_actor] = lambda: _actor(STUDENT, CanonicalRole.STUDENT)
@@ -130,7 +133,7 @@ class _World:
             Kind.S3_PRESIGN: self.s3,
             Kind.REKOGNITION_MODERATION: self.moderation,
         })
-        student.dependency_overrides[get_settings] = lambda: self.settings
+        config.install(self.settings)
         self.student = TestClient(student)
 
     def reader(self, user: dict[str, str]) -> TestClient:
@@ -139,7 +142,7 @@ class _World:
         app.include_router(notifications.admin_router, prefix="/admin")
         install_actor_overrides(app, user)
         aws.install({Kind.S3: self.s3})
-        app.dependency_overrides[get_settings] = lambda: self.settings
+        config.install(self.settings)
         return TestClient(app)
 
     @property
@@ -412,7 +415,7 @@ def test_the_retention_job_is_reached_from_its_schedule(world, monkeypatch) -> N
     _upload_id, case = _blocked(world)
     _handle(world, case["case_id"])
     aws.install({Kind.S3: world.s3})
-    monkeypatch.setattr(moderation_image_retention, "settings", world.settings)
+    config.install(world.settings)
     later = datetime.now(UTC) + timedelta(days=91)
     monkeypatch.setattr(moderation_image_retention, "_now", lambda: later)
 
@@ -439,7 +442,7 @@ def test_account_deletion_removes_the_image_and_the_case(world, monkeypatch) -> 
         )
     )
     aws.install({Kind.S3: world.s3})
-    monkeypatch.setattr(account_deletion_service, "get_settings", lambda: world.settings)
+    config.install(world.settings)
 
     previous: dict[str, Any] = {}
     for _ in range(6):
@@ -470,7 +473,7 @@ def test_a_lost_image_keeps_account_deletion_waiting(world, monkeypatch) -> None
 
     world.s3.delete_object = refuse
     aws.install({Kind.S3: world.s3})
-    monkeypatch.setattr(account_deletion_service, "get_settings", lambda: world.settings)
+    config.install(world.settings)
 
     result = account_deletion_service._moderation_support_branch(
         command={"user_id": STUDENT, "generation": 3}, previous={}
@@ -579,7 +582,7 @@ def test_a_run_that_could_not_delete_fails_so_the_schedule_retries_and_alarms(wo
 
     world.s3.delete_object = refuse
     aws.install({Kind.S3: world.s3})
-    monkeypatch.setattr(moderation_image_retention, "settings", world.settings)
+    config.install(world.settings)
     later = datetime.now(UTC) + timedelta(days=91)
     monkeypatch.setattr(moderation_image_retention, "_now", lambda: later)
 

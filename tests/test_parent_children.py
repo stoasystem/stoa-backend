@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from audit_helpers import MemoryAuthorizationAuditSink
 from fakes import student_evidence as fake_evidence
 from stoa.db import table as db_table
+from stoa import config
 from stoa.config import Settings
 from stoa.db.repositories import report_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -791,7 +792,7 @@ def test_report_repo_get_report_for_child_by_week_ignores_child_entities(monkeyp
 
 def test_parent_child_week_report_available_when_same_week_sibling_first(monkeypatch):
     app = _app_for_user({"sub": "parent-local", "role": "parent"})
-    app.dependency_overrides[parents.get_settings] = _settings
+    config.install(_settings())
     client = TestClient(app)
 
     monkeypatch.setattr(

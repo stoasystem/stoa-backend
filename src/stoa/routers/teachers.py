@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field, model_validator
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db.repositories import (
     asked_knowledge_repo,
     attachment_repo,
@@ -986,7 +987,7 @@ def _asked_topics(conversation_id: str) -> list[str]:
 @router.get("/me/help-requests/{request_id}/attachments/{attachment_id}/content")
 async def download_help_request_attachment(
     loaded: _HelpRequestAttachment = Depends(_help_request_attachment_dependency),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """The content of an attachment the student sent in this help request (#140)."""

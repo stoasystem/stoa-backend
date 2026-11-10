@@ -37,6 +37,7 @@ from fakes.bedrock import FakeBedrock
 from fakes.dynamodb import FakeTable
 from fakes.learning_session import patch_session_table, seed_conversation
 from stoa import aws
+from stoa import config
 from stoa.aws import Kind
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.jobs import conversation_generation
@@ -108,7 +109,9 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     seed_plan(monkeypatch)
     monkeypatch.setattr(conversations.user_repo, "get_user", lambda *_a, **_k: {})
     # Answered in the request unless a test hands the answer to the worker.
-    monkeypatch.setattr(dispatch.settings, "conversation_generation_function_name", "")
+    config.install(
+        config.settings().model_copy(update={"conversation_generation_function_name": ""})
+    )
     return table
 
 

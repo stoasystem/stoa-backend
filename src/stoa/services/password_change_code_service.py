@@ -15,7 +15,7 @@ import secrets
 from stoa import aws
 from stoa.aws import Kind
 from stoa.db import table as db_table
-from stoa.config import settings
+from stoa import config
 from stoa.services import locale_service
 
 
@@ -397,7 +397,7 @@ def send_code_email(recipient: str, code: str, *, locale: str | None = None) -> 
     minutes = CODE_TTL_SECONDS // 60
     subject, body = _template(locale)
     ses.send_email(
-        Source=settings.notification_email_sender,
+        Source=config.settings().notification_email_sender,
         Destination={"ToAddresses": [recipient]},
         Message={
             "Subject": {"Data": subject},

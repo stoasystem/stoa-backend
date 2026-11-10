@@ -5,7 +5,7 @@ from urllib.parse import quote
 from uuid import uuid4
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import settings
+from stoa import config
 from stoa.db.repositories import account_deletion_repo, report_repo
 from stoa.services import locale_service, message_catalog
 
@@ -18,7 +18,7 @@ def teacher_invitation_message(
     `locale` is the language the candidate applied in; a candidate who named none is
     written to in the default one.
     """
-    base = settings.app_base_url.rstrip("/")
+    base = config.settings().app_base_url.rstrip("/")
     link = f"{base}/teacher-activate?token={quote(activation_token, safe='')}"
     lang = locale or locale_service.DEFAULT_LOCALE
     name = full_name.strip()
@@ -193,7 +193,7 @@ def account_invitation_message(
         str(locale or "").strip().lower(),
         ACCOUNT_INVITATION_COPY[ACCOUNT_INVITATION_DEFAULT_LOCALE],
     )
-    base = settings.app_base_url.rstrip("/")
+    base = config.settings().app_base_url.rstrip("/")
     link = f"{base}/activate?token={quote(activation_token, safe='')}"
     name = full_name.strip()
     greeting = (
@@ -230,7 +230,7 @@ def send_account_invitation_email(
     )
     ses = aws.client(Kind.SES)
     ses.send_email(
-        Source=settings.notification_email_sender,
+        Source=config.settings().notification_email_sender,
         Destination={"ToAddresses": [recipient]},
         Message={
             "Subject": {"Data": subject},
@@ -247,7 +247,7 @@ def dispatch_reminder_message(
     Only the subject's name and a link into STOA: the email leaves STOA, so nothing
     the student wrote, sent or is called goes with it.
     """
-    base = settings.app_base_url.rstrip("/")
+    base = config.settings().app_base_url.rstrip("/")
     link = f"{base}/teacher/requests/{quote(request_id, safe='')}"
     subject_line = message_catalog.text(
         "teacher_help.dispatched.email.subject", locale, minutes=minutes
@@ -281,7 +281,7 @@ def send_dispatch_reminder_email(
     # Bounded well inside the request's 29 seconds (`aws.DISPATCH_REMINDER_SES_CONFIG`).
     ses = aws.client(Kind.SES_DISPATCH_REMINDER)
     ses.send_email(
-        Source=settings.notification_email_sender,
+        Source=config.settings().notification_email_sender,
         Destination={"ToAddresses": [recipient]},
         Message={
             "Subject": {"Data": subject_line},

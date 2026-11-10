@@ -165,12 +165,12 @@ def main(argv: list[str] | None = None) -> int:
 
     import boto3
 
-    from stoa.config import settings
+    from stoa import config
     from stoa.db.dynamodb import get_table
 
-    s3 = boto3.client("s3", region_name=settings.aws_region)
+    s3 = boto3.client("s3", region_name=config.settings().aws_region)
     table = get_table()
-    bucket = settings.s3_images_bucket
+    bucket = config.settings().s3_images_bucket
 
     if args.apply:
         if args.source is None:

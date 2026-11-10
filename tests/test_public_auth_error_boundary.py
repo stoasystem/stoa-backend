@@ -10,7 +10,8 @@ from types import SimpleNamespace
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.routers import auth
 from stoa.security.errors import SecurityErrorCode
 from stoa.security.public_auth_errors import (
@@ -165,7 +166,7 @@ def test_every_public_auth_endpoint_redacts_unknown_provider_canary(
     )
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
-    app.dependency_overrides[get_settings] = _settings
+    config.install(_settings())
 
     with caplog.at_level("WARNING", logger="stoa.security.public_auth_errors"):
         response = TestClient(app).post(path, json=payload)

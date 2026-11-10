@@ -24,7 +24,7 @@ from botocore.config import Config
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import settings
+from stoa import config
 from stoa.models.allowance import MAX_EXACT_COUNT, ProviderUsageEvidence
 from stoa.security.private_telemetry import emit_private_event
 
@@ -378,7 +378,7 @@ def _stream_ai_answer(
 ) -> AIProviderResult[dict]:
     """Invoke the model as a stream, reporting each step as it completes."""
     response = client.invoke_model_with_response_stream(
-        modelId=settings.bedrock_model_id, body=body
+        modelId=config.settings().bedrock_model_id, body=body
     )
     stream = response.get("body") if isinstance(response, dict) else None
     if stream is None:
@@ -477,7 +477,7 @@ def _answer_result(
                 validated,
                 payload,
                 response=response,
-                inference_profile_id=settings.bedrock_model_id,
+                inference_profile_id=config.settings().bedrock_model_id,
                 effect_id=effect_id,
                 observed_at=observed_at,
                 invocation_class=invocation_class,
@@ -487,7 +487,7 @@ def _answer_result(
     failure.usage = parse_provider_usage(
         payload,
         provider_request_id=_provider_request_id(response),
-        inference_profile_id=settings.bedrock_model_id,
+        inference_profile_id=config.settings().bedrock_model_id,
         effect_id=effect_id,
         observed_at=observed_at,
     )
@@ -591,7 +591,7 @@ def invoke_answer(
         )
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": settings.bedrock_max_tokens,
+        "max_tokens": config.settings().bedrock_max_tokens,
         "temperature": 0.4,
         "system": system_prompt,
         "messages": messages,
@@ -617,7 +617,7 @@ def invoke_answer(
             observed_at=observed_at,
             invocation_class=invocation_class,
         )
-    response = client.invoke_model(modelId=settings.bedrock_model_id, body=body)
+    response = client.invoke_model(modelId=config.settings().bedrock_model_id, body=body)
     if deadline_monotonic is not None and clock() >= deadline_monotonic:
         raise AIInvocationFailure("deadline_exceeded")
     response_body = None

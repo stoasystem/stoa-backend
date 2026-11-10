@@ -17,7 +17,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
-from stoa.config import Settings, settings as app_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import parents as parent_routes, students as student_routes
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -346,7 +347,9 @@ def test_the_student_route_without_a_period(fake_table) -> None:
 def test_the_renewal_address_comes_from_the_configuration(fake_table, monkeypatch) -> None:
     _profile(fake_table, STUDENT, "student")
     _profile(fake_table, PARENT, "parent")
-    monkeypatch.setattr(app_settings, "renewal_contact_email", "renew@example.ch")
+    config.install(
+        config.settings().model_copy(update={"renewal_contact_email": "renew@example.ch"})
+    )
 
     student = _client(_actor(CanonicalRole.STUDENT, STUDENT)).get("/students/me/entitlement")
 

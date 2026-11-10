@@ -11,7 +11,8 @@ from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
 from rule_violation_helpers import assert_violation
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db.repositories import checkout_command_repo
 from stoa.main import app as main_app
 from stoa.models.billing import CheckoutCommandState
@@ -137,7 +138,7 @@ def _parent_app(*, user_id: str = PARENT_ID, role: str = "parent") -> tuple[Test
     app.include_router(parents.router, prefix="/parents")
     install_actor_overrides(app, {"sub": user_id, "role": role})
     provider = RetrievalOnlyProvider()
-    app.dependency_overrides[get_settings] = _settings
+    config.install(_settings())
     app.dependency_overrides[parents.get_billing_reconciliation_provider] = lambda: provider
     return TestClient(app), provider
 
@@ -155,7 +156,7 @@ def _admin_app(*, capability: str) -> tuple[TestClient, RetrievalOnlyProvider]:
         },
     )
     provider = RetrievalOnlyProvider()
-    app.dependency_overrides[get_settings] = _settings
+    config.install(_settings())
     app.dependency_overrides[admin.get_billing_reconciliation_provider] = lambda: provider
     return TestClient(app), provider
 

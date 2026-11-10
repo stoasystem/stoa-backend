@@ -1,9 +1,9 @@
 import base64
 import binascii
 from dataclasses import dataclass
-from functools import lru_cache
 import hashlib
 import re
+import threading
 from typing import Dict, List
 
 from pydantic import model_validator
@@ -516,10 +516,36 @@ class Settings(BaseSettings):
     apm_alert_destination_approved: bool = False
     apm_alerts_enabled: bool = False
 
+    # Outside production, best-effort notifications are off unless switched on
+    # with STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS=true. Production always sends.
+    stoa_enable_best_effort_notifications: bool = False
 
-@lru_cache
-def get_settings() -> Settings:
-    return Settings()
+
+# Configuration has two access paths (#359): a service takes `settings` as a
+# parameter, or calls `settings()` when it needs a value. Routes ask for
+# `Depends(settings)`. Nothing reads the configuration at import.
+_lock = threading.Lock()
+_current: Settings | None = None
 
 
-settings = get_settings()
+def settings() -> Settings:
+    """The configuration: built from the environment on first use, then reused."""
+    global _current
+    current = _current
+    if current is None:
+        with _lock:
+            if _current is None:
+                _current = Settings()
+            current = _current
+    return current
+
+
+def install(value: Settings | None) -> None:
+    """Make `value` what `settings()` returns; `None` builds from the environment again.
+
+    For tests, instead of changing attributes of a shared `Settings`. The autouse
+    fixture in `tests/conftest.py` calls `install(None)` around every test.
+    """
+    global _current
+    with _lock:
+        _current = value

@@ -23,7 +23,7 @@ from typing import Protocol
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import settings
+from stoa import config
 from stoa.services.ask_question import _answering
 from stoa.services.ask_question._answering import CommittedMessage
 from stoa.services.ask_question.models import SendMessageResponse
@@ -67,7 +67,7 @@ def in_process(
 
 
 def _generation_worker_name() -> str:
-    return settings.conversation_generation_function_name.strip()
+    return config.settings().conversation_generation_function_name.strip()
 
 
 def _invoke_generation_worker(event: dict[str, object]) -> None:

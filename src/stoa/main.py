@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from mangum import Mangum
 
-from stoa.config import settings
+from stoa import config
 from stoa.rule_violation import CorrelationMiddleware, install_rule_violation_handler
 from stoa.security.errors import redacted_validation_errors
 from stoa.services import locale_service, runtime_budget_service
@@ -34,7 +34,7 @@ app = FastAPI(
     title="STOA API",
     description="STOA learning platform backend — Zurich, Switzerland",
     version="0.1.0",
-    docs_url="/docs" if settings.environment != "production" else None,
+    docs_url="/docs" if config.settings().environment != "production" else None,
 )
 
 
@@ -127,7 +127,7 @@ async def handle_validation_error(_request: Request, exc: RequestValidationError
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=config.settings().cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

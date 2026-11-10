@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
@@ -14,7 +13,7 @@ from uuid import uuid4
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import settings
+from stoa import config
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
@@ -773,7 +772,7 @@ def create_event(
     delivery = delivery_decision(
         category=category,
         preferences=preferences,
-        realtime_configured=bool(settings.websocket_api_endpoint),
+        realtime_configured=bool(config.settings().websocket_api_endpoint),
     )
     if event_type in ALWAYS_IN_APP_EVENT_TYPES:
         delivery["channels"]["in_app"] = {"enabled": True, "decision": "stored"}
@@ -1336,7 +1335,7 @@ def delivery_status(*, limit: int = 100) -> dict[str, Any]:
             )
     websocket_readiness = websocket_service.readiness_status()
     return {
-        "websocketConfigured": bool(settings.websocket_api_endpoint),
+        "websocketConfigured": bool(config.settings().websocket_api_endpoint),
         "websocketMode": websocket_readiness["mode"],
         "websocketReadiness": websocket_readiness,
         "emailProvider": email_provider_readiness(),
@@ -1420,7 +1419,7 @@ def send_digest(
         "channel": "email_digest",
         "provider": readiness["provider"],
         "provider_mode": readiness["mode"],
-        "template": settings.notification_email_digest_template,
+        "template": config.settings().notification_email_digest_template,
         "event_ids": event_ids,
         "item_count": len(event_ids),
         "recipient_email_hash": _hash_value(recipient_email) if recipient_email else None,
@@ -1434,7 +1433,7 @@ def send_digest(
         attempt["status"] = "refused_missing_recipient_email"
     elif readiness["mode"] == "disabled" or readiness["blockers"]:
         attempt["status"] = "refused_provider_not_ready"
-    elif not settings.notification_email_send_enabled and send_func is None:
+    elif not config.settings().notification_email_send_enabled and send_func is None:
         attempt["status"] = "refused_provider_send_disabled"
     else:
         try:
@@ -1466,7 +1465,7 @@ def send_digest(
             discriminator = _canonical_payload_digest(
                 {
                     "recipient_email_hash": attempt["recipient_email_hash"],
-                    "template": settings.notification_email_digest_template,
+                    "template": config.settings().notification_email_digest_template,
                 }
             )
             delivery_id = authoritative_delivery_operation_id(
@@ -1481,7 +1480,7 @@ def send_digest(
                 "subject": message_catalog.text("email.notification_digest.title", locale),
                 "html": _digest_email_html(canonical_items, locale),
                 "items": canonical_items,
-                "template": settings.notification_email_digest_template,
+                "template": config.settings().notification_email_digest_template,
             }
             result = run_authoritative_delivery(
                 channel="email_digest",
@@ -1633,7 +1632,7 @@ def attempt_push_delivery(
         "channel": "push",
         "provider": readiness["provider"],
         "provider_mode": readiness["mode"],
-        "template": settings.notification_push_template,
+        "template": config.settings().notification_push_template,
         "token_count": len(token_refs),
         "token_references": [_redacted_reference(token_ref) for token_ref in token_refs],
         "status": "pending",
@@ -1648,14 +1647,14 @@ def attempt_push_delivery(
         attempt["status"] = "refused_missing_token"
     elif readiness["mode"] == "disabled" or readiness["blockers"]:
         attempt["status"] = "refused_provider_not_ready"
-    elif not settings.notification_push_send_enabled and send_func is None:
+    elif not config.settings().notification_push_send_enabled and send_func is None:
         attempt["status"] = "refused_provider_send_disabled"
     else:
         assert batch is not None
         discriminator = _canonical_payload_digest(
             {
                 "token_references": token_refs,
-                "template": settings.notification_push_template,
+                "template": config.settings().notification_push_template,
             }
         )
         delivery_id = authoritative_delivery_operation_id(
@@ -1673,7 +1672,7 @@ def attempt_push_delivery(
                 "targetType": canonical.get("target_type"),
                 "targetId": canonical.get("target_id"),
             },
-            "template": settings.notification_push_template,
+            "template": config.settings().notification_push_template,
         }
         result = run_authoritative_delivery(
             channel="push",
@@ -1703,13 +1702,13 @@ def attempt_push_delivery(
 
 
 def email_provider_readiness() -> dict[str, Any]:
-    provider = _safe_text(settings.notification_email_provider)
-    sender = _safe_text(settings.notification_email_sender)
-    template = _safe_text(settings.notification_email_digest_template)
+    provider = _safe_text(config.settings().notification_email_provider)
+    sender = _safe_text(config.settings().notification_email_sender)
+    template = _safe_text(config.settings().notification_email_digest_template)
     blockers = []
     if not provider:
         blockers.append("missing_notification_email_provider")
-    if provider and not settings.notification_email_provider_approved:
+    if provider and not config.settings().notification_email_provider_approved:
         blockers.append("notification_email_provider_not_approved")
     if provider and not sender:
         blockers.append("missing_notification_email_sender")
@@ -1717,13 +1716,13 @@ def email_provider_readiness() -> dict[str, Any]:
         blockers.append("missing_notification_email_digest_template")
     mode = "disabled"
     if provider:
-        mode = "provider_ready" if not blockers and settings.notification_email_send_enabled else "configured"
+        mode = "provider_ready" if not blockers and config.settings().notification_email_send_enabled else "configured"
     return {
         "provider": provider or "disabled",
         "mode": mode,
         "configured": bool(provider and not blockers),
-        "approved": bool(settings.notification_email_provider_approved),
-        "sendEnabled": bool(settings.notification_email_send_enabled),
+        "approved": bool(config.settings().notification_email_provider_approved),
+        "sendEnabled": bool(config.settings().notification_email_send_enabled),
         "senderConfigured": bool(sender),
         "template": template,
         "blockers": blockers,
@@ -1731,28 +1730,28 @@ def email_provider_readiness() -> dict[str, Any]:
 
 
 def push_provider_readiness() -> dict[str, Any]:
-    provider = _safe_text(settings.notification_push_provider)
-    template = _safe_text(settings.notification_push_template)
-    api_key = _safe_text(settings.notification_push_provider_api_key)
-    endpoint = _safe_text(settings.notification_push_provider_endpoint_url)
+    provider = _safe_text(config.settings().notification_push_provider)
+    template = _safe_text(config.settings().notification_push_template)
+    api_key = _safe_text(config.settings().notification_push_provider_api_key)
+    endpoint = _safe_text(config.settings().notification_push_provider_endpoint_url)
     blockers = []
     if not provider:
         blockers.append("missing_notification_push_provider")
-    if provider and not settings.notification_push_provider_approved:
+    if provider and not config.settings().notification_push_provider_approved:
         blockers.append("notification_push_provider_not_approved")
     if provider and not template:
         blockers.append("missing_notification_push_template")
-    if provider and settings.notification_push_send_enabled and not endpoint:
+    if provider and config.settings().notification_push_send_enabled and not endpoint:
         blockers.append("missing_notification_push_provider_endpoint_url")
     mode = "disabled"
     if provider:
-        mode = "provider_ready" if not blockers and settings.notification_push_send_enabled else "configured"
+        mode = "provider_ready" if not blockers and config.settings().notification_push_send_enabled else "configured"
     return {
         "provider": provider or "disabled",
         "mode": mode,
         "configured": bool(provider and not blockers),
-        "approved": bool(settings.notification_push_provider_approved),
-        "sendEnabled": bool(settings.notification_push_send_enabled),
+        "approved": bool(config.settings().notification_push_provider_approved),
+        "sendEnabled": bool(config.settings().notification_push_send_enabled),
         "credentials": "configured" if api_key else "missing",
         "endpointConfigured": bool(endpoint),
         "template": template,
@@ -1925,7 +1924,7 @@ def _record_event_attempts(event_ids: list[str], metadata_key: str, attempt: dic
 def _send_email_digest_provider(payload: dict[str, Any]) -> dict[str, Any]:
     ses = aws.client(Kind.SES)
     response = ses.send_email(
-        Source=settings.notification_email_sender,
+        Source=config.settings().notification_email_sender,
         Destination={"ToAddresses": [payload["recipientEmail"]]},
         Message={
             "Subject": {"Data": payload["subject"]},
@@ -1936,12 +1935,12 @@ def _send_email_digest_provider(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _send_push_provider(payload: dict[str, Any]) -> dict[str, Any]:
-    endpoint = _safe_text(settings.notification_push_provider_endpoint_url)
+    endpoint = _safe_text(config.settings().notification_push_provider_endpoint_url)
     if not endpoint:
         raise RuntimeError("notification push provider endpoint is not configured")
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     headers = {"Content-Type": "application/json"}
-    api_key = _safe_text(settings.notification_push_provider_api_key)
+    api_key = _safe_text(config.settings().notification_push_provider_api_key)
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     req = request.Request(endpoint, data=body, headers=headers, method="POST")
@@ -2023,9 +2022,9 @@ def _sort_events(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _best_effort_disabled() -> bool:
-    if settings.environment.strip().lower() in {"production", "prod"}:
+    if config.settings().environment.strip().lower() in {"production", "prod"}:
         return False
-    return os.getenv("STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS") != "true"
+    return not config.settings().stoa_enable_best_effort_notifications
 
 
 def _clean_text(value: str, *, limit: int) -> str:

@@ -26,10 +26,11 @@ from PIL import Image
 import pytest
 
 from stoa import aws
+from stoa import config
 from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import Settings
-from stoa.deps import get_actor, get_settings
+from stoa.deps import get_actor
 from stoa.routers import files
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from fakes.dynamodb import FakeTable
@@ -96,7 +97,7 @@ class _Api:
             Kind.S3_PRESIGN: self.s3,
             Kind.REKOGNITION_MODERATION: moderation,
         })
-        app.dependency_overrides[get_settings] = lambda: settings or Settings(s3_images_bucket=BUCKET)
+        config.install(settings or Settings(s3_images_bucket=BUCKET))
         self.client = TestClient(app)
 
     def upload(

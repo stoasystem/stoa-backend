@@ -12,7 +12,8 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from stoa.db import table as db_table
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db.repositories import identity_repo, user_repo
 from stoa.deps import (
     get_current_user,
@@ -498,7 +499,7 @@ async def register(body: RegisterRequest):
 @explicit_route_classification("public", "credential authentication entry point")
 async def login(
     body: LoginRequest,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     key_provider=Depends(get_jwks_key_provider),
     identity_repository=Depends(get_identity_repository),
     correlation_id: str = Depends(get_request_correlation_id),
@@ -550,7 +551,7 @@ async def login(
 @explicit_route_classification("public", "bounded verification recovery")
 async def resend_email_verification(
     body: EmailVerificationRequest,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Resend Cognito's sign-up confirmation code without exposing provider internals."""
@@ -680,7 +681,7 @@ async def resend_email_verification(
 @explicit_route_classification("public", "verification confirmation command")
 async def confirm_email_verification(
     body: EmailVerificationConfirmRequest,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Confirm Cognito's sign-up code and activate the local account profile."""
@@ -824,7 +825,7 @@ async def reset_password(body: ResetPasswordRequest):
 @explicit_route_classification("authenticated-global", "Actor self account projection")
 async def me(
     current_user: dict = Depends(get_current_user),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ):
     """Return the authenticated user's profile."""
     profile = _profile_from_current_user(current_user)
@@ -867,7 +868,7 @@ async def delete_me(
 async def update_my_locale_preference(
     body: LocalePreferenceUpdate,
     current_user: dict = Depends(get_current_user),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ):
     """Persist the authenticated user's preferred locale."""
     profile = _profile_from_current_user(current_user)
@@ -960,7 +961,7 @@ def _password_change_actor(current_user: dict) -> tuple[str, str]:
 async def request_password_change(
     body: PasswordChangeRequest,
     current_user: dict = Depends(get_current_user),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ):
     """Prove the current password, then mail a single-use code to the account."""
     user_id, email = _password_change_actor(current_user)
@@ -999,7 +1000,7 @@ async def confirm_password_change(
     body: PasswordChangeConfirmRequest,
     current_user: dict = Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
 ):
     """Spend the code, then let the provider check the old password and set the new one."""
     user_id, _ = _password_change_actor(current_user)
@@ -1037,7 +1038,7 @@ async def confirm_password_change(
 @explicit_route_classification("public", "refresh-token authentication entry point")
 async def refresh(
     body: RefreshRequest,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     key_provider=Depends(get_jwks_key_provider),
     identity_repository=Depends(get_identity_repository),
     correlation_id: str = Depends(get_request_correlation_id),
@@ -1099,7 +1100,7 @@ async def refresh(
 @explicit_route_classification("public", "token invalidation entry point")
 async def logout(
     body: LogoutRequest,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     correlation_id: str = Depends(get_request_correlation_id),
     key_provider=Depends(get_jwks_key_provider),
     identity_repository=Depends(get_identity_repository),
@@ -1191,7 +1192,7 @@ class InvitationClaimRequest(BaseModel):
         return enforce_password_complexity(value)
 
 
-def get_account_identity_provider(settings: Settings = Depends(get_settings)) -> Any:
+def get_account_identity_provider(settings: Settings = Depends(config.settings)) -> Any:
     return CognitoTeacherIdentityProvider(
         aws.client(Kind.COGNITO),
         user_pool_id=settings.cognito_user_pool_id,
@@ -1260,7 +1261,7 @@ def admit_invitation_claim(request: Request, *, now: datetime | None = None, tab
 def claim_invitation(
     body: InvitationClaimRequest,
     request: Request,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(config.settings),
     provider: Any = Depends(get_account_identity_provider),
 ) -> dict[str, Any]:
     """Exchange one single-use token for an active account with a chosen password.

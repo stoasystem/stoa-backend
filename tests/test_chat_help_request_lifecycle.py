@@ -117,9 +117,11 @@ def keep_waiting(monkeypatch) -> None:
     would expire them (#87). A test that is not about expiry opts in to this;
     the expiry tests set the clock and the limit themselves.
     """
-    from stoa.config import settings
+    from stoa import config
 
-    monkeypatch.setattr(settings, "teacher_help_expiry_seconds", 10 * 365 * 24 * 60 * 60)
+    config.install(
+        config.settings().model_copy(update={"teacher_help_expiry_seconds": 10 * 365 * 24 * 60 * 60})
+    )
 
 
 @pytest.fixture

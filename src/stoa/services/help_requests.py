@@ -41,7 +41,7 @@ from typing import Any, cast
 from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.db import table as db_table
-from stoa.config import settings
+from stoa import config
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, weekly_counter
 from stoa.models.attachment import AttachmentSummary
@@ -1353,7 +1353,7 @@ def sweep(*, now: str | None = None, table: Any | None = None) -> dict[str, Any]
     store: Any = table or db_table.table()
     cutoff = (
         (_parse(timestamp) or datetime.now(timezone.utc))
-        - timedelta(seconds=settings.teacher_help_expiry_seconds)
+        - timedelta(seconds=config.settings().teacher_help_expiry_seconds)
     ).isoformat()
     waiting = 0
     lapsed = 0
@@ -1416,7 +1416,7 @@ def _report_long_wait(record: Mapping[str, Any], *, now: str) -> None:
         logger.warning("Cannot tell how long %s has waited; not reported", record.get("conversation_id"))
         return
     waited = (moment - asked).total_seconds()
-    if waited < settings.teacher_help_alert_after_seconds:
+    if waited < config.settings().teacher_help_alert_after_seconds:
         return
     emit_private_event(
         TEACHER_HELP_WAITING_EVENT,

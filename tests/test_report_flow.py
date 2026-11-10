@@ -6,6 +6,7 @@ import pytest
 from fakes import student_evidence as fake_evidence
 
 from stoa import aws
+from stoa import config
 from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.jobs import weekly_reports
@@ -164,7 +165,7 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
     s3 = RecordingS3Client(events)
     ses = RecordingSESClient(events)
 
-    monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "reports-bucket")
+    config.install(config.settings().model_copy(update={"s3_reports_bucket": "reports-bucket"}))
     db_table.install(data_table)
     monkeypatch.setattr(
         report_service.user_repo,
@@ -328,7 +329,7 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
 def test_store_and_send_weekly_report_does_not_write_metadata_or_email_when_s3_fails(monkeypatch):
     events = []
 
-    monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "reports-bucket")
+    config.install(config.settings().model_copy(update={"s3_reports_bucket": "reports-bucket"}))
     monkeypatch.setattr(
         report_service.report_repo,
         "put_report",

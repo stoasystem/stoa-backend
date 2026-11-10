@@ -39,11 +39,12 @@ from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa import aws
+from stoa import config
 from stoa.aws import Kind
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.services import ai_service
-from stoa.services.ask_question import _answering, dispatch
+from stoa.services.ask_question import _answering
 
 
 def _deliver(event: dict[str, Any]) -> dict[str, Any]:
@@ -253,8 +254,8 @@ def test_a_named_worker_is_invoked_asynchronously_at_its_alias(
     table, model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The switch itself: a configured worker name is what hands the answer over."""
-    monkeypatch.setattr(
-        dispatch.settings, "conversation_generation_function_name", WORKER_ALIAS
+    config.install(
+        config.settings().model_copy(update={"conversation_generation_function_name": WORKER_ALIAS})
     )
     calls: list[dict[str, Any]] = []
 
@@ -275,10 +276,10 @@ def test_a_named_worker_is_invoked_asynchronously_at_its_alias(
     assert call["FunctionName"] == WORKER_ALIAS
     # Bounded well inside the request's 29 seconds; a slow invoke leaves the
     # command to the sweep rather than the student to a gateway timeout.
-    config = built.config
-    assert config.connect_timeout <= 2
-    assert config.read_timeout <= 3
-    assert config.retries["max_attempts"] <= 1
+    invoke_config = built.config
+    assert invoke_config.connect_timeout <= 2
+    assert invoke_config.read_timeout <= 3
+    assert invoke_config.retries["max_attempts"] <= 1
     assert call["InvocationType"] == "Event"
     assert json.loads(call["Payload"]) == {"conversation_id": CONV, "idempotency_key": "k"}
 

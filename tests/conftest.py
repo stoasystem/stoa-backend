@@ -171,6 +171,20 @@ def _no_aws_clients():
     aws.reset_for_test()
 
 
+@pytest.fixture(autouse=True)
+def _configuration_from_the_environment():
+    """Every test starts from settings built from the environment (#359).
+
+    A test that needs other values installs them with `stoa.config.install` or
+    passes them in; whatever it installed is gone before the next test.
+    """
+    from stoa import config
+
+    config.install(None)
+    yield
+    config.install(None)
+
+
 @pytest.fixture
 def link_rows(fake_table):
     """Link rows the relationship judge reads, served as the link table (#208).

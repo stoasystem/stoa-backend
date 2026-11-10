@@ -17,7 +17,8 @@ from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable, as_stored as _as_stored
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db import table as db_table
 from stoa.routers import auth
 from stoa.services import locale_service, password_change_code_service as codes
@@ -535,7 +536,7 @@ def password_change_client(monkeypatch):
 
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
-    app.dependency_overrides[get_settings] = _settings
+    config.install(_settings())
     install_actor_overrides(app, {"sub": "user-1", "role": "student"})
     client = TestClient(app)
     client.headers.update({"Authorization": "Bearer access-token"})

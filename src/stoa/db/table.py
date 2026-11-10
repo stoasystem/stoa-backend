@@ -50,7 +50,7 @@ import boto3
 from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import BotoCoreError, ClientError
 
-from stoa.config import settings
+from stoa import config
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +67,8 @@ _installed: object | None = None
 
 @lru_cache
 def _real_table() -> object:
-    return boto3.resource("dynamodb", region_name=settings.aws_region).Table(
-        settings.dynamodb_table_name
+    return boto3.resource("dynamodb", region_name=config.settings().aws_region).Table(
+        config.settings().dynamodb_table_name
     )
 
 
@@ -99,7 +99,7 @@ def client() -> Any:
     once used the resource's client learned this separately; this is the only
     place it now has to be known.
     """
-    return boto3.client("dynamodb", region_name=settings.aws_region)
+    return boto3.client("dynamodb", region_name=config.settings().aws_region)
 
 
 def transactional(target: object) -> bool:
@@ -261,7 +261,7 @@ def transact(operations: Iterable[Operation], *, table: object | None = None) ->
         if not isinstance(name, str) or not name:
             raise TableUnavailable("no_transaction_entry")
         execute = client().transact_write_items
-    table_name = name if isinstance(name, str) and name else settings.dynamodb_table_name
+    table_name = name if isinstance(name, str) and name else config.settings().dynamodb_table_name
     items = [_serialize(operation, table_name) for operation in given]
     try:
         execute(TransactItems=items)

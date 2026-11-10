@@ -4,6 +4,7 @@ from datetime import date
 import pytest
 
 from stoa import aws
+from stoa import config
 from stoa.aws import Kind
 from stoa.services import report_artifact_service
 
@@ -79,7 +80,7 @@ def test_build_report_artifact_keys_rejects_unsafe_or_blank_inputs(
 
 
 def test_write_report_artifacts_uses_private_bucket_content_types_and_no_acl(monkeypatch):
-    monkeypatch.setattr(report_artifact_service.settings, "s3_reports_bucket", "reports-bucket")
+    config.install(config.settings().model_copy(update={"s3_reports_bucket": "reports-bucket"}))
     keys = report_artifact_service.build_report_artifact_keys(
         "parent-1",
         "student-1",
@@ -106,7 +107,7 @@ def test_write_report_artifacts_uses_private_bucket_content_types_and_no_acl(mon
 
 
 def test_write_report_artifacts_cleans_json_partial_when_html_write_fails(monkeypatch):
-    monkeypatch.setattr(report_artifact_service.settings, "s3_reports_bucket", "reports-bucket")
+    config.install(config.settings().model_copy(update={"s3_reports_bucket": "reports-bucket"}))
     keys = report_artifact_service.build_report_artifact_keys(
         "parent-1",
         "student-1",
@@ -128,7 +129,7 @@ def test_write_report_artifacts_cleans_json_partial_when_html_write_fails(monkey
 
 
 def test_write_report_artifacts_preserves_html_failure_when_partial_cleanup_fails(monkeypatch):
-    monkeypatch.setattr(report_artifact_service.settings, "s3_reports_bucket", "reports-bucket")
+    config.install(config.settings().model_copy(update={"s3_reports_bucket": "reports-bucket"}))
     keys = report_artifact_service.build_report_artifact_keys(
         "parent-1",
         "student-1",
@@ -148,7 +149,7 @@ def test_write_report_artifacts_preserves_html_failure_when_partial_cleanup_fail
 
 
 def test_get_report_json_reads_and_decodes_private_artifact(monkeypatch):
-    monkeypatch.setattr(report_artifact_service.settings, "s3_reports_bucket", "reports-bucket")
+    config.install(config.settings().model_copy(update={"s3_reports_bucket": "reports-bucket"}))
     s3 = FakeS3Client(read_body=b'{"report":{"id":"report-1"}}')
 
     aws.install({Kind.S3: s3})
@@ -171,7 +172,7 @@ def test_get_report_json_rejects_noncanonical_keys():
 
 
 def test_run_report_artifact_s3_smoke_writes_and_reads_private_json(monkeypatch):
-    monkeypatch.setattr(report_artifact_service.settings, "s3_reports_bucket", "reports-bucket")
+    config.install(config.settings().model_copy(update={"s3_reports_bucket": "reports-bucket"}))
     s3 = FakeS3Client()
 
     aws.install({Kind.S3: s3})
@@ -202,7 +203,7 @@ def test_run_report_artifact_s3_smoke_writes_and_reads_private_json(monkeypatch)
 
 
 def test_run_report_artifact_s3_smoke_reports_cleanup_failure(monkeypatch):
-    monkeypatch.setattr(report_artifact_service.settings, "s3_reports_bucket", "reports-bucket")
+    config.install(config.settings().model_copy(update={"s3_reports_bucket": "reports-bucket"}))
     s3 = FakeS3Client(fail_delete=True)
 
     aws.install({Kind.S3: s3})

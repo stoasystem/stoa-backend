@@ -5,7 +5,7 @@ from typing import Any, List, Optional
 from pydantic import BaseModel, EmailStr, model_validator
 from datetime import date, datetime
 
-from stoa.config import get_settings
+from stoa import config
 from stoa.services import message_catalog
 
 
@@ -154,7 +154,7 @@ def account_is_minor(
     """Judge one stored account row. A row that is not there is a minor."""
 
     threshold = (
-        get_settings().adult_age_years if adult_age_years is None else adult_age_years
+        config.settings().adult_age_years if adult_age_years is None else adult_age_years
     )
     if not isinstance(profile, Mapping):
         return True

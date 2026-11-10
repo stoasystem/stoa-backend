@@ -17,7 +17,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from stoa.config import settings
+from stoa import config
 from stoa.db import table as db_table
 from stoa.security.route_inventory import explicit_route_classification
 from stoa.services import rate_limit
@@ -53,7 +53,7 @@ def _dynamo_safe(value: Any) -> Any:
     if isinstance(value, int):
         return value
     if isinstance(value, str):
-        return value[: settings.analytics_payload_max_value_length]
+        return value[: config.settings().analytics_payload_max_value_length]
     return _DROPPED
 
 
@@ -62,7 +62,7 @@ def _bounded_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     bounded: dict[str, Any] = {}
     truncated = False
     for key, value in payload.items():
-        if len(bounded) >= settings.analytics_payload_max_entries:
+        if len(bounded) >= config.settings().analytics_payload_max_entries:
             truncated = True
             break
         safe_key = str(key)[:_MAX_PAYLOAD_KEY_LENGTH]
@@ -83,7 +83,7 @@ def _ingest_rate_limited() -> HTTPException:
             "code": "analytics_ingest_rate_limited",
             "message": "Too many analytics events from this source. Try again later.",
         },
-        headers={"Retry-After": str(settings.analytics_ingest_window_seconds)},
+        headers={"Retry-After": str(config.settings().analytics_ingest_window_seconds)},
     )
 
 
@@ -103,8 +103,8 @@ def admit_analytics_event(
     admitted = rate_limit.admit_source_window(
         scope=_INGEST_SCOPE,
         source_digest=digest,
-        limit=settings.analytics_ingest_max_events_per_window,
-        window_seconds=settings.analytics_ingest_window_seconds,
+        limit=config.settings().analytics_ingest_max_events_per_window,
+        window_seconds=config.settings().analytics_ingest_window_seconds,
         now=now,
         table=table,
     )

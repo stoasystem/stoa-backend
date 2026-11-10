@@ -32,7 +32,8 @@ from security.conftest import FakeAsyncJwksTransport
 from stoa import aws
 from stoa.aws import Kind
 from stoa.db import table as db_table
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db.repositories import identity_repo
 from stoa import deps
 from stoa.deps import get_actor, get_identity_repository, get_jwks_key_provider
@@ -207,7 +208,7 @@ def session_app(rsa_jwks_keysets, monkeypatch):
     async def protected(actor=Depends(get_actor)):
         return {"userId": actor.user_id}
 
-    app.dependency_overrides[get_settings] = lambda: _settings(keyset)
+    config.install(_settings(keyset))
     app.dependency_overrides[get_jwks_key_provider] = lambda: JwksKeyProvider(
         FakeAsyncJwksTransport({keyset.issuer: keyset.jwks}),
         ttl_seconds=3600,

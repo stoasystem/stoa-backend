@@ -15,7 +15,7 @@ import logging
 from fakes.dynamodb import FakeTable
 import pytest
 
-from stoa.config import settings
+from stoa import config
 from stoa.services import help_requests
 
 import test_chat_help_request_lifecycle as lifecycle
@@ -29,7 +29,9 @@ EVENT = help_requests.TEACHER_HELP_WAITING_EVENT
 def table(monkeypatch) -> FakeTable:
     built = lifecycle.build_table(monkeypatch)
     lifecycle.keep_waiting(monkeypatch)
-    monkeypatch.setattr(settings, "teacher_help_alert_after_seconds", 30 * 60)
+    config.install(
+        config.settings().model_copy(update={"teacher_help_alert_after_seconds": 30 * 60})
+    )
     return built
 
 
@@ -107,7 +109,9 @@ def test_every_sweep_logs_it_again_while_it_waits(table, caplog) -> None:
 
 
 def test_the_limit_is_configurable(table, caplog, monkeypatch) -> None:
-    monkeypatch.setattr(settings, "teacher_help_alert_after_seconds", 5 * 60)
+    config.install(
+        config.settings().model_copy(update={"teacher_help_alert_after_seconds": 5 * 60})
+    )
     _nobody_available(table)
     with caplog.at_level(logging.INFO, logger="stoa.private_telemetry"):
         _sweep(6)
@@ -125,7 +129,7 @@ def test_a_withdrawn_request_is_not_logged(table, caplog) -> None:
 
 
 def test_a_request_the_sweep_expires_is_not_logged(table, caplog, monkeypatch) -> None:
-    monkeypatch.setattr(settings, "teacher_help_expiry_seconds", 60 * 60)
+    config.install(config.settings().model_copy(update={"teacher_help_expiry_seconds": 60 * 60}))
     _nobody_available(table)
     with caplog.at_level(logging.INFO, logger="stoa.private_telemetry"):
         _sweep(61)

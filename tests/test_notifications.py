@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.config import Settings
+from stoa import config
 from stoa.routers import notifications, teachers
 from stoa.db.repositories import question_repo, user_repo
 from stoa.services import (
@@ -367,8 +368,7 @@ def test_admin_delivery_status_reports_live_ready_websocket_without_secrets(monk
         websocket_live_deployed=True,
         websocket_live_smoke_passed=True,
     )
-    monkeypatch.setattr(notification_service, "settings", test_settings)
-    monkeypatch.setattr(websocket_service, "settings", test_settings)
+    config.install(test_settings)
     monkeypatch.setattr(
         websocket_service.websocket_repo,
         "list_connections",
@@ -536,7 +536,7 @@ def test_digest_send_refuses_unconfigured_provider_and_records_evidence(monkeypa
 
 def test_digest_send_selects_enabled_items_and_redacts_provider_result(monkeypatch):
     events, preferences = _install_notification_repo(monkeypatch)
-    monkeypatch.setattr(notification_service, "settings", _notification_provider_settings())
+    config.install(_notification_provider_settings())
     prefs = notification_service.default_preferences()
     prefs["teacher_responses"]["email_digest"] = True
     preferences["student-1"] = {"user_id": "student-1", "preferences": prefs}
@@ -574,7 +574,7 @@ def test_the_digest_email_is_in_the_recipients_language(monkeypatch, locale):
     # Sent from whoever's request, read by the recipient: their stored
     # language, and role messages rendered in it as the inbox does (#278).
     events, preferences = _install_notification_repo(monkeypatch)
-    monkeypatch.setattr(notification_service, "settings", _notification_provider_settings())
+    config.install(_notification_provider_settings())
     monkeypatch.setattr(
         user_repo,
         "get_user",
@@ -615,7 +615,7 @@ def test_the_digest_email_is_in_the_recipients_language(monkeypatch, locale):
 
 def test_digest_send_honors_email_digest_opt_out(monkeypatch):
     _install_notification_repo(monkeypatch)
-    monkeypatch.setattr(notification_service, "settings", _notification_provider_settings())
+    config.install(_notification_provider_settings())
     notification_service.create_event(
         recipient_id="student-1",
         recipient_role="student",
@@ -706,7 +706,7 @@ def test_notification_event_missing_and_authorization_outage_fail_before_mutatio
 def test_push_delivery_records_missing_token_without_breaking_event(monkeypatch):
     events, preferences = _install_notification_repo(monkeypatch)
     _install_push_token_repo(monkeypatch)
-    monkeypatch.setattr(notification_service, "settings", _notification_provider_settings())
+    config.install(_notification_provider_settings())
     prefs = notification_service.default_preferences()
     prefs["teacher_responses"]["push"] = True
     preferences["student-1"] = {"user_id": "student-1", "preferences": prefs}
@@ -729,7 +729,7 @@ def test_push_delivery_records_missing_token_without_breaking_event(monkeypatch)
 def test_push_delivery_records_success_and_provider_failure_redacted(monkeypatch):
     events, preferences = _install_notification_repo(monkeypatch)
     _install_push_token_repo(monkeypatch)
-    monkeypatch.setattr(notification_service, "settings", _notification_provider_settings())
+    config.install(_notification_provider_settings())
     prefs = notification_service.default_preferences()
     prefs["teacher_responses"]["push"] = True
     preferences["student-1"] = {"user_id": "student-1", "preferences": prefs}
@@ -863,7 +863,9 @@ def test_teacher_can_build_assistance_summary_seed(monkeypatch):
 def _profiles(monkeypatch, locales: dict):
     """Give each user id a stored language preference, and nothing else."""
     # Best-effort notifications are off outside production unless asked for.
-    monkeypatch.setenv("STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS", "true")
+    config.install(
+        config.settings().model_copy(update={"stoa_enable_best_effort_notifications": True})
+    )
     monkeypatch.setattr(
         user_repo,
         "get_user",
@@ -1019,7 +1021,11 @@ def test_a_reader_with_no_stored_language_still_gets_a_notification(monkeypatch)
     def refuse(_user_id, **_kwargs):
         raise RuntimeError("profile table unavailable")
 
-    monkeypatch.setenv("STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS", "true")
+    config.install(
+
+        config.settings().model_copy(update={"stoa_enable_best_effort_notifications": True})
+
+    )
     monkeypatch.setattr(user_repo, "get_user", refuse)
 
     notification_service.emit_teacher_help_takeover(

@@ -20,8 +20,8 @@ date: 2026-07-15
 
 - Each route module owns an `APIRouter`; `src/stoa/main.py` is the composition point.
 - Authenticated endpoints use dependencies such as `Depends(get_current_user)` and exact role/capability dependencies rather than handler-local authentication.
-- Settings are injected with `Depends(get_settings)` where practical, although some modules still import the cached global from `src/stoa/config.py`.
-- Cached AWS factories live in `src/stoa/deps.py`; some services still instantiate `boto3` clients directly, so tests often replace provider boundaries explicitly.
+- Configuration has two access paths (#359): a service takes `settings` as a parameter, or calls `config.settings()` when it needs a value; routes use `Depends(config.settings)`. Nothing reads configuration at import (except `main.py` building the app). Tests use `config.install(Settings(...))` or pass settings in, never `monkeypatch.setattr` on a settings object; `tests/test_config_access.py` gates this.
+- AWS clients come from `stoa.aws.client(Kind.X)` (#358), except DynamoDB, which goes through `stoa.db.table`; tests install doubles with `aws.install` / `db_table.install`.
 - The current active role vocabulary is student, parent, teacher, and administrator. Public registration is restricted to student and parent; privileged activation follows separate reviewed flows.
 
 ## DynamoDB And Time Patterns

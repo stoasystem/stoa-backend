@@ -28,9 +28,9 @@ from actor_helpers import install_actor_overrides
 from fakes.rekognition import FakeRekognition
 from fakes.s3 import MultipartS3
 from stoa import aws
+from stoa import config
 from stoa.aws import Kind
 from stoa.config import Settings
-from stoa.deps import get_settings
 from stoa.routers import conversations, files, teachers
 from stoa.security.declared_authorization import get_authorization_fact_repository
 from stoa.services import attachment_service
@@ -80,7 +80,7 @@ class _Api:
             Kind.S3_PRESIGN: self.s3,
             Kind.REKOGNITION_MODERATION: self.moderation,
         })
-        app.dependency_overrides[get_settings] = lambda: Settings(s3_images_bucket=BUCKET)
+        config.install(Settings(s3_images_bucket=BUCKET))
         install_actor_overrides(app, {"sub": user_id, "role": role})
         # The helper's fact stand-in grants a teacher whatever they ask for; who
         # may post is the point here, so the facts are loaded from the table.

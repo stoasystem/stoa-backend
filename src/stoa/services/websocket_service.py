@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from botocore.exceptions import ClientError
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import settings
+from stoa import config
 from stoa.db.repositories import notification_repo, websocket_repo
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.services.notification_errors import NotificationErrorCode as _N, NotificationViolation
@@ -60,8 +60,8 @@ def register_connection(
         "subscribed_channels": channels,
         "connected_at": connected_at,
         "last_seen_at": connected_at,
-        "expires_at": now_epoch() + max(int(settings.websocket_connection_ttl_seconds), 1),
-        "endpoint_url": endpoint_url or settings.websocket_api_endpoint or None,
+        "expires_at": now_epoch() + max(int(config.settings().websocket_connection_ttl_seconds), 1),
+        "endpoint_url": endpoint_url or config.settings().websocket_api_endpoint or None,
         "owner_id": user_id,
     }
     persisted = websocket_repo.put_connection(item)
@@ -75,7 +75,7 @@ def refresh_connection(connection_id: str, user: dict[str, Any] | None = None) -
     refreshed_at = now_iso()
     updates = {
         "last_seen_at": refreshed_at,
-        "expires_at": now_epoch() + max(int(settings.websocket_connection_ttl_seconds), 1),
+        "expires_at": now_epoch() + max(int(config.settings().websocket_connection_ttl_seconds), 1),
     }
     updated = websocket_repo.update_connection(connection_id, updates)
     return connection_response(updated or {**item, **updates})
@@ -93,7 +93,7 @@ def subscribe_connection(
         {
             "subscribed_channels": channels,
             "last_seen_at": now_iso(),
-            "expires_at": now_epoch() + max(int(settings.websocket_connection_ttl_seconds), 1),
+            "expires_at": now_epoch() + max(int(config.settings().websocket_connection_ttl_seconds), 1),
         },
     )
     return connection_response(updated or {**item, "subscribed_channels": channels})
@@ -111,11 +111,11 @@ def cleanup_stale_connections(*, current_epoch: int | None = None) -> dict[str, 
 
 
 def readiness_status(*, connection_limit: int = 200) -> dict[str, Any]:
-    endpoint = str(settings.websocket_api_endpoint or "").strip()
-    routes_configured = bool(settings.websocket_live_routes_configured)
-    deployed = bool(settings.websocket_live_deployed)
-    live_smoke_passed = bool(settings.websocket_live_smoke_passed)
-    stale_cleanup_enabled = bool(settings.websocket_stale_cleanup_enabled)
+    endpoint = str(config.settings().websocket_api_endpoint or "").strip()
+    routes_configured = bool(config.settings().websocket_live_routes_configured)
+    deployed = bool(config.settings().websocket_live_deployed)
+    live_smoke_passed = bool(config.settings().websocket_live_smoke_passed)
+    stale_cleanup_enabled = bool(config.settings().websocket_stale_cleanup_enabled)
     active_connection_count = 0
     stale_connection_count = 0
     connection_status_error: str | None = None
@@ -154,13 +154,13 @@ def readiness_status(*, connection_limit: int = 200) -> dict[str, Any]:
         "endpointHost": _endpoint_host(endpoint),
         "routes": {
             "configured": routes_configured,
-            "connect": settings.websocket_live_connect_route,
-            "disconnect": settings.websocket_live_disconnect_route,
-            "message": settings.websocket_live_message_route,
+            "connect": config.settings().websocket_live_connect_route,
+            "disconnect": config.settings().websocket_live_disconnect_route,
+            "message": config.settings().websocket_live_message_route,
         },
         "deployed": deployed,
         "liveSmokePassed": live_smoke_passed,
-        "connectionTtlSeconds": max(int(settings.websocket_connection_ttl_seconds), 1),
+        "connectionTtlSeconds": max(int(config.settings().websocket_connection_ttl_seconds), 1),
         "connectionStatus": {
             "activeConnectionCount": active_connection_count,
             "staleConnectionCount": stale_connection_count,
@@ -222,7 +222,7 @@ def fanout_notification_event(
         if not target_channels.intersection(raw_channels):
             continue
 
-        endpoint_url = str(connection.get("endpoint_url") or settings.websocket_api_endpoint or "")
+        endpoint_url = str(connection.get("endpoint_url") or config.settings().websocket_api_endpoint or "")
         if not endpoint_url and post_func is None:
             results.append(
                 {"connection_id": connection_ref, "status": "skipped_no_endpoint"}

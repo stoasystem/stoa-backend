@@ -16,7 +16,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import settings
+from stoa import config
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
@@ -1217,7 +1217,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 lambda: attachment_service.extract_message_attachment_context(
                     prepared,
                     s3=s3,
-                    settings=settings,
+                    settings=config.settings(),
                 )
             )
             if (

@@ -12,7 +12,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.config import get_settings
+from stoa import config
 from stoa.deps import get_actor
 from stoa.models.billing import BillingFact, BillingFactKind
 from stoa.routers import admin, billing as billing_router, parents
@@ -378,7 +378,7 @@ def test_admin_capability_denial_happens_before_billing_reads(
 ) -> None:
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_settings] = lambda: SimpleNamespace()
+    config.install(SimpleNamespace())
     reads: list[str] = []
     monkeypatch.setattr(
         admin,

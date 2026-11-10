@@ -10,7 +10,8 @@ from typing import Any
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.config import Settings, settings
+from stoa.config import Settings
+from stoa import config
 from stoa.db import table as db_table
 from stoa.services import uploads
 
@@ -138,7 +139,7 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, int | str |
     remaining = getattr(context, "get_remaining_time_in_millis", None)
     result = cleanup_expired_uploads(
         s3=aws.client(Kind.S3),
-        settings_obj=settings,
+        settings_obj=config.settings(),
         batch_limit=event.get("batchLimit", DEFAULT_BATCH_LIMIT),
         page_limit=event.get("pageLimit", DEFAULT_PAGE_LIMIT),
         max_pages=event.get("maxPages", DEFAULT_MAX_PAGES),

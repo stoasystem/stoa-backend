@@ -10,6 +10,7 @@ import pytest
 from fakes.dynamodb import as_stored as _as_stored
 
 from stoa.config import Settings
+from stoa import config
 from stoa.db.repositories import account_deletion_repo, notification_repo
 from stoa.services import notification_service, websocket_service
 
@@ -95,7 +96,7 @@ def test_private_push_rejects_missing_malformed_or_stale_persisted_generation(
 ) -> None:
     persisted = _private_event(account_fence_generation=generation)
     calls: list[dict[str, Any]] = []
-    monkeypatch.setattr(notification_service, "settings", _ready_settings())
+    config.install(_ready_settings())
     monkeypatch.setattr(
         notification_repo,
         "load_delivery_event_strong",
@@ -290,7 +291,7 @@ def test_mixed_owner_digest_is_refused_before_email_provider(
     calls: list[dict[str, Any]] = []
     preferences = notification_service.default_preferences()
     preferences["teacher_responses"]["email_digest"] = True
-    monkeypatch.setattr(notification_service, "settings", _ready_settings())
+    config.install(_ready_settings())
     monkeypatch.setattr(notification_repo, "list_events", lambda **_kwargs: list(events.values()))
     monkeypatch.setattr(notification_repo, "get_preferences", lambda _user_id: {"preferences": preferences})
     monkeypatch.setattr(notification_repo, "get_event", lambda event_id: deepcopy(events[event_id]))

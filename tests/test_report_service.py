@@ -7,6 +7,7 @@ import pytest
 from fakes import student_evidence as fake_evidence
 from fakes.links import LinkRows
 from stoa import aws
+from stoa import config
 from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import Settings
@@ -506,7 +507,7 @@ def test_generate_weekly_report_content_invokes_bedrock_with_structured_input():
     assert len(client.calls) == 1
     request_body = json.loads(client.calls[0]["body"])
     user_input = json.loads(request_body["messages"][0]["content"])
-    assert client.calls[0]["modelId"] == report_service.settings.bedrock_model_id
+    assert client.calls[0]["modelId"] == config.settings().bedrock_model_id
     assert user_input["metrics"]["questionsAsked"] == 3
     assert len(user_input["activities"]) == 6
 
@@ -561,7 +562,7 @@ def test_store_and_send_weekly_report_writes_artifacts_before_email(monkeypatch)
     stored_items = []
     status_updates = []
 
-    monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "reports-bucket")
+    config.install(config.settings().model_copy(update={"s3_reports_bucket": "reports-bucket"}))
     monkeypatch.setattr(
         report_service.report_repo,
         "put_report",
@@ -609,8 +610,11 @@ def test_store_and_send_weekly_report_writes_artifacts_before_email(monkeypatch)
 def test_store_and_send_weekly_report_rejects_production_placeholder_bucket(monkeypatch):
     events = []
 
-    monkeypatch.setattr(report_service.settings, "environment", "production")
-    monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "stoa-reports")
+    config.install(
+        config.settings().model_copy(
+            update={"environment": "production", "s3_reports_bucket": "stoa-reports"}
+        )
+    )
     monkeypatch.setattr(
         report_service.report_repo,
         "put_report",
@@ -635,7 +639,7 @@ def test_store_and_send_weekly_report_rejects_production_placeholder_bucket(monk
 
 
 def test_store_and_send_weekly_report_emails_parent_only(monkeypatch):
-    monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "reports-bucket")
+    config.install(config.settings().model_copy(update={"s3_reports_bucket": "reports-bucket"}))
     monkeypatch.setattr(report_service.report_repo, "put_report", lambda item: None)
     monkeypatch.setattr(report_service.report_repo, "update_report_status", lambda report_id, status, **fields: None)
 
@@ -665,7 +669,7 @@ def test_the_weekly_report_email_is_in_the_parents_language(monkeypatch, locale)
     # Sent by a job, read by the parent: the parent's stored language (#278).
     from stoa.db.repositories import user_repo
 
-    monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "reports-bucket")
+    config.install(config.settings().model_copy(update={"s3_reports_bucket": "reports-bucket"}))
     monkeypatch.setattr(report_service.report_repo, "put_report", lambda item: None)
     monkeypatch.setattr(report_service.report_repo, "update_report_status", lambda report_id, status, **fields: None)
     monkeypatch.setattr(
@@ -714,7 +718,7 @@ def test_store_and_send_weekly_report_marks_email_failed_after_storage(monkeypat
     stored_items = []
     status_updates = []
 
-    monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "reports-bucket")
+    config.install(config.settings().model_copy(update={"s3_reports_bucket": "reports-bucket"}))
     monkeypatch.setattr(
         report_service.report_repo,
         "put_report",
