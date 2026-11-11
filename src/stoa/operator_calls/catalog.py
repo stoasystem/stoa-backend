@@ -151,6 +151,38 @@ class RevokeInvitationArguments(_InvitationKey):
     dryRun: bool = Field(strict=True, description=DRY_RUN_DESCRIPTION)
 
 
+class DeleteAccountArguments(_Arguments):
+    accountNumber: str = Field(
+        min_length=1,
+        max_length=32,
+        description="Account number of the account to delete, e.g. S26-0001.",
+    )
+    reason: str = Field(
+        min_length=1,
+        max_length=300,
+        description=(
+            "One sentence saying why, e.g. 'Parent asked by email to close the trial "
+            "account.' Kept with the deletion record and the audit trail, so name no "
+            "person and no address in it."
+        ),
+    )
+    dryRun: bool = Field(strict=True, description=DRY_RUN_DESCRIPTION)
+    confirmAccountNumber: str | None = Field(
+        default=None,
+        max_length=32,
+        description=(
+            "Required when dryRun is false: the account number again, exactly as in "
+            "accountNumber, typed after the person confirmed the dry run."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _reason_says_something(self) -> "DeleteAccountArguments":
+        if not self.reason.strip():
+            raise ValueError("reason must not be blank")
+        return self
+
+
 class GetAccountArguments(_Arguments):
     userId: str | None = Field(default=None, min_length=1, max_length=128)
     accountNumber: str | None = Field(default=None, min_length=1, max_length=32)
@@ -171,7 +203,7 @@ class OperationSpec:
     title: str
     description: str
     arguments: type[BaseModel]
-    # Takes something away that the person may still need (an invitation link).
+    # Takes something away that the person may still need (an invitation link, an account).
     destructive: bool = False
 
     def input_schema(self) -> dict[str, Any]:
@@ -200,8 +232,9 @@ OPERATIONS: tuple[OperationSpec, ...] = (
         description=(
             "Read only. Shows one STOA account, named by exactly one of userId, "
             "accountNumber or email: the fields find_accounts lists, plus its usage "
-            "period (end date, state, version) and, for a student, the effective "
-            "period and who pays for it. Every call is recorded in the audit trail."
+            "period (end date, state, version), for a student the effective period and "
+            "who pays for it, and its deletion: none, in_progress (with the accepted "
+            "time) or completed. Every call is recorded in the audit trail."
         ),
         arguments=GetAccountArguments,
     ),
@@ -255,6 +288,32 @@ OPERATIONS: tuple[OperationSpec, ...] = (
             "recorded in the audit trail."
         ),
         arguments=RevokeInvitationArguments,
+        destructive=True,
+    ),
+    OperationSpec(
+        name="delete_account",
+        effect=Effect.WRITE,
+        title="Delete a STOA account",
+        description=(
+            "Changes data. Irreversible. Before calling, confirm with the person: run "
+            "with dryRun=true first, show them the whole answer, and only call with "
+            "dryRun=false, repeating the number as confirmAccountNumber, once they have "
+            "said yes to deleting that account. Deletes one student or parent account "
+            "in any state except archived or provisioning_failed, or a teacher account "
+            "that is still invited, through the same deletion pipeline as an account "
+            "closing itself: its data is erased, its parent-student links end, and its "
+            "email address is released once the deletion completes. Refused for a "
+            "teacher past invited, an administrator or any account holding an admin "
+            "capability, an account already being "
+            "deleted, and an account with an active paid subscription (settle billing "
+            "first). An open invitation is revoked as part of the deletion. A dry run "
+            "shows the account number, role, state, linked accounts, usage period and "
+            "whether it can be deleted, or why not. The real run answers with the "
+            "deletion command id, accepted time and status; get_account then shows "
+            "the deletion in progress and, later, completed. Every call, dry runs "
+            "included, is recorded in the audit trail with its reason."
+        ),
+        arguments=DeleteAccountArguments,
         destructive=True,
     ),
 )

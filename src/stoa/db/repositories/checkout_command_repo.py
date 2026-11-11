@@ -275,6 +275,17 @@ def _strong_get(table: object, key: Mapping[str, str]) -> CheckoutItem | None:
     return _mapping(item)
 
 
+def get_open_checkout_guard(
+    parent_id: str, *, table: object | None = None
+) -> CheckoutItem | None:
+    """The guard a parent's open checkout holds, read strongly; None when none is open.
+
+    Its presence is what stops a second checkout opening for the same parent, so it
+    is also what says a checkout is still under way (#396 refuses to delete then).
+    """
+    return _strong_get(table or db_table.table(), _open_guard_key(parent_id))
+
+
 def _strong_command(
     command_id: str,
     *,

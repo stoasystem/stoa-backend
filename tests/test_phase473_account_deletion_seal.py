@@ -234,7 +234,8 @@ def test_terminal_transaction_is_exact_once_and_replay_minimal_forever():
         "PK", "SK", "entity_type", "schema_version", "command_id", "user_id",
         "generation", "status", "accepted_at", "completed_at", "inventory_sha256",
         "issuer_hash", "subject_hash", "fingerprint", "method", "path",
-        "request_body_sha256", "receipt", "accounting_identity", "external_receipts",
+        "request_body_sha256", "initiated_by", "reason", "receipt",
+        "accounting_identity", "external_receipts",
         "evidence_references", "version", "command_version",
         "branch_results_digest",
     }

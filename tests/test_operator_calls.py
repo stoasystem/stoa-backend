@@ -104,6 +104,7 @@ def test_the_operation_list_is_exactly_this() -> None:
         "invite_account": catalog.Effect.WRITE,
         "reissue_invitation": catalog.Effect.WRITE,
         "revoke_invitation": catalog.Effect.WRITE,
+        "delete_account": catalog.Effect.WRITE,
     }
     assert set(entry.RUNNERS) == set(catalog.OPERATIONS_BY_NAME)
 
@@ -401,7 +402,8 @@ def test_an_address_with_two_accounts_names_their_numbers(fake_table) -> None:
         ("get_account", {"userId": "a", "email": "a@b.c"}, "invalid_arguments"),
         ("find_accounts", {"limit": 500}, "invalid_arguments"),
         ("find_accounts", {"password": "hunter2"}, "invalid_arguments"),
-        ("delete_account", {"userId": "student-1"}, "unknown_operation"),
+        ("archive_account", {"userId": "student-1"}, "unknown_operation"),
+        ("delete_account", {"userId": "student-1"}, "invalid_arguments"),
         ("provision_privileged_admin", {}, "unknown_operation"),
     ],
 )
@@ -919,3 +921,436 @@ def test_a_real_write_whose_row_fails_says_it_ran(fake_table, mailbox, monkeypat
     assert answer["error"]["code"] == "audit_unavailable"
     assert "ran but could not be recorded" in answer["error"]["message"]
     assert len(mailbox) == 1
+
+
+# -- delete_account (#396) -------------------------------------------------------------
+
+
+REASON = "Parent asked by email to close the trial account."
+
+
+def _fence(user_id: str, status: str = "active", **fields: Any) -> dict[str, Any]:
+    return {
+        "PK": f"USER#{user_id}",
+        "SK": "ACCOUNT_FENCE",
+        "entity_type": "account_fence",
+        "schema_version": "account-fence.v1",
+        "user_id": user_id,
+        "status": status,
+        "generation": 1,
+        "version": 1,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        **fields,
+    }
+
+
+def _number_claim(user_id: str, number: str) -> dict[str, Any]:
+    return {
+        "PK": f"ACCOUNT_NUMBER#{number}",
+        "SK": "ACCOUNT_NUMBER",
+        "entity_type": "account_number",
+        "account_number": number,
+        "account_id": user_id,
+    }
+
+
+def _seed_account(table, user_id: str, role: str, number: str, **fields: Any) -> None:
+    table.seed(
+        _profile(user_id, role, number, **fields),
+        _fence(user_id),
+        _number_claim(user_id, number),
+    )
+
+
+def _delete(number: str, *, dry: bool, confirm: str | None = None, **extra: Any) -> dict:
+    arguments: dict[str, Any] = {"accountNumber": number, "reason": REASON, "dryRun": dry}
+    if confirm is not None:
+        arguments["confirmAccountNumber"] = confirm
+    arguments.update(extra)
+    return _call("delete_account", arguments)
+
+
+def _deletion_commands(table) -> list[dict[str, Any]]:
+    return [
+        row
+        for (_pk, sk), row in table.rows.items()
+        if sk.startswith("DELETE_COMMAND#")
+    ]
+
+
+def test_delete_account_is_destructive_and_says_it_cannot_be_undone() -> None:
+    spec = catalog.OPERATIONS_BY_NAME["delete_account"]
+    assert spec.destructive is True
+    assert spec.description.startswith("Changes data. Irreversible.")
+    assert "dryRun=true first" in spec.description
+    schema = spec.input_schema()
+    assert set(schema["required"]) == {"accountNumber", "reason", "dryRun"}
+    assert "confirmAccountNumber" in schema["properties"]
+    import stoa_admin_mcp
+
+    (tool,) = [
+        tool for tool in stoa_admin_mcp.tool_definitions() if tool["name"] == "delete_account"
+    ]
+    assert tool["annotations"]["destructiveHint"] is True
+    assert tool["annotations"]["readOnlyHint"] is False
+
+
+def test_a_dry_run_deletion_shows_the_student_and_writes_no_business_row(
+    fake_table, link_rows
+) -> None:
+    _seed_account(fake_table, "student-1", "student", "S26-0001")
+    _seed_account(
+        fake_table, "parent-1", "parent", "P26-0001", usage_period_ends_at="2026-12-31"
+    )
+    link_rows.link("parent-1", "student-1")
+    before = _rows(fake_table)
+
+    answer = _delete("S26-0001", dry=True)
+
+    assert answer["ok"] is True, answer
+    result = answer["result"]
+    assert result["canDelete"] is True
+    assert result["refusal"] is None
+    assert result["accountNumber"] == "S26-0001"
+    assert result["role"] == "student"
+    assert result["accountStatus"] == "active"
+    assert [item["accountNumber"] for item in result["linkedAccounts"]] == ["P26-0001"]
+    assert result["usagePeriod"]["effective"]["paidBy"] == "parent"
+    assert result["usagePeriodPaidBy"] == "parent P26-0001"
+    assert result["usagePeriod"]["effective"]["endsOn"] == "2026-12-31"
+    assert "Irreversible" in result["summary"]
+    assert "email address is released when the deletion completes" in result["irreversible"]
+    assert "Links that end: P26-0001." in result["summary"]
+    assert {key: fake_table.rows[key] for key in before} == before
+    assert _business_rows_added(fake_table, before) == set()
+    (row,) = _audit_rows(fake_table)
+    assert row["action"] == "delete_account"
+    assert row["dry_run"] is True
+    assert row["actor_id"] == "operator:agent_mcp"
+    assert row["target_id"] == "student-1"
+    assert row["evidence_reference"] == f"would_delete:S26-0001;reason:{REASON}"
+    assert "sub-secret" not in str(answer) and "hash-secret" not in str(answer)
+
+
+def test_a_dry_run_names_why_an_account_cannot_be_deleted(fake_table) -> None:
+    _seed_account(fake_table, "teacher-1", "teacher", "T26-0001")
+    before = _rows(fake_table)
+
+    answer = _delete("T26-0001", dry=True)
+
+    assert answer["ok"] is True, answer
+    result = answer["result"]
+    assert result["canDelete"] is False
+    assert result["refusal"]["code"] == "teacher_not_deletable"
+    assert result["summary"].startswith("Would be refused: account T26-0001.")
+    assert _business_rows_added(fake_table, before) == set()
+    assert _audit_rows(fake_table)[0]["evidence_reference"].startswith(
+        "would_refuse:teacher_not_deletable;reason:"
+    )
+
+
+@pytest.mark.parametrize("confirm", [None, "S26-0002", "s26-0001", " S26-0001"])
+def test_a_real_deletion_needs_the_number_confirmed_exactly(fake_table, confirm) -> None:
+    _seed_account(fake_table, "student-1", "student", "S26-0001")
+    before = _rows(fake_table)
+
+    answer = _delete("S26-0001", dry=False, confirm=confirm)
+
+    assert answer["error"]["code"] == "confirmation_mismatch"
+    assert "Nothing was deleted." in answer["error"]["message"]
+    assert _business_rows_added(fake_table, before) == set()
+    assert fake_table.rows[("USER#student-1", "ACCOUNT_FENCE")]["status"] == "active"
+    (row,) = _audit_rows(fake_table)
+    assert row["result_code"] == "confirmation_mismatch"
+    assert row["dry_run"] is False
+    assert row["evidence_reference"] == f"refused:confirmation_mismatch;reason:{REASON}"
+
+
+@pytest.mark.parametrize(
+    ("role", "status", "code"),
+    [
+        ("teacher", "active", "teacher_not_deletable"),
+        ("teacher", "suspended", "teacher_not_deletable"),
+        ("admin", "active", "account_role_not_deletable"),
+        ("admin", "invited", "account_role_not_deletable"),
+        ("student", "archived", "account_status_not_deletable"),
+        ("parent", "provisioning_failed", "account_status_not_deletable"),
+    ],
+)
+def test_accounts_an_agent_may_not_delete_are_refused(fake_table, role, status, code) -> None:
+    _seed_account(fake_table, "account-1", role, "X26-0001", account_status=status)
+    before = _rows(fake_table)
+
+    for dry in (True, False):
+        answer = _delete("X26-0001", dry=dry, confirm="X26-0001")
+        if dry:
+            assert answer["result"]["refusal"]["code"] == code
+        else:
+            assert answer["error"]["code"] == code
+            assert answer["error"]["message"].startswith("Refused: account X26-0001.")
+
+    assert _business_rows_added(fake_table, before) == set()
+    assert fake_table.rows[("USER#account-1", "ACCOUNT_FENCE")]["status"] == "active"
+
+
+def test_an_invited_teacher_may_be_deleted(fake_table) -> None:
+    _seed_account(fake_table, "teacher-1", "teacher", "T26-0001", account_status="invited")
+
+    assert _delete("T26-0001", dry=True)["result"]["canDelete"] is True
+
+
+def test_an_active_subscription_is_refused_until_billing_is_settled(fake_table) -> None:
+    _seed_account(fake_table, "parent-1", "parent", "P26-0001")
+    fake_table.seed(
+        {
+            "PK": "SUBSCRIPTION_BILLING#parent-1",
+            "SK": "SUMMARY",
+            "entity_type": "subscription_billing",
+            "billing_status": "active",
+        }
+    )
+    before = _rows(fake_table)
+
+    dry = _delete("P26-0001", dry=True)["result"]
+    real = _delete("P26-0001", dry=False, confirm="P26-0001")
+
+    assert dry["refusal"]["code"] == "billing_active"
+    assert "subscription billing is active" in dry["refusal"]["message"]
+    assert "Settle billing first" in dry["refusal"]["message"]
+    assert real["error"]["code"] == "billing_active"
+    assert _business_rows_added(fake_table, before) == set()
+
+
+def test_a_student_covered_by_a_paid_plan_is_refused(fake_table, link_rows) -> None:
+    _seed_account(fake_table, "student-1", "student", "S26-0001")
+    _seed_account(fake_table, "parent-1", "parent", "P26-0001")
+    link_rows.link("parent-1", "student-1")
+    fake_table.seed(
+        {
+            "PK": "PAID_GRANT#parent-1",
+            "SK": "BENEFICIARY#student-1",
+            "entity_type": "beneficiary_grant",
+            "grant_status": "active",
+            "plan_id": "family",
+            "parent_id": "parent-1",
+            "beneficiary_id": "student-1",
+        }
+    )
+
+    result = _delete("S26-0001", dry=True)["result"]
+
+    assert result["refusal"]["code"] == "billing_active"
+    assert "a parent's paid plan covers this account" in result["refusal"]["message"]
+
+
+def test_a_usage_period_alone_does_not_hold_a_deletion_up(fake_table) -> None:
+    _seed_account(
+        fake_table, "parent-1", "parent", "P26-0001", usage_period_ends_at="2027-06-30"
+    )
+    fake_table.seed(
+        {
+            "PK": "SUBSCRIPTION_BILLING#parent-1",
+            "SK": "SUMMARY",
+            "entity_type": "subscription_billing",
+            "billing_status": "canceled",
+        }
+    )
+
+    result = _delete("P26-0001", dry=True)["result"]
+
+    assert result["canDelete"] is True
+    assert result["usagePeriod"]["endsOn"] == "2027-06-30"
+    assert result["usagePeriodPaidBy"] == "the parent's own period"
+
+
+def test_a_real_deletion_enters_the_one_pipeline_and_records_who_and_why(
+    fake_table,
+) -> None:
+    from stoa.db.repositories import account_deletion_repo
+    from stoa.services import account_deletion_service
+
+    _seed_account(fake_table, "student-1", "student", "S26-0001")
+
+    answer = _delete("S26-0001", dry=False, confirm="S26-0001")
+
+    assert answer["ok"] is True, answer
+    result = answer["result"]
+    assert set(result) == {
+        "dryRun",
+        "summary",
+        "accountNumber",
+        "deletionCommandId",
+        "acceptedAt",
+        "status",
+        "revokedInvitationId",
+    }
+    assert result["status"] == "deletion_pending"
+    assert result["accountNumber"] == "S26-0001"
+    assert result["revokedInvitationId"] is None
+    fence = fake_table.rows[("USER#student-1", "ACCOUNT_FENCE")]
+    assert fence["status"] == "deletion_pending"
+    assert fence["command_id"] == result["deletionCommandId"]
+    (command,) = _deletion_commands(fake_table)
+    assert command["command_id"] == result["deletionCommandId"]
+    assert command["status"] == "pending"
+    assert command["initiated_by"] == "operator:agent_mcp"
+    assert command["reason"] == REASON
+    assert command["fingerprint"] == account_deletion_service.operator_deletion_command_fingerprint(
+        initiated_by="operator:agent_mcp", user_id="student-1", generation=1
+    )
+    assert "issuer_hash" not in command and "subject_hash" not in command
+    assert command["branch_ids"] == list(account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS)
+    (row,) = _audit_rows(fake_table)
+    assert row["dry_run"] is False
+    assert row["actor_id"] == "operator:agent_mcp"
+    assert row["evidence_reference"] == (
+        f"account-deletion:{result['deletionCommandId']};reason:{REASON}"
+    )
+    _assert_no_secrets(answer, fake_table)
+    assert "fingerprint" not in str(answer) and "PK" not in str(answer)
+
+    # The scheduled job's sweep finds it, as it finds a self-deletion.
+    page = account_deletion_repo.scan_pending_deletion_commands(table=fake_table)
+    assert [item["command_id"] for item in page.items] == [result["deletionCommandId"]]
+
+    # And it is not accepted twice.
+    again = _delete("S26-0001", dry=False, confirm="S26-0001")
+    assert again["error"]["code"] == "account_deletion_in_progress"
+    assert result["deletionCommandId"] in again["error"]["message"]
+    assert len(_deletion_commands(fake_table)) == 1
+
+
+def test_an_invited_parents_invitation_is_revoked_and_its_dry_run_says_so(
+    fake_table, mailbox
+) -> None:
+    invited = _invite(role="parent", email="invited.parent@stoa.test")
+    number = invited["accountNumber"]
+
+    dry = _delete(number, dry=True)
+    assert dry["ok"] is True, dry
+    preview = dry["result"]
+    assert preview["role"] == "parent"
+    assert preview["accountStatus"] == "invited"
+    assert preview["canDelete"] is True
+    assert preview["openInvitationId"] == invited["invitationId"]
+    assert preview["linkedAccounts"] == []
+    assert f"Its open invitation {invited['invitationId']} is revoked first." in preview["summary"]
+    (invitation,) = _invitations(fake_table)
+    assert invitation["status"] == "issued"
+
+    answer = _delete(number, dry=False, confirm=number)
+
+    assert answer["ok"] is True, answer
+    assert answer["result"]["revokedInvitationId"] == invited["invitationId"]
+    (invitation,) = _invitations(fake_table)
+    assert invitation["status"] == "revoked"
+    fence = fake_table.rows[(f"USER#{invited['userId']}", "ACCOUNT_FENCE")]
+    assert fence["status"] == "deletion_pending"
+    _assert_no_secrets(answer, fake_table)
+
+
+def test_get_account_shows_a_deletion_in_progress_then_completed(fake_table) -> None:
+    _seed_account(fake_table, "student-1", "student", "S26-0001")
+    assert _call("get_account", {"accountNumber": "S26-0001"})["result"]["deletion"] == {
+        "state": "none"
+    }
+
+    accepted = _delete("S26-0001", dry=False, confirm="S26-0001")["result"]
+    shown = _call("get_account", {"accountNumber": "S26-0001"})["result"]
+
+    assert shown["accountStatus"] == "active"
+    assert shown["deletion"] == {
+        "state": "in_progress",
+        "commandId": accepted["deletionCommandId"],
+        "acceptedAt": accepted["acceptedAt"],
+        "initiatedBy": "operator:agent_mcp",
+    }
+
+    # What the pipeline leaves once it has finished: a tombstone profile, a
+    # terminal fence and a terminal command.
+    command_key = ("USER#student-1", f"DELETE_COMMAND#{accepted['deletionCommandId']}")
+    fake_table.seed(
+        {
+            "PK": "USER#student-1",
+            "SK": "PROFILE",
+            "entity_type": "user_deletion_tombstone",
+            "schema_version": "account-deletion-tombstone.v1",
+            "status": "deleted",
+            "owner_deletion_generation": 1,
+            "deleted_at": "2026-11-11T12:10:00+00:00",
+        },
+        {
+            **fake_table.rows[("USER#student-1", "ACCOUNT_FENCE")],
+            "status": "deleted",
+            "deleted_at": "2026-11-11T12:10:00+00:00",
+        },
+        {**fake_table.rows[command_key], "status": "complete"},
+    )
+
+    done = _call("get_account", {"accountNumber": "S26-0001"})
+
+    assert done["ok"] is True, done
+    assert done["result"]["role"] is None
+    assert done["result"]["deletion"]["state"] == "completed"
+    assert done["result"]["deletion"]["completedAt"] == "2026-11-11T12:10:00+00:00"
+    assert "student-1@stoa.test" not in str(done)
+    refused = _delete("S26-0001", dry=True)
+    assert refused["error"]["code"] == "account_already_deleted"
+
+
+def test_a_self_deletion_still_records_the_account_and_meets_no_operator_command(
+    fake_table,
+) -> None:
+    from stoa.db.repositories import account_deletion_repo
+    from stoa.security.tokens import VerifiedAccessToken
+    from stoa.services import account_deletion_service
+
+    token = VerifiedAccessToken(
+        issuer="https://identity.example/pool",
+        subject="subject-1",
+        client_id="student-client",
+        groups=("students",),
+    )
+    _seed_account(fake_table, "student-1", "student", "S26-0001")
+    _seed_account(fake_table, "student-2", "student", "S26-0002")
+
+    receipt = account_deletion_service.accept_account_deletion(
+        user_id="student-1",
+        initiator=account_deletion_service.SelfInitiated(verified=token),
+        now_iso="2026-11-11T12:00:00+00:00",
+    )
+    (command,) = _deletion_commands(fake_table)
+    assert command["initiated_by"] == "student-1"
+    assert "reason" not in command
+    assert command["path"] == "/auth/me"
+    assert command["fingerprint"] == account_deletion_service.deletion_command_fingerprint(
+        verified=token,
+        user_id="student-1",
+        method="DELETE",
+        path="/auth/me",
+        body=b"",
+        generation=1,
+    )
+    assert account_deletion_service.begin_or_replay_deletion(
+        verified=token,
+        user_id="student-1",
+        method="DELETE",
+        path="/auth/me",
+        body=b"",
+        now_iso="2026-11-11T12:05:00+00:00",
+    ) == receipt
+    assert _call("get_account", {"userId": "student-1"})["result"]["deletion"][
+        "initiatedBy"
+    ] == "self"
+    # An operator cannot take over a deletion the account started.
+    assert _delete("S26-0001", dry=True)["error"]["code"] == "account_deletion_in_progress"
+
+    # And the other way round: an operator's command is not the account's to replay.
+    _delete("S26-0002", dry=False, confirm="S26-0002")
+    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
+        account_deletion_service.accept_account_deletion(
+            user_id="student-2",
+            initiator=account_deletion_service.SelfInitiated(verified=token),
+            now_iso="2026-11-11T12:05:00+00:00",
+        )
