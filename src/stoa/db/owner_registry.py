@@ -63,6 +63,17 @@ DERIVED_PREFIXES: tuple[str, ...] = (
     "PASSWORD_CHANGE_CODE#",  # password_change_code_service
     "PASSWORD_CHANGE_QUOTA#",  # password_change_code_service
     "PARENT_LINK_REQUEST_QUOTA#",  # routers/parents, keyed by requester
+    # Billing, keyed by the paying parent (excluded from deletion, but still the
+    # parent's own partitions: nothing to register).
+    "BILLING#",
+    "CHECKOUT_OPEN#",
+    "SUBSCRIPTION_BILLING#",
+    "SUBSCRIPTION_OPEN#",
+    "PAID_GRANT#",
+    "PAID_GRANT_HISTORY#",
+    "PAID_TRANSITION#",
+    "PLAN_GRANT#",
+    "ALLOWANCE_PLAN#",
 )
 
 

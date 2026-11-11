@@ -287,3 +287,38 @@ def test_the_derived_prefixes_match_the_repositories_that_build_them():
         review_repo.card_partition(user),
     }
     assert built <= set(owner_registry.derived_partitions(user))
+
+
+# -- writers outside `fenced` that open a partition deletion acts on --------------------
+
+
+def test_a_phone_upload_code_registers_its_partition_for_its_owner(table):
+    from stoa.db.repositories import upload_code_repo
+
+    upload_code_repo.put_code(
+        {"code_id": "code-1", "owner_id": STUDENT, "status": "issued", "expires_at": 1},
+        table=table,
+    )
+
+    assert ("UPLOADCODE#code-1", "CODE") in table.rows
+    assert _registry(table, STUDENT) == {"OWNS#UPLOADCODE#code-1": "owner"}
+
+
+def test_a_recovery_job_registers_its_partition_for_each_targeted_student(table):
+    from stoa.db.repositories import report_repo
+
+    db_table.install(table)
+    try:
+        report_repo.put_recovery_job(
+            {"job_id": "job-1", "status": "pending"},
+            [
+                {"target_id": "t1", "student_id": STUDENT},
+                {"target_id": "t2", "student_id": STUDENT},
+                {"target_id": "t3", "student_id": TEACHER},
+            ],
+        )
+    finally:
+        db_table.install(None)
+
+    assert _registry(table, STUDENT) == {"OWNS#REPORT_RECOVERY_JOB#job-1": "owner"}
+    assert _registry(table, TEACHER) == {"OWNS#REPORT_RECOVERY_JOB#job-1": "owner"}

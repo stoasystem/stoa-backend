@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 
 
@@ -22,6 +23,16 @@ def code_key(code_id: str) -> dict[str, str]:
 
 
 def put_code(item: dict[str, Any], *, table: Any | None = None) -> None:
+    # The code is written outside `fenced` (the service re-reads the fence
+    # after it), so it registers its partition itself, first (#397): a registry
+    # row for a code that then fails to land is harmless, a code without one is
+    # out of reach of a registry-path deletion.
+    owner = item.get("owner_id")
+    if isinstance(owner, str) and owner.strip():
+        db_table.put(
+            table=table,
+            Item=owner_registry.registry_item(owner, code_key(str(item["code_id"]))["PK"]),
+        )
     db_table.put(
         table=table,
         Item={**item, **code_key(str(item["code_id"])), "entity_type": ENTITY_TYPE},

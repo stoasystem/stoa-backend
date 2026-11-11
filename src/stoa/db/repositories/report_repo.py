@@ -8,6 +8,7 @@ from hashlib import sha256
 from typing import Literal, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -1181,6 +1182,14 @@ def get_legal_hold_review_metadata(scope_key: str) -> ReportItem | None:
 def put_recovery_job(job: ReportItem, targets: list[ReportItem]) -> None:
     """Persist one recovery job and its stable target snapshot."""
     table = db_table.table()
+    # Written outside `fenced` (an operator's job, not the student's write), so
+    # each targeted student's registry row is written here, before the targets
+    # that carry their `student_id` (#397).
+    partition = f"REPORT_RECOVERY_JOB#{job['job_id']}"
+    for student in sorted(
+        {str(t["student_id"]) for t in targets if isinstance(t.get("student_id"), str) and t["student_id"]}
+    ):
+        _put_item(table, Item=owner_registry.registry_item(student, partition))
     _put_item(
         table,
         Item={

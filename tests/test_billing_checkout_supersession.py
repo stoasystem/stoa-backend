@@ -18,7 +18,7 @@ from stoa.db.repositories.checkout_command_repo import (
 from stoa.models.billing import CheckoutCommandState, CheckoutIntent, PurchasablePlanId
 from stoa.services import subscription_service
 from test_checkout_command_repo import AtomicCheckoutTable
-from fakes.dynamodb import from_wire
+from fakes.dynamodb import from_wire, without_owner_registry
 
 
 PARENT_ID = "parent-supersession-canary"
@@ -221,7 +221,7 @@ class SupersessionAtomicTable(AtomicCheckoutTable):
         self.commit_then_timeout_supersede = False
 
     def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
-        operations = from_wire(TransactItems)
+        operations = without_owner_registry(from_wire(TransactItems))
         update_values = [
             operation["Update"]["ExpressionAttributeValues"]
             for operation in operations

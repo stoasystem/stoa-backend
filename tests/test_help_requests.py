@@ -11,7 +11,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from fakes.dynamodb import FakeTable
+from fakes.dynamodb import FakeTable, without_owner_registry
 from fakes.help_requests import seed_reply
 from fakes.learning_session import seed_conversation
 
@@ -705,7 +705,7 @@ def test_a_reply_is_one_transaction_and_one_notice(world, monkeypatch) -> None:
     written = _reply(world.record, now=at(4), table=world.table, author_name="  Frau Muster ")
 
     [operations] = transactions
-    fence, update, note_put, message_put = operations
+    fence, update, note_put, message_put = without_owner_registry(operations)
     assert fence["ConditionCheck"]["Key"] == {"PK": f"USER#{STUDENT}", "SK": "ACCOUNT_FENCE"}
     assert update["Update"]["Key"] == {"PK": f"CONV#{CONV}", "SK": "HELP"}
     note = note_put["Put"]["Item"]
