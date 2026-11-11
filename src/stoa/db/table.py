@@ -51,6 +51,7 @@ from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import BotoCoreError, ClientError
 
 from stoa import config
+from stoa.db import owner_registry
 
 logger = logging.getLogger(__name__)
 
@@ -381,6 +382,14 @@ def fenced(
     - `also`: other accounts whose fences must hold in the same transaction,
       each with its generation or `None` to read it.
 
+    The write also registers where it went (#397): for every partition a Put
+    or Update touches that is not one of the account's own derived partitions,
+    an unconditional Put of `USER#{owner}/OWNS#{partition}` (and of
+    `USER#{other}/REFERENCED_IN#{partition}` for each `also=` account), in
+    the same transaction - see `stoa.db.owner_registry`. When that would take
+    the transaction past DynamoDB's 100 items, the registry rows are committed
+    first, behind the same fences, and the caller's operations after.
+
     Outcomes besides success: `AccountNotWritable` (an `AccountDeletionConflict`)
     when a fence is missing, not active or not the expected generation - whether
     the read said so or the transaction did. `WriteRefused` when the caller's own
@@ -404,18 +413,54 @@ def fenced(
     conditions = [
         fences.active_fence_condition(account, held) for account, held in generations.items()
     ]
+    registry = owner_registry.registry_operations(owner, list(also or {}), own)
+    if len(conditions) + len(own) + len(registry) <= TRANSACTION_ITEM_LIMIT:
+        own_and_registry = [*own, *registry]
+    else:
+        # Too many for one transaction: register first, under the same fences.
+        # A registry row for a partition the write then never reaches is
+        # harmless - the deletion finds nothing there - while a write without
+        # its registry row is the one thing the registry must not allow.
+        _register_ahead(conditions, registry, table=table)
+        own_and_registry = own
     try:
-        transact([*conditions, *own], table=table)
+        transact([*conditions, *own_and_registry], table=table)
     except WriteRefused as exc:
-        fence_reasons, own_reasons = exc.reasons[: len(conditions)], exc.reasons[len(conditions) :]
+        fence_reasons = exc.reasons[: len(conditions)]
+        own_reasons = exc.reasons[len(conditions) : len(conditions) + len(own)]
+        registry_reasons = exc.reasons[len(conditions) + len(own) :]
         kinds = {reason.kind for reason in fence_reasons}
         if ReasonKind.CONDITION_FAILED in kinds:
             raise fences.AccountNotWritable("account is not writable") from exc
-        if kinds - {ReasonKind.NOT_THE_CAUSE}:
-            # The fence row itself was busy or throttled: the caller's reasons
-            # alone would say nothing went wrong with its operations.
+        if (kinds | {reason.kind for reason in registry_reasons}) - {ReasonKind.NOT_THE_CAUSE}:
+            # The fence row or a registry row was busy or throttled: the
+            # caller's reasons alone would say nothing went wrong with its
+            # operations.
             own_reasons = ()
         raise WriteRefused(exc.code, own_reasons) from exc
+
+
+# DynamoDB's limit on the items of one transaction.
+TRANSACTION_ITEM_LIMIT = 100
+
+
+def _register_ahead(
+    conditions: list[Operation], registry: list[Operation], *, table: object | None
+) -> None:
+    """Commit `registry` behind `conditions`, in as many transactions as it takes."""
+    room = TRANSACTION_ITEM_LIMIT - len(conditions)
+    if room <= 0:
+        raise ValueError("too many fences for one transaction")
+    fences = _account_fences()
+    for start in range(0, len(registry), room):
+        try:
+            transact([*conditions, *registry[start : start + room]], table=table)
+        except WriteRefused as exc:
+            if ReasonKind.CONDITION_FAILED in {
+                reason.kind for reason in exc.reasons[: len(conditions)]
+            }:
+                raise fences.AccountNotWritable("account is not writable") from exc
+            raise WriteRefused(exc.code, ()) from exc
 
 
 # -- reading page by page -------------------------------------------------------------
