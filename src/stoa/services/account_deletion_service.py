@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 import json
 import logging
@@ -37,6 +39,7 @@ from stoa.services import (
     attachment_service,
     help_requests,
     moderation_service,
+    owner_registry_sweep,
     usage_period,
 )
 
@@ -167,9 +170,15 @@ class BranchResult:
 
 
 INVENTORY_FILENAME = "phase-473-private-store-inventory.json"
+# The owner registry path's inventory (#397). Derived from v1 by
+# `scripts/generate_phase473_private_store_inventory_v2.py`; v1 stays as it is,
+# byte for byte, for the commands sealed under it.
+INVENTORY_V2_FILENAME = "phase-473-private-store-inventory.v2.json"
+_SCHEMA_V1 = "phase-473-private-store-inventory.v1"
+_SCHEMA_V2 = "phase-473-private-store-inventory.v2"
 
 
-def _default_inventory_path() -> Path:
+def _default_inventory_path(filename: str = INVENTORY_FILENAME) -> Path:
     """Where the sealed inventory lives, in the repository and in the bundle.
 
     The repository path was the only one, and it resolves above the package
@@ -178,14 +187,14 @@ def _default_inventory_path() -> Path:
     does anything, so every deletion in production answered `identity_conflict`
     and no test could see it: they all run from the checkout.
     """
-    candidates = inventory_candidates(Path(__file__).resolve())
+    candidates = inventory_candidates(Path(__file__).resolve(), filename)
     for candidate in candidates:
         if candidate.is_file():
             return candidate
     return candidates[0]
 
 
-def inventory_candidates(here: Path) -> tuple[Path, ...]:
+def inventory_candidates(here: Path, filename: str = INVENTORY_FILENAME) -> tuple[Path, ...]:
     """Every place the seal is looked for, given this module's own location.
 
     Taken apart from the lookup so a packaged layout can be asserted without a
@@ -193,8 +202,8 @@ def inventory_candidates(here: Path) -> tuple[Path, ...]:
     what the build copies in beside the code.
     """
     return (
-        here.parents[3] / "docs" / "security" / INVENTORY_FILENAME,
-        here.parents[1] / "security_inventory" / INVENTORY_FILENAME,
+        here.parents[3] / "docs" / "security" / filename,
+        here.parents[1] / "security_inventory" / filename,
     )
 
 
@@ -208,8 +217,9 @@ def load_private_store_seal(path: Path | str | None = None) -> dict[str, Any]:
         raise account_deletion_repo.AccountDeletionConflict(
             "private-store inventory unavailable"
         ) from exc
-    if not isinstance(payload, Mapping) or payload.get("schema_version") != (
-        "phase-473-private-store-inventory.v1"
+    if not isinstance(payload, Mapping) or payload.get("schema_version") not in (
+        "phase-473-private-store-inventory.v1",
+        _SCHEMA_V2,
     ):
         raise account_deletion_repo.AccountDeletionConflict(
             "private-store inventory schema mismatch"
@@ -256,7 +266,70 @@ def load_private_store_seal(path: Path | str | None = None) -> dict[str, Any]:
         "inventory_sha256": sha256(raw).hexdigest(),
         "branches": branches,
         "branch_contracts": contracts,
+        "schema_version": payload["schema_version"],
+        # v2 reads the account's derived and registered partitions instead of
+        # scanning the table (#397).
+        "registry_path": payload["schema_version"] == _SCHEMA_V2,
     }
+
+
+def load_registry_path_seal(path: Path | str | None = None) -> dict[str, Any]:
+    """The v2 inventory's seal: what a command accepted for the registry path carries."""
+    seal = load_private_store_seal(
+        path if path is not None else _default_inventory_path(INVENTORY_V2_FILENAME)
+    )
+    if not seal["registry_path"]:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "private-store inventory schema mismatch"
+        )
+    return seal
+
+
+# How old the owner registry sweep's last clean run may be for a deletion to
+# be sealed for the registry path: a daily schedule, plus slack.
+REGISTRY_SWEEP_MAX_AGE = timedelta(hours=36)
+
+
+def registry_path_ready(*, table: Any | None = None, now: datetime | None = None) -> bool:
+    """Whether the last owner registry sweep vouches for the registry (#397).
+
+    Its result row must say the run reached the end of the table, found no
+    missing registration, and finished within `REGISTRY_SWEEP_MAX_AGE`. A
+    missing, unreadable or stale row is a no.
+    """
+    try:
+        marker = account_deletion_repo.get_row(
+            owner_registry_sweep.RUN_MARKER_KEY, table=table
+        )
+    except Exception:
+        return False
+    if not marker or marker.get("complete") is not True:
+        return False
+    if stored_int(marker.get("missing_registrations")) != 0:
+        return False
+    try:
+        completed = datetime.fromisoformat(str(marker.get("completed_at")))
+    except ValueError:
+        return False
+    if completed.tzinfo is None:
+        return False
+    return (now or datetime.now(UTC)) - completed <= REGISTRY_SWEEP_MAX_AGE
+
+
+def acceptance_seal(*, table: Any | None = None) -> dict[str, Any]:
+    """The inventory a newly accepted deletion is sealed with.
+
+    v2 (owner registry) only when `ACCOUNT_DELETION_REGISTRY_PATH` is on AND
+    the last daily sweep vouches for the registry (`registry_path_ready`);
+    otherwise v1 (full-table scans), so the switch cannot get ahead of the
+    backfill and a registry that has drifted since falls back by itself. It
+    decides acceptance only: a command keeps its seal to the end (#397).
+    """
+    if config.settings().account_deletion_registry_path:
+        if registry_path_ready(table=table):
+            return load_registry_path_seal()
+        logger.warning("account_deletion_registry_path_not_ready sealing=v1")
+    return load_private_store_seal()
 
 
 def _result_debt_is_zero(result: Mapping[str, Any]) -> bool:
@@ -489,7 +562,7 @@ def accept_account_deletion(
     initiator is the caller's: the route lets an account close itself, the
     operator call checks its own rules first.
     """
-    seal = load_private_store_seal()
+    seal = acceptance_seal(table=table)
     fence = account_deletion_repo.get_account_fence(user_id, table=table)
     if not fence or stored_int(fence.get("generation")) is None:
         raise account_deletion_repo.AccountDeletionConflict("missing account fence")
@@ -731,14 +804,24 @@ def _identity_cross_account_branch(
     provider_revoked = False
 
     def predicate(item: Mapping[str, Any]) -> bool:
+        # Sign-in sessions reach this branch only on the registry path, whose
+        # sweep hands them over (#397); the v1 scan never matched them.
         return item.get("entity_type") in {
             "identity_binding",
             "user_identity_inventory",
             "public_identity_command",
-        }
+        } or account_deletion_repo.is_sign_in_session(item, str(command["user_id"]))
 
     def mutate(item: dict[str, Any]) -> None:
         nonlocal provider_revoked
+        if account_deletion_repo.is_sign_in_session(item, str(command["user_id"])):
+            # A stored refresh token: nothing in it is worth a tombstone.
+            account_deletion_repo.delete_owned_row(
+                item,
+                user_id=str(command["user_id"]),
+                generation=int(command["generation"]),
+            )
+            return
         provider_username = next(
             (
                 str(item.get(field)).strip()
@@ -1797,6 +1880,7 @@ class AccountDeletionService:
         now_epoch: Callable[[], int] | None = None,
         lease_seconds: int = 120,
         inventory_path: Path | str | None = None,
+        registry_inventory_path: Path | str | None = None,
         remaining_seconds: Callable[[], float] | None = None,
         min_remaining_seconds: float = MIN_REMAINING_SECONDS,
         step_pages: int = STEP_PAGES,
@@ -1814,20 +1898,45 @@ class AccountDeletionService:
         self.step_seconds = step_seconds
         self.monotonic = monotonic or time.monotonic
         self.seal = load_private_store_seal(inventory_path)
+        # Every inventory a command in flight may have been sealed with (#397):
+        # a command is continued, validated and finalized under its own.
+        self.seals = {self.seal["inventory_sha256"]: self.seal}
+        try:
+            registry_seal = load_registry_path_seal(registry_inventory_path)
+        except account_deletion_repo.AccountDeletionConflict:
+            if registry_inventory_path is not None:
+                raise
+        else:
+            self.seals[registry_seal["inventory_sha256"]] = registry_seal
         if tuple(self.branch_handlers) != ACCOUNT_DELETION_BRANCH_IDS:
             raise account_deletion_repo.AccountDeletionConflict(
                 "runtime branch handlers do not match sealed registry"
             )
 
+    def _seal_of(self, command: Mapping[str, Any]) -> dict[str, Any]:
+        """The inventory `command` was sealed with; any other is seal drift."""
+        seal = self.seals.get(str(command.get("inventory_sha256") or ""))
+        if seal is None:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "deletion command seal drift"
+            )
+        return seal
+
     def _require_sealed_command(self, command: Mapping[str, Any]) -> None:
+        seal = self._seal_of(command)
         if (
-            command.get("inventory_sha256") != self.seal["inventory_sha256"]
-            or command.get("branch_ids") != list(ACCOUNT_DELETION_BRANCH_IDS)
-            or command.get("branch_contracts") != self.seal["branch_contracts"]
+            command.get("branch_ids") != list(ACCOUNT_DELETION_BRANCH_IDS)
+            or command.get("branch_contracts") != seal["branch_contracts"]
         ):
             raise account_deletion_repo.AccountDeletionConflict(
                 "deletion command seal drift"
             )
+
+    def _read_scope(self, command: Mapping[str, Any]) -> Any:
+        """Where the command's branches read: the registry for v2, the table for v1."""
+        if self._seal_of(command).get("registry_path"):
+            return account_deletion_repo.registry_scope(str(command["user_id"]))
+        return nullcontext()
 
     def continue_command(self, claim: DeletionCommandClaim) -> None:
         if not isinstance(claim, DeletionCommandClaim):
@@ -1871,10 +1980,11 @@ class AccountDeletionService:
             self._require_current_claim(command, claim)
             handler = self.branch_handlers[branch_id]
             try:
-                result = handler(command=command, previous=previous)
+                with self._read_scope(command):
+                    result = handler(command=command, previous=previous)
             except Exception:
                 result = BranchResult("retryable", debt_counts={"dependency": 1})
-            contract = self.seal["branch_contracts"][branch_id]
+            contract = self._seal_of(command)["branch_contracts"][branch_id]
             persisted = result.persisted(
                 self.now(),
                 generation=int(command["generation"]),
@@ -1900,17 +2010,26 @@ class AccountDeletionService:
         self, command: Mapping[str, Any], claim: DeletionCommandClaim
     ) -> bool:
         fence = self._load_fence(str(command["user_id"]))
+        seal = self._seal_of(command)
         if fence and validate_deletion_seal(
-            command=command, fence=fence, seal=self.seal
+            command=command, fence=fence, seal=seal
         ):
             self.repository.finalize_account_deletion(
                 command=command,
                 fence=fence,
-                seal=self.seal,
+                seal=seal,
                 claim=claim,
                 now_epoch=self.now_epoch(),
                 now_iso=self.now(),
             )
+            if seal.get("registry_path"):
+                # Only now: until the deletion is final its branches read the
+                # registry. A cleanup that fails leaves bookkeeping rows the
+                # daily sweep reports; nothing private.
+                try:
+                    account_deletion_repo.delete_owner_registry(str(command["user_id"]))
+                except Exception:
+                    logger.warning("account_deletion_registry_cleanup_failed")
             return True
         return False
 
@@ -1996,14 +2115,15 @@ class AccountDeletionService:
         )
         command = self._current(claim)
         handler = self.branch_handlers[branch_id]
-        contract = self.seal["branch_contracts"][branch_id]
+        contract = self._seal_of(command)["branch_contracts"][branch_id]
         state: Mapping[str, Any] = previous
         persisted: dict[str, Any] | None = None
         progressed = False
         started = self.monotonic()
         for _page in range(self.step_pages):
             try:
-                result = handler(command=command, previous=state)
+                with self._read_scope(command):
+                    result = handler(command=command, previous=state)
             except Exception:
                 result = BranchResult("retryable", debt_counts={"dependency": 1})
             persisted = result.persisted(

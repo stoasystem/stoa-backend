@@ -1161,8 +1161,13 @@ def list_owner_attachment_items(
     request: dict[str, object] = {"ConsistentRead": True}
     if maximum_items is not None:
         request["Limit"] = min(100, maximum_items)
+    scope = account_deletion_repo.current_registry_scope()
     try:
-        source = db_table.pages("scan", table=table, **request)
+        if scope is not None and scope.user_id == owner_id.strip():
+            # A v2 deletion's purge reads the owner's partitions, not the table (#397).
+            source = account_deletion_repo.registry_pages(scope, start=None, table=table, **request)
+        else:
+            source = db_table.pages("scan", table=table, **request)
     except Exception:
         raise AttachmentRepositoryConflict("dependency_failure") from None
     page_count = 0
