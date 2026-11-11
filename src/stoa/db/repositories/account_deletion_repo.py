@@ -100,6 +100,10 @@ class DeletionCommandClaim:
     lease_expires_at: int
     command_version: int
     branch_results_digest: str
+    # The command's account, so the command is read by its key rather than found
+    # by a scan of the whole table (#397). A claim made from a row without one
+    # (only test doubles) falls back to the lookup by id.
+    user_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +170,7 @@ def _claim_from_command(command: Mapping[str, Any]) -> DeletionCommandClaim:
     if len(digest) != 64:
         raise AccountDeletionConflict("invalid branch results digest")
     raw_version = command.get("command_version") or command.get("version")
+    user_id = command.get("user_id")
     return DeletionCommandClaim(
         command_id=_required(command.get("command_id"), "command_id"),
         generation=_positive_int(stored_int(command.get("generation")), "generation"),
@@ -175,6 +180,7 @@ def _claim_from_command(command: Mapping[str, Any]) -> DeletionCommandClaim:
         ),
         command_version=_positive_int(stored_int(raw_version), "command version"),
         branch_results_digest=digest,
+        user_id=user_id.strip() if isinstance(user_id, str) and user_id.strip() else None,
     )
 
 
@@ -298,6 +304,144 @@ def deletion_command_key(user_id: str, command_id: str) -> dict[str, str]:
         "PK": f"USER#{_required(user_id, 'user_id')}",
         "SK": f"DELETE_COMMAND#{_required(command_id, 'command_id')}",
     }
+
+
+# Every accepted, unfinished deletion has one row in this partition, written in
+# the transaction that accepts it and deleted in the one that finalizes it, so
+# the scheduled job finds them all with one strong query instead of a cursor
+# walk over the whole table (#397). Commands accepted before the registry
+# existed have no row; the job's old discovery scan still finds those and
+# writes their row on the way (`register_pending_deletion`).
+PENDING_REGISTRY_PK = "ACCOUNT_DELETION_PENDING"
+
+
+def pending_registry_key(user_id: str, command_id: str) -> dict[str, str]:
+    return {
+        "PK": PENDING_REGISTRY_PK,
+        "SK": f"{_required(user_id, 'user_id')}#{_required(command_id, 'command_id')}",
+    }
+
+
+def _pending_registry_item(
+    user_id: str, command_id: str, accepted_at: str | None
+) -> dict[str, Any]:
+    # The account is named under attributes of its own, never `user_id` or
+    # `owner_id`: the deletion's sweeps match rows on those, and this row is
+    # bookkeeping, not the account's data.
+    item: dict[str, Any] = {
+        **pending_registry_key(user_id, command_id),
+        "entity_type": "account_deletion_pending",
+        "deletion_user_id": user_id,
+        "deletion_command_id": command_id,
+    }
+    if isinstance(accepted_at, str) and accepted_at:
+        item["accepted_at"] = accepted_at
+    return item
+
+
+@dataclass(frozen=True, slots=True)
+class PendingDeletion:
+    user_id: str
+    command_id: str
+
+
+def list_pending_deletions(*, table: Any | None = None) -> list[PendingDeletion]:
+    """Every registered unfinished deletion: a strong query of one small partition."""
+    target = table or db_table.table()
+    found: list[PendingDeletion] = []
+    seen: set[tuple[str, str]] = set()
+    try:
+        for page in db_table.pages(
+            "query",
+            table=target,
+            ConsistentRead=True,
+            KeyConditionExpression="PK = :pk",
+            ExpressionAttributeValues={":pk": PENDING_REGISTRY_PK},
+        ):
+            for item in page.items:
+                user_id = item.get("deletion_user_id")
+                command_id = item.get("deletion_command_id")
+                if not isinstance(user_id, str) or not user_id:
+                    continue
+                if not isinstance(command_id, str) or not command_id:
+                    continue
+                if (user_id, command_id) not in seen:
+                    seen.add((user_id, command_id))
+                    found.append(PendingDeletion(user_id, command_id))
+            if page.last_key is None:
+                break
+    except (db_table.PageTokenInvalid, db_table.TableUnavailable) as exc:
+        raise AccountDeletionConflict("pending deletion registry unavailable") from exc
+    return found
+
+
+def register_pending_deletion(
+    *,
+    user_id: str,
+    command_id: str,
+    accepted_at: str | None = None,
+    table: Any | None = None,
+) -> None:
+    """Write the registry row of a command accepted before the registry existed."""
+    target = table or db_table.table()
+    if not isinstance(target, _PutTable):
+        raise AccountDeletionConflict("account deletion dependency unavailable")
+    try:
+        db_table.put(
+            table=target, Item=_pending_registry_item(user_id, command_id, accepted_at)
+        )
+    except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
+        raise AccountDeletionConflict("pending deletion registry unavailable") from exc
+
+
+def unregister_pending_deletion(
+    *, user_id: str, command_id: str, table: Any | None = None
+) -> None:
+    """Drop a registry row whose command is finished or gone."""
+    try:
+        db_table.delete(
+            table=table or db_table.table(), Key=pending_registry_key(user_id, command_id)
+        )
+    except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
+        raise AccountDeletionConflict("pending deletion registry unavailable") from exc
+
+
+def query_account_partition(
+    user_id: str, *, table: Any | None = None
+) -> list[dict[str, Any]]:
+    """Every row under `USER#{user_id}`, read strongly from the base table.
+
+    The rows whose key the account itself determines: its profile, fence,
+    identity inventory and deletion bookkeeping. The deletion's first run acts
+    on some of these at once (#397); completeness still rests on the full scans.
+    """
+    target = table or db_table.table()
+    rows: list[dict[str, Any]] = []
+    try:
+        for page in db_table.pages(
+            "query",
+            table=target,
+            ConsistentRead=True,
+            KeyConditionExpression="PK = :pk",
+            ExpressionAttributeValues={":pk": f"USER#{_required(user_id, 'user_id')}"},
+        ):
+            rows.extend(dict(item) for item in page.items)
+            if page.last_key is None:
+                break
+    except (db_table.PageTokenInvalid, db_table.TableUnavailable) as exc:
+        raise AccountDeletionConflict("account partition unavailable") from exc
+    return rows
+
+
+def get_row(key: Mapping[str, Any], *, table: Any | None = None) -> dict[str, Any] | None:
+    """One row by its full key, strongly."""
+    response = _get_item(
+        table or db_table.table(),
+        Key={"PK": _required(key.get("PK"), "PK"), "SK": _required(key.get("SK"), "SK")},
+        ConsistentRead=True,
+    )
+    item = response.get("Item")
+    return dict(item) if isinstance(item, Mapping) else None
 
 
 def active_fence_condition(
@@ -563,6 +707,15 @@ def begin_account_deletion(
                         "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
                     }
                 },
+                # Accepted and registered in one commit: the scheduled job
+                # finds every unfinished command by this row (#397).
+                {
+                    "Put": {
+                        "Item": _pending_registry_item(
+                            user_id, str(command["command_id"]), now_iso
+                        )
+                    }
+                },
             ],
             table=target,
         )
@@ -691,7 +844,14 @@ def get_command_by_id(
 def find_deletion_command_for_identity(
     issuer_hash: str, subject_hash: str, *, table: Any | None = None
 ) -> dict[str, Any] | None:
-    """Recover the one replay command after its active binding is terminalized."""
+    """Recover the one replay command after its active binding is terminalized.
+
+    Still a scan (#397): it runs only when `DELETE /auth/me` is replayed after
+    the deletion terminalized the token's binding, and by then nothing keyed by
+    the token's issuer and subject names the account - the binding's evidence
+    row deliberately keeps no account id. It is not on the deletion's own path,
+    which reads its command by key.
+    """
     matches = _scan_commands(
         table or db_table.table(),
         filter_expression=(
@@ -717,11 +877,13 @@ def _scan_commands(
 ) -> list[dict[str, Any]]:
     seen: set[tuple[str, str]] = set()
     matches: list[dict[str, Any]] = []
+    # No `Limit`: each page is the table's own (up to 1 MB), so the bound is a
+    # hundred of those rather than ten thousand rows (#397). The deletion
+    # itself no longer comes here: it reads its command by key.
     for page in sweep_pages(
         "deletion command",
         table=target,
         cursor=None,
-        page_limit=100,
         maximum_pages=maximum_pages,
         FilterExpression=filter_expression,
         ExpressionAttributeValues=dict(values),
@@ -1697,6 +1859,69 @@ def renew_deletion_command_claim(
         lease_expires_at=lease_expires_at,
         command_version=claim.command_version + 1,
         branch_results_digest=claim.branch_results_digest,
+        user_id=claim.user_id,
+    )
+
+
+def release_deletion_command_claim(
+    command: Mapping[str, Any],
+    *,
+    claim: DeletionCommandClaim,
+    now_epoch: int,
+    now_iso: str,
+    table: Any | None = None,
+) -> DeletionCommandClaim:
+    """End this run's lease now, so the next run need not wait for it to expire.
+
+    Guarded exactly as the renewal is: only the holder of the current version
+    can give it up. The command stays `running`, and a claim takes a running
+    command whose lease has passed (#397).
+    """
+    if not isinstance(claim, DeletionCommandClaim):
+        raise DeletionCommandClaimLost("opaque deletion claim required")
+    now_epoch = _positive_int(now_epoch, "current epoch")
+    released_at = _positive_int(max(now_epoch - 1, 1), "lease expiry")
+    now_iso = _valid_lifecycle_timestamp(now_iso)
+    target = table or db_table.table()
+    try:
+        _update_item(
+            target,
+            Key={"PK": command["PK"], "SK": command["SK"]},
+            UpdateExpression=(
+                "SET lease_expires_at=:released, updated_at=:now, "
+                "command_version=command_version+:one, #version=#version+:one"
+            ),
+            ConditionExpression=(
+                "#status=:running AND generation=:generation AND lease_owner=:owner "
+                "AND command_version=:command_version "
+                "AND branch_results_digest=:branch_results_digest "
+                "AND lease_expires_at>=:now_epoch"
+            ),
+            ExpressionAttributeNames={"#status": "status", "#version": "version"},
+            ExpressionAttributeValues={
+                ":running": "running",
+                ":generation": claim.generation,
+                ":owner": claim.lease_owner,
+                ":command_version": claim.command_version,
+                ":branch_results_digest": claim.branch_results_digest,
+                ":now_epoch": now_epoch,
+                ":released": released_at,
+                ":now": now_iso,
+                ":one": 1,
+            },
+        )
+    except db_table.WriteRefused as exc:
+        raise DeletionCommandClaimLost("deletion release lost") from exc
+    except db_table.TableUnavailable as exc:
+        raise AccountDeletionConflict("deletion release unavailable") from exc
+    return DeletionCommandClaim(
+        command_id=claim.command_id,
+        generation=claim.generation,
+        lease_owner=claim.lease_owner,
+        lease_expires_at=released_at,
+        command_version=claim.command_version + 1,
+        branch_results_digest=claim.branch_results_digest,
+        user_id=claim.user_id,
     )
 
 
@@ -1828,6 +2053,7 @@ def persist_branch_result(
         lease_expires_at=claim.lease_expires_at,
         command_version=claim.command_version + 1,
         branch_results_digest=next_digest,
+        user_id=claim.user_id,
     )
 
 
@@ -2041,6 +2267,9 @@ def finalize_account_deletion(
                         },
                     }
                 },
+                # Finished, so no longer pending. A command accepted before the
+                # registry has no row, which an unconditional delete tolerates.
+                {"Delete": {"Key": pending_registry_key(user_id, command_id)}},
             ],
             table=target,
         )

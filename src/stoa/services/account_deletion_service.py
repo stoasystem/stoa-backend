@@ -6,7 +6,9 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 import json
+import logging
 from pathlib import Path
+import time
 from typing import Any, Callable, Mapping
 from uuid import uuid4
 
@@ -26,6 +28,7 @@ from stoa.db.repositories import (
     parent_link_repo,
     practice_repo,
     report_repo,
+    upload_code_repo,
     websocket_repo,
 )
 from stoa.security.tokens import VerifiedAccessToken
@@ -67,6 +70,8 @@ PRIMARY_BRANCH_IDS = {
 
 DeletionCommandClaim = account_deletion_repo.DeletionCommandClaim
 DeletionCommandClaimLost = account_deletion_repo.DeletionCommandClaimLost
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -781,6 +786,90 @@ def _revoke_provider_identity(user_id: str, generation: int, username: str) -> N
         return
 
 
+def known_key_fast_path(
+    *,
+    user_id: str,
+    generation: int,
+    now_iso: str,
+    provider: bool = True,
+    table: Any | None = None,
+) -> dict[str, int]:
+    """What a deletion can do at once from the account's own partition (#397).
+
+    One strong query of `USER#{user_id}`, then: the profile becomes its
+    tombstone, which releases the email claim in the same commit; and, with
+    `provider`, the provider identity is revoked, the revoke debt recorded
+    complete, and the identity inventory rows and the bindings they point to
+    terminalized. The same repository writes the profile and identity branches
+    make, under the same deletion fence, so those branches later find nothing
+    left of these rows. Nothing here decides completion.
+
+    Without `provider` the identity rows are left alone: terminalizing them
+    without the revoke would leave the identity branch nothing to revoke from.
+    """
+    rows = account_deletion_repo.query_account_partition(user_id, table=table)
+    done = {"profile": 0, "identity": 0, "provider_revoked": 0}
+    profile = next((row for row in rows if row.get("SK") == "PROFILE"), None)
+    if (
+        profile is not None
+        and profile.get("user_id") == user_id
+        and not account_deletion_repo.is_deletion_tombstone(profile)
+    ):
+        account_deletion_repo.replace_with_deletion_tombstone(
+            profile,
+            user_id=user_id,
+            generation=generation,
+            now_iso=now_iso,
+            table=table,
+        )
+        done["profile"] = 1
+    if not provider:
+        return done
+    identity_rows: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("entity_type") != "user_identity_inventory" or row.get("user_id") != user_id:
+            continue
+        binding_pk = row.get("binding_pk")
+        if isinstance(binding_pk, str) and binding_pk:
+            binding = account_deletion_repo.get_row(
+                {"PK": binding_pk, "SK": "BINDING"}, table=table
+            )
+            if (
+                binding is not None
+                and binding.get("entity_type") == "identity_binding"
+                and binding.get("user_id") == user_id
+            ):
+                identity_rows.append(binding)
+        identity_rows.append(row)
+    if not identity_rows:
+        return done
+    account_deletion_repo.create_provider_revoke_debt(
+        user_id=user_id, generation=generation, now_iso=now_iso, table=table
+    )
+    # The same choice of provider username the identity branch makes.
+    username = next(
+        (
+            str(row.get(field)).strip()
+            for row in identity_rows
+            for field in ("normalized_email", "email", "subject")
+            if isinstance(row.get(field), str) and str(row.get(field)).strip()
+        ),
+        None,
+    )
+    if username:
+        _revoke_provider_identity(user_id, generation, username)
+        account_deletion_repo.complete_provider_revoke_debt(
+            user_id=user_id, generation=generation, now_iso=now_iso, table=table
+        )
+        done["provider_revoked"] = 1
+    for row in identity_rows:
+        account_deletion_repo.terminalize_identity_row(
+            row, user_id=user_id, generation=generation, now_iso=now_iso, table=table
+        )
+        done["identity"] += 1
+    return done
+
+
 def _capability_scope_branch(
     *, command: Mapping[str, Any], previous: Mapping[str, Any]
 ) -> BranchResult:
@@ -863,33 +952,102 @@ def _question_ocr_session_branch(
     )
 
 
+# What the attachment purge acts on, among the closing account's rows: these
+# are what a pass must not find for the branch to count it clean.
+_ATTACHMENT_DEBT_ENTITIES = frozenset(
+    {
+        "attachment",
+        "attachment_association",
+        "upload_intent",
+        upload_code_repo.ENTITY_TYPE,
+    }
+)
+
+
+def _is_attachment_debt(item: Mapping[str, Any], owner_id: str) -> bool:
+    if item.get("PK") == f"STORAGE#{owner_id}" and item.get("SK") == "USAGE":
+        return True  # the quota row the purge deletes last
+    if item.get("student_id") != owner_id and item.get("owner_id") != owner_id:
+        return False
+    return (
+        item.get("entity_type") in _ATTACHMENT_DEBT_ENTITIES
+        or item.get("staging_cleanup_status") == "pending"
+    )
+
+
 def _attachments_branch(
     *, command: Mapping[str, Any], previous: Mapping[str, Any]
 ) -> BranchResult:
-    settings = config.settings()
-    result = attachment_service.purge_student_attachments(
-        str(command["user_id"]),
-        account_fence_generation=int(command["generation"]),
-        cursors=previous.get("cursor") if isinstance(previous, Mapping) else None,
-        s3=aws.client(Kind.S3),
-        settings=settings,
+    """Page the table like every other branch; purge the owner once per dirty pass.
+
+    The purge reads the owner's rows from the whole table at once, and that read
+    stopped at ten thousand rows, after which the branch failed for good
+    (#397). The branch now walks the table with a cursor, one strong page per
+    call, and runs the unchanged purge the first time a pass meets one of the
+    owner's attachment, reference, upload, upload-code, staging-debt or quota
+    rows. It completes as the others do: a pass that met none of them is clean,
+    and two clean passes in a row seal it.
+    """
+    owner_id = str(command["user_id"])
+    raw_cursor = previous.get("cursor")
+    # A result written before #397 kept one empty cursor per purge category;
+    # that is the top of a pass.
+    cursor = (
+        {"PK": str(raw_cursor["PK"]), "SK": str(raw_cursor["SK"])}
+        if isinstance(raw_cursor, Mapping) and set(raw_cursor) == {"PK", "SK"}
+        else None
     )
-    quiescent = bool(result.quiescent)
-    epoch = int(previous.get("epoch") or 0) + (1 if quiescent else 0)
-    status = str(result.status)
-    # Complete means two clean passes, as for every other branch. The purge
-    # reported complete on its first clean pass; continue_command then never
-    # ran this branch again, its epoch stayed 1, and no deletion could seal.
-    if status == "complete" and epoch < 2:
-        status = "retryable"
-    cursors = dict(result.cursors)
+    page = next(
+        account_deletion_repo.sweep_pages(
+            "attachment row",
+            table=db_table.table(),
+            cursor=cursor,
+            page_limit=100,
+            maximum_pages=1,
+        ),
+        None,
+    )
+    if page is None:
+        raise account_deletion_repo.AccountDeletionConflict("attachment scan returned no page")
+    found = [item for item in page.items if _is_attachment_debt(item, owner_id)]
+    prior_debt = previous.get("debt_counts")
+    already_dirty = bool(
+        isinstance(prior_debt, Mapping) and stored_int(prior_debt.get("pass_dirty"))
+    )
+    debt: dict[str, int] = {
+        "pass_dirty": int(already_dirty or bool(found)),
+        "processed": 0,
+    }
+    if found and not already_dirty:
+        # Once per pass: the purge settles the whole owner, so the rest of this
+        # pass only has to be read. A purge that could not finish leaves the
+        # pass dirty, and the next pass runs it again.
+        result = attachment_service.purge_student_attachments(
+            owner_id,
+            account_fence_generation=int(command["generation"]),
+            cursors=None,
+            s3=aws.client(Kind.S3),
+            settings=config.settings(),
+        )
+        # The purge's counts are the mapping it is, not attributes.
+        debt["processed"] = int(result.get("released") or 0) + int(result.get("deleted") or 0)
+        if str(result.status) != "complete":
+            debt["purge_retryable"] = 1
+    epoch = int(previous.get("epoch") or 0)
+    if page.last_key is not None:
+        return BranchResult(
+            "retryable", cursor=dict(page.last_key), debt_counts=debt, epoch=epoch
+        )
+    if debt["pass_dirty"]:
+        settled = {"pass_dirty": 0, "processed": debt["processed"]}
+        if "purge_retryable" in debt:
+            settled["purge_retryable"] = 1
+        return BranchResult("retryable", debt_counts=settled, epoch=0)
+    epoch += 1
     return BranchResult(
-        status,
-        # A cursor with nothing left to resume is no cursor; the seal only
-        # accepts an empty one (stoasystem/stoa-backend#78).
-        cursor=cursors if any(value is not None for value in cursors.values()) else None,
-        debt_counts=dict(result.debt_counts),
-        quiescent=quiescent,
+        "complete" if epoch >= 2 else "retryable",
+        debt_counts={},
+        quiescent=epoch >= 2,
         epoch=epoch,
     )
 
@@ -1585,8 +1743,50 @@ BRANCH_HANDLERS: dict[str, Callable[..., BranchResult]] = {
 }
 
 
+# A run stops starting new work with this much of its Lambda's time left. One
+# step can still overrun its slice by a single page's work; the deletion
+# function's timeout is ten minutes.
+MIN_REMAINING_SECONDS = 60.0
+# One step advances one branch through up to this many pages, or for about this
+# long, and then writes its place once (#397).
+STEP_PAGES = 50
+STEP_SECONDS = 20.0
+# Debt that records progress or a policy fact rather than a row that failed.
+_PROGRESS_DEBT = frozenset(
+    {"pass_dirty", "processed", "external_accepted", "external_delivered", "external_unknown"}
+)
+# The branches whose rows the known-key fast path settles early.
+_FAST_PATH_BRANCHES = ("account_profile", "identity_cross_account")
+_IDENTITY_ENTITIES = frozenset({"identity_binding", "user_identity_inventory"})
+
+
+def _branch_complete(result: object) -> bool:
+    return (
+        isinstance(result, Mapping)
+        and result.get("status") == "complete"
+        and result.get("quiescent") is True
+    )
+
+
+def _blocked(result: BranchResult) -> bool:
+    """Whether a page ended in debt that only a later attempt can clear."""
+    if result.status not in {"retryable", "complete"}:
+        return True
+    return any(
+        key not in _PROGRESS_DEBT and (stored_int(value) or 0) > 0
+        for key, value in (result.debt_counts or {}).items()
+    )
+
+
 class AccountDeletionService:
-    """Resume independent primary branches from one durable command lease."""
+    """Resume independent primary branches from one durable command lease.
+
+    Without `remaining_seconds` one call is one round: every unfinished branch
+    advances by one page. With it (the scheduled job, #397) a call keeps
+    advancing the unfinished branches, several pages per step, until the command
+    is finalized or the Lambda's remaining time falls under
+    `MIN_REMAINING_SECONDS`, and then gives its lease back.
+    """
 
     def __init__(
         self,
@@ -1597,27 +1797,29 @@ class AccountDeletionService:
         now_epoch: Callable[[], int] | None = None,
         lease_seconds: int = 120,
         inventory_path: Path | str | None = None,
+        remaining_seconds: Callable[[], float] | None = None,
+        min_remaining_seconds: float = MIN_REMAINING_SECONDS,
+        step_pages: int = STEP_PAGES,
+        step_seconds: float = STEP_SECONDS,
+        monotonic: Callable[[], float] | None = None,
     ) -> None:
         self.repository = repository
         self.branch_handlers = dict(branch_handlers or BRANCH_HANDLERS)
         self.now = now or (lambda: datetime.now(UTC).isoformat())
         self.now_epoch = now_epoch or (lambda: int(datetime.now(UTC).timestamp()))
         self.lease_seconds = lease_seconds
+        self.remaining_seconds = remaining_seconds
+        self.min_remaining_seconds = min_remaining_seconds
+        self.step_pages = max(int(step_pages), 1)
+        self.step_seconds = step_seconds
+        self.monotonic = monotonic or time.monotonic
         self.seal = load_private_store_seal(inventory_path)
         if tuple(self.branch_handlers) != ACCOUNT_DELETION_BRANCH_IDS:
             raise account_deletion_repo.AccountDeletionConflict(
                 "runtime branch handlers do not match sealed registry"
             )
 
-    def continue_command(self, claim: DeletionCommandClaim) -> None:
-        if not isinstance(claim, DeletionCommandClaim):
-            raise DeletionCommandClaimLost("opaque deletion claim required")
-        command = self._load_command(claim.command_id)
-        if not command:
-            raise DeletionCommandClaimLost("deletion command disappeared")
-        if command.get("status") == "complete":
-            return
-        self._require_current_claim(command, claim)
+    def _require_sealed_command(self, command: Mapping[str, Any]) -> None:
         if (
             command.get("inventory_sha256") != self.seal["inventory_sha256"]
             or command.get("branch_ids") != list(ACCOUNT_DELETION_BRANCH_IDS)
@@ -1626,13 +1828,28 @@ class AccountDeletionService:
             raise account_deletion_repo.AccountDeletionConflict(
                 "deletion command seal drift"
             )
+
+    def continue_command(self, claim: DeletionCommandClaim) -> None:
+        if not isinstance(claim, DeletionCommandClaim):
+            raise DeletionCommandClaimLost("opaque deletion claim required")
+        if self.remaining_seconds is not None:
+            self._continue_within_budget(claim, self.remaining_seconds)
+            return
+        command = self._load_command(claim)
+        if not command:
+            raise DeletionCommandClaimLost("deletion command disappeared")
+        if command.get("status") == "complete":
+            return
+        self._require_current_claim(command, claim)
+        self._require_sealed_command(command)
         branch_results = command.setdefault("branch_results", {})
         if not isinstance(branch_results, dict):
             raise account_deletion_repo.AccountDeletionConflict(
                 "invalid deletion branch results"
             )
+        self._known_key_fast_path(command)
         for branch_id in ACCOUNT_DELETION_BRANCH_IDS:
-            command = self._load_command(claim.command_id)
+            command = self._load_command(claim)
             if not command:
                 raise DeletionCommandClaimLost("deletion command disappeared")
             self._require_current_claim(command, claim)
@@ -1648,7 +1865,7 @@ class AccountDeletionService:
                 lease_expires_at=current_epoch + self.lease_seconds,
                 now_iso=now_iso,
             )
-            command = self._load_command(claim.command_id)
+            command = self._load_command(claim)
             if not command:
                 raise DeletionCommandClaimLost("deletion command disappeared")
             self._require_current_claim(command, claim)
@@ -1673,10 +1890,15 @@ class AccountDeletionService:
                 expected_result_version=int(previous.get("result_version") or 0),
                 now_epoch=self.now_epoch(),
             )
-        command = self._load_command(claim.command_id)
+        command = self._load_command(claim)
         if not command:
             raise DeletionCommandClaimLost("deletion command disappeared")
         self._require_current_claim(command, claim)
+        self._finalize_if_sealed(command, claim)
+
+    def _finalize_if_sealed(
+        self, command: Mapping[str, Any], claim: DeletionCommandClaim
+    ) -> bool:
         fence = self._load_fence(str(command["user_id"]))
         if fence and validate_deletion_seal(
             command=command, fence=fence, seal=self.seal
@@ -1689,6 +1911,196 @@ class AccountDeletionService:
                 now_epoch=self.now_epoch(),
                 now_iso=self.now(),
             )
+            return True
+        return False
+
+    # -- time-budgeted runs (#397) -------------------------------------------
+
+    def _out_of_time(self, remaining: Callable[[], float]) -> bool:
+        return remaining() < self.min_remaining_seconds
+
+    def _budget_lease_seconds(self, remaining: Callable[[], float]) -> int:
+        # Long enough to outlast the invocation, which renews it every step and
+        # gives it back at the end; a run that dies holds it at most this long
+        # past its own end.
+        return max(self.lease_seconds, int(max(remaining(), 0.0)) + 30)
+
+    def _continue_within_budget(
+        self, claim: DeletionCommandClaim, remaining: Callable[[], float]
+    ) -> None:
+        command = self._load_command(claim)
+        if not command:
+            raise DeletionCommandClaimLost("deletion command disappeared")
+        if command.get("status") == "complete":
+            return
+        self._require_current_claim(command, claim)
+        self._require_sealed_command(command)
+        if not isinstance(command.get("branch_results") or {}, Mapping):
+            raise account_deletion_repo.AccountDeletionConflict(
+                "invalid deletion branch results"
+            )
+        self._known_key_fast_path(command)
+        finalized = False
+        try:
+            while not self._out_of_time(remaining):
+                command = self._current(claim)
+                results = command.get("branch_results") or {}
+                pending = [
+                    branch_id
+                    for branch_id in ACCOUNT_DELETION_BRANCH_IDS
+                    if not _branch_complete(results.get(branch_id))
+                ]
+                if not pending:
+                    break
+                progressed = False
+                for branch_id in pending:
+                    if self._out_of_time(remaining):
+                        break
+                    claim, moved = self._advance_branch(claim, branch_id, remaining)
+                    progressed = progressed or moved
+                if not progressed:
+                    # Every unfinished branch is waiting on something a later
+                    # run has to retry; going round again would only spin.
+                    break
+            command = self._current(claim)
+            finalized = self._finalize_if_sealed(command, claim)
+        finally:
+            if not finalized:
+                self._release(claim)
+
+    def _current(self, claim: DeletionCommandClaim) -> dict[str, Any]:
+        command = self._load_command(claim)
+        if not command:
+            raise DeletionCommandClaimLost("deletion command disappeared")
+        self._require_current_claim(command, claim)
+        return command
+
+    def _advance_branch(
+        self,
+        claim: DeletionCommandClaim,
+        branch_id: str,
+        remaining: Callable[[], float],
+    ) -> tuple[DeletionCommandClaim, bool]:
+        """One step: up to `step_pages` pages of one branch, then one write."""
+        command = self._current(claim)
+        previous = (command.get("branch_results") or {}).get(branch_id) or {}
+        if _branch_complete(previous):
+            return claim, False
+        current_epoch = self.now_epoch()
+        claim = self.repository.renew_deletion_command_claim(
+            command,
+            claim=claim,
+            now_epoch=current_epoch,
+            lease_expires_at=current_epoch + self._budget_lease_seconds(remaining),
+            now_iso=self.now(),
+        )
+        command = self._current(claim)
+        handler = self.branch_handlers[branch_id]
+        contract = self.seal["branch_contracts"][branch_id]
+        state: Mapping[str, Any] = previous
+        persisted: dict[str, Any] | None = None
+        progressed = False
+        started = self.monotonic()
+        for _page in range(self.step_pages):
+            try:
+                result = handler(command=command, previous=state)
+            except Exception:
+                result = BranchResult("retryable", debt_counts={"dependency": 1})
+            persisted = result.persisted(
+                self.now(),
+                generation=int(command["generation"]),
+                handler_version=str(contract["handler_version"]),
+                subfamilies=contract["subfamilies"],
+            )
+            state = persisted
+            blocked = _blocked(result)
+            progressed = progressed or not blocked
+            if (
+                result.status == "complete"
+                or blocked
+                or self.monotonic() - started >= self.step_seconds
+                or self._out_of_time(remaining)
+            ):
+                break
+        assert persisted is not None
+        claim = self.repository.persist_branch_result(
+            command,
+            branch_id,
+            persisted,
+            claim=claim,
+            expected_branch_results_digest=claim.branch_results_digest,
+            expected_result_version=int(previous.get("result_version") or 0),
+            now_epoch=self.now_epoch(),
+        )
+        return claim, progressed
+
+    def _release(self, claim: DeletionCommandClaim) -> None:
+        release = getattr(self.repository, "release_deletion_command_claim", None)
+        if not callable(release):
+            return
+        try:
+            command = self._load_command(claim)
+            if not command or command.get("status") != "running":
+                return
+            release(
+                command,
+                claim=claim,
+                now_epoch=self.now_epoch(),
+                now_iso=self.now(),
+            )
+        except Exception:
+            # The lease runs out on its own; a run that could not give it back
+            # only makes the next one wait for that.
+            logger.warning("account_deletion_lease_release_failed")
+
+    # -- known-key fast path (#397) ------------------------------------------
+
+    def _known_key_fast_path(
+        self, command: Mapping[str, Any], *, provider: bool = True
+    ) -> None:
+        """Settle at once what the account's own partition holds.
+
+        Tombstone the profile (which gives the address back in the same
+        commit), revoke the provider identity and terminalize the identity rows,
+        all read by key with strong reads, before the full scans get there. The
+        scans still run and still decide completion: they find nothing left of
+        these rows, which is a clean page. Idempotent, so it runs on every run
+        until the profile and identity branches are complete; any failure is
+        logged and left to those branches.
+        """
+        if self.repository is not account_deletion_repo:
+            return
+        results = command.get("branch_results") or {}
+        if all(_branch_complete(results.get(branch)) for branch in _FAST_PATH_BRANCHES):
+            return
+        try:
+            known_key_fast_path(
+                user_id=str(command["user_id"]),
+                generation=int(command["generation"]),
+                now_iso=self.now(),
+                provider=provider,
+            )
+        except Exception as exc:
+            logger.warning("account_deletion_fast_path_incomplete reason=%s", type(exc).__name__)
+
+    def run_fast_path(self, claim: DeletionCommandClaim, *, provider: bool = False) -> None:
+        """The request side's share (#397): the fast path only, then the lease back.
+
+        The profile tombstone only, by default: the API function's role holds no
+        Cognito admin sign-out or delete, which only the deletion function does,
+        so the provider revoke and the identity rows wait for its first run.
+        """
+        if not isinstance(claim, DeletionCommandClaim):
+            raise DeletionCommandClaimLost("opaque deletion claim required")
+        command = self._load_command(claim)
+        if not command or command.get("status") == "complete":
+            return
+        try:
+            self._require_current_claim(command, claim)
+            self._require_sealed_command(command)
+            self._known_key_fast_path(command, provider=provider)
+        finally:
+            self._release(claim)
 
     @staticmethod
     def _require_current_claim(
@@ -1709,12 +2121,20 @@ class AccountDeletionService:
         ):
             raise DeletionCommandClaimLost("deletion claim lost")
 
-    def _load_command(self, command_id: str) -> dict[str, Any] | None:
+    def _load_command(self, claim: DeletionCommandClaim) -> dict[str, Any] | None:
+        """The claimed command, strongly, by its key (#397).
+
+        The claim names the account, so this is one GetItem on
+        `USER#{user_id}/DELETE_COMMAND#{command_id}`. Only a claim without an
+        account (a test double's) falls back to the lookup by id.
+        """
+        if claim.user_id:
+            by_key = getattr(self.repository, "get_deletion_command", None)
+            if callable(by_key):
+                return by_key(claim.user_id, claim.command_id)
         loader = getattr(self.repository, "get_command_by_id", None)
         if callable(loader):
-            return loader(command_id)
-        if self.repository is account_deletion_repo:
-            return account_deletion_repo.get_command_by_id(command_id)
+            return loader(claim.command_id)
         return None
 
     def _load_fence(self, user_id: str) -> dict[str, Any] | None:

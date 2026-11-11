@@ -447,9 +447,11 @@ def validate_private_store_semantics(root: Path | str) -> None:
         if not path.is_file():
             continue
         functions = _function_sources(path)
+        # Ten lifecycle writers validate their timestamp; the tenth is the lease
+        # release a time-budgeted deletion run ends with (#397).
         if relative.endswith("account_deletion_repo.py") and path.read_text(
             encoding="utf-8"
-        ).count("_valid_lifecycle_timestamp(now_iso)") < 9:
+        ).count("_valid_lifecycle_timestamp(now_iso)") < 10:
             raise ValueError(
                 "reviewed private-store semantic missing: lifecycle timestamp validation"
             )

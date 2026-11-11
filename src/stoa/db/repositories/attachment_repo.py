@@ -1135,8 +1135,8 @@ def list_owner_attachment_items(
     owner_id: str,
     *,
     table: object | None = None,
-    maximum_pages: int = 100,
-    maximum_items: int = 10_000,
+    maximum_pages: int | None = None,
+    maximum_items: int | None = None,
     entity_types: frozenset[str] | None = frozenset(
         {"attachment", "attachment_association"}
     ),
@@ -1146,19 +1146,28 @@ def list_owner_attachment_items(
 
     DynamoDB GSIs cannot provide strongly consistent reads. Retention therefore scans
     the base table with ConsistentRead and validates every pagination transition.
+
+    By default the read goes on until the table ends, a page at a time of whatever
+    the table returns (up to 1 MB). It used to stop at a hundred pages of a hundred
+    rows and fail, so once the table passed ten thousand rows every caller failed
+    with it, an account deletion's attachment branch included (#397). A caller that
+    wants a bound still passes one; a repeating or malformed cursor still fails.
     """
     if not isinstance(owner_id, str) or not owner_id.strip():
         raise AttachmentRepositoryConflict("conditional_conflict")
     seen_cursors: set[tuple[str, str]] = set()
     seen_keys: set[tuple[str, str]] = set()
     result: list[dict[str, object]] = []
+    request: dict[str, object] = {"ConsistentRead": True}
+    if maximum_items is not None:
+        request["Limit"] = min(100, maximum_items)
     try:
-        source = db_table.pages(
-            "scan", table=table, ConsistentRead=True, Limit=min(100, maximum_items)
-        )
+        source = db_table.pages("scan", table=table, **request)
     except Exception:
         raise AttachmentRepositoryConflict("dependency_failure") from None
-    for _page in range(maximum_pages):
+    page_count = 0
+    while maximum_pages is None or page_count < maximum_pages:
+        page_count += 1
         try:
             page = next(source)
         except AttachmentRepositoryConflict:
@@ -1180,7 +1189,7 @@ def list_owner_attachment_items(
                 continue
             seen_keys.add(identity)
             result.append(item)
-            if len(result) > maximum_items:
+            if maximum_items is not None and len(result) > maximum_items:
                 raise AttachmentRepositoryConflict("dependency_failure")
         if page.last_key is None:
             if fence is not None and not advance_retention_fence_cursor(
