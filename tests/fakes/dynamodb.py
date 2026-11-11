@@ -121,6 +121,22 @@ def empty_index_key(index_name: str, attribute: str, operation: str) -> ClientEr
     )
 
 
+def invalid_document_path(operation: str) -> ClientError:
+    """The ValidationException for a SET through a map the item does not hold."""
+    return ClientError(
+        {
+            "Error": {
+                "Code": "ValidationException",
+                "Message": (
+                    "The document path provided in the update expression is invalid for update"
+                ),
+            },
+            "ResponseMetadata": {"HTTPStatusCode": 400},
+        },
+        operation,
+    )
+
+
 def null_index_key(index_name: str, attribute: str, operation: str) -> ClientError:
     """The ValidationException DynamoDB answers a NULL secondary index key with."""
     return ClientError(
@@ -336,26 +352,26 @@ class ConditionEvaluator:
     def _primary(self, expression: str, item: dict[str, Any]) -> bool:
         text = expression.strip()
         for prefix, decide in (
-            ("attribute_not_exists(", lambda path, _args: path not in item),
-            ("attribute_exists(", lambda path, _args: path in item),
+            ("attribute_not_exists(", lambda found: not found),
+            ("attribute_exists(", lambda found: found),
         ):
             if text.startswith(prefix):
-                return bool(decide(self.path(text[len(prefix) : -1]), ()))
+                return bool(decide(self.lookup(item, text[len(prefix) : -1])[0]))
         if text.startswith("begins_with("):
             path, value = (part.strip() for part in text[len("begins_with(") : -1].split(",", 1))
-            stored = item.get(self.path(path))
+            stored = self.get(item, path)
             return isinstance(stored, str) and stored.startswith(str(self.value(value)))
         if text.startswith("contains("):
             path, value = (part.strip() for part in text[len("contains(") : -1].split(",", 1))
-            stored = item.get(self.path(path))
+            stored = self.get(item, path)
             return stored is not None and self.value(value) in stored
         if text.startswith("attribute_type("):
             path, kind = (part.strip() for part in text[len("attribute_type(") : -1].split(",", 1))
-            return _matches_type(item.get(self.path(path)), str(self.value(kind)))
+            return _matches_type(self.get(item, path), str(self.value(kind)))
         if " BETWEEN " in text:
             path, bounds = text.split(" BETWEEN ", 1)
             low, high = (part.strip() for part in bounds.split(" AND ", 1))
-            stored = item.get(self.path(path))
+            stored = self.get(item, path)
             if stored is None:
                 return False
             return self.value(low) <= stored <= self.value(high)
@@ -364,16 +380,40 @@ class ConditionEvaluator:
             candidates = [
                 self.value(token.strip()) for token in listed.strip().strip("()").split(",")
             ]
-            return item.get(self.path(path)) in candidates
+            return self.get(item, path) in candidates
         for operator in self.OPERATORS:
             if operator in text:
                 left, right = text.split(operator, 1)
-                return _compare(operator, item.get(self.path(left)), self.value(right))
+                return _compare(operator, self.get(item, left), self.value(right))
         raise AssertionError(f"unsupported condition: {expression}")
 
     def path(self, token: str) -> str:
         name = token.strip()
         return self.names.get(name, name)
+
+    def segments(self, token: str) -> list[str]:
+        """A document path, one attribute name per map level.
+
+        In an expression a dot always descends into a map, as DynamoDB reads it;
+        an attribute whose own name holds a dot is reached through a `#` name.
+        List indexes are not something this codebase writes.
+        """
+        parts = [self.path(part) for part in token.strip().split(".")]
+        if any(not part or "[" in part for part in parts):
+            raise AssertionError(f"unsupported document path: {token}")
+        return parts
+
+    def lookup(self, item: dict[str, Any], token: str) -> tuple[bool, Any]:
+        """Whether the path is present in `item`, and what it holds."""
+        current: Any = item
+        for part in self.segments(token):
+            if not isinstance(current, dict) or part not in current:
+                return False, None
+            current = current[part]
+        return True, current
+
+    def get(self, item: dict[str, Any], token: str) -> Any:
+        return self.lookup(item, token)[1]
 
     def value(self, token: str) -> Any:
         name = token.strip()
@@ -524,9 +564,15 @@ def apply_update_expression(
                 continue
             if verb == "SET":
                 target, source = piece.split("=", 1)
-                name = evaluator.path(target)
-                item[name] = as_stored(_resolve_operand(source, evaluator, item))
-                touched.add(name)
+                *parents, leaf = evaluator.segments(target)
+                holder: Any = item
+                for part in parents:
+                    holder = holder.get(part) if isinstance(holder, dict) else None
+                    if not isinstance(holder, dict):
+                        # DynamoDB refuses a path through a map that is not there.
+                        raise invalid_document_path("UpdateItem")
+                holder[leaf] = as_stored(_resolve_operand(source, evaluator, item))
+                touched.add(parents[0] if parents else leaf)
             elif verb == "REMOVE":
                 item.pop(evaluator.path(piece), None)
             elif verb == "ADD":
