@@ -963,6 +963,55 @@ def get_parent_active_billing_grants(
     return grants
 
 
+# A parent's billing summary in one of these is a subscription still running, or
+# one whose outcome is not settled yet; `none`, `canceled` and a manual override
+# (an administrator's own arrangement, like a usage period) are not.
+STANDING_BILLING_STATUSES = frozenset(
+    {"checkout_pending", "active", "past_due", "payment_failed", "provider_unknown"}
+)
+
+
+def standing_billing(
+    account_id: str,
+    role: str,
+    *,
+    parent_ids: Sequence[str] = (),
+    table: object | None = None,
+) -> list[str]:
+    """What paid billing still stands on one account, each as a short phrase (#396).
+
+    Empty means nothing does. For a parent: its billing summary in a standing
+    status, a paid grant still active for any child, or an open checkout. For a
+    student: a paid grant still active from one of `parent_ids` that covers it.
+    Usage periods are not billing here: an administrator grants them and the money
+    is settled offline, so deleting an account never waits on one.
+    """
+    target = table or get_table()
+    standing: list[str] = []
+    if role == "parent":
+        summary = _subscription_optional_item(
+            _subscription_get(
+                target, Key=_billing_key(account_id), ConsistentRead=True
+            ).get("Item")
+        )
+        status = str((summary or {}).get("billing_status") or "none")
+        if status in STANDING_BILLING_STATUSES:
+            standing.append(f"subscription billing is {status}")
+        grants = paid_entitlement_service.standing_paid_grants(account_id, table=target)
+        if grants:
+            standing.append(f"a paid plan is active for {len(grants)} child account(s)")
+        if checkout_command_repo.get_open_checkout_guard(account_id, table=target):
+            standing.append("a checkout is open")
+    elif role == "student":
+        for parent_id in parent_ids:
+            if paid_entitlement_service.standing_paid_grants(
+                parent_id, beneficiary_id=account_id, table=target
+            ):
+                standing.append("a parent's paid plan covers this account")
+                break
+    return standing
+
+
 def get_current_payment_reminder(
     parent_id: str,
     *,

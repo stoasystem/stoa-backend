@@ -519,7 +519,7 @@ async def test_closing_the_account_is_refused_once_that_sign_in_was_signed_out(
     keyset, _ = rsa_jwks_keysets
     built: list[str] = []
     monkeypatch.setattr(
-        deps, "begin_or_replay_deletion", lambda **kwargs: built.append(kwargs["user_id"])
+        deps, "accept_account_deletion", lambda **kwargs: built.append(kwargs["user_id"])
     )
 
     with pytest.raises(SecurityDecisionError) as refused:
@@ -542,7 +542,7 @@ async def test_closing_the_account_still_works_for_a_sign_in_that_was_not_signed
     keyset, _ = rsa_jwks_keysets
     built: list[str] = []
     monkeypatch.setattr(
-        deps, "begin_or_replay_deletion", lambda **kwargs: built.append(kwargs["user_id"])
+        deps, "accept_account_deletion", lambda **kwargs: built.append(kwargs["user_id"])
     )
 
     await deps.get_deletion_command(

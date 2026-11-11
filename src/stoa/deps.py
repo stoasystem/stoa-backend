@@ -32,7 +32,11 @@ from stoa.security.identity import (
 )
 from stoa.security.jwks import HttpxJwksTransport, JwksKeyProvider
 from stoa.security.tokens import VerifiedAccessToken, verify_access_token
-from stoa.services.account_deletion_service import DeletionReceipt, begin_or_replay_deletion
+from stoa.services.account_deletion_service import (
+    DeletionReceipt,
+    SelfInitiated,
+    accept_account_deletion,
+)
 
 security = HTTPBearer()
 
@@ -234,12 +238,9 @@ async def get_deletion_command(
             raise account_deletion_repo.AccountDeletionConflict(
                 "deletion identity is unavailable"
             )
-        return begin_or_replay_deletion(
-            verified=verified,
+        return accept_account_deletion(
             user_id=user_id,
-            method="DELETE",
-            path="/auth/me",
-            body=b"",
+            initiator=SelfInitiated(verified=verified, method="DELETE", path="/auth/me"),
             now_iso=datetime.now(UTC).isoformat(),
         )
     except SecurityDecisionError:

@@ -1069,6 +1069,44 @@ def _active_grant(
     return grant
 
 
+def standing_paid_grants(
+    parent_id: str,
+    *,
+    beneficiary_id: str | None = None,
+    table: object | None = None,
+) -> list[dict[str, object]]:
+    """A parent's grants still stored as active on a paid plan, as stored (#396).
+
+    Not `get_active_beneficiary_grant`: that one also asks for a current
+    relationship, because it answers "may this child use the paid plan now". This
+    answers "is anyone still paying here", where a grant whose relationship has
+    lapsed still stands until billing settles it, and a malformed one counts too.
+    Named by `beneficiary_id`, only that child's grant is read.
+    """
+    target = table or db_table.table()
+    if beneficiary_id:
+        found = _strong_get(target, _grant_key(parent_id, beneficiary_id))
+        items: list[Mapping[str, object]] = [found] if found else []
+    else:
+        items = db_table.rows(
+            "query",
+            table=target,
+            KeyConditionExpression="PK=:pk AND begins_with(SK,:prefix)",
+            ExpressionAttributeValues={
+                ":pk": f"PAID_GRANT#{_required_text(parent_id, 'parent_id')}",
+                ":prefix": "BENEFICIARY#",
+            },
+            ConsistentRead=True,
+        )
+    return [
+        dict(item)
+        for item in items
+        if item.get("entity_type") == "beneficiary_grant"
+        and item.get("grant_status") == "active"
+        and item.get("plan_id") != BillingPlanId.FREE_TRIAL.value
+    ]
+
+
 def get_active_beneficiary_grant(
     parent_id: str,
     beneficiary_id: str,

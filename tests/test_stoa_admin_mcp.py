@@ -120,8 +120,9 @@ def test_write_tools_say_so_and_ask_for_a_rehearsal_first() -> None:
         "invite_account": (False, False),
         "reissue_invitation": (False, True),
         "revoke_invitation": (False, True),
+        "delete_account": (False, True),
     }
-    for name in ("invite_account", "reissue_invitation", "revoke_invitation"):
+    for name in ("invite_account", "reissue_invitation", "revoke_invitation", "delete_account"):
         assert "dryRun" in tools[name]["inputSchema"]["required"]
         assert "confirm with the person" in tools[name]["description"]
 
@@ -212,7 +213,7 @@ def test_a_function_crash_or_refused_invoke_is_a_tool_error() -> None:
 def test_an_unlisted_tool_never_reaches_aws() -> None:
     lambda_client = FakeLambda({"ok": True, "result": {}})
 
-    reply = _rpc(_server(lambda_client), _call("delete_account", {"userId": "x"}))[0]
+    reply = _rpc(_server(lambda_client), _call("archive_account", {"userId": "x"}))[0]
 
     assert reply["result"]["isError"] is True
     assert lambda_client.invocations == []

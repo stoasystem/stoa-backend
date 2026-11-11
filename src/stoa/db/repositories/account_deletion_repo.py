@@ -1947,6 +1947,8 @@ def finalize_account_deletion(
         "command_version": command_version + 1,
         "branch_results_digest": durable_digest,
     }
+    # Who asked, kept for replay and accountability: a self-deletion's token
+    # hashes and request, or an operator's id and its one-sentence reason (#396).
     for field in (
         "issuer_hash",
         "subject_hash",
@@ -1954,6 +1956,8 @@ def finalize_account_deletion(
         "method",
         "path",
         "request_body_sha256",
+        "initiated_by",
+        "reason",
     ):
         if field in command:
             terminal_command[field] = command[field]

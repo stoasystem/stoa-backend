@@ -54,6 +54,13 @@ agent is told to rehearse with `dryRun: true` and ask you before the real run:
 but its audit row; a real run mails the same activation email the console's invitation does,
 and the accounts and invitations it creates name `operator:agent_mcp` as their creator.
 
+`delete_account` (#396) is irreversible. It takes a required one-sentence `reason`, and its real
+run needs `confirmAccountNumber` to repeat `accountNumber`. It deletes students and parents, and
+any non-admin account still invited, through the same pipeline as an account closing itself.
+It refuses active teachers, administrators, accounts with an active paid subscription and
+accounts already being deleted. The scheduled deletion job finishes the work within minutes, and
+`get_account` shows the deletion as in progress and then completed.
+
 ## Project Structure
 
 ```

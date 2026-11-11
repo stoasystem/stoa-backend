@@ -35,7 +35,7 @@ from pydantic import BaseModel, ValidationError
 
 from stoa import config
 from stoa.db.repositories import security_audit_repo
-from stoa.operator_calls import accounts, caller_identity, catalog, invitations
+from stoa.operator_calls import accounts, caller_identity, catalog, deletions, invitations
 from stoa.operator_calls.outcome import OperatorCallRefused, Outcome
 from stoa.rule_violation import RuleViolation
 
@@ -50,6 +50,7 @@ RUNNERS: Mapping[str, Runner] = {
     "invite_account": invitations.invite_account,
     "reissue_invitation": invitations.reissue_invitation,
     "revoke_invitation": invitations.revoke_invitation,
+    "delete_account": deletions.delete_account,
 }
 
 _AGENT_PATTERN = re.compile(r"[^A-Za-z0-9._-]")
@@ -181,7 +182,7 @@ def handle(
             result_code=result_code,
             target_type=outcome.target_type if outcome else (refused.target_type if refused else ""),
             target_id=outcome.target_id if outcome else (refused.target_id if refused else ""),
-            evidence=outcome.evidence if outcome else "",
+            evidence=outcome.evidence if outcome else (refused.evidence if refused else ""),
             correlation_id=correlation_id,
             now=now(),
         )
