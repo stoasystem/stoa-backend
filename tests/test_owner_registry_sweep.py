@@ -195,8 +195,52 @@ def test_the_daily_job_is_report_only_and_logs_findings(table, caplog):
     finally:
         db_table.install(None)
 
+    # Its one write is its own result row, counts only.
+    marker = table.rows.pop((sweep.RUN_MARKER_KEY["PK"], sweep.RUN_MARKER_KEY["SK"]))
     assert table.rows == before
+    assert marker["complete"] is True
+    assert marker["missing_registrations"] == 4 and marker["leftover_rows"] == 1
     assert summary["missing_registrations"] == 4 and summary["leftover_rows"] == 1
     assert "owner_registry_sweep_findings" in caplog.text
+    assert STUDENT not in json.dumps(marker, default=str)
     # Keys and counts only: no row contents in what is logged.
     assert "owner_id" not in caplog.text
+
+
+# -- what the audit added -----------------------------------------------------------------
+
+
+def _legacy_signal(student: str, public_id: str) -> dict:
+    from stoa.db.repositories import curriculum_analytics_repo
+
+    return {
+        "PK": f"CURRICULUM_SIGNAL#{public_id}", "SK": "SIGNAL#2026#s1",
+        "entity_type": curriculum_analytics_repo.SIGNAL_ENTITY,
+        "metadata": {"studentHash": curriculum_analytics_repo._legacy_student_hash(student)},
+    }
+
+
+def test_legacy_curriculum_signals_are_found_by_their_student_hash():
+    double = FakeTable()
+    double.seed(_fence(STUDENT), _fence(GONE, status="deleted"),
+                _legacy_signal(STUDENT, "p1"), _legacy_signal(GONE, "p2"))
+
+    report = sweep.run(table=double, write=True)
+
+    assert report.unregistered == {"CURRICULUM_SIGNAL/SIGNAL": 1}
+    assert report.leftovers == {"CURRICULUM_SIGNAL/SIGNAL": 1}
+    assert (f"USER#{STUDENT}", "OWNS#CURRICULUM_SIGNAL#p1") in _registry(double)
+    assert sweep.run(table=double).registry_complete
+
+
+def test_teacher_activation_commands_are_a_reviewed_exclusion():
+    double = FakeTable()
+    double.seed(_fence(TEACHER), _fence(GONE, status="deleted"),
+                {"PK": "TEACHER_ACTIVATION#c1", "SK": "COMMAND", "user_id": TEACHER,
+                 "entity_type": "teacher_activation_command"},
+                {"PK": "TEACHER_ACTIVATION#c2", "SK": "COMMAND", "user_id": GONE,
+                 "entity_type": "teacher_activation_command"})
+
+    report = sweep.run(table=double)
+
+    assert not report.unregistered and not report.leftovers

@@ -4,14 +4,17 @@ Runs on the account-deletion function, which already holds the table; its
 schedule sends `{"job": "owner_registry_sweep"}`. One walk over the table checks
 every account at once - rows that name an account in a partition it has not
 registered, and rows a deleted account left behind - and logs what it found.
-It never writes, deletes or re-queues anything, and no single deletion waits
-for it. A finding is logged at WARNING as `owner_registry_sweep_findings`, the
+Its one write is its own result row (`owner_registry_sweep.RUN_MARKER_KEY`,
+counts only), which acceptance reads before sealing a deletion for the
+registry path. It never fixes, deletes or re-queues anything, and no single
+deletion waits for it. A finding is logged at WARNING as `owner_registry_sweep_findings`, the
 line an alarm can match.
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from stoa.services import owner_registry_sweep
@@ -26,6 +29,10 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
         remaining_seconds=(lambda: float(remaining()) / 1000.0) if callable(remaining) else None,
     )
     summary = report.as_dict()
+    try:
+        owner_registry_sweep.record_run(report, now_iso=datetime.now(UTC).isoformat())
+    except Exception:
+        logger.warning("owner_registry_sweep_marker_failed")
     if not report.complete:
         logger.warning("owner_registry_sweep_incomplete rows=%d", report.rows_scanned)
     if report.unregistered or report.leftovers:

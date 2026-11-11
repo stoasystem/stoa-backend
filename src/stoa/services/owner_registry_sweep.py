@@ -36,7 +36,7 @@ from typing import Any
 
 from stoa.db import owner_registry
 from stoa.db import table as db_table
-from stoa.db.repositories import account_deletion_repo
+from stoa.db.repositories import account_deletion_repo, curriculum_analytics_repo
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,17 @@ NOT_OWNED_PREFIXES: tuple[str, ...] = (
     "CURRICULUM_AUDIT#",
     "CURRICULUM_POINTER#",
     "CURRICULUM_MIGRATION#",
+    # The reviewed `teacher_application` exclusion: no deletion branch acts
+    # on applications, invitations or activation commands (the activation
+    # command carries the new teacher's `user_id`, and stays on purpose).
+    "TEACHER_APPLICATION#",
+    "TEACHER_INVITATION#",
+    "TEACHER_ACTIVATION#",
 )
+
+# Where the daily run leaves its result: what acceptance reads before it seals
+# a deletion for the registry path (#397).
+RUN_MARKER_KEY = {"PK": "JOB#owner_registry_sweep", "SK": "LAST_RUN"}
 
 # Rows deletion keeps under the deleted account's own partition.
 _RETAINED_ACCOUNT_SK_PREFIXES = ("ACCOUNT_FENCE", "DELETE_COMMAND#", "DELETE_ACCOUNTING#")
@@ -123,6 +133,10 @@ class Census:
     active: frozenset[str]
     deleted: frozenset[str]
     registry: frozenset[tuple[str, str]]  # (account, registered partition)
+    # Curriculum signals written before the owner manifest name their student
+    # only as `metadata.studentHash`, a hash of the id; deletion matches them
+    # by that hash, so the sweep does too.
+    legacy_hashes: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def accounts(self) -> frozenset[str]:
@@ -151,7 +165,20 @@ def census(rows: Iterable[Mapping[str, Any]]) -> Census:
             partition = item.get("registered_pk")
             if isinstance(partition, str) and partition:
                 registry.add((account, partition))
-    return Census(frozenset(active), frozenset(deleted - active), frozenset(registry))
+    deleted -= active
+    hashes = {
+        curriculum_analytics_repo._legacy_student_hash(account): account
+        for account in active | deleted
+    }
+    return Census(frozenset(active), frozenset(deleted), frozenset(registry), hashes)
+
+
+def _legacy_signal_account(item: Mapping[str, Any], seen: Census) -> str | None:
+    if item.get("entity_type") != curriculum_analytics_repo.SIGNAL_ENTITY:
+        return None
+    metadata = item.get("metadata")
+    digest = metadata.get("studentHash") if isinstance(metadata, Mapping) else None
+    return seen.legacy_hashes.get(digest) if isinstance(digest, str) else None
 
 
 def named_accounts(item: Mapping[str, Any], accounts: frozenset[str]) -> dict[str, str]:
@@ -204,11 +231,17 @@ def check_row(
     if not pk or _not_owned(pk) or owner_registry.is_registry_row(item):
         return [], False
     missing: list[tuple[str, str]] = []
-    for account, role in named_accounts(item, seen.active).items():
+    named = named_accounts(item, seen.active)
+    legacy = _legacy_signal_account(item, seen)
+    if legacy in seen.active:
+        named[legacy] = owner_registry.ROLE_OWNER
+    for account, role in named.items():
         if owner_registry.is_derived_for(pk, account) or (account, pk) in seen.registry:
             continue
         missing.append((account, role))
-    leftover = any(_is_leftover(item, account) for account in seen.deleted)
+    leftover = legacy in seen.deleted or any(
+        _is_leftover(item, account) for account in seen.deleted
+    )
     return missing, leftover
 
 
@@ -223,6 +256,25 @@ def _is_leftover(item: Mapping[str, Any], account: str) -> bool:
         return account_deletion_repo._targets_user(item, account)
     except account_deletion_repo.AccountDeletionConflict:
         return False
+
+
+def record_run(report: SweepReport, *, now_iso: str, table: object | None = None) -> None:
+    """Leave the run's result where acceptance reads it (`RUN_MARKER_KEY`).
+
+    Counts only, no keys. The one write the daily job makes.
+    """
+    db_table.put(
+        table=table,
+        Item={
+            **RUN_MARKER_KEY,
+            "entity_type": "owner_registry_sweep_run",
+            "completed_at": now_iso,
+            "complete": report.complete,
+            "rows_scanned": report.rows_scanned,
+            "missing_registrations": sum(report.unregistered.values()),
+            "leftover_rows": sum(report.leftovers.values()),
+        },
+    )
 
 
 def scan_pages(
