@@ -142,8 +142,10 @@ def test_repository_claim_persists_one_complete_command_usage_identity() -> None
 
 def test_claim_cas_contention_rereads_same_fingerprint_instead_of_false_429() -> None:
     existing = _message_command(counter_value=4)
+    # One reason per operation, the owner registry Put the fenced write adds
+    # included (#397).
     error = _transaction_cancel(
-        ["None", "ConditionalCheckFailed", "None", "None"]
+        ["None", "ConditionalCheckFailed", "None", "None", "None"]
     )
     table = _ClaimTable(counter=3, transact_error=error, reread_command=existing)
 

@@ -993,3 +993,16 @@ class FakeTable:
                     self.rows.pop(key, None)
                 else:
                     self.rows[key] = row
+
+
+def without_owner_registry(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """`operations` without the owner registry Puts the fenced write adds (#397).
+
+    For tests that pin a transaction's exact shape: the registry rows are the
+    gateway's, covered in `test_owner_registry_dual_write.py`, not the caller's.
+    """
+    return [
+        operation
+        for operation in operations
+        if (operation.get("Put") or {}).get("Item", {}).get("entity_type") != "owner_registry"
+    ]

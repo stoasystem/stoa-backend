@@ -653,15 +653,25 @@ def _persist_private(
         raise account_deletion_repo.AccountDeletionConflict("notification owner is required")
     generation = _generation(owner_id, item.get("account_fence_generation"), target)
     stored = {**item, "owner_id": owner_id, "account_fence_generation": generation}
+    operations = build_notification_write_transaction(
+        item=stored,
+        owner_id=owner_id,
+        generation=generation,
+        mode=mode,
+        updates=updates,
+    )
+    # A Put's actor and metadata accounts are registered by the fenced write
+    # itself; an Update's are not visible to it, so they are named here, as
+    # references - their fences do not become conditions of the write (#397).
+    operations = [
+        *operations,
+        *account_deletion_repo.registry_operations_for(
+            [{**stored, **dict(updates or {})}], operations
+        ),
+    ]
     db_table.fenced(
         owner_id,
-        build_notification_write_transaction(
-            item=stored,
-            owner_id=owner_id,
-            generation=generation,
-            mode=mode,
-            updates=updates,
-        ),
+        operations,
         generation=generation,
         table=target,
     )

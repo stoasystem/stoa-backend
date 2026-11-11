@@ -13,6 +13,7 @@ import pytest
 from botocore.exceptions import EndpointConnectionError
 
 from fakes.dynamodb import FakeTable, transaction_canceled
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -61,7 +62,9 @@ def test_a_write_behind_an_active_fence_commits_with_the_fence_condition_first(t
     assert table.rows[("THING#1", "META")]["value"] == "v"
     sent = _sent(table)
     assert sent[0] == account_deletion_repo.active_fence_condition(OWNER, 3)
-    assert sent[1:] == [_create()]
+    assert sent[1] == _create()
+    # ...and, after the caller's own, the owner registry row for the partition (#397).
+    assert sent[2:] == [{"Put": {"Item": owner_registry.registry_item(OWNER, "THING#1")}}]
 
 
 def test_operations_built_from_the_generation_carry_the_one_that_was_read(table):

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from fakes import student_evidence as fake_evidence
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa import config
 from stoa.config import Settings
@@ -471,6 +472,11 @@ def test_report_repo_put_recovery_job_persists_summary_and_targets(monkeypatch):
         ],
     )
 
+    # First the targeted student's owner registry row (#397), then the job.
+    assert table.calls[0] == {
+        "Item": owner_registry.registry_item("student-1", "REPORT_RECOVERY_JOB#job-1")
+    }
+    table.calls.pop(0)
     assert table.calls[0] == {
         "Item": {
             "PK": "REPORT_RECOVERY_JOB#job-1",

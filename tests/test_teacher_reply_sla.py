@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from fakes.dynamodb import FakeTable
+from fakes.dynamodb import FakeTable, without_owner_registry
 from stoa.db import table as db_table
 from stoa.routers import admin, teachers
 from stoa.services import help_requests
@@ -147,7 +147,7 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
     assert holder["Key"] == {"PK": "CONV#conv-1", "SK": "HELP"}
     assert "teacher_id = :teacher" in holder["ConditionExpression"]
     assert holder["ExpressionAttributeValues"][":teacher"] == "teacher-1"
-    note, message = (op["Put"]["Item"] for op in captured if "Put" in op)
+    note, message = (op["Put"]["Item"] for op in without_owner_registry(captured) if "Put" in op)
     assert note["teacher_response_format"] == "stoa_teacher_reply_v1"
     assert message["teacher_response_rich"]["blocks"][1]["type"] == "formula"
 

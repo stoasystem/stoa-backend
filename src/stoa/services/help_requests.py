@@ -1541,6 +1541,15 @@ def _write(
         fences[str(teacher["teacherId"])] = int(teacher["accountFenceGeneration"])
         operations.extend(teacher_dispatch_service.teacher_assignment_conditions(dict(teacher)))
     operations.extend(extra)
+    # The request names its teachers (`teacher_id`, `dispatched_teacher_id`,
+    # `previous_dispatch_teacher_ids`) in an Update the fenced write cannot
+    # read, and `_record_no_candidate` writes without any fence: register each
+    # named account as a reference here, without making its fence a condition
+    # of the write (#397).
+    merged = {**record, **changes}
+    merged.setdefault("entity_type", ENTITY_TYPE)
+    merged["PK"] = operations[0]["Update"]["Key"]["PK"]
+    operations.extend(account_deletion_repo.registry_operations_for([merged], operations))
     try:
         if fences:
             owner, *others = fences

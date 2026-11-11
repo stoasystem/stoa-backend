@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from fakes.dynamodb import as_stored as _as_stored, from_wire
+from fakes.dynamodb import as_stored as _as_stored, from_wire, without_owner_registry
 
 from stoa.db.repositories import checkout_command_repo
 from stoa.models.billing import CheckoutCommandState, CheckoutIntent, PurchasablePlanId
@@ -48,7 +48,9 @@ class AtomicCheckoutTable:
             return {"Item": dict(item)} if item is not None else {}
 
     def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
-        operations = from_wire(TransactItems)
+        # The owner registry rows are the gateway's (#397); this double pins the
+        # repository's own shapes.
+        operations = without_owner_registry(from_wire(TransactItems))
         with self.lock:
             is_create = sum("Put" in operation for operation in operations) == 3
             if is_create and self.fail_before_create:
