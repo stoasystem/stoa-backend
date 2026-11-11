@@ -373,6 +373,12 @@ def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, Any]:
         from stoa.jobs import security_audit_retention
 
         return security_audit_retention.handler(event, _context)
+    if event.get("job") == "owner_registry_sweep":
+        # Daily, report-only (#397): every account's registry checked in one
+        # walk, and anything a deleted account left behind.
+        from stoa.jobs import owner_registry_sweep
+
+        return owner_registry_sweep.handler(event, _context)
     if event.get("job") == "upload_cleanup":
         # Every 15 minutes (#250): the upload sweep. This function already
         # cleans uploads when it deletes an account, with the same code.
