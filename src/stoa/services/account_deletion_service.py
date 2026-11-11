@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import nullcontext
 
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 import json
 import logging
@@ -39,6 +39,7 @@ from stoa.services import (
     attachment_service,
     help_requests,
     moderation_service,
+    owner_registry_sweep,
     usage_period,
 )
 
@@ -284,15 +285,50 @@ def load_registry_path_seal(path: Path | str | None = None) -> dict[str, Any]:
     return seal
 
 
-def acceptance_seal() -> dict[str, Any]:
+# How old the owner registry sweep's last clean run may be for a deletion to
+# be sealed for the registry path: a daily schedule, plus slack.
+REGISTRY_SWEEP_MAX_AGE = timedelta(hours=36)
+
+
+def registry_path_ready(*, table: Any | None = None, now: datetime | None = None) -> bool:
+    """Whether the last owner registry sweep vouches for the registry (#397).
+
+    Its result row must say the run reached the end of the table, found no
+    missing registration, and finished within `REGISTRY_SWEEP_MAX_AGE`. A
+    missing, unreadable or stale row is a no.
+    """
+    try:
+        marker = account_deletion_repo.get_row(
+            owner_registry_sweep.RUN_MARKER_KEY, table=table
+        )
+    except Exception:
+        return False
+    if not marker or marker.get("complete") is not True:
+        return False
+    if stored_int(marker.get("missing_registrations")) != 0:
+        return False
+    try:
+        completed = datetime.fromisoformat(str(marker.get("completed_at")))
+    except ValueError:
+        return False
+    if completed.tzinfo is None:
+        return False
+    return (now or datetime.now(UTC)) - completed <= REGISTRY_SWEEP_MAX_AGE
+
+
+def acceptance_seal(*, table: Any | None = None) -> dict[str, Any]:
     """The inventory a newly accepted deletion is sealed with.
 
-    v1 (full-table scans) unless `ACCOUNT_DELETION_REGISTRY_PATH` is on; turn it
-    on only once the owner registry sweep reports no missing registration. It
+    v2 (owner registry) only when `ACCOUNT_DELETION_REGISTRY_PATH` is on AND
+    the last daily sweep vouches for the registry (`registry_path_ready`);
+    otherwise v1 (full-table scans), so the switch cannot get ahead of the
+    backfill and a registry that has drifted since falls back by itself. It
     decides acceptance only: a command keeps its seal to the end (#397).
     """
     if config.settings().account_deletion_registry_path:
-        return load_registry_path_seal()
+        if registry_path_ready(table=table):
+            return load_registry_path_seal()
+        logger.warning("account_deletion_registry_path_not_ready sealing=v1")
     return load_private_store_seal()
 
 
@@ -526,7 +562,7 @@ def accept_account_deletion(
     initiator is the caller's: the route lets an account close itself, the
     operator call checks its own rules first.
     """
-    seal = acceptance_seal()
+    seal = acceptance_seal(table=table)
     fence = account_deletion_repo.get_account_fence(user_id, table=table)
     if not fence or stored_int(fence.get("generation")) is None:
         raise account_deletion_repo.AccountDeletionConflict("missing account fence")

@@ -10,8 +10,10 @@ reviewed v1 inventory unchanged, so v2 is a deterministic function of v1's bytes
 - `schema_version` -> `phase-473-private-store-inventory.v2`;
 - every branch's `handler_version` -> `HANDLER_VERSION`;
 - every row's `cursor_schema` -> `CURSOR_SCHEMA`;
-- `supersedes` names v1 by its schema and sha-256, and `seal_rule` states which
-  commands run under which inventory.
+- `supersedes` names v1 by its schema and sha-256, `seal_rule` states which
+  commands run under which inventory, and `coverage` says plainly what v2
+  inherits from v1, what it adds, and what it does not prove (the registry
+  writers are listed there, not inventoried as sinks).
 
 v1 is never rewritten: commands sealed under it (any in flight when this ships)
 finish on the scan path against those exact bytes.
@@ -50,6 +52,46 @@ SEAL_RULE = (
 )
 
 
+# What v2 does and does not prove, stated in the inventory itself (#397).
+COVERAGE = {
+    "inherited_from_v1": (
+        "branches, rows, mutation sinks, scrub and tombstone allowlists and "
+        "quiescence are v1's, reviewed against v1's pinned candidate commit; "
+        "they are not re-derived from the current tree"
+    ),
+    "proven_by_v2": (
+        "each branch reads only owner_registry.derived_partitions(owner_id) and "
+        "the partitions registered under USER#{owner_id}, strongly and by key, "
+        "and needs two clean passes over them; acceptance seals v2 only after a "
+        "complete owner registry sweep with zero missing registrations in the "
+        "last 36 hours"
+    ),
+    "not_proven": [
+        "that every current writer of a row deletion acts on registers its "
+        "partition: held by tests/test_owner_registry_unfenced_writers.py "
+        "(reviewed list) and the daily sweep, not by this inventory",
+        "rows written after the fence flips by writers outside db_table.fenced",
+        "Update operations inside fenced whose values name another account "
+        "(only Put items are read for mentions; the listed writers register "
+        "explicitly)",
+    ],
+    "registry_writers": [
+        "src/stoa/db/table.py:fenced",
+        "src/stoa/db/repositories/account_deletion_repo.py:registry_operations_for",
+        "src/stoa/db/repositories/upload_code_repo.py:put_code",
+        "src/stoa/db/repositories/report_repo.py:put_recovery_job",
+        "src/stoa/db/repositories/capability_repo.py:_apply",
+        "src/stoa/db/repositories/parent_link_repo.py:close_link",
+        "src/stoa/db/repositories/notification_repo.py:_persist_private",
+        "src/stoa/services/help_requests.py:_write",
+        "src/stoa/services/owner_registry_sweep.py:run (backfill --apply)",
+    ],
+    "registry_removers": [
+        "src/stoa/db/repositories/account_deletion_repo.py:delete_owner_registry",
+    ],
+}
+
+
 def build(v1_bytes: bytes) -> dict[str, Any]:
     payload = json.loads(v1_bytes)
     if payload.get("schema_version") != "phase-473-private-store-inventory.v1":
@@ -64,6 +106,7 @@ def build(v1_bytes: bytes) -> dict[str, Any]:
         "schema_version": "phase-473-private-store-inventory.v1",
     }
     payload["seal_rule"] = SEAL_RULE
+    payload["coverage"] = COVERAGE
     return payload
 
 

@@ -278,6 +278,29 @@
       ]
     }
   ],
+  "coverage": {
+    "inherited_from_v1": "branches, rows, mutation sinks, scrub and tombstone allowlists and quiescence are v1's, reviewed against v1's pinned candidate commit; they are not re-derived from the current tree",
+    "not_proven": [
+      "that every current writer of a row deletion acts on registers its partition: held by tests/test_owner_registry_unfenced_writers.py (reviewed list) and the daily sweep, not by this inventory",
+      "rows written after the fence flips by writers outside db_table.fenced",
+      "Update operations inside fenced whose values name another account (only Put items are read for mentions; the listed writers register explicitly)"
+    ],
+    "proven_by_v2": "each branch reads only owner_registry.derived_partitions(owner_id) and the partitions registered under USER#{owner_id}, strongly and by key, and needs two clean passes over them; acceptance seals v2 only after a complete owner registry sweep with zero missing registrations in the last 36 hours",
+    "registry_removers": [
+      "src/stoa/db/repositories/account_deletion_repo.py:delete_owner_registry"
+    ],
+    "registry_writers": [
+      "src/stoa/db/table.py:fenced",
+      "src/stoa/db/repositories/account_deletion_repo.py:registry_operations_for",
+      "src/stoa/db/repositories/upload_code_repo.py:put_code",
+      "src/stoa/db/repositories/report_repo.py:put_recovery_job",
+      "src/stoa/db/repositories/capability_repo.py:_apply",
+      "src/stoa/db/repositories/parent_link_repo.py:close_link",
+      "src/stoa/db/repositories/notification_repo.py:_persist_private",
+      "src/stoa/services/help_requests.py:_write",
+      "src/stoa/services/owner_registry_sweep.py:run (backfill --apply)"
+    ]
+  },
   "exclusions": [
     {
       "exclusion_class": "authored_public_curriculum",

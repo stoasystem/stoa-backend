@@ -9,6 +9,7 @@ flight when the switch is turned on, keeps the full-table scan to its end.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from hashlib import sha256
 import importlib.util
 import json
@@ -59,6 +60,13 @@ def _sign_in(table: FakeTable, user_id: str) -> tuple[str, str]:
     return key
 
 
+def _vouch(table: FakeTable) -> owner_registry_sweep.SweepReport:
+    """What the daily job does: sweep, and leave its result for acceptance."""
+    report = owner_registry_sweep.run(table=table)
+    owner_registry_sweep.record_run(report, now_iso=datetime.now(UTC).isoformat(), table=table)
+    return report
+
+
 def _run(command_id: str, user_id: str, table: FakeTable) -> dict[str, Any]:
     command = quick._command(table, user_id, command_id)
     claim = quick._claim(command)
@@ -80,6 +88,10 @@ def test_v1_is_untouched_and_v2_is_derived_from_it_deterministically():
         "schema_version": "phase-473-private-store-inventory.v1",
     }
     assert v2["branch_ids"] == v1["branch_ids"]
+    # It says what it inherits and what it does not prove (#397 audit).
+    assert set(v2["coverage"]) == {"inherited_from_v1", "proven_by_v2", "not_proven",
+                                   "registry_writers", "registry_removers"}
+    assert "src/stoa/db/table.py:fenced" in v2["coverage"]["registry_writers"]
     assert {b["handler_version"] for b in v2["branch_registry"]} == {"473-36.v2"}
     assert {json.dumps(r["cursor_schema"], sort_keys=True) for r in v2["rows"]} == {
         json.dumps(module.CURSOR_SCHEMA, sort_keys=True)
@@ -93,15 +105,36 @@ def test_v1_is_untouched_and_v2_is_derived_from_it_deterministically():
     assert all(r["quiescence"]["authoritative_zero_epochs"] == 2 for r in v2["rows"])
 
 
-def test_acceptance_seals_v1_unless_the_switch_is_on(small_table, monkeypatch):
+def test_acceptance_seals_v2_only_with_the_switch_and_a_clean_recent_sweep(small_table, registry_path):
+    v2 = sha256(V2.read_bytes()).hexdigest()
+    config.install(None)
+    _vouch(small_table)
+    # Switch off: v1, whatever the sweep says.
     assert service.acceptance_seal()["inventory_sha256"] == quick.SEALED_INVENTORY_SHA256
     config.install(config.settings().model_copy(update={"account_deletion_registry_path": True}))
-    try:
-        seal = service.acceptance_seal()
-    finally:
-        config.install(None)
-    assert seal["registry_path"] is True
-    assert seal["inventory_sha256"] == sha256(V2.read_bytes()).hexdigest()
+    seal = service.acceptance_seal()
+    assert seal["registry_path"] is True and seal["inventory_sha256"] == v2
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        None,
+        {"complete": False, "missing_registrations": 0},
+        {"complete": True, "missing_registrations": 3},
+        {"complete": True, "missing_registrations": 0, "completed_at": "2026-01-01T00:00:00+00:00"},
+        {"complete": True, "missing_registrations": 0, "completed_at": "not a time"},
+    ],
+)
+def test_without_a_clean_recent_sweep_the_switch_falls_back_to_v1(small_table, registry_path, marker):
+    if marker is not None:
+        small_table.seed({**owner_registry_sweep.RUN_MARKER_KEY,
+                          "completed_at": datetime.now(UTC).isoformat(), **marker})
+
+    seal = service.acceptance_seal()
+
+    assert seal["inventory_sha256"] == quick.SEALED_INVENTORY_SHA256
+    assert not seal["registry_path"]
 
 
 small_table = quick.small_table
@@ -118,7 +151,7 @@ def test_a_registry_path_deletion_completes_without_scanning_the_table(
     # The migration order: the backfill has given the pre-existing rows their
     # registry rows before the switch was turned on.
     assert owner_registry_sweep.run(table=table, write=True).complete
-    assert owner_registry_sweep.run(table=table).registry_complete
+    assert _vouch(table).registry_complete
     command_id = quick._accept(student)
     scans_before = table.calls["scan"]
 
@@ -144,11 +177,27 @@ def test_a_registry_path_deletion_completes_without_scanning_the_table(
     # complete, quiescent after two clean passes, stamped `473-36.v2`.
 
 
+def test_without_the_backfill_the_guard_keeps_new_deletions_on_v1(
+    table: FakeTable, providers: dict[Kind, Any], registry_path
+) -> None:
+    student = lifecycle.STUDENT
+    assert not _vouch(table).registry_complete
+    command_id = quick._accept(student)
+
+    command = _run(command_id, student, table)
+
+    assert command["inventory_sha256"] == quick.SEALED_INVENTORY_SHA256
+    assert command["status"] == "complete"
+    assert quick._private_left(table) == []
+
+
 def test_the_registry_path_needs_the_registry(
     table: FakeTable, providers: dict[Kind, Any], registry_path
 ) -> None:
-    """Without the backfill a pre-existing row is out of reach: why the switch waits for the sweep."""
+    """What the guard prevents: a v2 deletion over an unbackfilled table misses rows."""
     student = lifecycle.STUDENT
+    table.seed({**owner_registry_sweep.RUN_MARKER_KEY, "complete": True,
+                "missing_registrations": 0, "completed_at": datetime.now(UTC).isoformat()})
     command_id = quick._accept(student)
 
     _run(command_id, student, table)
@@ -234,6 +283,7 @@ def test_a_v2_rounds_results_carry_the_v2_handler_version_and_registry_cursors(
 ) -> None:
     student = lifecycle.STUDENT
     owner_registry_sweep.run(table=table, write=True)
+    _vouch(table)
     command_id = quick._accept(student)
     claim = quick._claim(quick._command(table, student, command_id))
 
