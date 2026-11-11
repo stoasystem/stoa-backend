@@ -43,6 +43,12 @@ SHARED_DOUBLE = "FakeTable"
 #             019 group A converted the doubles behind the five known incidents
 #             first, and this list is what is left.
 HAND_WRITTEN_DOUBLES: dict[str, str] = {
+    "test_account_deletion_quick_fix.py::_BigTable": (
+        "script: twelve thousand rows paged in key order by binary search, to show the "
+        "attachment branch and listing get past ten thousand rows; the shared double "
+        "copies and sorts the whole table for every page, and the three passes take "
+        "some four hundred pages"
+    ),
     "test_billing_fact_repo.py::AtomicBillingTable": "repo",
     "test_conversations.py::_PagedIndexTable": "script",
     "test_table_pages.py::_Broken": (

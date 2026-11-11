@@ -1,4 +1,13 @@
-"""Scheduled discovery and continuation for durable account deletion commands."""
+"""Scheduled discovery and continuation for durable account deletion commands.
+
+Discovery has two halves (#397). Every command accepted since the pending
+registry exists has a row in `ACCOUNT_DELETION_PENDING`, and one strong query of
+that partition finds all of them on every run. Commands accepted before it - the
+ones in flight when it was deployed - have none, so the old cursor scan still
+runs too, and writes the missing registry row for each command it finds; from
+the next run on those are found by the query as well. The scan can go once no
+command without a row is left.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +15,7 @@ import asyncio
 import logging
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 from uuid import uuid4
 
 from stoa.db.repositories import account_deletion_repo
@@ -34,6 +43,10 @@ _REQUIRED_REPOSITORY_METHODS = (
 _HOLD_LIMIT = 3
 
 
+# Below this much remaining Lambda time a run claims no further command.
+MIN_REMAINING_SECONDS = 60.0
+
+
 @dataclass(frozen=True, slots=True)
 class DeletionJobSummary:
     discovered: int = 0
@@ -42,11 +55,86 @@ class DeletionJobSummary:
     retryable: int = 0
 
 
+def _registered_commands(repository: Any) -> list[dict[str, Any]]:
+    """The commands the pending registry names, each read by its key.
+
+    A row whose command is finished or gone is dropped on the way. A registry
+    that cannot be read is logged, not fatal: the scan below still runs.
+    """
+    lister = getattr(repository, "list_pending_deletions", None)
+    loader = getattr(repository, "get_deletion_command", None)
+    if not callable(lister) or not callable(loader):
+        return []
+    try:
+        entries = lister()
+    except Exception:
+        logger.warning("account_deletion_registry_unavailable")
+        return []
+    commands: list[dict[str, Any]] = []
+    for entry in entries:
+        try:
+            command = loader(entry.user_id, entry.command_id)
+        except Exception:
+            logger.warning(
+                "account_deletion_registry_read_failed command_id=%s", entry.command_id
+            )
+            continue
+        if not command or command.get("status") not in {"pending", "running"}:
+            unregister = getattr(repository, "unregister_pending_deletion", None)
+            if callable(unregister):
+                try:
+                    unregister(user_id=entry.user_id, command_id=entry.command_id)
+                except Exception:
+                    pass
+            continue
+        commands.append(dict(command))
+    return commands
+
+
+def _backfill_registry(repository: Any, commands: list[dict[str, Any]]) -> None:
+    """Register the scanned commands accepted before the registry existed."""
+    register = getattr(repository, "register_pending_deletion", None)
+    if not callable(register):
+        return
+    for command in commands:
+        user_id = command.get("user_id")
+        command_id = command.get("command_id")
+        if not isinstance(user_id, str) or not user_id:
+            continue
+        if not isinstance(command_id, str) or not command_id:
+            continue
+        try:
+            register(
+                user_id=user_id,
+                command_id=command_id,
+                accepted_at=command.get("accepted_at"),
+            )
+        except Exception:
+            logger.warning("account_deletion_registry_backfill_failed command_id=%s", command_id)
+
+
+def _claim(repository: Any, command: Mapping[str, Any]) -> Any:
+    """Claim one command on the clock as it is now, not as the run began.
+
+    A run now lasts minutes; a lease timed from its start would already have
+    run out for a command claimed late in it.
+    """
+    now = datetime.now(UTC)
+    return repository.claim_deletion_command(
+        command,
+        lease_owner=uuid4().hex,
+        now_epoch=int(now.timestamp()),
+        lease_expires_at=int((now + timedelta(minutes=2)).timestamp()),
+        now_iso=now.isoformat(),
+    )
+
+
 def run_pending_deletions(
     *,
     repository: Any = account_deletion_repo,
     service_factory: Callable[[], Any] | None = None,
     limit: int = 25,
+    remaining_seconds: Callable[[], float] | None = None,
 ) -> DeletionJobSummary:
     missing = [
         name
@@ -107,18 +195,43 @@ def run_pending_deletions(
     # every deletion stopped after the one pass the request itself did.
     if len(commands) < limit and cursor is not None and pages >= 100:
         unfinished = True
-    worker = (service_factory or (lambda: AccountDeletionService()))()
+    _backfill_registry(repository, commands)
+    # Registered commands first, then whatever the scan found that is not
+    # among them; each command is handled once per run.
+    scanned_ids = {str(command.get("command_id") or "") for command in commands}
+    registered = [
+        command
+        for command in _registered_commands(repository)
+        if str(command.get("command_id") or "") not in scanned_ids
+    ]
+    worker = (
+        service_factory
+        or (lambda: AccountDeletionService(remaining_seconds=remaining_seconds))
+    )()
     claimed = continued = retryable = 0
     failed_command_ids: list[str] = []
-    for command in commands:
+    for command in registered:
+        if remaining_seconds is not None and remaining_seconds() < MIN_REMAINING_SECONDS:
+            unfinished = True
+            break
         try:
-            claim = repository.claim_deletion_command(
-                command,
-                lease_owner=uuid4().hex,
-                now_epoch=int(now.timestamp()),
-                lease_expires_at=int((now + timedelta(minutes=2)).timestamp()),
-                now_iso=now.isoformat(),
-            )
+            claim = _claim(repository, command)
+            if not claim:
+                continue
+            claimed += 1
+            worker.continue_command(claim)
+            continued += 1
+        except Exception:
+            # Found again by the next run's query; it does not hold the scan.
+            unfinished = True
+    for command in commands:
+        if remaining_seconds is not None and remaining_seconds() < MIN_REMAINING_SECONDS:
+            # Not attempted is not failed, and the place need not hold for it:
+            # the registry row written above finds it on the next run.
+            unfinished = True
+            continue
+        try:
+            claim = _claim(repository, command)
             if not claim:
                 # Another run holds it; that is progress, not failure.
                 continue
@@ -187,19 +300,45 @@ def run_pending_deletions(
             )
     # A sweep that stopped short says so, so the next run knows to come back.
     return DeletionJobSummary(
-        len(commands), claimed, continued, retryable + (1 if unfinished else 0)
+        len(commands) + len(registered),
+        claimed,
+        continued,
+        retryable + (1 if unfinished else 0),
     )
+
+
+def _registered_command(repository: Any, command_id: str) -> dict[str, Any] | None:
+    """The command named `command_id`, found through the registry, never a scan."""
+    lister = getattr(repository, "list_pending_deletions", None)
+    loader = getattr(repository, "get_deletion_command", None)
+    if not callable(lister) or not callable(loader):
+        return None
+    for entry in lister():
+        if entry.command_id == command_id:
+            return loader(entry.user_id, entry.command_id)
+    return None
 
 
 async def continue_deletion_command(
     command_id: str, *, service: Any | None = None
 ) -> None:
-    worker = service or AccountDeletionService()
+    """The request side's share of a deletion `DELETE /auth/me` just accepted.
+
+    It used to run a whole round of every branch before the response left -
+    under Mangum a background task runs inside the request - which took 17.6 s
+    against the API's 29 s (#397). It now only tombstones the profile, which
+    gives the address back at once, and returns the lease; a few keyed reads
+    and writes whatever the size of the table. The provider revoke, the
+    identity rows and every scan are the scheduled job's, on the deletion
+    function, which alone holds the Cognito admin rights. The command is found
+    through the pending registry, by key, never by a scan; one accepted before
+    the registry is left to the schedule.
+    """
     try:
+        worker = service or AccountDeletionService()
         repository = worker.repository
-        loader = getattr(repository, "get_command_by_id", None)
-        command = loader(command_id) if callable(loader) else None
-        if not command:
+        command = _registered_command(repository, command_id)
+        if not command or command.get("status") not in {"pending", "running"}:
             return
         now = datetime.now(UTC)
         claim = repository.claim_deletion_command(
@@ -209,8 +348,11 @@ async def continue_deletion_command(
             lease_expires_at=int((now + timedelta(minutes=2)).timestamp()),
             now_iso=now.isoformat(),
         )
-        if claim:
-            await asyncio.to_thread(worker.continue_command, claim)
+        if not claim:
+            return
+        run_fast_path = getattr(worker, "run_fast_path", None)
+        if callable(run_fast_path):
+            await asyncio.to_thread(run_fast_path, claim)
     except Exception:
         # The committed command remains discoverable by the scheduled handler.
         return
@@ -237,5 +379,12 @@ def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, Any]:
         from stoa.jobs import upload_cleanup
 
         return upload_cleanup.handler(event, _context)
-    summary = run_pending_deletions(limit=min(max(int(event.get("limit", 25)), 1), 100))
+    remaining = getattr(_context, "get_remaining_time_in_millis", None)
+    remaining_seconds = (
+        (lambda: float(remaining()) / 1000.0) if callable(remaining) else None
+    )
+    summary = run_pending_deletions(
+        limit=min(max(int(event.get("limit", 25)), 1), 100),
+        remaining_seconds=remaining_seconds,
+    )
     return asdict(summary)
