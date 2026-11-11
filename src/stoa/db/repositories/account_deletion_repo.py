@@ -1868,20 +1868,21 @@ def release_deletion_command_claim(
     *,
     claim: DeletionCommandClaim,
     now_epoch: int,
-    now_iso: str,
+    updated_at: str,
     table: Any | None = None,
 ) -> DeletionCommandClaim:
     """End this run's lease now, so the next run need not wait for it to expire.
 
     Guarded exactly as the renewal is: only the holder of the current version
     can give it up. The command stays `running`, and a claim takes a running
-    command whose lease has passed (#397).
+    command whose lease has passed (#397). The time is validated as every
+    lifecycle writer's is.
     """
     if not isinstance(claim, DeletionCommandClaim):
         raise DeletionCommandClaimLost("opaque deletion claim required")
     now_epoch = _positive_int(now_epoch, "current epoch")
     released_at = _positive_int(max(now_epoch - 1, 1), "lease expiry")
-    now_iso = _valid_lifecycle_timestamp(now_iso)
+    updated_at = _valid_lifecycle_timestamp(updated_at)
     target = table or db_table.table()
     try:
         _update_item(
@@ -1906,7 +1907,7 @@ def release_deletion_command_claim(
                 ":branch_results_digest": claim.branch_results_digest,
                 ":now_epoch": now_epoch,
                 ":released": released_at,
-                ":now": now_iso,
+                ":now": updated_at,
                 ":one": 1,
             },
         )

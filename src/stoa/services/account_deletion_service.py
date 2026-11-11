@@ -2046,7 +2046,7 @@ class AccountDeletionService:
                 command,
                 claim=claim,
                 now_epoch=self.now_epoch(),
-                now_iso=self.now(),
+                updated_at=self.now(),
             )
         except Exception:
             # The lease runs out on its own; a run that could not give it back

@@ -379,6 +379,44 @@ def test_registered_commands_are_found_every_run_and_older_ones_by_the_scan(
     } == {("student-small", command_id), ("zz-legacy", "legacy-command")}
 
 
+@pytest.mark.parametrize("value", ["", "not-a-time", "2026-11-11T10:00:00", None])
+def test_the_lease_release_refuses_an_invalid_time(small_table: FakeTable, value: Any) -> None:
+    command_id = _accept("student-small")
+    claim = _claim(_command(small_table, "student-small", command_id))
+    before = dict(_command(small_table, "student-small", command_id))
+
+    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
+        account_deletion_repo.release_deletion_command_claim(
+            before, claim=claim, now_epoch=int(datetime.now(UTC).timestamp()), updated_at=value
+        )
+
+    assert _command(small_table, "student-small", command_id) == before
+
+
+def test_only_the_lease_holder_can_release_it(small_table: FakeTable) -> None:
+    command_id = _accept("student-small")
+    claim = _claim(_command(small_table, "student-small", command_id))
+    command = dict(_command(small_table, "student-small", command_id))
+    stale = account_deletion_repo.DeletionCommandClaim(
+        command_id=claim.command_id, generation=claim.generation, lease_owner="someone-else",
+        lease_expires_at=claim.lease_expires_at, command_version=claim.command_version,
+        branch_results_digest=claim.branch_results_digest, user_id=claim.user_id,
+    )
+    now = datetime.now(UTC)
+
+    with pytest.raises(account_deletion_repo.DeletionCommandClaimLost):
+        account_deletion_repo.release_deletion_command_claim(
+            command, claim=stale, now_epoch=int(now.timestamp()), updated_at=now.isoformat()
+        )
+    released = account_deletion_repo.release_deletion_command_claim(
+        command, claim=claim, now_epoch=int(now.timestamp()), updated_at=now.isoformat()
+    )
+
+    assert released.lease_expires_at < int(now.timestamp())
+    stored = _command(small_table, "student-small", command_id)
+    assert stored["status"] == "running" and stored["command_version"] == claim.command_version + 1
+
+
 def test_the_registry_is_read_with_one_strong_query(small_table: FakeTable) -> None:
     _accept("student-small")
     before = len(small_table.requests)
