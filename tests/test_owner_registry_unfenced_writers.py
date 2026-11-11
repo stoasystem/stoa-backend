@@ -107,6 +107,8 @@ def scan(root: Path) -> set[str]:
 
 REVIEWED: dict[str, str] = {
     "src/stoa/db/repositories/account_deletion_repo.py::advance_deletion_scan_cursor": "deletion_flow",
+    # The owner registry sweep's own result row (JOB#owner_registry_sweep): counts only.
+    "src/stoa/services/owner_registry_sweep.py::record_run": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::begin_account_deletion": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::claim_deletion_command": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::complete_provider_revoke_debt": "deletion_flow",
