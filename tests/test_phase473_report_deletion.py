@@ -378,3 +378,51 @@ def test_report_branches_restart_and_require_two_later_clean_epochs(monkeypatch:
     assert [item.epoch for item in results] == [0, 0, 1, 2]
     assert results[-1].quiescent is True
     assert asdict(results[-1])["debt_counts"] == {}
+
+
+def test_rows_that_are_not_this_accounts_never_count_as_unresolved_lineage() -> None:
+    """#397: one audit-retention row kept every deletion in production from completing.
+
+    The report sweep counted as "unresolved lineage" any row of the support,
+    recovery or audit-retention families that was not the deleting account's -
+    including rows that name another student, and audit-retention bookkeeping,
+    which names no student at all. Nothing ever resolves such a row, so the
+    report and support branches stayed dirty forever. Only a support or
+    recovery row that names nobody can still be this account's.
+    """
+    scan = _contract("scan_report_private_rows")
+    rows = [
+        # Audit-retention bookkeeping: digests and counts, no student.
+        {"PK": "AUDIT_RETENTION#manifest-1", "SK": "IMMUTABLE_MANIFEST", "created_by": "admin-1"},
+        {"PK": "AUDIT_RETENTION#manifest-1", "SK": "AUDIT#1#event", "actor": "admin-1"},
+        # Another student's rows.
+        {"PK": "SUPPORT_HANDOFF_DELIVERY#d-1", "SK": "SUMMARY", "student_id": "student-other"},
+        {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "TARGET#00000#t", "student_id": "student-other"},
+        {"PK": "SUPPORT_HANDOFF#p-1", "SK": "AUDIT#1#event", "owner_id": "student-other"},
+        # This student's.
+        {"PK": "SUPPORT_HANDOFF_DELIVERY#d-2", "SK": "SUMMARY", "student_id": STUDENT_ID},
+    ]
+
+    class _Table:
+        def scan(self, **_kwargs: Any) -> dict[str, Any]:
+            return {"Items": rows}
+
+    page = scan(STUDENT_ID, table=_Table(), maximum_pages=1)
+    assert [row["PK"] for row in page.items] == ["SUPPORT_HANDOFF_DELIVERY#d-2"]
+    assert page.unresolved == 0
+
+
+def test_a_support_or_recovery_row_that_names_nobody_is_still_unresolved() -> None:
+    scan = _contract("scan_report_private_rows")
+    rows = [
+        {"PK": "SUPPORT_HANDOFF_DELIVERY#d-3", "SK": "CRM_MESSAGE#1"},
+        {"PK": "REPORT_RECOVERY_JOB#job-2", "SK": "TARGET#00000#t", "student_id": ""},
+    ]
+
+    class _Table:
+        def scan(self, **_kwargs: Any) -> dict[str, Any]:
+            return {"Items": rows}
+
+    page = scan(STUDENT_ID, table=_Table(), maximum_pages=1)
+    assert page.items == ()
+    assert page.unresolved == 2
