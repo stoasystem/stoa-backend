@@ -2005,7 +2005,15 @@ def scan_report_private_rows(
                 continue
             if item.get("student_id") == owner_id or item.get("owner_id") == owner_id:
                 rows.append(item)
-            elif pk.startswith(("SUPPORT_", "AUDIT_RETENTION#", "REPORT_RECOVERY_JOB#")):
+            elif _names_an_account(item):
+                # Someone else's row: not this deletion's, and not in doubt.
+                continue
+            elif pk.startswith(("SUPPORT_", "REPORT_RECOVERY_JOB#")):
+                # A support or recovery row that names nobody could be this
+                # account's. Audit-retention rows are not counted (#397): they
+                # are bookkeeping about a manifest (digests, counts, the
+                # operator), carry no student by construction, and nothing ever
+                # resolves them - one such row kept every deletion dirty.
                 unresolved += 1
         if page.last_key is None:
             return ReportPrivatePage(tuple(rows), None, unresolved)
@@ -2015,6 +2023,14 @@ def scan_report_private_rows(
         seen.add(marker)
         current = page.last_key
     return ReportPrivatePage(tuple(rows), current, unresolved)
+
+
+def _names_an_account(item: Mapping[str, object]) -> bool:
+    """Whether a report-family row says whose it is (`student_id` or `owner_id`)."""
+    return any(
+        isinstance(item.get(field), str) and str(item[field]).strip()
+        for field in ("student_id", "owner_id")
+    )
 
 
 def scrub_report_private_row(
