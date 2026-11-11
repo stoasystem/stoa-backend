@@ -26,6 +26,8 @@ import zipfile
 
 MANIFEST_NAME = ".stoa-build-manifest.json"
 SECURITY_INVENTORY_NAME = "phase-473-private-store-inventory.json"
+# The owner registry path's inventory (#397); v1 stays for commands sealed under it.
+SECURITY_INVENTORY_V2_NAME = "phase-473-private-store-inventory.v2.json"
 RUNTIME_TARGET = "python3.12"
 PYTHON_VERSION = "3.12"
 PLATFORM = "manylinux_2_28_aarch64"
@@ -517,12 +519,16 @@ def copy_security_inventory(repo_root: Path, package_dir: Path) -> None:
     answered `identity_conflict` -- a message about identity, for a bundle that
     was missing a document.
     """
-    inventory = repo_root / "docs" / "security" / SECURITY_INVENTORY_NAME
-    if not inventory.is_file():
-        raise SystemExit(f"missing sealed inventory: {inventory}")
     target = package_dir / "security_inventory"
     target.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(inventory, target / SECURITY_INVENTORY_NAME)
+    for name in (SECURITY_INVENTORY_NAME, SECURITY_INVENTORY_V2_NAME):
+        inventory = repo_root / "docs" / "security" / name
+        if not inventory.is_file():
+            if name == SECURITY_INVENTORY_V2_NAME:
+                # Only the registry path needs it, and it is off without it.
+                continue
+            raise SystemExit(f"missing sealed inventory: {inventory}")
+        shutil.copy2(inventory, target / name)
 
 
 def compile_bytecode(dist_dir: Path) -> None:

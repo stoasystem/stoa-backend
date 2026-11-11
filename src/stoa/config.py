@@ -468,6 +468,12 @@ class Settings(BaseSettings):
     websocket_live_smoke_passed: bool = False
     websocket_stale_cleanup_enabled: bool = True
 
+    # Account deletion (#397): seal newly accepted deletions with the v2
+    # inventory, whose branches read the owner registry instead of scanning the
+    # table. Off until the owner registry sweep reports no missing registration;
+    # commands keep the inventory they were accepted under either way.
+    account_deletion_registry_path: bool = False
+
     # Provider-backed notifications (v4.9)
     notification_email_provider: str = ""
     notification_email_provider_approved: bool = False

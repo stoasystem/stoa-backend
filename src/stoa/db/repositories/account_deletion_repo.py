@@ -10,7 +10,10 @@ from decimal import Decimal
 from datetime import datetime
 from hashlib import sha256
 import json
+from bisect import bisect_right
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from itertools import islice
 from typing import Any, Iterable, Mapping, Protocol, runtime_checkable
 
@@ -760,7 +763,9 @@ def scan_owned_private_rows(
         maximum_pages=maximum_pages,
     ):
         for item in page.items:
-            if not _targets_user(item, user_id):
+            if not _targets_user(item, user_id) and not (
+                _REGISTRY_SCOPE.get() is not None and is_sign_in_session(item, user_id)
+            ):
                 continue
             identity = (str(item.get("PK") or ""), str(item.get("SK") or ""))
             if not all(identity):
@@ -799,8 +804,17 @@ def sweep_pages(
     refuse = conflict or AccountDeletionConflict
     if page_limit is not None:
         request["Limit"] = page_limit
+    scope = _REGISTRY_SCOPE.get()
     try:
-        source = db_table.pages("scan", start=cursor, table=table, ConsistentRead=True, **request)
+        if scope is not None:
+            # A command sealed under the v2 inventory (#397): the same pages,
+            # read from the account's own and registered partitions instead
+            # of the whole table.
+            source = registry_pages(scope, start=cursor, table=table, **request)
+        else:
+            source = db_table.pages(
+                "scan", start=cursor, table=table, ConsistentRead=True, **request
+            )
     except db_table.PageTokenInvalid as exc:
         raise refuse(f"invalid {name} cursor") from exc
     except db_table.TableUnavailable as exc:
@@ -814,6 +828,170 @@ def sweep_pages(
         except db_table.TableUnavailable as exc:
             raise refuse(f"malformed {name} page") from exc
         yield page
+
+
+# -- the owner registry path (#397) ---------------------------------------------------
+
+# A position after the last row of one partition. Never sent to the table: a
+# cursor holding it resumes at the next partition.
+PARTITION_DONE = "￿REGISTRY_PARTITION_DONE"
+
+REGISTRY_PAGE_ROWS = 100
+
+
+@dataclass(frozen=True, slots=True)
+class RegistryScope:
+    """Where a v2 deletion reads: every partition that can hold the account's rows.
+
+    The derived partitions (`owner_registry.derived_partitions`) and every
+    partition registered under `USER#{id}` (`OWNS#` and `REFERENCED_IN#`), in
+    sorted order, so a `{PK, SK}` cursor is a position in this list and still
+    a key the gateway checks like any other.
+    """
+
+    user_id: str
+    partitions: tuple[str, ...]
+
+
+_REGISTRY_SCOPE: ContextVar[RegistryScope | None] = ContextVar(
+    "account_deletion_registry_scope", default=None
+)
+
+
+def owner_partitions(user_id: str, *, table: Any | None = None) -> tuple[str, ...]:
+    """The account's derived partitions and its registry, read strongly.
+
+    Once the fence has left `active` no fenced write for the account can land,
+    so no registry row can be added: the set read here is closed.
+    """
+    registered = {
+        str(row["registered_pk"])
+        for row in query_account_partition(user_id, table=table)
+        if owner_registry.is_registry_row(row)
+        and isinstance(row.get("registered_pk"), str)
+        and row["registered_pk"]
+    }
+    return tuple(sorted(set(owner_registry.derived_partitions(user_id)) | registered))
+
+
+def current_registry_scope() -> RegistryScope | None:
+    return _REGISTRY_SCOPE.get()
+
+
+@contextmanager
+def registry_scope(user_id: str, *, table: Any | None = None) -> Iterator[RegistryScope]:
+    """Within it, every deletion sweep reads the account's partitions, not the table."""
+    scope = RegistryScope(_required(user_id, "user_id"), owner_partitions(user_id, table=table))
+    token = _REGISTRY_SCOPE.set(scope)
+    try:
+        yield scope
+    finally:
+        _REGISTRY_SCOPE.reset(token)
+
+
+def registry_pages(
+    scope: RegistryScope,
+    *,
+    start: Mapping[str, object] | None,
+    table: object | None,
+    **request: object,
+) -> Iterator[db_table.Page]:
+    """The pages of one pass over `scope`'s partitions, each queried strongly.
+
+    `request` is what a sweep would have scanned with (`FilterExpression`,
+    its names and values, `Limit`); each partition is queried with the same.
+    Small partitions are gathered into one page of up to `Limit` (or
+    `REGISTRY_PAGE_ROWS`) rows. A page ends where a partition's query stopped,
+    or after a whole partition (`SK` = `PARTITION_DONE`); the last page has no
+    `last_key`. A cursor naming a partition the scope does not hold resumes at
+    the next one in order.
+    """
+    request = {name: value for name, value in request.items() if name != "ConsistentRead"}
+    wanted = int(request.get("Limit") or REGISTRY_PAGE_ROWS)  # type: ignore[call-overload]
+    partitions = scope.partitions
+    resume: dict[str, Any] | None = None
+    if start is None:
+        index = 0
+    else:
+        position = db_table.page_key(start)
+        pk, sk = str(position["PK"]), str(position["SK"])
+        if sk != PARTITION_DONE and pk in partitions:
+            index, resume = partitions.index(pk), {"PK": pk, "SK": sk}
+        else:
+            index = bisect_right(partitions, pk)
+    target = table if table is not None else db_table.table()
+    if index >= len(partitions):
+        yield db_table.Page([], None)
+        return
+    while index < len(partitions):
+        items: list[dict[str, Any]] = []
+        last: dict[str, Any] | None = None
+        while index < len(partitions) and len(items) < wanted:
+            pk = partitions[index]
+            page = next(
+                db_table.pages(
+                    "query",
+                    start=resume,
+                    table=target,
+                    ConsistentRead=True,
+                    **_partition_query(pk, request),
+                )
+            )
+            items.extend(page.items)
+            if page.last_key is not None:
+                resume = dict(page.last_key)
+                last = resume
+                break
+            index, resume = index + 1, None
+            last = {"PK": pk, "SK": PARTITION_DONE}
+        yield db_table.Page(items, last if index < len(partitions) else None)
+
+
+def _partition_query(pk: str, request: Mapping[str, object]) -> dict[str, object]:
+    query = dict(request)
+    if query.get("FilterExpression") is not None and not isinstance(
+        query["FilterExpression"], str
+    ):
+        from boto3.dynamodb.conditions import Key
+
+        query["KeyConditionExpression"] = Key("PK").eq(pk)
+        return query
+    query["KeyConditionExpression"] = "#registry_pk = :registry_pk"
+    query["ExpressionAttributeNames"] = {
+        **dict(query.get("ExpressionAttributeNames") or {}),  # type: ignore[call-overload]
+        "#registry_pk": "PK",
+    }
+    query["ExpressionAttributeValues"] = {
+        **dict(query.get("ExpressionAttributeValues") or {}),  # type: ignore[call-overload]
+        ":registry_pk": pk,
+    }
+    return query
+
+
+def is_sign_in_session(item: Mapping[str, Any], user_id: str) -> bool:
+    """A `USER#{id}/SIGNIN#...` refresh-token custody row of this account.
+
+    It carries no owner attribute, so the v1 scan never matched it and only its
+    TTL removed it. The v2 path deletes it with the identity rows.
+    """
+    return item.get("PK") == f"USER#{user_id}" and str(item.get("SK") or "").startswith(
+        "SIGNIN#"
+    )
+
+
+def delete_owner_registry(user_id: str, *, table: Any | None = None) -> int:
+    """Remove the account's registry rows, once its deletion is final."""
+    target = table or db_table.table()
+    removed = 0
+    for row in query_account_partition(user_id, table=target):
+        if not owner_registry.is_registry_row(row):
+            continue
+        try:
+            db_table.delete(table=target, Key={"PK": row["PK"], "SK": row["SK"]})
+        except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
+            raise AccountDeletionConflict("owner registry cleanup unavailable") from exc
+        removed += 1
+    return removed
 
 
 def continuation_key(value: object, name: str = "continuation") -> dict[str, str]:
