@@ -684,6 +684,14 @@ def _apply(table: object, operations: list[_CapabilityOperation]) -> None:
             put["ExpressionAttributeNames"] = put_names
             put["ExpressionAttributeValues"] = put_values
         transact_items.append({"Put": put})
+    # Grants live in the grantee's partition but name their student in
+    # `scope`; deletion of that student takes them (`_targets_user`), so the
+    # student registers the grantee's partition in the same write (#397).
+    transact_items.extend(
+        account_deletion_repo.registry_operations_for(
+            [op["Put"]["Item"] for op in transact_items if "Put" in op], transact_items
+        )
+    )
     try:
         db_table.transact(transact_items, table=table)
     except db_table.WriteRefused as exc:

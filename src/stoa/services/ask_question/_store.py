@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 from itertools import islice
+from typing import Any
 
 from stoa.db import table as db_table
 from stoa.db.repositories import attachment_repo
@@ -107,27 +108,45 @@ def record_generation_progress(
     them, so a reader asking about one command never sees another's.
     """
     target = table or db_table.table()
-    update_item = getattr(target, "update_item", None)
-    if not callable(update_item):
-        return False
+    values: dict[str, Any] = {
+        ":steps": steps,
+        ":owner": owner_id,
+        ":entity": "conversation_generation_progress",
+        ":now": now_iso,
+        ":expires": expires_at,
+    }
+    assignments = [
+        "steps=:steps", "owner_id=:owner", "entity_type=:entity",
+        "updated_at=:now", "expires_at=:expires",
+    ]
+    removed: list[str] = []
+    # A transaction drops `None` values, so an absent command or attempt is
+    # removed rather than set to NULL; readers treat both as absent.
+    for field, token, value in (("command_id", ":command", command_id), ("attempt", ":attempt", attempt)):
+        if value is None:
+            removed.append(field)
+        else:
+            assignments.append(f"{field}={token}")
+            values[token] = value
+    expression = "SET " + ", ".join(assignments)
+    if removed:
+        expression += " REMOVE " + ", ".join(removed)
+    update: dict[str, Any] = {
+        "Key": generation_progress_key(conversation_id),
+        "UpdateExpression": expression,
+        "ExpressionAttributeValues": values,
+    }
     try:
-        update_item(
-            Key=generation_progress_key(conversation_id),
-            UpdateExpression=(
-                "SET steps=:steps, owner_id=:owner, entity_type=:entity, "
-                "updated_at=:now, expires_at=:expires, command_id=:command, "
-                "attempt=:attempt"
-            ),
-            ExpressionAttributeValues={
-                ":steps": steps,
-                ":owner": owner_id,
-                ":entity": "conversation_generation_progress",
-                ":now": now_iso,
-                ":expires": expires_at,
-                ":command": command_id,
-                ":attempt": attempt,
-            },
-        )
+        if db_table.transactional(target):
+            # Behind the owner's fence, at no read's cost (#397): a worker that
+            # outlives the request can no longer recreate this row - which
+            # names the owner - after the account is deleted.
+            db_table.fenced(owner_id, [{"Update": update}], any_generation=True, table=target)
+        else:
+            update_item = getattr(target, "update_item", None)
+            if not callable(update_item):
+                return False
+            update_item(**update)
     except Exception:
         return False
     return True

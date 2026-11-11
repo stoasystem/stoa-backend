@@ -27,7 +27,7 @@ rows on those, and a registry row is bookkeeping, not the account's data.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 ENTITY_TYPE = "owner_registry"
@@ -140,29 +140,43 @@ def registry_operations(
     owner: str,
     references: Sequence[str],
     operations: Sequence[Mapping[str, Any]],
+    *,
+    mentions: Callable[[Mapping[str, Any]], Mapping[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     """The registry Puts a fenced write of `operations` carries.
 
     One per (account, role, partition): the owner for every partition written
     that is not one of its own derived partitions, each `also=` account the
-    same as a reference. A key the operations themselves already touch is left
-    out, so a transaction never names one item twice.
+    same as a reference, and - with `mentions` - every account a Put's item
+    names in the role `mentions` gives it (the accounts deletion's matcher
+    would take the row for: a notification's actor, a grant's student). A key
+    the operations themselves already touch is left out, so a transaction
+    never names one item twice.
     """
-    partitions = written_partitions(operations)
+    pairs: list[tuple[str, str, str]] = []
+    for partition in written_partitions(operations):
+        pairs.append((owner, ROLE_OWNER, partition))
+        pairs.extend((other, ROLE_REFERENCE, partition) for other in references)
+    if mentions is not None:
+        for operation in operations:
+            body = operation.get("Put") if isinstance(operation, Mapping) else None
+            item = body.get("Item") if isinstance(body, Mapping) else None
+            if not isinstance(item, Mapping) or not isinstance(item.get("PK"), str):
+                continue
+            for account, role in mentions(item).items():
+                pairs.append((account, role, item["PK"]))
     taken = {_operation_key(operation) for operation in operations}
     wanted: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
-    for account, role in ((owner, ROLE_OWNER), *((other, ROLE_REFERENCE) for other in references)):
-        own = set(derived_partitions(account))
-        for partition in partitions:
-            if partition in own:
-                continue
-            item = registry_item(account, partition, role)
-            key = (item["PK"], item["SK"])
-            if key in seen or key in taken:
-                continue
-            seen.add(key)
-            wanted.append({"Put": {"Item": item}})
+    for account, role, partition in pairs:
+        if is_derived_for(partition, account):
+            continue
+        item = registry_item(account, partition, role)
+        key = (item["PK"], item["SK"])
+        if key in seen or key in taken:
+            continue
+        seen.add(key)
+        wanted.append({"Put": {"Item": item}})
     return wanted
 
 

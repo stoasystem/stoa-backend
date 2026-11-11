@@ -181,7 +181,11 @@ def test_a_parent_link_registers_each_side_where_the_other_wrote(table):
     )
 
     # Each side's own partition is derived; the other side's is registered as a reference.
-    assert _registry(table, PARENT) == {f"OWNS#STUDENT#{STUDENT}": "owner"}
+    assert _registry(table, PARENT) == {
+        f"OWNS#STUDENT#{STUDENT}": "owner",
+        # ...and named by the reverse row's `PARENT#` sort key.
+        f"REFERENCED_IN#STUDENT#{STUDENT}": "reference",
+    }
     assert _registry(table, STUDENT) == {f"REFERENCED_IN#PARENT#{PARENT}": "reference"}
 
 
@@ -322,3 +326,112 @@ def test_a_recovery_job_registers_its_partition_for_each_targeted_student(table)
 
     assert _registry(table, STUDENT) == {"OWNS#REPORT_RECOVERY_JOB#job-1": "owner"}
     assert _registry(table, TEACHER) == {"OWNS#REPORT_RECOVERY_JOB#job-1": "owner"}
+
+
+# -- accounts a row names (#397 audit) ----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("item", "expected"),
+    [
+        ({"owner_id": STUDENT}, {STUDENT: "owner"}),
+        ({"PK": "PARENT#p", "SK": f"CHILD#{STUDENT}"}, {STUDENT: "reference"}),
+        ({"scope": f"student:{STUDENT}"}, {STUDENT: "reference"}),
+        ({"scope": f"student/{STUDENT}"}, {STUDENT: "reference"}),
+        ({"scope": "global"}, {}),
+        (
+            {"entity_type": "notification_event", "owner_id": STUDENT, "actor_id": TEACHER,
+             "metadata": {"teacher_id": PARENT}},
+            {STUDENT: "owner", TEACHER: "reference", PARENT: "reference"},
+        ),
+        (
+            {"entity_type": "help_request", "student_id": STUDENT, "dispatched_teacher_id": TEACHER,
+             "previous_dispatch_teacher_ids": [PARENT]},
+            {STUDENT: "owner", TEACHER: "reference", PARENT: "reference"},
+        ),
+        ({"children": [{"student_id": STUDENT}]}, {STUDENT: "reference"}),
+    ],
+)
+def test_mentions_are_exactly_what_the_deletion_matcher_takes(item, expected):
+    assert account_deletion_repo.mentioned_accounts(item) == expected
+    for account in expected:
+        assert account_deletion_repo._targets_user({"SK": "X", **item}, account)
+
+
+def test_a_fenced_put_registers_every_account_its_row_names(table):
+    event = {
+        "PK": "NOTIFICATION#e1", "SK": "EVENT", "entity_type": "notification_event",
+        "owner_id": STUDENT, "actor_id": TEACHER, "metadata": {"teacher_id": TEACHER},
+    }
+
+    db_table.fenced(STUDENT, [_put(event["PK"], event["SK"], **event)], table=table)
+
+    assert _registry(table, STUDENT) == {"OWNS#NOTIFICATION#e1": "owner"}
+    # The teacher's fence is not a condition of the write; only its reference row.
+    assert _registry(table, TEACHER) == {"REFERENCED_IN#NOTIFICATION#e1": "reference"}
+    (sent,) = _transactions(table)
+    assert [op for op in sent if "ConditionCheck" in op] == [
+        account_deletion_repo.active_fence_condition(STUDENT, 3)
+    ]
+
+
+def test_a_capability_grant_registers_the_student_it_is_scoped_to(table):
+    from stoa.db.repositories import capability_repo
+
+    grant = {"PK": f"USER#{TEACHER}", "SK": "CAPABILITY#teacher_support#1", "scope": f"student:{STUDENT}",
+             "entity_type": "capability_grant"}
+    capability_repo._apply(table, [{"kind": "put", "item": grant, "condition": "absent"}])
+
+    assert _registry(table, STUDENT) == {f"REFERENCED_IN#USER#{TEACHER}": "reference"}
+
+
+def test_closing_a_link_registers_each_side_for_the_other(table):
+    from stoa.db.repositories import parent_link_repo
+
+    side = {"parent_id": PARENT, "student_id": STUDENT, "status": "active",
+            "entity_type": parent_link_repo.ENTITY_TYPE}
+    forward = {**parent_link_repo.parent_side_key(PARENT, STUDENT), **side}
+    reverse = {**parent_link_repo.student_side_key(STUDENT, PARENT), **side}
+    table.seed(forward, reverse)
+    parent_link_repo.close_link(
+        parent_id=PARENT, student_id=STUDENT, parent_side=forward, student_side=reverse,
+        updated_by="admin-1", link_updated_at="2026-11-11T10:00:00+00:00", table=table,
+    )
+
+    assert table.rows[(f"PARENT#{PARENT}", f"CHILD#{STUDENT}")]["status"] != "active"
+    assert _registry(table, STUDENT) == {f"OWNS#PARENT#{PARENT}": "owner"}
+    assert _registry(table, PARENT) == {f"REFERENCED_IN#STUDENT#{STUDENT}": "reference"}
+
+
+def test_a_help_request_written_without_a_fence_registers_its_lapsed_teachers(table):
+    from stoa.services import help_requests
+
+    table.seed({"PK": "CONV#c1", "SK": "HELP", "conversation_id": "c1", "student_id": STUDENT,
+                "entity_type": "help_request", "escalation_status": "pending", "version": 1})
+    record = dict(table.rows[("CONV#c1", "HELP")])
+
+    help_requests._write(
+        record, {"previous_dispatch_teacher_ids": [TEACHER], "dispatch_status": "no_candidate"},
+        table=table,
+    )
+
+    assert table.rows[("CONV#c1", "HELP")]["previous_dispatch_teacher_ids"] == [TEACHER]
+    assert _registry(table, TEACHER) == {"REFERENCED_IN#CONV#c1": "reference"}
+
+
+def test_generation_progress_cannot_be_written_once_the_owner_is_closing(table):
+    from stoa.services.ask_question import _store
+
+    def write() -> bool:
+        return _store.record_generation_progress(
+            "c1", owner_id=STUDENT, steps=["a"], now_iso="2026-11-11T10:00:00+00:00",
+            expires_at=1, table=table,
+        )
+
+    assert write() is True
+    assert table.rows[("CONV#c1", "GENERATION")]["owner_id"] == STUDENT
+    del table.rows[("CONV#c1", "GENERATION")]
+    table.seed(_fence(STUDENT, status="deletion_pending"))
+
+    assert write() is False
+    assert ("CONV#c1", "GENERATION") not in table.rows

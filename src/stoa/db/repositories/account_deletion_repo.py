@@ -15,6 +15,7 @@ from itertools import islice
 from typing import Any, Iterable, Mapping, Protocol, runtime_checkable
 
 
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_email_claim_repo
@@ -2366,6 +2367,115 @@ def _targets_user(item: Mapping[str, Any], user_id: str) -> bool:
                 return True
     scope = str(item.get("scope") or "")
     return scope in {f"student:{user_id}", f"student/{user_id}", user_id}
+
+
+# -- who a row names, for the owner registry (#397) ------------------------------------
+
+_OWNER_FIELDS = (
+    "owner_id",
+    "student_id",
+    "user_id",
+    "child_id",
+    "child_user_id",
+    "target_user_id",
+)
+
+
+def mentioned_accounts(item: Mapping[str, Any]) -> dict[str, str]:
+    """Every account `_targets_user` would take this row for, with its registry role.
+
+    The inverse of `_targets_user`, field for field: the direct owner fields
+    are the `owner` role, everything else (link SKs, the reviewed cross-account
+    references, child summaries, a `student:` scope) is a `reference`. A bare
+    `scope` equal to an id is not read back: any scope string would pass for
+    an account. Kept next to `_targets_user` so the two change together.
+    """
+    found: dict[str, str] = {}
+
+    def add(value: object, role: str) -> None:
+        if isinstance(value, str) and value.strip():
+            account = value.strip()
+            if found.get(account) != owner_registry.ROLE_OWNER:
+                found[account] = role
+
+    for field in _OWNER_FIELDS:
+        add(item.get(field), owner_registry.ROLE_OWNER)
+    sk = str(item.get("SK") or "")
+    for prefix in ("CHILD#", "PARENT#"):
+        if sk.startswith(prefix):
+            add(sk[len(prefix) :], owner_registry.ROLE_REFERENCE)
+    scalar_fields, collection_fields, metadata_fields = (
+        CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY.get(
+            str(item.get("entity_type") or ""),
+            (frozenset(), frozenset(), frozenset()),
+        )
+    )
+    for field in scalar_fields:
+        add(item.get(field), owner_registry.ROLE_REFERENCE)
+    for field in collection_fields:
+        value = item.get(field)
+        if isinstance(value, (list, tuple, set, frozenset)):
+            for member in value:
+                add(member, owner_registry.ROLE_REFERENCE)
+    metadata = item.get("metadata")
+    if isinstance(metadata, Mapping):
+        for field in metadata_fields:
+            add(metadata.get(field), owner_registry.ROLE_REFERENCE)
+    for field in ("children", "child_summaries", "student_summaries"):
+        value = item.get(field)
+        entries: Iterable[object] = ()
+        if isinstance(value, Mapping):
+            for key in value:
+                add(key, owner_registry.ROLE_REFERENCE)
+            entries = value.values()
+        elif isinstance(value, (list, tuple)):
+            entries = value
+        for entry in entries:
+            if isinstance(entry, Mapping):
+                for name in ("user_id", "student_id", "child_id"):
+                    add(entry.get(name), owner_registry.ROLE_REFERENCE)
+    scope = str(item.get("scope") or "")
+    for prefix in ("student:", "student/"):
+        if scope.startswith(prefix):
+            add(scope[len(prefix) :], owner_registry.ROLE_REFERENCE)
+    return found
+
+
+def registry_operations_for(
+    items: Iterable[Mapping[str, Any]],
+    operations: Iterable[Mapping[str, Any]] = (),
+) -> list[dict[str, Any]]:
+    """Registry Puts for every account the rows `items` name, for a write outside `fenced`.
+
+    `items` are the rows as they will stand (an Update's caller passes the
+    merged row). An account's own derived partitions are skipped, and so is a
+    key `operations` already writes. Write them in the same transaction as the
+    rows, or before them.
+    """
+    taken = {
+        (str(key.get("PK", "")), str(key.get("SK", "")))
+        for operation in operations
+        if isinstance(operation, Mapping) and len(operation) == 1
+        for body in operation.values()
+        if isinstance(body, Mapping)
+        for key in (body.get("Key") or body.get("Item") or {},)
+        if isinstance(key, Mapping)
+    }
+    wanted: list[dict[str, Any]] = []
+    for item in items:
+        partition = item.get("PK")
+        if not isinstance(partition, str) or not partition:
+            continue
+        for account, role in mentioned_accounts(item).items():
+            if owner_registry.is_derived_for(partition, account):
+                continue
+            row = owner_registry.registry_item(account, partition, role)
+            key = (row["PK"], row["SK"])
+            if key in taken:
+                continue
+            taken.add(key)
+            wanted.append({"Put": {"Item": row}})
+    return wanted
 
 
 def normalized_identity_hash(value: str) -> str:

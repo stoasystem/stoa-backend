@@ -386,7 +386,9 @@ def fenced(
     or Update touches that is not one of the account's own derived partitions,
     an unconditional Put of `USER#{owner}/OWNS#{partition}` (and of
     `USER#{other}/REFERENCED_IN#{partition}` for each `also=` account), in
-    the same transaction - see `stoa.db.owner_registry`. When that would take
+    the same transaction - see `stoa.db.owner_registry`. Every account a Put's
+    row names the way deletion's matcher reads it (a notification's actor, a
+    grant's `student:` scope) is registered the same way, owner or reference. When that would take
     the transaction past DynamoDB's 100 items, the registry rows are committed
     first, behind the same fences, and the caller's operations after.
 
@@ -413,7 +415,9 @@ def fenced(
     conditions = [
         fences.active_fence_condition(account, held) for account, held in generations.items()
     ]
-    registry = owner_registry.registry_operations(owner, list(also or {}), own)
+    registry = owner_registry.registry_operations(
+        owner, list(also or {}), own, mentions=fences.mentioned_accounts
+    )
     if len(conditions) + len(own) + len(registry) <= TRANSACTION_ITEM_LIMIT:
         own_and_registry = [*own, *registry]
     else:
