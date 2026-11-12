@@ -283,10 +283,11 @@ CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY: Mapping[
         frozenset(),
     ),
     # A student's request for a teacher names the teacher it is with, the one
-    # it is offered to and the ones who let it lapse (#189).
+    # it is offered to, the ones who let it lapse (#189) and the ones who
+    # declined it (#391).
     "help_request": (
         frozenset({"teacher_id", "dispatched_teacher_id"}),
-        frozenset({"previous_dispatch_teacher_ids"}),
+        frozenset({"previous_dispatch_teacher_ids", "declined_dispatch_teacher_ids"}),
         frozenset(),
     ),
     "teacher_session": (frozenset({"teacher_id"}), frozenset(), frozenset()),

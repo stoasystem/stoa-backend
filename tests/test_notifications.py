@@ -1445,3 +1445,95 @@ def test_a_role_event_cannot_be_marked_by_one_reader(monkeypatch):
 
     assert client.post(f"/notifications/{event_id}/read").status_code == 404
     assert client.post(f"/notifications/{event_id}/archive").status_code == 404
+
+
+# ── an offer that no longer stands (#391) ────────────────────────────────────
+
+
+def _offer(monkeypatch, *, standing: bool) -> tuple[dict, list]:
+    events, _ = _install_notification_repo(monkeypatch)
+    _profiles(monkeypatch, {"teacher-391": "de"})
+    monkeypatch.setattr(
+        user_repo,
+        "get_user",
+        lambda user_id, **_kwargs: {"user_id": user_id, "preferred_locale": "de", "email": "t@example.test"},
+    )
+    emails: list = []
+    monkeypatch.setattr(notification_service, "dispatch_email_enabled", lambda _teacher: True)
+    monkeypatch.setattr(
+        notification_service.notify_service,
+        "send_dispatch_reminder_email",
+        lambda *args, **kwargs: emails.append((args, kwargs)),
+    )
+    notification_service.emit_teacher_help_dispatched(
+        conversation={
+            "student_id": "student-391",
+            "escalation_request_id": "req-391",
+            "subject": "math",
+            "account_fence_generation": 1,
+        },
+        teacher_id="teacher-391",
+        dispatch_id="offer-391",
+        deadline_at="2026-11-12T10:10:00+00:00",
+        accept_minutes=10,
+        standing=standing,
+    )
+    return events, emails
+
+
+def test_a_standing_offer_says_it_still_waits_and_sends_no_second_email(monkeypatch):
+    events, emails = _offer(monkeypatch, standing=True)
+
+    stored = events["teacher-help-dispatched-offer-391"]
+    assert stored["summary"].startswith("Fach: ")
+    assert stored["summary"].endswith(
+        message_catalog.TEXT["teacher_help.dispatched.summary_standing"]["de"].split("{subject}")[1]
+    )
+    assert stored["metadata"]["standing"] is True
+    assert emails == []
+
+
+def test_an_ordinary_offer_still_sends_its_email(monkeypatch):
+    events, emails = _offer(monkeypatch, standing=False)
+
+    assert "standing" not in events["teacher-help-dispatched-offer-391"]["metadata"]
+    assert len(emails) == 1
+
+
+def test_a_closed_offer_is_marked_with_what_became_of_it_and_read(monkeypatch):
+    events, _ = _offer(monkeypatch, standing=False)
+
+    notification_service.close_teacher_help_offer(
+        dispatch_id="offer-391", state="expired", now="2026-11-12T10:11:00+00:00"
+    )
+
+    stored = events["teacher-help-dispatched-offer-391"]
+    assert stored["metadata"]["offer_state"] == "expired"
+    assert stored["metadata"]["offer_closed_at"] == "2026-11-12T10:11:00+00:00"
+    assert stored["metadata"]["dispatch_id"] == "offer-391"
+    assert stored["status"] == "read"
+    assert stored["read_at"] == "2026-11-12T10:11:00+00:00"
+    shown = notification_service.event_response(stored)
+    assert shown["metadata"]["offer_state"] == "expired"
+
+
+def test_an_offer_closed_once_keeps_what_it_was_closed_as(monkeypatch):
+    events, _ = _offer(monkeypatch, standing=False)
+    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="reassigned")
+
+    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="expired")
+
+    assert events["teacher-help-dispatched-offer-391"]["metadata"]["offer_state"] == "reassigned"
+
+
+def test_closing_an_offer_with_no_notification_does_nothing(monkeypatch):
+    events, _ = _offer(monkeypatch, standing=False)
+
+    notification_service.close_teacher_help_offer(dispatch_id="offer-missing", state="expired")
+
+    assert list(events) == ["teacher-help-dispatched-offer-391"]
+
+
+def test_an_offer_is_closed_only_as_one_of_its_states():
+    with pytest.raises(ValueError):
+        notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="gone")

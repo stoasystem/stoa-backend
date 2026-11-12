@@ -955,6 +955,7 @@ def emit_teacher_help_dispatched(
     dispatch_id: str,
     deadline_at: str,
     accept_minutes: int,
+    standing: bool = False,
 ) -> None:
     """Tell the teacher a chat help request was just offered to that it waits for them (#141).
 
@@ -963,10 +964,32 @@ def emit_teacher_help_dispatched(
     one reminder email. Both are in the teacher's own language and name the
     subject and nothing of the student. Neither ever fails the offer: a failed
     send is logged with its exception type only.
+
+    A ``standing`` offer is one made again to a teacher who let it lapse,
+    because nobody else is free (#391). It stays open until the request
+    expires, so its notification says the request still waits for them rather
+    than naming minutes, and no email is sent: they had one with the first.
     """
     request_id = str(conversation.get("escalation_request_id") or "")
     locale = _recipient_locale(teacher_id)
     subject_name = learning_profile_service.subject_name(conversation.get("subject"), locale)
+    summary = (
+        message_catalog.text("teacher_help.dispatched.summary_standing", locale, subject=subject_name)
+        if standing
+        else message_catalog.text(
+            "teacher_help.dispatched.summary",
+            locale,
+            subject=subject_name,
+            minutes=accept_minutes,
+        )
+    )
+    metadata: dict[str, Any] = {
+        "request_id": request_id,
+        "dispatch_id": dispatch_id,
+        "deadline_at": deadline_at,
+    }
+    if standing:
+        metadata["standing"] = True
     create_event_safe(
         recipient_id=teacher_id,
         recipient_role="teacher",
@@ -974,24 +997,15 @@ def emit_teacher_help_dispatched(
         target_type="question",
         target_id=request_id,
         title=message_catalog.text("teacher_help.dispatched.title", locale),
-        summary=message_catalog.text(
-            "teacher_help.dispatched.summary",
-            locale,
-            subject=subject_name,
-            minutes=accept_minutes,
-        ),
-        metadata={
-            "request_id": request_id,
-            "dispatch_id": dispatch_id,
-            "deadline_at": deadline_at,
-        },
+        summary=summary,
+        metadata=metadata,
         actor_role="system",
         # The request is the student's: their account's deletion takes this with it.
         owner_id=str(conversation.get("student_id") or ""),
         account_fence_generation=conversation.get("account_fence_generation"),
-        event_id=f"teacher-help-dispatched-{dispatch_id}",
+        event_id=_dispatched_event_id(dispatch_id),
     )
-    if _best_effort_disabled():
+    if standing or _best_effort_disabled():
         return
     try:
         if not dispatch_email_enabled(teacher_id):
@@ -1012,6 +1026,51 @@ def emit_teacher_help_dispatched(
         )
     except Exception as exc:  # noqa: BLE001 - best effort by contract
         logger.warning("dispatch_reminder_email_failed error=%s", type(exc).__name__)
+
+
+def _dispatched_event_id(dispatch_id: str) -> str:
+    return f"teacher-help-dispatched-{dispatch_id}"
+
+
+#: What became of an offer whose notification no longer offers anything (#391):
+#: it lapsed or the request expired, it went to another teacher, or the student
+#: took the request back.
+OFFER_STATES = frozenset({"expired", "reassigned", "withdrawn"})
+
+
+def close_teacher_help_offer(*, dispatch_id: str, state: str, now: str | None = None) -> None:
+    """Mark an offer's notification as no longer open, saying what became of it (#391).
+
+    The notification keeps its text; its metadata gains `offer_state` (one of
+    `OFFER_STATES`) and `offer_closed_at`, so the teacher's bell shows
+    "expired" or "passed on" instead of a request that opens onto nothing,
+    and an unread one is marked read, so a lapsed offer does not stay in the
+    unread count. A notification already closed is left as it was. Written
+    through the notification repository, behind the student's account fence
+    (#397); best effort: a failure is logged with its exception type only.
+    """
+    if state not in OFFER_STATES:
+        raise ValueError(f"unsupported offer state: {state}")
+    if not dispatch_id or _best_effort_disabled():
+        return
+    try:
+        event_id = _dispatched_event_id(dispatch_id)
+        item = notification_repo.get_event(event_id)
+        if not item:
+            return
+        metadata = dict(item.get("metadata") or {})
+        if metadata.get("offer_state"):
+            return
+        timestamp = now or now_iso()
+        updates: dict[str, Any] = {
+            "metadata": {**metadata, "offer_state": state, "offer_closed_at": timestamp},
+        }
+        if item.get("status") == "created":
+            updates["status"] = "read"
+            updates["read_at"] = item.get("read_at") or timestamp
+        notification_repo.update_event(event_id, updates)
+    except Exception as exc:  # noqa: BLE001 - best effort by contract
+        logger.warning("teacher_help_offer_close_failed error=%s", type(exc).__name__)
 
 
 def emit_moderation_update(
