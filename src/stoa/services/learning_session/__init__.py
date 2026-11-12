@@ -14,8 +14,9 @@ made by `append`. The entry points:
   its stored record.
 - `read` is the record, or `None`; `owned_by` says whether it is the student's.
 - `retitle` replaces a placeholder title.
-- `history` is every message, oldest first, as `Message` values; the student's
-  `ChatMessage` and the teacher's `MessageOut` are built from them.
+- `history` is every message, oldest first, as `Message` values, a question
+  sent again read once; the student's `ChatMessage` and the teacher's
+  `MessageOut` are built from them.
 - `history_rows` and `anchored_history` are the question's: the checked rows
   it fingerprints, and the exact snapshot a committed command names;
   `committed_message` is the one checked row its replay reads back.
@@ -58,6 +59,7 @@ __all__ = [
     "required_conversation_text",
     "retitle",
     "stored_message",
+    "without_resent_questions",
 ]
 
 
@@ -187,9 +189,38 @@ def conversation_grade(record: Mapping[str, object]) -> str:
 def history(conversation_id: str) -> list[Message]:
     """Every message of the session, oldest first, each row checked.
 
-    Read strongly, every page, ordered by `created_at` then id.
+    Read strongly, every page, ordered by `created_at` then id. A question
+    sent again is read once (`without_resent_questions`).
     """
-    return [message_from_row(row) for row in history_rows(conversation_id)]
+    return without_resent_questions(
+        [message_from_row(row) for row in history_rows(conversation_id)]
+    )
+
+
+def without_resent_questions(messages: list[Message]) -> list[Message]:
+    """The messages, with a question the student sent again read once (#389).
+
+    When an answer fails, the student's message is already stored, and
+    sending it again ("Erneut senden") stores it a second time under a new
+    key. A student message followed directly by another of the same text,
+    quote and attachments is that first copy: nothing answered it, and the
+    second one carries all it said, so the first is left out. The rows stay
+    as written; every view of the session reads through here.
+    """
+    kept: list[Message] = []
+    for index, message in enumerate(messages):
+        following = messages[index + 1] if index + 1 < len(messages) else None
+        if (
+            following is not None
+            and message.role == "student"
+            and following.role == "student"
+            and message.content == following.content
+            and message.quote == following.quote
+            and message.attachment_ids == following.attachment_ids
+        ):
+            continue
+        kept.append(message)
+    return kept
 
 
 def history_rows(conversation_id: str) -> list[dict]:

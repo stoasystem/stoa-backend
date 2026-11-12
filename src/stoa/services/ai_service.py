@@ -337,30 +337,46 @@ def _validate_output(parsed: dict, raw_text: str) -> dict:
 
 # ── JSON parsing ───────────────────────────────────────────────────────────────
 
-_STEP_PATTERN = re.compile(r'"((?:[^"\\]|\\.)*)"\s*(?:,|\])')
+_STEP_STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
+_WHITESPACE = re.compile(r"\s*")
 
 
 def completed_steps(partial_json: str) -> list[str]:
     """Return the steps already closed in a partly received JSON answer.
 
     The model answers with one JSON object, so a student cannot be shown raw
-    tokens. Each step is whole the moment its closing quote arrives, which is
-    the smallest piece worth showing.
+    tokens. Each step is whole the moment its closing quote and the `,` or `]`
+    after it arrive, which is the smallest piece worth showing.
+
+    The array is read from its start, one string after the other. A string
+    that is not followed by `,` or `]` ends the reading: the reply is broken
+    there, typically by a `"` the model left unescaped inside a step (#389).
+    Searching on past it would take that inner quote for an opening one and
+    cut a step from the middle of a sentence.
     """
     if '"steps"' not in partial_json:
         return []
     tail = partial_json.split('"steps"', 1)[1]
     opening = tail.find("[")
-    if opening == -1:
+    if opening == -1 or tail[:opening].strip() != ":":
         return []
+    rest = tail[opening + 1 :]
+    position = _WHITESPACE.match(rest).end()
     steps: list[str] = []
-    for match in _STEP_PATTERN.finditer(tail[opening + 1 :]):
+    while position < len(rest) and rest[position] == '"':
+        match = _STEP_STRING.match(rest, position)
+        if match is None:
+            break
+        after = _WHITESPACE.match(rest, match.end()).end()
+        if after >= len(rest) or rest[after] not in ",]":
+            break
         try:
-            steps.append(json.loads(f'"{match.group(1)}"'))
+            steps.append(json.loads(match.group(0)))
         except json.JSONDecodeError:
             break
-        if match.group(0).rstrip().endswith("]"):
+        if rest[after] == "]":
             break
+        position = _WHITESPACE.match(rest, after + 1).end()
     return steps
 
 

@@ -671,9 +671,18 @@ def _reply(
     if star_map:
         system_prompt += _STAR_MAP_RULE.format(language_name=ai_service.language_name(language))
         system_prompt += _TARGET_UNIT_RULE
+    history = [dict(message) for message in asked.history]
+    if (
+        history
+        and history[-1].get("role") == "student"
+        and history[-1].get("content") == asked.content
+    ):
+        # The same question, sent again after its answer failed (#389): the
+        # model is asked it once.
+        history.pop()
     messages = _build_messages(
         safe_content,
-        [dict(message) for message in asked.history],
+        history,
         asked.attachment_context,
         practice_context=asked.practice_context,
         quote=asked.quote,

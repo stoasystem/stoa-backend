@@ -181,7 +181,8 @@ def progress(
     """Where an answer stands, for the student who asked.
 
     Without a key, the conversation's latest steps. With one, the command it
-    names too, with only the steps its current attempt wrote; a key that names
+    names too, with only the steps its current attempt wrote, and none once it
+    failed (#389); a key that names
     no command of this student raises `AttachmentDecisionError`
     (`MESSAGE_COMMAND_NOT_FOUND`).
     """
@@ -202,6 +203,10 @@ def progress(
     )
     if state is None:
         raise AttachmentDecisionError(AskQuestionErrorCode.MESSAGE_COMMAND_NOT_FOUND)
+    if state.status == "failed":
+        # No answer was stored, so nothing it streamed is shown: the steps of
+        # a failed attempt may be cut from a reply that did not parse (#389).
+        return state
     state.steps, state.updatedAt = _store.read_generation_progress(
         conversation_id,
         owner_id=student_id,

@@ -668,6 +668,20 @@ def _record_generation_failure(
         )
     except Exception:
         logger.warning("message_command_failure_not_recorded", exc_info=True)
+    # The steps published while it streamed belong to an answer that will not
+    # be stored, and may be cut from a broken reply (#389): no reader is shown
+    # them, with or without the message's key. Best effort, as publishing is.
+    ask_question_store.record_generation_progress(
+        str(command["conversation_id"]),
+        owner_id=str(command["owner_id"]),
+        steps=[],
+        now_iso=_now(),
+        expires_at=int(datetime.now(timezone.utc).timestamp())
+        + GENERATION_PROGRESS_TTL_SECONDS,
+        command_id=str(command.get("command_id") or "") or None,
+        attempt=lease_attempt,
+        table=table,
+    )
 
 
 def commit_message_command(
