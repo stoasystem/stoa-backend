@@ -426,3 +426,30 @@ def test_a_support_or_recovery_row_that_names_nobody_is_still_unresolved() -> No
     page = scan(STUDENT_ID, table=_Table(), maximum_pages=1)
     assert page.items == ()
     assert page.unresolved == 2
+
+
+def test_a_recovery_jobs_own_records_are_never_unresolved_lineage() -> None:
+    scan = _contract("scan_report_private_rows")
+    other = "student-someone-else"
+    mine = [
+        {"PK": "REPORT_RECOVERY_JOB#job-3", "SK": "SUMMARY", "filters": {"student_id": STUDENT_ID}},
+        {"PK": "REPORT_RECOVERY_JOB#job-4", "SK": "AUDIT#t#1", "metadata": {"student_id": STUDENT_ID}},
+        {
+            "PK": "REPORT_RECOVERY_JOB#job-3",
+            "SK": "AUDIT#t#2",
+            "metadata": {"filters": {"student_id": STUDENT_ID}},
+        },
+    ]
+    not_mine = [
+        {"PK": "REPORT_RECOVERY_JOB#job-4", "SK": "SUMMARY", "filters": {"student_id": None}},
+        {"PK": "REPORT_RECOVERY_JOB#job-4", "SK": "AUDIT#t#3", "metadata": {"student_id": other}},
+        {"PK": "REPORT_RECOVERY_JOB#job-4", "SK": "AUDIT#t#4", "metadata": {"job_type": "resend"}},
+    ]
+
+    class _Table:
+        def scan(self, **_kwargs: Any) -> dict[str, Any]:
+            return {"Items": [*mine, *not_mine]}
+
+    page = scan(STUDENT_ID, table=_Table(), maximum_pages=1)
+    assert list(page.items) == mine
+    assert page.unresolved == 0
