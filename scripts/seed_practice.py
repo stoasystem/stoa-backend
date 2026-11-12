@@ -235,8 +235,8 @@ def _brueche_data():
             "Richtig! 12/18 = 2/3.", "Nicht ganz. Der ggT von 12 und 18 ist 6."),
         _mc(f"{tid}-l1", tid, sid, gl, tt, f"{tid}-u1", 3,
             "Welcher Bruch liegt zwischen 1/2 und 1 auf der Zahlengeraden?",
-            ["1/3", "3/4", "1/4", "2/3"],
-            "3/4",  # both 3/4 and 2/3 are valid, but 3/4 is given in options as unique clear answer
+            ["1/3", "3/4", "1/4", "5/4"],
+            "3/4",
             "Rechne: 1/2 = 2/4 und 1 = 4/4. Welcher Viertelbruch liegt dazwischen?",
             "3/4 liegt genau zwischen 2/4 (= 1/2) und 4/4 (= 1).",
             "Richtig! 3/4 liegt auf der Hälfte zwischen 1/2 und 1.", "Nicht ganz. Schreibe 1/2 als Viertel um."),
