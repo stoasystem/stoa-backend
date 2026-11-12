@@ -22,6 +22,7 @@ from typing import Any
 
 import pytest
 
+from fakes import model_reply
 from stoa.services import ai_service, ask_answer
 from stoa.services.curriculum_service import SUPPORTED_SUBJECTS
 
@@ -84,7 +85,7 @@ class FakeModel:
             "id": f"msg_{self.calls}",
             "model": modelId,
             "stop_reason": "end_turn",
-            "content": [{"text": json.dumps(content, ensure_ascii=False)}],
+            "content": model_reply.content(content, request),
             "usage": {"input_tokens": 800, "output_tokens": 300},
         }
         return {
@@ -532,9 +533,7 @@ class StyleRecordingModel(FakeModel):
         leak = self.leaking_style
         if leak is not None and ask_answer.ANSWER_STYLE_RULES[leak] in system:
             payload = json.loads(response["body"].read())
-            content = json.loads(payload["content"][0]["text"])
-            content["answer"] += " Das Ergebnis ist $\\frac{7}{12}$."
-            payload["content"][0]["text"] = json.dumps(content, ensure_ascii=False)
+            payload["content"][0]["input"]["answer"] += " Das Ergebnis ist $\\frac{7}{12}$."
             response["body"] = io.BytesIO(json.dumps(payload).encode())
         return response
 
@@ -698,14 +697,15 @@ def test_a_confirmed_run_in_all_styles_reports_each_against_standard(tmp_path) -
 
 
 class BrokenJsonModel(FakeModel):
-    """Writes an object that never closes, which the reply parser refuses."""
+    """Calls the tool without an answer, which the reply parser refuses."""
 
-    BROKEN = '{"steps": ["Zuerst «schauen» wir", "dann'
+    BROKEN_INPUT = {"steps": ["Zuerst «schauen» wir", "dann"]}
+    BROKEN = json.dumps(BROKEN_INPUT, ensure_ascii=False)
 
     def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
         response = super().invoke_model(modelId=modelId, body=body)
         payload = json.loads(response["body"].read())
-        payload["content"][0]["text"] = self.BROKEN
+        payload["content"][0]["input"] = self.BROKEN_INPUT
         response["body"] = io.BytesIO(json.dumps(payload).encode())
         return response
 

@@ -376,6 +376,7 @@ def _ask(client) -> Any:
         "Answer the question.",
         [{"role": "user", "content": "Wie kürze ich Brüche?"}],
         input_size=21,
+        tool=ask_answer.answer_tool(star_map=False),
         effect_id=client.effect_id,
         client=client,
         observed_at=NOW,

@@ -193,7 +193,10 @@ def test_a_failure_the_provider_charged_for_is_not_generated_again(
     charge_failures_as_paid(monkeypatch)
     client = _client()
     model.outcomes = [ai_service.AIInvocationFailure("incomplete_output")]
-    assert _send(client, "key-1").status_code == 503
+    first = _send(client, "key-1")
+    # The first attempt already says what the retry says (#412).
+    assert first.status_code == 409, first.text
+    assert first.json()["detail"]["code"] == "message_failed"
     assert _generation(client, "key-1")["retryable"] is False
 
     retried = _send(client, "key-1")

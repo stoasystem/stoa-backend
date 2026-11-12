@@ -39,6 +39,7 @@ from stoa.aws import Kind
 from stoa.db.repositories import allowance_repo
 from stoa.routers import conversations
 from stoa.services import ai_service, allowance_service, entitlement_service
+from stoa.services import ask_answer
 from stoa.services.ask_question import _admission, _answering
 from stoa.services.ask_question._admission import AdmissionError, UsageEvidence
 from stoa.services.ask_question_errors import AskQuestionErrorCode
@@ -93,7 +94,8 @@ class MockBedrockProvider:
                         "input_tokens": self.actual_input_tokens,
                         "output_tokens": self.actual_output_tokens,
                     },
-                    "content": [{"text": json.dumps(content)}],
+                    "content": [{"type": "tool_use", "id": "toolu-1",
+                                 "name": ask_answer.ANSWER_TOOL_NAME, "input": content}],
                 }
             ),
             "ResponseMetadata": {
@@ -117,6 +119,7 @@ def _ask(metered: _admission.MeteredModel) -> ai_service.AIProviderResult[dict[s
         "Answer the question.",
         [{"role": "user", "content": "private-message-canary"}],
         input_size=1,
+        tool=ask_answer.answer_tool(star_map=False),
         correlation_id="transport-correlation-that-must-not-own-the-effect",
         effect_id=metered.effect_id,
         client=metered,

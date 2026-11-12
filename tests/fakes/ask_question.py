@@ -33,6 +33,7 @@ from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from fakes.admission import seed_plan
+from fakes import model_reply
 from fakes.bedrock import FakeBedrock
 from fakes.dynamodb import FakeTable
 from fakes.learning_session import patch_session_table, seed_conversation
@@ -563,6 +564,7 @@ class _Provider:
 
     def invoke_model(self, **kwargs: object) -> dict[str, object]:
         self.invoke_calls.append(copy.deepcopy(kwargs))
+        request = json.loads(str(kwargs["body"]))
         return {
             "body": _ResponseBody(
                 {
@@ -570,7 +572,7 @@ class _Provider:
                     "model": "anthropic.claude-sonnet-4-6",
                     "stop_reason": self.stop_reason,
                     "usage": {"input_tokens": 70, "output_tokens": 2048},
-                    "content": [{"text": self.text}],
+                    "content": model_reply.content(self.text, request),
                 }
             ),
             "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "invoke-request-1"},
@@ -578,6 +580,7 @@ class _Provider:
 
     def invoke_model_with_response_stream(self, **kwargs: object) -> dict[str, object]:
         self.invoke_calls.append(copy.deepcopy(kwargs))
+        request = json.loads(str(kwargs["body"]))
         events: list[dict[str, Any]] = [
             {
                 "type": "message_start",
@@ -587,9 +590,8 @@ class _Provider:
                     "usage": {"input_tokens": 70},
                 },
             },
-            *(
-                {"type": "content_block_delta", "delta": {"text": self.text[i : i + 16]}}
-                for i in range(0, len(self.text), 16)
+            *model_reply.stream_events(
+                self.text, request, pieces=max(1, -(-len(self.text) // 16))
             ),
             {
                 "type": "message_delta",
@@ -721,8 +723,8 @@ class _CapturingBedrockClient:
         payload = {
             "id": "msg_test_1",
             "model": modelId,
-            "stop_reason": "end_turn",
-            "content": [{"text": json.dumps(self.answer)}],
+            "stop_reason": "tool_use",
+            "content": model_reply.content(self.answer, self.request_body),
             "usage": {"input_tokens": 10, "output_tokens": 5},
         }
         return {
@@ -732,15 +734,13 @@ class _CapturingBedrockClient:
 
     def invoke_model_with_response_stream(self, *, modelId: str, body: str):  # noqa: N803
         self.request_body = json.loads(body)
-        text = json.dumps(self.answer, ensure_ascii=False)
         events = [
             {"type": "message_start", "message": {
                 "id": "msg_test_1", "model": modelId, "usage": {"input_tokens": 70},
             }},
             # Cut in two, so the steps are found in a partly received answer.
-            {"type": "content_block_delta", "delta": {"text": text[: len(text) // 2]}},
-            {"type": "content_block_delta", "delta": {"text": text[len(text) // 2 :]}},
-            {"type": "message_delta", "delta": {"stop_reason": "end_turn"},
+            *model_reply.stream_events(self.answer, self.request_body),
+            {"type": "message_delta", "delta": {"stop_reason": "tool_use"},
              "usage": {"output_tokens": 25}},
         ]
         return {
@@ -910,29 +910,29 @@ class _Bedrock:
     def count_tokens(self, **_kwargs: object) -> dict[str, object]:
         return {"inputTokens": 90, "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "c"}}
 
-    def _answer(self, body: str) -> str:
+    def _answer(self, body: str) -> tuple[dict[str, Any], dict[str, Any]]:
         request = json.loads(body)
         self.bodies.append(request)
-        return json.dumps(self.answers.pop(0)(request), ensure_ascii=False)
+        return self.answers.pop(0)(request), request
 
     def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
         payload = {
             "id": "msg_test_1",
             "model": modelId,
-            "stop_reason": "end_turn",
-            "content": [{"text": self._answer(body)}],
+            "stop_reason": "tool_use",
+            "content": model_reply.content(*self._answer(body)),
             "usage": {"input_tokens": 10, "output_tokens": 5},
         }
         return {"ResponseMetadata": {"RequestId": "r"}, "body": io.BytesIO(json.dumps(payload).encode())}
 
     def invoke_model_with_response_stream(self, *, modelId: str, body: str):  # noqa: N803
-        text = self._answer(body)
+        answer, request = self._answer(body)
         events = [
             {"type": "message_start", "message": {
                 "id": "msg_test_1", "model": modelId, "usage": {"input_tokens": 70},
             }},
-            {"type": "content_block_delta", "delta": {"text": text}},
-            {"type": "message_delta", "delta": {"stop_reason": "end_turn"},
+            *model_reply.stream_events(answer, request, pieces=1),
+            {"type": "message_delta", "delta": {"stop_reason": "tool_use"},
              "usage": {"output_tokens": 25}},
         ]
         return {

@@ -28,6 +28,7 @@ from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa import aws
 from stoa.aws import Kind
 from stoa.services import ai_service, runtime_budget_service
+from stoa.services import ask_answer
 from stoa.services.ask_question import _admission, _answering
 from fakes.ask_question import AtomicAllowanceTable
 
@@ -68,8 +69,14 @@ class _Provider:
                 "id": "msg-1", "model": "anthropic.claude-sonnet-4-6",
                 "usage": {"input_tokens": 10}}}).encode()}}
             self.clock.now = self.answer_at
-            yield {"chunk": {"bytes": json.dumps({"type": "content_block_delta",
-                                                  "delta": {"text": json.dumps(ANSWER)}}).encode()}}
+            yield {"chunk": {"bytes": json.dumps({"type": "content_block_start", "index": 0,
+                                                  "content_block": {
+                                                      "type": "tool_use", "id": "toolu-1",
+                                                      "name": ask_answer.ANSWER_TOOL_NAME,
+                                                      "input": {}}}).encode()}}
+            yield {"chunk": {"bytes": json.dumps({"type": "content_block_delta", "index": 0,
+                                                  "delta": {"type": "input_json_delta",
+                                                            "partial_json": json.dumps(ANSWER)}}).encode()}}
             yield {"chunk": {"bytes": json.dumps({"type": "message_delta",
                                                   "usage": {"output_tokens": 20},
                                                   "delta": {"stop_reason": "end_turn"}}).encode()}}
@@ -89,6 +96,7 @@ def _answer(client: Any, clock: _Clock, deadline: float) -> Any:
     return ai_service.invoke_answer(
         "Answer the question.", [{"role": "user", "content": "What is a half?"}],
         input_size=15, deadline_monotonic=deadline, clock=clock, client=client,
+        tool=ask_answer.answer_tool(star_map=False),
         effect_id=getattr(client, "allowance_effect_id", "effect-1"),
         observed_at=NOW, on_step=lambda *_: None,
     )

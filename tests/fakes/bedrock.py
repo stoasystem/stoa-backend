@@ -2,8 +2,10 @@
 
 `FakeBedrock` is the model connection as boto3 hands it out: it counts tokens,
 answers buffered and streamed, and records every request body it was sent.
-Each call takes the next of `outcomes`: a dict is written back as the model's
-JSON, a string as the model's raw text, an exception is raised from the call.
+Each call takes the next of `outcomes`: a dict is the input of the tool call
+the request forces, a string the raw text of that input (#412), a
+`model_reply.Prose` a reply that calls no tool, an exception is raised from
+the call.
 With none left it answers with `answer` (`ANSWER` unless given). An
 `Unsent(exception)` is raised while the tokens are counted instead, before the
 allowance client records the call: the model was never asked. A `gate`, when
@@ -19,6 +21,8 @@ import io
 import json
 import threading
 from typing import Any
+
+from fakes import model_reply
 
 ANSWER: dict[str, Any] = {
     "language": "de",
@@ -45,6 +49,8 @@ class FakeBedrock:
         self.requests: list[dict[str, Any]] = []
         self.counted = 0
         self.gate: threading.Event | None = None
+        # How many `input_json_delta` pieces a streamed answer is cut into.
+        self.pieces = 2
 
     # ── What a test reads back ───────────────────────────────────────────────
 
@@ -81,12 +87,12 @@ class FakeBedrock:
         }
 
     def invoke_model(self, *, modelId: str, body: str) -> dict[str, Any]:  # noqa: N803
-        text = self._next(body)
+        outcome = self._next(body)
         payload = {
             "id": f"msg_{len(self.requests)}",
             "model": modelId,
-            "stop_reason": "end_turn",
-            "content": [{"text": text}],
+            "stop_reason": "tool_use",
+            "content": model_reply.content(outcome, self.requests[-1]),
             "usage": {"input_tokens": 90, "output_tokens": 30},
         }
         return {
@@ -97,16 +103,15 @@ class FakeBedrock:
     def invoke_model_with_response_stream(
         self, *, modelId: str, body: str  # noqa: N803
     ) -> dict[str, Any]:
-        text = self._next(body)
+        outcome = self._next(body)
         events = [
             {"type": "message_start", "message": {
                 "id": f"msg_{len(self.requests)}", "model": modelId,
                 "usage": {"input_tokens": 90},
             }},
-            # Cut in two, so the steps are found in a partly received answer.
-            {"type": "content_block_delta", "delta": {"text": text[: len(text) // 2]}},
-            {"type": "content_block_delta", "delta": {"text": text[len(text) // 2 :]}},
-            {"type": "message_delta", "delta": {"stop_reason": "end_turn"},
+            # Cut in pieces, so the steps are found in a partly received answer.
+            *model_reply.stream_events(outcome, self.requests[-1], pieces=self.pieces),
+            {"type": "message_delta", "delta": {"stop_reason": "tool_use"},
              "usage": {"output_tokens": 30}},
         ]
         return {
@@ -114,13 +119,11 @@ class FakeBedrock:
             "body": [{"chunk": {"bytes": json.dumps(event).encode()}} for event in events],
         }
 
-    def _next(self, body: str) -> str:
+    def _next(self, body: str) -> Any:
         self.requests.append(json.loads(body))
         if self.gate is not None:
             self.gate.wait(5)
         outcome = self.outcomes.pop(0) if self.outcomes else self.answer
         if isinstance(outcome, BaseException):
             raise outcome
-        if isinstance(outcome, str):
-            return outcome
-        return json.dumps(outcome, ensure_ascii=False)
+        return outcome

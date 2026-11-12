@@ -77,7 +77,7 @@ def test_a_failed_answer_reports_no_steps(table, model) -> None:
     ]
     client = _client()
 
-    assert _send(client, "key-1").status_code == 503
+    assert _send(client, "key-1").status_code == 409  # message_failed (#412)
 
     generation = _generation(client, "key-1")
     assert generation["status"] == "failed"
@@ -91,7 +91,7 @@ def test_a_failed_answer_reports_no_steps_without_a_key_either(table, model) -> 
         '"answer": "Das Wort "von" heisst mal.", "hints": []}'
     ]
     client = _client()
-    assert _send(client, "key-1").status_code == 503
+    assert _send(client, "key-1").status_code == 409  # message_failed (#412)
 
     assert _generation(client, None)["steps"] == []
 
@@ -102,7 +102,7 @@ def test_a_failed_answer_reports_no_steps_without_a_key_either(table, model) -> 
 def _resend_after_a_failure(table, model) -> None:
     model.outcomes = [BROKEN_REPLY]
     client = _client()
-    assert _send(client, "initial-1").status_code == 503
+    assert _send(client, "initial-1").status_code == 409  # message_failed (#412)
     assert _generation(client, "initial-1")["status"] == "failed"
 
     # "Erneut senden": the same question, under a new key.
@@ -136,7 +136,7 @@ def test_the_model_is_asked_the_question_sent_again_once(table, model) -> None:
 def test_a_different_question_after_a_failure_is_kept(table, model) -> None:
     model.outcomes = [BROKEN_REPLY]
     client = _client()
-    assert _send(client, "initial-1").status_code == 503
+    assert _send(client, "initial-1").status_code == 409  # message_failed (#412)
 
     assert _send(client, "next-1", content="Und wie erweitere ich?").status_code == 200
 

@@ -388,10 +388,9 @@ def test_every_style_says_the_rules_still_win(style):
         "year group",
         "suggest_teacher to true",
         "emotional distress",
-        "one valid JSON object and nothing else",
-        "mark any quotation with « and »",
-        "never type a straight double quote",
-        "every backslash",
+        # The JSON is the tool's input, written by the API (#412): no escaping
+        # rules for quotes or backslashes are needed in the prompt any more.
+        "one call of `give_answer` and nothing else",
     ):
         assert kept in rule, (style, kept)
 
