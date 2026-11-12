@@ -1761,3 +1761,30 @@ def test_调用方的附加字段改不动那份出身(table: FakeAccountTable) 
     profile = table.rows[("USER#student-forged", "PROFILE")]
     assert profile["registration_command"] == public_identity_repo.ADMIN_ASSIGNMENT_COMMAND
     assert profile["registration_role"] == "student"
+
+
+def test_an_invitation_registers_its_partition_for_the_accounts_it_names(
+    table: FakeAccountTable,
+) -> None:
+    """#397: the invited account's deletion finds the invitation by its registry row.
+
+    The invitation is written outside `fenced` and holds the invited person's
+    address and name. Unregistered, the registry path would never read it, and
+    the daily sweep would report it the day it was issued.
+    """
+    from stoa.db import owner_registry
+
+    _invite(table)
+
+    [(partition, _)] = [
+        key for key, row in table.rows.items() if row.get("entity_type") == "account_invitation"
+    ]
+    row = table.rows[(partition, "META")]
+    assert row["account_id"] and row["invited_by"] and row["account_id"] != row["invited_by"]
+    registered = {
+        (item["registry_account"], item["registered_pk"])
+        for item in table.rows.values()
+        if owner_registry.is_registry_row(item)
+    }
+    assert (row["account_id"], partition) in registered
+    assert (row["invited_by"], partition) in registered

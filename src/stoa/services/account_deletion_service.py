@@ -21,6 +21,7 @@ from stoa import config
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
+    account_invitation_repo,
     adaptive_learning_repo,
     ai_teacher_tools_repo,
     attachment_repo,
@@ -810,10 +811,24 @@ def _identity_cross_account_branch(
             "identity_binding",
             "user_identity_inventory",
             "public_identity_command",
-        } or account_deletion_repo.is_sign_in_session(item, str(command["user_id"]))
+        } or account_deletion_repo.is_sign_in_session(
+            item, str(command["user_id"])
+        ) or _is_own_invitation(item, str(command["user_id"]))
 
     def mutate(item: dict[str, Any]) -> None:
         nonlocal provider_revoked
+        if _is_own_invitation(item, str(command["user_id"])):
+            # The invited person's address, name and token digest: nothing in it
+            # is evidence worth keeping. Its pointer row holds only the
+            # invitation id and now leads nowhere, which reads as no invitation.
+            # Before the provider arm below, which would take the row's `email`
+            # for a provider username.
+            account_deletion_repo.delete_owned_row(
+                item,
+                user_id=str(command["user_id"]),
+                generation=int(command["generation"]),
+            )
+            return
         if account_deletion_repo.is_sign_in_session(item, str(command["user_id"])):
             # A stored refresh token: nothing in it is worth a tombstone.
             account_deletion_repo.delete_owned_row(
@@ -850,6 +865,14 @@ def _identity_cross_account_branch(
         )
     return _run_base_branch(
         command=command, previous=previous, predicate=predicate, mutate=mutate
+    )
+
+
+def _is_own_invitation(item: Mapping[str, Any], user_id: str) -> bool:
+    """The invitation that opened, or was to open, this account."""
+    return (
+        item.get("entity_type") == account_invitation_repo.ENTITY_TYPE
+        and item.get("account_id") == user_id
     )
 
 

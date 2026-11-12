@@ -290,6 +290,12 @@ CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY: Mapping[
         frozenset(),
     ),
     "teacher_session": (frozenset({"teacher_id"}), frozenset(), frozenset()),
+    # An invitation carries the invited person's address and full name and names
+    # the account by `account_id`, which no owner field covers: it outlived the
+    # account on both deletion paths until 2026-11-12. `invited_by` is
+    # deliberately absent, like `created_by` on a link: the inviter is usually
+    # an administrator, whose deletion must not sweep the invitations they issued.
+    "account_invitation": (frozenset({"account_id"}), frozenset(), frozenset()),
     "notification_event": (
         frozenset({"actor_id"}),
         frozenset(),
