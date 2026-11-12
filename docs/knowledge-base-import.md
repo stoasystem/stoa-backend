@@ -134,7 +134,12 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
     published version); run the dry run again and apply its new code to go on - published
     sets are skipped, and a set left in review or approved continues from there.
 13. **Go live:** `seed_practice.py --knowledge-base-live` writes the stars and nebulae
-    active, and the English and physics subjects with them.
+    active, and the English and physics subjects with them. A subject goes live once
+    its own lessons are published, so the flag can name subjects:
+    `--knowledge-base-live mathematics` writes the mathematics stars active and keeps
+    the English and physics nebulae and stars in preview, without their subject rows.
+    The seed stamps that run as the mode `live:mathematics`, and the deploy check
+    recomputes the hash in it.
 
 ### Running the seed again
 

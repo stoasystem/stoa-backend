@@ -73,11 +73,35 @@ def _aws_cli(args: Sequence[str]) -> str:
     return completed.stdout
 
 
+#: A mode with one or some subjects live, e.g. "live:mathematics" (stoa-backend#422).
+LIVE_SUBJECTS_PREFIX = "live:"
+
+
+def mode_entry(mode: str) -> tuple[str | None, str] | None:
+    """What `seed_rows` is called with for a stamp's mode and the seed's flags for
+    it; None for a mode the code does not know."""
+    if mode in MODES:
+        return MODES[mode]
+    if not mode.startswith(LIVE_SUBJECTS_PREFIX):
+        return None
+    import seed_practice
+
+    try:
+        subjects = seed_practice.knowledge_base_live_subjects(mode)
+    except ValueError:
+        return None
+    named = [s for s in seed_practice.KNOWLEDGE_BASE_SUBJECTS if s in subjects]
+    return mode, " ".join(["--knowledge-base-live", *named])
+
+
 def code_hash(mode: str) -> str:
     """The hash `seed_practice.py --print-hash` prints for this knowledge-base mode."""
     import seed_practice
 
-    return seed_practice.seed_hash(seed_practice.seed_rows(knowledge_base=MODES[mode][0]))
+    entry = mode_entry(mode)
+    if entry is None:
+        raise ValueError(f"unknown knowledge-base mode {mode!r}")
+    return seed_practice.seed_hash(seed_practice.seed_rows(knowledge_base=entry[0]))
 
 
 def read_stamp(run: Runner, *, table: str, region: str, profile: str | None) -> dict | None:
@@ -122,8 +146,9 @@ def _stamp_lines(stamp: dict) -> list[str]:
 
 
 def _lagging(reason: str, mode: str, digest: str | None, stamp: dict | None) -> Outcome:
-    if mode in MODES:
-        command = " ".join(filter(None, (SEED_COMMAND, MODES[mode][1])))
+    entry = mode_entry(mode)
+    if entry is not None:
+        command = " ".join(filter(None, (SEED_COMMAND, entry[1])))
         advice = f"Run `{command}` against production."
     else:
         # Guessing a flag could reseed production in the wrong mode.
@@ -153,7 +178,7 @@ def compare(stamp: dict | None, hasher: Hasher) -> Outcome:
             DEFAULT_MODE, digest, None,
         )
     mode = str(stamp.get("knowledge_base") or DEFAULT_MODE)
-    if mode not in MODES:
+    if mode_entry(mode) is None:
         return _lagging(
             f"The stamp names a knowledge-base mode the code does not know: {mode!r}.",
             mode, None, stamp,

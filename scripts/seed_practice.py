@@ -27,6 +27,7 @@ import json
 import os
 import subprocess
 from collections import Counter
+from collections.abc import Collection, Sequence
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -988,6 +989,11 @@ RETIRED_BUILDERS = (_retired_textaufgaben_data,)
 # unit while they wait for review. With --knowledge-base-live, once the sets are
 # published, they are written active together with the English and physics
 # subjects; the subject list shows a subject whether or not it has lessons.
+# A subject goes live once its own lessons are published (stoa-backend#364), so
+# --knowledge-base-live can name the subjects: `--knowledge-base-live mathematics`
+# writes the mathematics stars active and keeps the English and physics nebulae
+# and stars in preview, without their subject rows. The seed records that as the
+# mode "live:mathematics"; naming every subject is the same as naming none.
 #
 # The stars' prerequisites, drawn from the upstream edges between knowledge
 # points, are written by both options: the unit rows are the only source the
@@ -996,11 +1002,50 @@ RETIRED_BUILDERS = (_retired_textaufgaben_data,)
 # and where the map recommends starting.
 
 KNOWLEDGE_BASE_PREVIEW = "preview"
+KNOWLEDGE_BASE_LIVE = "live"
+#: The subjects the knowledge base has stars in, in map order.
+KNOWLEDGE_BASE_SUBJECTS = (
+    "mathematics", *(subject["subject_id"] for subject in knowledge_base_catalog.SUBJECTS)
+)
 
 
-def knowledge_base_rows(*, live: bool):
-    """The subjects, nebulae and stars of the knowledge base, as the seed writes them."""
-    state = "active" if live else KNOWLEDGE_BASE_PREVIEW
+def knowledge_base_live_mode(subjects: Collection[str]) -> str:
+    """The mode --knowledge-base-live writes for these subjects: "live" for all of
+    them (or none named), "live:<id>,<id>" in map order for some."""
+    unknown = sorted(set(subjects) - set(KNOWLEDGE_BASE_SUBJECTS))
+    if unknown:
+        raise ValueError(f"no knowledge base subject {', '.join(unknown)}")
+    named = [subject for subject in KNOWLEDGE_BASE_SUBJECTS if subject in subjects]
+    if not named or len(named) == len(KNOWLEDGE_BASE_SUBJECTS):
+        return KNOWLEDGE_BASE_LIVE
+    return f"{KNOWLEDGE_BASE_LIVE}:{','.join(named)}"
+
+
+def knowledge_base_live_subjects(knowledge_base: str | None) -> frozenset[str]:
+    """The subjects a knowledge base mode writes active."""
+    if knowledge_base == KNOWLEDGE_BASE_LIVE:
+        return frozenset(KNOWLEDGE_BASE_SUBJECTS)
+    if knowledge_base and knowledge_base.startswith(f"{KNOWLEDGE_BASE_LIVE}:"):
+        subjects = knowledge_base.split(":", 1)[1].split(",")
+        if knowledge_base_live_mode(subjects) != knowledge_base:
+            raise ValueError(f"not a knowledge base mode the seed writes: {knowledge_base!r}")
+        return frozenset(subjects)
+    if knowledge_base in (None, KNOWLEDGE_BASE_PREVIEW):
+        return frozenset()
+    raise ValueError(f"not a knowledge base mode the seed writes: {knowledge_base!r}")
+
+
+def knowledge_base_rows(*, live: bool | Collection[str]):
+    """The subjects, nebulae and stars of the knowledge base, as the seed writes them:
+    active for the subjects in `live` (True: every subject), preview for the rest."""
+    if isinstance(live, bool):
+        live_subjects = frozenset(KNOWLEDGE_BASE_SUBJECTS) if live else frozenset()
+    else:
+        live_subjects = frozenset(live)
+
+    def state(subject_id: str) -> str:
+        return "active" if subject_id in live_subjects else KNOWLEDGE_BASE_PREVIEW
+
     grade_levels = knowledge_base_catalog.SUBJECT_GRADE_LEVELS
     subjects = [
         {
@@ -1013,13 +1058,14 @@ def knowledge_base_rows(*, live: bool):
             "accent": subject["accent"], "order": subject["order"],
         }
         for subject in knowledge_base_catalog.SUBJECTS
-    ] if live else []
+        if subject["subject_id"] in live_subjects
+    ]
     topics = [
         {
             "topic_id": row["topic_id"], "subject_id": row["subject_id"], "grade_level": "",
             "grade_levels": list(grade_levels[row["subject_id"]]),
             "title": row["titles"]["de"], "description": "", "order": row["order"],
-            "status": "available", "rollout_state": state,
+            "status": "available", "rollout_state": state(row["subject_id"]),
         }
         for row in knowledge_base_catalog.topics()
     ]
@@ -1031,7 +1077,7 @@ def knowledge_base_rows(*, live: bool):
             "title": unit["titles"]["de"], "description": unit["description"],
             "order": unit["order"],
             "prerequisite_unit_ids": list(unit.get("prerequisites") or []),
-            "rollout_state": state,
+            "rollout_state": state(unit["subject_id"]),
         }
         for unit in knowledge_base_catalog.units()
     ]
@@ -1170,7 +1216,9 @@ def seed_rows(*, knowledge_base: str | None = None) -> list[dict]:
         all_lessons.extend(lessons)
         all_challenges.extend(challenges)
     if knowledge_base:
-        kb_subjects, kb_topics, kb_units = knowledge_base_rows(live=knowledge_base == "live")
+        kb_subjects, kb_topics, kb_units = knowledge_base_rows(
+            live=knowledge_base_live_subjects(knowledge_base)
+        )
         all_topics.extend(kb_topics)
         all_units.extend(kb_units)
 
@@ -1323,7 +1371,9 @@ def seed(
           f"from {commit}{dirty_note}.")
 
 
-if __name__ == "__main__":
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """The command line; `knowledge_base` is the mode the seed runs and stamps:
+    None, "preview", "live" or "live:<subject>,..."."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--table", default=os.environ.get("STOA_TABLE", "stoa-main"))
     parser.add_argument("--region", default=os.environ.get("AWS_DEFAULT_REGION", "eu-central-2"))
@@ -1343,10 +1393,20 @@ if __name__ == "__main__":
         help="also write the knowledge base stars and nebulae, hidden, for its drafts",
     )
     knowledge_base.add_argument(
-        "--knowledge-base-live", dest="knowledge_base", action="store_const", const="live",
-        help="write them active, with the English and physics subjects, once published",
+        "--knowledge-base-live", dest="live_subjects", nargs="*", metavar="SUBJECT",
+        choices=KNOWLEDGE_BASE_SUBJECTS,
+        help="write them active once published: the named subjects only "
+             f"({', '.join(KNOWLEDGE_BASE_SUBJECTS)}), the others in preview; "
+             "with no subject named, every subject, with the English and physics subjects",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    if args.live_subjects is not None:
+        args.knowledge_base = knowledge_base_live_mode(args.live_subjects)
+    return args
+
+
+if __name__ == "__main__":
+    args = parse_args()
     if args.print_hash:
         print(seed_hash(seed_rows(knowledge_base=args.knowledge_base)))
     else:
