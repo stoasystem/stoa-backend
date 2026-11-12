@@ -924,10 +924,13 @@ def _lesson_activity(lesson: student_evidence.Completion) -> ParentChildActivity
     )
 
 
-def _mistake_activity(item: Mapping[str, Any]) -> ParentChildActivity | None:
+def _mistake_activity(
+    item: Mapping[str, Any], names: learning_profile_service.TopicNames | None = None
+) -> ParentChildActivity | None:
     created_at = _response_text(item.get("created_at") or item.get("createdAt"))
     if created_at is None or not _parse_iso_datetime(created_at):
         return None
+    names = names or learning_profile_service.TopicNames({}, locale_service.resolve_locale(None))
     return ParentChildActivity(
         id=_response_text(item.get("lesson_id") or item.get("challenge_id"))
         or f"practice_mistake-{created_at}",
@@ -935,7 +938,12 @@ def _mistake_activity(item: Mapping[str, Any]) -> ParentChildActivity | None:
         title=message_catalog.text(
             "activity.practice_mistake_logged", locale_service.resolve_locale(None)
         ),
-        summary=_response_text(item.get("topic_id") or item.get("subject_id")) or "",
+        # The knowledge point as the curriculum names it, never its stored id (#390).
+        summary=names.name(
+            item.get("topic_id"), unit_id=item.get("unit_id"), lesson_id=item.get("lesson_id")
+        )
+        or _response_text(item.get("topic_id") or item.get("subject_id"))
+        or "",
         subject=_response_text(item.get("subject_id")),
         createdAt=created_at,
     )
@@ -1002,6 +1010,7 @@ def _practice_history_events(
     evidence: student_evidence.StudentEvidence,
 ) -> list[ParentChildActivity]:
     """The lessons the child finished and the answers they got wrong."""
+    names = _topic_names(evidence)
     activities = [
         activity
         for lesson in evidence.completions
@@ -1010,9 +1019,14 @@ def _practice_history_events(
     activities.extend(
         activity
         for mistake in evidence.mistakes
-        if (activity := _mistake_activity(mistake)) is not None
+        if (activity := _mistake_activity(mistake, names)) is not None
     )
     return activities
+
+
+def _topic_names(evidence: student_evidence.StudentEvidence) -> learning_profile_service.TopicNames:
+    """The curriculum's names for the child's knowledge points, in the reader's language."""
+    return learning_profile_service.TopicNames(evidence.content.catalog, evidence.content.locale)
 
 
 def _conversation_history_events(child_id: str) -> list[ParentChildActivity]:
@@ -1456,7 +1470,7 @@ async def get_child_summary(
         for row in _response_items(question_repo.list_questions_by_student(child_id, limit=500))
         if question_repo.is_question_record(row)
     ]
-    evidence = student_evidence.for_student(child_id)
+    evidence = student_evidence.for_student(child_id, locale=locale_service.resolve_locale(None))
     conversations = _list_conversations_for_child(child_id)
     latest_report = _latest_report_for_child(actor.user_id, child_id)
 
@@ -1476,20 +1490,32 @@ async def get_child_summary(
         and _is_current_week(item.get("escalated_at") or item.get("updated_at"))
     )
 
+    # Every name a knowledge point was written under counts as the one the
+    # curriculum gives it, in the reader's language (#390).
+    names = _topic_names(evidence)
+
+    def named(values: list[str]) -> list[str]:
+        return [names.name(value) or value for value in values]
+
     weak_topics_counter: Counter[str] = Counter()
     for question in questions:
-        weak_topics_counter.update(_response_string_list(question.get("knowledge_points", [])))
+        weak_topics_counter.update(named(_response_string_list(question.get("knowledge_points", []))))
     # What Ask questions named, by name only (#143).
     for record in asked_knowledge_repo.list_for_student(child_id):
-        weak_topics_counter.update(_response_string_list(record.get("knowledge_points", [])))
+        weak_topics_counter.update(named(_response_string_list(record.get("knowledge_points", []))))
     for mistake in evidence.mistakes:
-        for key in ("topic_id", "subject_id"):
-            value = _response_text(mistake.get(key))
-            if value:
-                weak_topics_counter[value] += 1
+        topic = _response_text(mistake.get("topic_id"))
+        if topic:
+            topic_name = names.name(
+                topic, unit_id=mistake.get("unit_id"), lesson_id=mistake.get("lesson_id")
+            )
+            weak_topics_counter[topic_name or topic] += 1
+        subject = _response_text(mistake.get("subject_id"))
+        if subject:
+            weak_topics_counter[subject] += 1
     if latest_report:
         weak_topics_counter.update(
-            _response_string_list(latest_report.get("weak_knowledge_points", []))
+            named(_response_string_list(latest_report.get("weak_knowledge_points", [])))
         )
 
     activities = []
@@ -1531,12 +1557,14 @@ async def get_child_learning_profile(
         for row in _response_items(question_repo.list_questions_by_student(child_id, limit=500))
         if question_repo.is_question_record(row)
     ]
-    mistakes = list(student_evidence.for_student(child_id).mistakes)
+    evidence = student_evidence.for_student(child_id, locale=locale_service.resolve_locale(None))
     return learning_profile_service.build_learning_profile(
         student_id=child_id,
         questions=questions,
-        mistakes=mistakes,
+        mistakes=list(evidence.mistakes),
         asked=asked_knowledge_repo.list_for_student(child_id),
+        catalog=evidence.content.catalog,
+        locale=evidence.content.locale,
     )
 
 
@@ -1635,7 +1663,8 @@ async def get_child_history(
 
     activities = []
     activities.extend(_question_history_events(child_id, limit=100))
-    activities.extend(_practice_history_events(student_evidence.for_student(child_id)))
+    evidence = student_evidence.for_student(child_id, locale=locale_service.resolve_locale(None))
+    activities.extend(_practice_history_events(evidence))
     activities.extend(_conversation_history_events(child_id))
     activities.extend(_report_history_events(actor.user_id, child_id))
 

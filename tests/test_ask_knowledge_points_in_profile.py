@@ -51,6 +51,7 @@ from stoa.services import (
     account_deletion_service,
     adaptive_learning_service,
     curriculum_service,
+    locale_service,
     parent_link_service,
     report_service,
 )
@@ -142,6 +143,14 @@ def _points(locale: str):
 
 def _student() -> TestClient:
     app = FastAPI()
+
+    @app.middleware("http")
+    async def bind_locale(request, call_next):
+        locale_service.set_request_locale(
+            locale_service.locale_from_accept_language(request.headers.get("accept-language"))
+        )
+        return await call_next(request)
+
     app.include_router(students.router, prefix="/students")
     app.include_router(adaptive.router, prefix="/adaptive")
     install_actor_overrides(app, {"sub": STUDENT, "role": "student"})
@@ -196,9 +205,15 @@ def test_what_was_asked_about_is_among_the_student_s_weak_topics(
 
     _ask(locale)
 
-    profile = _ok(_student().get(f"/students/{STUDENT}/learning-profile"))
+    profile = _ok(
+        _student().get(
+            f"/students/{STUDENT}/learning-profile", headers={"Accept-Language": locale}
+        )
+    )
     topics = {(topic["subject"], topic["label"]): topic["count"] for topic in profile["weakTopics"]}
-    assert topics == {("math", TITLES["kraefte"][locale]): 1, ("math", FREE[locale]): 1}
+    # A star counts under its own unit, and so under the unit's subject, whatever
+    # conversation it was asked in (#390); a free name keeps the conversation's.
+    assert topics == {("physics", TITLES["kraefte"][locale]): 1, ("math", FREE[locale]): 1}
     summary = _ok(_student().get(f"/students/{STUDENT}/summary"))
     assert set(summary["weak_knowledge_points"]) == {TITLES["kraefte"][locale], FREE[locale]}
 
