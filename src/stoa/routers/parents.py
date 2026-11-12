@@ -925,11 +925,12 @@ def _lesson_activity(lesson: student_evidence.Completion) -> ParentChildActivity
 
 
 def _mistake_activity(
-    item: Mapping[str, Any], names: learning_profile_service.TopicNames
+    item: Mapping[str, Any], names: learning_profile_service.TopicNames | None = None
 ) -> ParentChildActivity | None:
     created_at = _response_text(item.get("created_at") or item.get("createdAt"))
     if created_at is None or not _parse_iso_datetime(created_at):
         return None
+    names = names or learning_profile_service.TopicNames({}, locale_service.resolve_locale(None))
     return ParentChildActivity(
         id=_response_text(item.get("lesson_id") or item.get("challenge_id"))
         or f"practice_mistake-{created_at}",
