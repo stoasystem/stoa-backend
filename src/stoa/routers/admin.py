@@ -2230,7 +2230,7 @@ def _account_issuer(settings: Settings) -> str:
 
 
 def _invitation_delivery(locale: str | None):
-    """Mail the invitee in the language the request names, else the default (#374).
+    """Mail the invitee in the language the request names, else in all four (#374, #415).
 
     Never in the administrator's own screen language: that is who sent the
     invitation, not who reads it. The operator calls (#384) mail the same way.

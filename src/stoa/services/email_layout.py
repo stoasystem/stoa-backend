@@ -61,6 +61,8 @@ class Action:
 
     label: str
     url: str
+    # The language of the "copy this link" line; by default the email's own.
+    locale: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,9 +239,9 @@ def _block(block: Block, lang: str) -> str:
                 f'font-size:28px;letter-spacing:6px;font-weight:700;color:{_BRAND_DARK};">'
                 f"{escape(value)}</span></p>"
             )
-        case Action(label=label, url=url):
+        case Action(label=label, url=url, locale=own):
             href = escape(url, quote=True)
-            fallback = _copy("link_fallback", lang)
+            fallback = _copy("link_fallback", _lang(own) if own else lang)
             return (
                 '<table role="presentation" cellpadding="0" cellspacing="0" '
                 'style="margin:6px 0 22px;"><tr>'
@@ -265,32 +267,11 @@ def _block(block: Block, lang: str) -> str:
     raise TypeError(f"not an email block: {block!r}")
 
 
-def render(
-    *,
-    subject: str,
-    title: str,
-    greeting: str | None,
-    blocks: list[Block] | tuple[Block, ...],
-    locale: str | None,
-    footer_reason: str | None,
-    questions: bool = True,
-) -> Rendered:
-    """One email in the STOA frame, as HTML and plain text.
-
-    `footer_reason` says why the reader gets this email; a notification email
-    leaves it out, since its unsubscribe line says the same and is added at
-    send time. `questions` adds "reply to this email" above the sign-off.
-    """
-    lang = _lang(locale)
+def _frame(
+    *, subject: str, title: str, body: str, lang: str, tagline: str, reason: str
+) -> str:
     settings = config.settings()
-    body = "".join(_block(block, lang) for block in blocks)
-    if greeting:
-        body = _p(escape(greeting)) + body
-    if questions:
-        body += _p(escape(_copy("questions", lang)), margin="8px 0 4px")
-    body += _p(_lines(_copy("signoff", lang)), margin="0 0 28px")
-    reason = _p(escape(footer_reason), size=12, color=_FAINT, margin="8px 0 0") if footer_reason else ""
-    html = f"""<!doctype html>
+    return f"""<!doctype html>
 <html lang="{escape(lang, quote=True)}">
 <head>
 <meta charset="utf-8">
@@ -310,7 +291,7 @@ def render(
 {body}
 </td></tr>
 <tr><td style="padding:18px 36px 24px;background:{_FOOT};border-top:1px solid {_LINE};border-radius:0 0 12px 12px;font-family:{_FONT};font-size:12px;line-height:1.6;color:{_FAINT};">
-<strong style="color:{_BRAND_DARK};">STOA</strong> · {escape(_copy("tagline", lang))}<br>
+<strong style="color:{_BRAND_DARK};">STOA</strong> · {escape(tagline)}<br>
 Zürich · <a href="mailto:info@stoaedu.ch" style="color:{_FAINT};">info@stoaedu.ch</a> · <a href="https://stoaedu.ch" style="color:{_FAINT};">stoaedu.ch</a>
 {reason}{FOOTER_MARK}
 </td></tr>
@@ -319,13 +300,104 @@ Zürich · <a href="mailto:info@stoaedu.ch" style="color:{_FAINT};">info@stoaedu
 </table>
 </body>
 </html>"""
+
+
+def _section_body(
+    greeting: str | None, blocks: list[Block] | tuple[Block, ...], lang: str, questions: bool
+) -> str:
+    body = "".join(_block(block, lang) for block in blocks)
+    if greeting:
+        body = _p(escape(greeting)) + body
+    if questions:
+        body += _p(escape(_copy("questions", lang)), margin="8px 0 4px")
+    return body + _p(_lines(_copy("signoff", lang)), margin="0 0 28px")
+
+
+def _reason(text: str | None) -> str:
+    return _p(escape(text), size=12, color=_FAINT, margin="8px 0 0") if text else ""
+
+
+def render(
+    *,
+    subject: str,
+    title: str,
+    greeting: str | None,
+    blocks: list[Block] | tuple[Block, ...],
+    locale: str | None,
+    footer_reason: str | None,
+    questions: bool = True,
+) -> Rendered:
+    """One email in the STOA frame, as HTML and plain text.
+
+    `footer_reason` says why the reader gets this email; a notification email
+    leaves it out, since its unsubscribe line says the same and is added at
+    send time. `questions` adds "reply to this email" above the sign-off.
+    """
+    lang = _lang(locale)
+    html = _frame(
+        subject=subject,
+        title=title,
+        body=_section_body(greeting, blocks, lang, questions),
+        lang=lang,
+        tagline=_copy("tagline", lang),
+        reason=_reason(footer_reason),
+    )
+    return Rendered(subject=subject, html=html, text=to_text(html))
+
+
+# The order a reader in Switzerland expects: the national languages, then English.
+ALL_LOCALES: tuple[str, ...] = ("de", "fr", "it", "en")
+LANGUAGE_NAMES = {"de": "Deutsch", "fr": "Français", "it": "Italiano", "en": "English"}
+
+
+@dataclass(frozen=True, slots=True)
+class Section:
+    """One language's part of an email written in several (#415)."""
+
+    locale: str
+    greeting: str | None
+    blocks: tuple[Block, ...]
+    footer_reason: str | None = None
+
+
+def render_multilingual(
+    *, subject: str, title: str, sections: list[Section] | tuple[Section, ...]
+) -> Rendered:
+    """One email that says the same thing in several languages, one after the other.
+
+    For a reader whose language STOA does not know yet. Each section is headed by
+    its language's own name and carries its own greeting, sign-off and, in the
+    footer, its own reason; the frame around them is drawn once.
+    """
+    if not sections:
+        raise ValueError("a multilingual email needs at least one section")
+    names = " · ".join(LANGUAGE_NAMES.get(_lang(s.locale), s.locale) for s in sections)
+    parts = [_p(escape(names), size=13, color=_FAINT, margin="0 0 18px")]
+    for index, section in enumerate(sections):
+        lang = _lang(section.locale)
+        rule = f"border-top:1px solid {_LINE};padding-top:18px;" if index else ""
+        parts.append(
+            f'<div lang="{escape(lang, quote=True)}" style="{rule}">'
+            + _block(Subheading(LANGUAGE_NAMES.get(lang, lang)), lang)
+            + _section_body(section.greeting, section.blocks, lang, True)
+            + "</div>"
+        )
+    first = _lang(sections[0].locale)
+    html = _frame(
+        subject=subject,
+        title=title,
+        body="".join(parts),
+        lang=first,
+        tagline=_copy("tagline", first),
+        reason="".join(_reason(s.footer_reason) for s in sections),
+    )
     return Rendered(subject=subject, html=html, text=to_text(html))
 
 
 class _TextWriter(HTMLParser):
     """HTML to readable plain text: paragraphs as blank lines, links as "label: url"."""
 
-    _BREAKS = {"p", "h1", "h2", "ul", "table", "tr"}
+    _BREAKS = {"p", "h1", "h2", "ul", "table", "tr", "div"}
     _HIDDEN = {"head", "style", "script", "title"}
 
     def __init__(self) -> None:

@@ -560,14 +560,15 @@ def test_a_dry_run_invitation_writes_and_sends_nothing(fake_table, mailbox) -> N
     assert answer["result"] == {
         "dryRun": True,
         "summary": (
-            "Would create a student account in state invited and send a German activation "
+            "Would create a student account in state invited and send a four-language "
+            "(German, French, Italian, English) activation "
             f"email to {ADDRESS}. Its account number is allocated when it runs. Nothing was "
             "created or sent."
         ),
         "role": "student",
         "email": ADDRESS,
         "accountStatus": "invited",
-        "emailLanguage": "de",
+        "emailLanguage": "all",
         "expirySeconds": account_provisioning_service.DEFAULT_INVITATION_SECONDS,
     }
     assert mailbox == []
@@ -767,7 +768,7 @@ def test_a_dry_run_reissue_reports_the_invitation_and_changes_nothing(
     assert result["expired"] is False
     assert result["accountNumber"] == invited["accountNumber"]
     assert result["accountStatus"] == "invited"
-    assert result["emailLanguage"] == "de"
+    assert result["emailLanguage"] == "all"
     assert result["summary"].startswith(
         f"Now: invitation {invited['invitationId']} is issued; student account "
         f"{invited['accountNumber']} is invited. Would retire this invitation"
