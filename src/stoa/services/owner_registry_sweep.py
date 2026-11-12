@@ -16,10 +16,19 @@ checks two things for every account at once:
    fence says `deleted`, other than what deletion keeps on purpose (the fence,
    its commands, its tombstones) - plus any registry row still filed under it.
 
+3. **Stale references into a deleted account.** A registry row another
+   account holds for one of a deleted account's derived partitions
+   (`USER#{admin}/REFERENCED_IN#USER#{deleted}`): it was true while that
+   account's rows named the holder, and nothing removes it when they go. It
+   costs the holder's own deletion one empty read and keeps the deleted
+   account's id in a key. Listed only when the walk finished and saw no row in
+   that partition that still names the holder.
+
 The walk is two scans. The first collects the accounts (their fence rows) and
 the registry. The second checks every row and, for a backfill, writes the
 missing registry rows. Both are report-only unless `write=True`; nothing is
-ever deleted or re-queued here.
+deleted or re-queued here. `remove_stale_references` is the one removal, and
+only the daily job calls it.
 
 The report holds counts by key family (`CONV/MSG`) and up to `SAMPLE_LIMIT`
 keys per finding - keys, never row contents.
@@ -101,6 +110,8 @@ class SweepReport:
     leftovers: Counter[str] = field(default_factory=Counter)
     leftover_samples: list[dict[str, str]] = field(default_factory=list)
     registry_of_deleted_accounts: int = 0
+    # Keys of registry rows that point into a deleted account's partitions.
+    stale_references: list[dict[str, str]] = field(default_factory=list)
     last_key: dict[str, Any] | None = None
     complete: bool = False
 
@@ -126,6 +137,7 @@ class SweepReport:
             "leftovers_by_family": dict(sorted(self.leftovers.items())),
             "leftover_samples": self.leftover_samples,
             "registry_rows_of_deleted_accounts": self.registry_of_deleted_accounts,
+            "stale_references": len(self.stale_references),
             "complete": self.complete,
             "registry_complete": self.registry_complete,
             "leftover_free": self.leftover_free,
@@ -316,6 +328,15 @@ def run(
         registry_rows=len(seen.registry),
     )
     registry = set(seen.registry)
+    # A deleted account's derived partitions, the registry rows other accounts
+    # hold for them, and every (account, partition) some row still names.
+    gone_partitions = {
+        partition
+        for account in seen.deleted
+        for partition in owner_registry.derived_partitions(account)
+    }
+    held: dict[tuple[str, str], dict[str, str]] = {}
+    named_in: set[tuple[str, str]] = set()
     pages = scan_pages(table=target, start=start)
     if max_pages is not None:
         pages = islice(pages, max_pages)
@@ -324,11 +345,21 @@ def run(
             report.rows_scanned += 1
             if owner_registry.is_registry_row(item):
                 pk = str(item.get("PK") or "")
-                if pk.startswith("USER#") and pk[len("USER#") :] in seen.deleted:
+                holder = pk[len("USER#") :] if pk.startswith("USER#") else ""
+                if holder in seen.deleted:
                     report.registry_of_deleted_accounts += 1
+                elif holder and item.get("registered_pk") in gone_partitions:
+                    held[(holder, str(item["registered_pk"]))] = {
+                        "PK": pk,
+                        "SK": str(item.get("SK")),
+                    }
                 continue
             missing, leftover = check_row(item, seen)
             key = {"PK": str(item.get("PK")), "SK": str(item.get("SK"))}
+            if key["PK"] in gone_partitions:
+                named_in.update(
+                    (account, key["PK"]) for account in named_accounts(item, seen.active)
+                )
             if leftover:
                 report.leftovers[family(item)] += 1
                 if len(report.leftover_samples) < SAMPLE_LIMIT:
@@ -351,12 +382,18 @@ def run(
             on_page(report)
         if page.last_key is None:
             report.complete = True
+            # Only a whole walk can say that nothing in the partition names the
+            # holder any more; a resumed one did not see the rows before `start`.
+            if start is None:
+                report.stale_references = [
+                    key for pair, key in sorted(held.items()) if pair not in named_in
+                ]
             break
         if remaining_seconds is not None and remaining_seconds() < min_remaining_seconds:
             break
     logger.info(
         "owner_registry_sweep accounts=%d deleted=%d rows=%d unregistered=%d written=%d "
-        "leftovers=%d deleted_registry=%d complete=%s",
+        "leftovers=%d deleted_registry=%d stale_references=%d complete=%s",
         report.accounts,
         report.deleted_accounts,
         report.rows_scanned,
@@ -364,6 +401,31 @@ def run(
         report.registry_written,
         sum(report.leftovers.values()),
         report.registry_of_deleted_accounts,
+        len(report.stale_references),
         report.complete,
     )
     return report
+
+
+def remove_stale_references(report: SweepReport, *, table: object | None = None) -> int:
+    """Delete the registry rows `report.stale_references` lists; returns how many went.
+
+    Each delete is conditional on the row still being a registry row, so a key
+    that has since become something else is left alone. Registry rows only: no
+    account's data is touched, and a row removed in error would show as a
+    missing registration on the next walk.
+    """
+    target = table if table is not None else db_table.table()
+    removed = 0
+    for key in report.stale_references:
+        try:
+            db_table.delete(
+                table=target,
+                Key=dict(key),
+                ConditionExpression="entity_type = :registry",
+                ExpressionAttributeValues={":registry": owner_registry.ENTITY_TYPE},
+            )
+        except db_table.WriteRefused:
+            continue
+        removed += 1
+    return removed

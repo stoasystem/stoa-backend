@@ -863,9 +863,18 @@ def _identity_cross_account_branch(
             generation=int(command["generation"]),
             now_iso=now,
         )
-    return _run_base_branch(
+    result = _run_base_branch(
         command=command, previous=previous, predicate=predicate, mutate=mutate
     )
+    if result.status == "complete":
+        # Two clean passes and the debt opened above is still pending: the
+        # account never had a provider identity (invited, never signed in).
+        account_deletion_repo.close_unused_provider_revoke_debt(
+            user_id=str(command["user_id"]),
+            generation=int(command["generation"]),
+            closed_at=now,
+        )
+    return result
 
 
 def _is_own_invitation(item: Mapping[str, Any], user_id: str) -> bool:
