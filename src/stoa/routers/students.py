@@ -734,12 +734,14 @@ async def get_learning_profile(
         question_repo.list_questions_by_student(student_id, limit=500).get("Items", []),
         correlation_id,
     )
-    mistakes = list(student_evidence.for_student(student_id).mistakes)
+    evidence = student_evidence.for_student(student_id, locale=locale_service.resolve_locale(None))
     return learning_profile_service.build_learning_profile(
         student_id=student_id,
         questions=questions,
-        mistakes=mistakes,
+        mistakes=list(evidence.mistakes),
         asked=asked_knowledge_repo.list_for_student(student_id),
+        catalog=evidence.content.catalog,
+        locale=evidence.content.locale,
     )
 
 
