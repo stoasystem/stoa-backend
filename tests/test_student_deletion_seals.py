@@ -34,6 +34,10 @@ PRIVATE = (
     "private student message",
     "private question",
     "Step 2 makes no sense to me.",
+    # The invitation the account was opened with: it names the account by
+    # `account_id` only, and outlived the account on both deletion paths.
+    "invited.person@example.invalid",
+    "Invited Private Person",
 )
 
 
@@ -74,6 +78,19 @@ def table(monkeypatch):
         # question or practised has rows like these.
         {"PK": f"PROGRESS#{student}", "SK": "LESSON#l1", "student_id": student, "completed": True},
         {"PK": f"USAGE_LEDGER#{student}", "SK": "EVENT#e1", "student_id": student, "action": "question"},
+        {
+            "PK": "ACCOUNT_INVITATION#digest-1", "SK": "META", "entity_type": "account_invitation",
+            "invitation_id": "inv-1", "token_digest": "digest-1", "account_id": student,
+            "role": "student", "email": PRIVATE[4], "full_name": PRIVATE[5], "status": "used",
+            "version": 2, "invited_by": "admin-1", "issued_at": "2026-09-20T10:00:00+00:00",
+        },
+        # Someone else's invitation, issued by the same administrator: it stays.
+        {
+            "PK": "ACCOUNT_INVITATION#digest-2", "SK": "META", "entity_type": "account_invitation",
+            "invitation_id": "inv-2", "token_digest": "digest-2", "account_id": "student-other",
+            "role": "student", "email": "other@example.invalid", "full_name": "Other Person",
+            "status": "issued", "version": 1, "invited_by": "admin-1",
+        },
     )
     table.rows[(f"USER#{student}", "ACCOUNT_FENCE")].update(
         {"status": "deletion_pending", "command_id": COMMAND_ID, "entity_type": "account_fence",
@@ -117,3 +134,5 @@ def test_a_student_with_a_conversation_and_practice_can_be_deleted(table, monkey
     assert service.validate_deletion_seal(command=full_command, fence=fence, seal=seal), history
     left = [key for key, row in table.rows.items() if any(text in json.dumps(row, default=str) for text in PRIVATE)]
     assert left == [], left
+    assert ("ACCOUNT_INVITATION#digest-1", "META") not in table.rows
+    assert table.rows[("ACCOUNT_INVITATION#digest-2", "META")]["full_name"] == "Other Person"

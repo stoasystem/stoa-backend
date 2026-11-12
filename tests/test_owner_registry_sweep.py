@@ -66,6 +66,9 @@ def table() -> FakeTable:
         {"PK": f"USER#{GONE}", "SK": "PROFILE", "user_id": GONE, "status": "deleted",
          "owner_deletion_generation": 2},
         {"PK": f"USER#{GONE}", "SK": "DELETE_COMMAND#x", "user_id": GONE},
+        # Its invitation names it by `account_id` only, and holds an address and a name.
+        {"PK": "ACCOUNT_INVITATION#d9", "SK": "META", "entity_type": "account_invitation",
+         "account_id": GONE, "email": "gone@example.invalid", "full_name": "Gone Person"},
         {"PK": f"USER#{GONE}", "SK": "PROVIDER_REVOKE#00000000000000000002", "user_id": GONE,
          "generation": 2, "status": "complete"},
         owner_registry.registry_item(GONE, "UPLOAD#u9"),
@@ -100,8 +103,11 @@ def test_a_dry_run_reports_and_writes_nothing(table):
 def test_the_sweep_finds_a_deleted_accounts_leftovers_and_registry(table):
     report = sweep.run(table=table)
 
-    assert report.leftovers == {"UPLOAD/META": 1}
-    assert report.leftover_samples == [{"PK": "UPLOAD#u9", "SK": "META"}]
+    assert report.leftovers == {"UPLOAD/META": 1, "ACCOUNT_INVITATION/META": 1}
+    assert sorted(report.leftover_samples, key=lambda key: key["PK"]) == [
+        {"PK": "ACCOUNT_INVITATION#d9", "SK": "META"},
+        {"PK": "UPLOAD#u9", "SK": "META"},
+    ]
     assert report.registry_of_deleted_accounts == 1
     assert report.deleted_accounts == 1 and report.accounts == 3
 
@@ -201,8 +207,8 @@ def test_the_daily_job_is_report_only_and_logs_findings(table, caplog):
     marker = table.rows.pop((sweep.RUN_MARKER_KEY["PK"], sweep.RUN_MARKER_KEY["SK"]))
     assert table.rows == before
     assert marker["complete"] is True
-    assert marker["missing_registrations"] == 4 and marker["leftover_rows"] == 1
-    assert summary["missing_registrations"] == 4 and summary["leftover_rows"] == 1
+    assert marker["missing_registrations"] == 4 and marker["leftover_rows"] == 2
+    assert summary["missing_registrations"] == 4 and summary["leftover_rows"] == 2
     assert "owner_registry_sweep_findings" in caplog.text
     assert STUDENT not in json.dumps(marker, default=str)
     # Keys and counts only: no row contents in what is logged.

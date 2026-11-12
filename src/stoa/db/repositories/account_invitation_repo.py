@@ -13,6 +13,7 @@ from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 
 
@@ -23,6 +24,7 @@ class AccountInvitationConflict(RuntimeError):
 type InvitationItem = dict[str, object]
 
 
+ENTITY_TYPE = "account_invitation"
 INVITATION_SK = "META"
 POINTER_SK = "POINTER"
 # GSI-Email is keyed on the address alone; a page of it ends on the base key and that.
@@ -156,9 +158,23 @@ def create_invitation(item: Mapping[str, object], *, table: object | None = None
     _conditional_put(pointer, table=target)
     row = {
         **invitation_key(token_digest),
-        "entity_type": "account_invitation",
+        "entity_type": ENTITY_TYPE,
         **dict(item),
     }
+    # Written outside `fenced` (an administrator's write, before the invited
+    # person has signed in), so the registry rows are written here, before the
+    # row that names the accounts (#397): the invited account, whose deletion
+    # removes the invitation, and the inviter, whom the daily sweep would
+    # otherwise report as named in an unregistered partition.
+    for field in ("account_id", "invited_by"):
+        account = row.get(field)
+        if isinstance(account, str) and account.strip():
+            _put_item(
+                target,
+                Item=owner_registry.registry_item(
+                    account.strip(), str(row["PK"]), owner_registry.ROLE_REFERENCE
+                ),
+            )
     _conditional_put(row, table=target)
     return row
 
