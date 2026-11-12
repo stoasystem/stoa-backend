@@ -132,6 +132,14 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "Matière : {subject}. Merci d'accepter la demande dans les {minutes} minutes.",
         "it": "Materia: {subject}. Accetti la richiesta entro {minutes} minuti.",
     },
+    # A standing offer (#391): made again to a teacher who let it lapse, open
+    # until the request expires, so it names no minutes.
+    "teacher_help.dispatched.summary_standing": {
+        "de": "Fach: {subject}. Die Anfrage wartet weiterhin auf Sie. Bitte nehmen Sie sie an, sobald Sie können.",
+        "en": "Subject: {subject}. The request is still waiting for you. Please accept it as soon as you can.",
+        "fr": "Matière : {subject}. La demande vous attend toujours. Merci de l'accepter dès que possible.",
+        "it": "Materia: {subject}. La richiesta La attende ancora. La accetti appena possibile.",
+    },
     # ── the dispatch reminder email (#141) ───────────────────────────────
     #
     # It leaves STOA, so it says that there is a request, its subject and where

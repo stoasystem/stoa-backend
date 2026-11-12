@@ -349,9 +349,29 @@ def test_a_failed_request_read_writes_nothing(table, monkeypatch, first_accept):
     assert set(table.rows) == rows_before
 
 
-def test_a_teacher_who_timed_out_is_not_offered_the_case_again(table):
+def test_a_teacher_who_timed_out_is_offered_it_again_when_nobody_else_is_free(table):
+    # Nobody else is on dispatch: the request goes back to the teacher who let
+    # it lapse, who finds it in their list and takes it (#391).
     _dispatch_to(table, TEACHER)
     _help(table)["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+
+    help_requests.sweep()
+
+    record = _help(table)
+    assert record["dispatched_teacher_id"] == TEACHER
+    assert record["dispatch_fallback"] is True
+    assert TEACHER not in record["previous_dispatch_teacher_ids"]
+    listed = _client().get("/teachers/me/help-requests")
+    assert [item["requestId"] for item in listed.json()["items"]] == [REQUEST]
+    assert _client().get(f"/teachers/me/help-requests/{REQUEST}").status_code == 200
+    assert _set_status(_client(), "in_progress").status_code == 200
+    assert _help(table)["teacher_id"] == TEACHER
+
+
+def test_a_teacher_who_declined_is_not_offered_the_case_again(table):
+    _dispatch_to(table, TEACHER)
+    _help(table)["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+    _help(table)["declined_dispatch_teacher_ids"] = [TEACHER]
 
     help_requests.sweep()
 
@@ -578,6 +598,8 @@ def test_deleting_the_teacher_returns_an_open_request_to_waiting(table, accepted
 def test_deleting_the_teacher_after_a_timeout_clears_the_lapsed_offer(table):
     _dispatch_to(table, TEACHER)
     _help(table)["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+    # The teacher went off dispatch, so it is not offered to them again (#391).
+    table.rows[(f"USER#{TEACHER}", "PROFILE")]["dispatch_availability"] = "paused"
     help_requests.sweep()
     assert TEACHER in _help(table)["previous_dispatch_teacher_ids"]
 

@@ -79,9 +79,16 @@ TEACHER_TARGETS = (IN_PROGRESS, RESOLVED)
 TEACHER_HELP_WAITING_EVENT = teacher_dispatch_service.TEACHER_HELP_WAITING_EVENT
 
 # What an offer writes, and what finding nobody writes. Each write that ends
-# one of them removes exactly these.
-_OFFER_FIELDS = ("dispatched_teacher_id", "dispatch_id", "dispatch_deadline_at")
+# one of them removes exactly these. `dispatch_fallback` marks a standing offer:
+# one made again to a teacher who let it lapse, because nobody else was free
+# (#391).
+_OFFER_FIELDS = ("dispatched_teacher_id", "dispatch_id", "dispatch_deadline_at", "dispatch_fallback")
 _NO_CANDIDATE_FIELDS = ("dispatch_no_candidate_reason", "dispatch_no_candidate_since")
+# Teachers who declined the request (#391), kept apart from the ones who let
+# its offer lapse (`previous_dispatch_teacher_ids`): a lapse is offered again
+# when nobody else is free, a refusal never. Nothing writes it yet - there is
+# no way to decline - but the dispatch already honours it.
+DECLINED_FIELD = "declined_dispatch_teacher_ids"
 # A scan's ceiling on pages; the table is far from it.
 _SCAN_PAGE_LIMIT = 1000
 # A read on GSI-StudentId continues from the index's key as well as the table's.
@@ -379,9 +386,11 @@ def student_view(record: Mapping[str, Any], *, now: str | None = None) -> tuple[
         return stored, holder
     if holder:
         return "assigned", holder
-    if _live_offer(record, timestamp):
+    if _live_offer(record, timestamp) and not record.get("dispatch_fallback"):
         return "assigned", str(record.get("dispatched_teacher_id") or "")
-    if record.get("dispatch_status") == "no_candidate":
+    # A standing offer waits on a teacher who let it lapse once (#391): nobody
+    # is expected to answer within minutes, and the student is told so.
+    if record.get("dispatch_status") == "no_candidate" or record.get("dispatch_fallback"):
         return "waiting_no_teacher", ""
     return PENDING, ""
 
@@ -692,11 +701,13 @@ def _live_offer(record: Mapping[str, Any], now: str) -> bool:
 
 
 def _previous(record: Mapping[str, Any], now: str) -> list[str]:
-    """Teachers this request must not be offered to again.
+    """Teachers who let the request's offer lapse, in the order they did.
 
     The ones recorded, and the teacher of an offer that lapsed unanswered:
     recording the lapse in the same write as the next offer is what keeps the
-    two from disagreeing.
+    two from disagreeing. They are offered it again only when nobody else can
+    be (#391). Every name a record stored before #391 is a lapse: no code ever
+    wrote a refusal there.
     """
     previous = list(
         dict.fromkeys(str(item) for item in record.get("previous_dispatch_teacher_ids") or [] if item)
@@ -712,50 +723,106 @@ def _previous(record: Mapping[str, Any], now: str) -> list[str]:
     return previous
 
 
+def _declined(record: Mapping[str, Any]) -> list[str]:
+    """Teachers who declined the request: it is never offered to them again (#391)."""
+    return [str(item) for item in record.get(DECLINED_FIELD) or [] if item]
+
+
 def dispatch(record: Mapping[str, Any], *, now: str | None = None, table: Any | None = None) -> dict[str, Any]:
     """Offer a pending request to the best available teacher, or say nobody is free.
 
     Returns the record as written. A request already taken, ended, or holding
     a live offer is returned as it is. The offer binds the chosen teacher's
     active account and profile version, and the record's version.
+
+    A teacher who has not had the request comes first. With none free, it is
+    offered again to a free teacher who let it lapse - never to one who
+    declined it - as a standing offer, open until the request expires (#391).
+    A standing offer still gives way to a teacher who becomes free.
     """
     timestamp = now or _now()
     store: Any = table or db_table.table()
-    if stored_status(record) != PENDING or record.get("teacher_id") or _live_offer(record, timestamp):
+    if stored_status(record) != PENDING or record.get("teacher_id"):
+        return dict(record)
+    standing = _live_offer(record, timestamp)
+    if standing and not record.get("dispatch_fallback"):
         return dict(record)
     previous = _previous(record, timestamp)
-    plan = teacher_dispatch_service.plan_dispatch(
-        {**record, "previous_dispatch_teacher_ids": previous}, now=timestamp
-    )
-    if not plan["selected"]:
-        reason = str(plan["summary"]["noCandidateReason"] or "no_eligible_teacher")
-        return _record_no_candidate(record, reason=reason, previous=previous, now=timestamp, table=store)
+    declined = _declined(record)
+    profiles = teacher_dispatch_service.list_teacher_profiles()
 
-    candidate = plan["selected"][0]
+    def plan(excluded: list[str]) -> dict[str, Any]:
+        return teacher_dispatch_service.plan_dispatch(
+            {**record, "previous_dispatch_teacher_ids": excluded}, profiles, now=timestamp
+        )
+
+    if standing:
+        holder = str(record.get("dispatched_teacher_id") or "")
+        fresh = plan([*previous, holder, *declined])
+        if not fresh["selected"]:
+            return dict(record)
+        return _offer(
+            record, fresh["selected"][0], previous=[*previous, holder], standing=False, now=timestamp, table=store
+        )
+    first = plan([*previous, *declined])
+    if first["selected"]:
+        return _offer(record, first["selected"][0], previous=previous, standing=False, now=timestamp, table=store)
+    again = [candidate for candidate in plan(declined)["selected"] if str(candidate["teacherId"]) in previous]
+    if again:
+        teacher_id = str(again[0]["teacherId"])
+        return _offer(
+            record,
+            again[0],
+            previous=[value for value in previous if value != teacher_id],
+            standing=True,
+            now=timestamp,
+            table=store,
+        )
+    reason = str(first["summary"]["noCandidateReason"] or "no_eligible_teacher")
+    return _record_no_candidate(record, reason=reason, previous=previous, now=timestamp, table=store)
+
+
+def _offer(
+    record: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    *,
+    previous: list[str],
+    standing: bool,
+    now: str,
+    table: Any,
+) -> dict[str, Any]:
+    """Write one offer to ``candidate`` and tell them, closing the offer it replaces."""
     teacher_id = str(candidate["teacherId"])
     dispatch_id = str(uuid.uuid4())
-    deadline = _deadline(timestamp)
+    deadline = _standing_deadline(record, now) if standing else _deadline(now)
     changes: dict[str, Any] = {
         "dispatched_teacher_id": teacher_id,
         "dispatch_status": "dispatched",
         "dispatch_id": dispatch_id,
         "dispatch_deadline_at": deadline,
         "dispatch_attempt_count": _int(record.get("dispatch_attempt_count"), 0) + 1,
-        "dispatch_updated_at": timestamp,
+        "dispatch_updated_at": now,
         "previous_dispatch_teacher_ids": previous,
     }
+    remove: tuple[str, ...] = _NO_CANDIDATE_FIELDS
+    if standing:
+        changes["dispatch_fallback"] = True
+    else:
+        remove = (*_NO_CANDIDATE_FIELDS, "dispatch_fallback")
     try:
         written = _write(
             record,
             changes,
-            remove=_NO_CANDIDATE_FIELDS,
+            remove=remove,
             condition="escalation_status = :pending AND attribute_not_exists(teacher_id)",
             values={":pending": PENDING},
             teacher=candidate,
-            table=store,
+            table=table,
         )
     except HelpRequestConflict:
         return dict(record)
+    replaced = str(record.get("dispatched_teacher_id") or "")
+    _close_offer(record, "expired" if replaced == teacher_id else "reassigned", now=now)
     # Only after the offer is written, so a refused offer tells nobody (#141).
     try:
         notification_service.emit_teacher_help_dispatched(
@@ -764,10 +831,34 @@ def dispatch(record: Mapping[str, Any], *, now: str | None = None, table: Any | 
             dispatch_id=dispatch_id,
             deadline_at=deadline,
             accept_minutes=teacher_dispatch_service.DISPATCH_ACCEPT_TIMEOUT_SECONDS // 60,
+            standing=standing,
         )
     except Exception as exc:  # noqa: BLE001 - best effort by contract
         logger.warning("dispatch_teacher_alert_failed error=%s", type(exc).__name__)
     return written
+
+
+def _close_offer(record: Mapping[str, Any], state: str, *, now: str) -> None:
+    """Mark the notification of the offer ``record`` held as no longer open (#391)."""
+    dispatch_id = str(record.get("dispatch_id") or "")
+    if not dispatch_id or record.get("dispatch_status") != "dispatched":
+        return
+    try:
+        notification_service.close_teacher_help_offer(dispatch_id=dispatch_id, state=state, now=now)
+    except Exception as exc:  # noqa: BLE001 - best effort by contract
+        logger.warning("dispatch_offer_close_failed error=%s", type(exc).__name__)
+
+
+def _standing_deadline(record: Mapping[str, Any], now: str) -> str:
+    """When a standing offer lapses: when the request expires, never sooner than an ordinary offer."""
+    ordinary = _deadline(now)
+    asked = _parse(record.get("escalated_at"))
+    if asked is None:
+        return ordinary
+    expires = asked + timedelta(seconds=config.settings().teacher_help_expiry_seconds)
+    if expires <= (_parse(ordinary) or expires):
+        return ordinary
+    return expires.isoformat()
 
 
 def _record_no_candidate(
@@ -796,7 +887,7 @@ def _record_no_candidate(
         "previous_dispatch_teacher_ids": previous,
     }
     try:
-        return _write(
+        written = _write(
             record,
             changes,
             remove=_OFFER_FIELDS,
@@ -809,6 +900,8 @@ def _record_no_candidate(
         # sweep looks again.
         logger.info("No-candidate record skipped for %s", record.get("conversation_id"))
         return dict(record)
+    _close_offer(record, "expired", now=now)
+    return written
 
 
 # ── Ending a request nobody took ─────────────────────────────────────────────
@@ -820,6 +913,8 @@ class _Ending:
     changed: bool
     refund: Any = None
     refund_week: str | None = None
+    #: The record as this ending read it, before its write.
+    before: Mapping[str, Any] | None = None
 
 
 def withdraw(
@@ -831,7 +926,11 @@ def withdraw(
     that a teacher taking it at the same moment refuses. Withdrawing twice
     returns the withdrawn request and writes nothing.
     """
-    return _end(conversation_id, outcome=WITHDRAWN, student_id=student_id, now=now, table=table).record
+    timestamp = now or _now()
+    ending = _end(conversation_id, outcome=WITHDRAWN, student_id=student_id, now=timestamp, table=table)
+    if ending.changed and ending.before is not None:
+        _close_offer(ending.before, WITHDRAWN, now=timestamp)
+    return ending.record
 
 
 def expire(
@@ -858,7 +957,9 @@ def expire(
         return None
     if not ending.changed:
         return None
-    observed = _parse(timestamp) or datetime.now(timezone.utc)
+    if ending.before is not None:
+        _close_offer(ending.before, EXPIRED, now=timestamp)
+    observed =_parse(timestamp) or datetime.now(timezone.utc)
     notification_service.emit_teacher_help_expired(
         conversation=ending.record,
         case_returned=(
@@ -967,6 +1068,7 @@ def _end(
                 changed=True,
                 refund=result.disposition,
                 refund_week=result.week_identity,
+                before=record,
             )
         if result.disposition is Disposition.IDEMPOTENCY_CONFLICT:
             raise HelpRequestEndingRefused("teacher_help_request_not_withdrawable")
@@ -1345,9 +1447,11 @@ def sweep(*, now: str | None = None, table: Any | None = None) -> dict[str, Any]
 
     For each pending request: one asked more than 24 hours ago that nobody
     took ends `expired` (#87); one whose offer lapsed, or that was never
-    offered, is offered again - never to a teacher who let it lapse - and one
-    nobody can be offered is reported once it has waited past the alert limit
-    (#88). Safe to run repeatedly: a live offer is left alone.
+    offered, is offered again - to a teacher who let it lapse only when nobody
+    else is free (#391) - and one nobody but such a teacher can be offered is
+    reported once it has waited past the alert limit (#88). Safe to run
+    repeatedly: a live offer is left alone, a standing one unless a teacher who
+    has not had the request is free.
     """
     timestamp = now or _now()
     store: Any = table or db_table.table()
@@ -1372,16 +1476,17 @@ def sweep(*, now: str | None = None, table: Any | None = None) -> dict[str, Any]
                 if ended is not None:
                     expired.append(conversation_id)
                     continue
-            if record.get("teacher_id") or _live_offer(record, timestamp):
+            live = _live_offer(record, timestamp)
+            if record.get("teacher_id") or (live and not record.get("dispatch_fallback")):
                 continue
             waiting += 1
-            if record.get("dispatch_status") == "dispatched":
+            if record.get("dispatch_status") == "dispatched" and not live:
                 lapsed += 1
             written = dispatch(record, now=timestamp, table=store)
             outcome = str(written.get("dispatch_status") or "")
             if outcome in {"dispatched", "no_candidate"} and written.get("version") != record.get("version"):
                 offered.append({"conversationId": conversation_id, "status": outcome})
-            if outcome == "no_candidate":
+            if outcome == "no_candidate" or written.get("dispatch_fallback"):
                 _report_long_wait(written, now=timestamp)
     except Exception:  # noqa: BLE001
         logger.warning("Help request sweep failed", exc_info=True)
@@ -1450,6 +1555,8 @@ def scrub_teacher(
     previous = [value for value in record.get("previous_dispatch_teacher_ids") or [] if value != teacher_id]
     holds = teacher_id in {record.get("teacher_id"), record.get("dispatched_teacher_id")}
     changes: dict[str, Any] = {"previous_dispatch_teacher_ids": previous, "updated_at": timestamp}
+    if DECLINED_FIELD in record:
+        changes[DECLINED_FIELD] = [value for value in _declined(record) if value != teacher_id]
     remove: tuple[str, ...] = ()
     if holds:
         remove = ("teacher_id", "accepted_at", *_OFFER_FIELDS)
@@ -1470,8 +1577,10 @@ def scrub_teacher(
 
 
 def references_teacher(record: Mapping[str, Any], teacher_id: str) -> bool:
-    return teacher_id in {record.get("teacher_id"), record.get("dispatched_teacher_id")} or teacher_id in (
-        record.get("previous_dispatch_teacher_ids") or []
+    return (
+        teacher_id in {record.get("teacher_id"), record.get("dispatched_teacher_id")}
+        or teacher_id in (record.get("previous_dispatch_teacher_ids") or [])
+        or teacher_id in _declined(record)
     )
 
 
