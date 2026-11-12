@@ -124,6 +124,9 @@ def test_write_tools_say_so_and_ask_for_a_rehearsal_first() -> None:
         "list_teacher_applications": (True, False),
         "count_review_queues": (True, False),
         "report_email_stats": (True, False),
+        "get_usage_period": (True, False),
+        "extend_usage_period": (False, False),
+        "set_usage_period": (False, True),
     }
     for name in ("invite_account", "reissue_invitation", "revoke_invitation", "delete_account"):
         assert "dryRun" in tools[name]["inputSchema"]["required"]

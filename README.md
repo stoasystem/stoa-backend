@@ -62,6 +62,13 @@ It refuses active teachers, administrators, accounts with an active paid subscri
 accounts already being deleted. The scheduled deletion job finishes the work within minutes, and
 `get_account` shows the deletion as in progress and then completed.
 
+Usage periods (#385): `get_usage_period` is read-only; `extend_usage_period` and
+`set_usage_period` take `dryRun` and run the console's own usage-period service. A dry run shows
+the end date before and after and the effective period of every student it reaches (a parent's
+period reaches its current children), and writes nothing but its audit row. The real run needs
+`expectedVersion` from the dry run; its period record and the account's audit event name
+`operator:agent_mcp`, and the operator audit row names the record.
+
 ## Project Structure
 
 ```
