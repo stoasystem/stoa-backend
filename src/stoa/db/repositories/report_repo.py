@@ -1185,11 +1185,13 @@ def put_recovery_job(job: ReportItem, targets: list[ReportItem]) -> None:
     # Written outside `fenced` (an operator's job, not the student's write), so
     # each targeted student's registry row is written here, before the targets
     # that carry their `student_id` (#397).
+    # The summary can name an account too, in the operator's filters.
     partition = f"REPORT_RECOVERY_JOB#{job['job_id']}"
-    for student in sorted(
+    for account in sorted(
         {str(t["student_id"]) for t in targets if isinstance(t.get("student_id"), str) and t["student_id"]}
+        | _recovery_job_record_accounts(job)
     ):
-        _put_item(table, Item=owner_registry.registry_item(student, partition))
+        _put_item(table, Item=owner_registry.registry_item(account, partition))
     _put_item(
         table,
         Item={
@@ -2008,10 +2010,18 @@ def scan_report_private_rows(
             elif _names_an_account(item):
                 # Someone else's row: not this deletion's, and not in doubt.
                 continue
+            elif _is_recovery_job_record(pk, sk):
+                # A recovery job's summary and audit events belong to the
+                # operator's job, not to one student, so they carry no top-level
+                # owner by construction and nothing would ever resolve them
+                # (#397). They can still name an account in the job's filters or
+                # in an event's metadata: then the row is this deletion's.
+                if owner_id in _recovery_job_record_accounts(item):
+                    rows.append(item)
             elif pk.startswith(("SUPPORT_", "REPORT_RECOVERY_JOB#")):
-                # A support or recovery row that names nobody could be this
-                # account's. Audit-retention rows are not counted (#397): they
-                # are bookkeeping about a manifest (digests, counts, the
+                # A support row or recovery target that names nobody could be
+                # this account's. Audit-retention rows are not counted (#397):
+                # they are bookkeeping about a manifest (digests, counts, the
                 # operator), carry no student by construction, and nothing ever
                 # resolves them - one such row kept every deletion dirty.
                 unresolved += 1
@@ -2023,6 +2033,33 @@ def scan_report_private_rows(
         seen.add(marker)
         current = page.last_key
     return ReportPrivatePage(tuple(rows), current, unresolved)
+
+
+_ACCOUNT_FIELDS = ("student_id", "parent_id")
+
+
+def _is_recovery_job_record(pk: str, sk: str) -> bool:
+    """A recovery job's own summary or audit event, as opposed to one of its targets."""
+    return pk.startswith("REPORT_RECOVERY_JOB#") and (sk == "SUMMARY" or sk.startswith("AUDIT#"))
+
+
+def _recovery_job_record_accounts(item: Mapping[str, object]) -> set[str]:
+    """Accounts a recovery job's summary or audit event names below the top level.
+
+    The summary keeps the operator's `filters`; an audit event keeps `metadata`,
+    which names a target's student and parent directly or repeats the filters.
+    """
+    metadata = item.get("metadata")
+    holders: list[object] = [item.get("filters"), metadata]
+    if isinstance(metadata, Mapping):
+        holders += [metadata.get("filters"), metadata.get("result_filters")]
+    return {
+        str(holder[field])
+        for holder in holders
+        if isinstance(holder, Mapping)
+        for field in _ACCOUNT_FIELDS
+        if isinstance(holder.get(field), str) and str(holder[field]).strip()
+    }
 
 
 def _names_an_account(item: Mapping[str, object]) -> bool:
