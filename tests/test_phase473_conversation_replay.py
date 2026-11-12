@@ -20,6 +20,7 @@ from stoa.config import Settings
 from stoa.db.repositories import attachment_repo
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services import ai_service, attachment_service
+from stoa.services import ask_answer
 from stoa.services.document_extraction_service import DocumentExtractionFailure
 
 
@@ -296,7 +297,9 @@ def test_ai_invocation_crossing_injected_deadline_is_rejected_without_result() -
                 {
                     "id": "msg-deadline-boundary",
                     "model": "anthropic.claude-sonnet-4-6",
-                    "content": [{"text": '{"steps":["x"],"answer":"y"}'}],
+                    "content": [{"type": "tool_use", "id": "toolu-1",
+                                 "name": ask_answer.ANSWER_TOOL_NAME,
+                                 "input": {"steps": ["x"], "answer": "y"}}],
                     "stop_reason": "end_turn",
                     "usage": {"input_tokens": 9, "output_tokens": 3},
                 }
@@ -320,6 +323,7 @@ def test_ai_invocation_crossing_injected_deadline_is_rejected_without_result() -
             "Answer the question.",
             [{"role": "user", "content": "question"}],
             input_size=8,
+            tool=ask_answer.answer_tool(star_map=False),
             deadline_monotonic=100.0,
             clock=lambda: next(ticks),
             client=Client(),

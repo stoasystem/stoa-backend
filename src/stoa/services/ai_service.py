@@ -3,6 +3,7 @@
 Implements a lightweight AI harness:
 - Prompt injection defence (input sanitisation)
 - Sending a built prompt to the model, buffered or streamed, under a deadline
+- Reading the answer from the one tool call the request forces (#412)
 - Output validation (structure check + forbidden-term scan)
 - Exact usage evidence for every reply that was paid for
 
@@ -315,14 +316,9 @@ def _validate_output(parsed: dict, raw_text: str) -> dict:
             raw_text = re.sub(re.escape(term), "[AI]", raw_text, flags=re.IGNORECASE)
         parsed = _parse_ai_response(raw_text)
 
-    # 3. No guided steps for a question response
+    # 3. Neither steps nor an answer: nothing a student could be shown.
     if not parsed.get("steps") and not parsed.get("answer"):
-        # Prose that was never JSON can stand as the answer; a JSON object
-        # cannot, or the student is shown the braces.
-        if _looks_like_json_object(raw_text):
-            raise AIInvocationFailure("malformed_response")
-        issues.append("missing_structure")
-        parsed["answer"] = raw_text  # fall back to raw text
+        raise AIInvocationFailure("malformed_response")
 
     if issues:
         emit_private_event(
@@ -335,24 +331,24 @@ def _validate_output(parsed: dict, raw_text: str) -> dict:
     return parsed
 
 
-# ── JSON parsing ───────────────────────────────────────────────────────────────
+# ── Reading the tool call ──────────────────────────────────────────────────────
 
 _STEP_STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
 _WHITESPACE = re.compile(r"\s*")
 
 
 def completed_steps(partial_json: str) -> list[str]:
-    """Return the steps already closed in a partly received JSON answer.
+    """Return the steps already closed in a partly received answer.
 
-    The model answers with one JSON object, so a student cannot be shown raw
-    tokens. Each step is whole the moment its closing quote and the `,` or `]`
-    after it arrive, which is the smallest piece worth showing.
+    The answer arrives as the input of a tool call, streamed piece by piece
+    (#412), so a student cannot be shown raw tokens. Each step is whole the
+    moment its closing quote and the `,` or `]` after it arrive, which is the
+    smallest piece worth showing.
 
     The array is read from its start, one string after the other. A string
-    that is not followed by `,` or `]` ends the reading: the reply is broken
-    there, typically by a `"` the model left unescaped inside a step (#389).
-    Searching on past it would take that inner quote for an opening one and
-    cut a step from the middle of a sentence.
+    that is not followed by `,` or `]` ends the reading: the input is broken
+    there. Searching on past it could take an inner quote for an opening one
+    and cut a step from the middle of a sentence (#389).
     """
     if '"steps"' not in partial_json:
         return []
@@ -380,10 +376,38 @@ def completed_steps(partial_json: str) -> list[str]:
     return steps
 
 
+def answer_tool_request(tool: Mapping[str, Any]) -> dict[str, Any]:
+    """The request fields that make the model answer through `tool` alone."""
+    return {
+        "tools": [dict(tool)],
+        "tool_choice": {"type": "tool", "name": tool["name"]},
+    }
+
+
+def _tool_input_text(payload: Mapping[str, object], tool_name: str) -> str | None:
+    """The input of the buffered reply's call of `tool_name`, as JSON text.
+
+    None when the reply holds no such call: text the model wrote beside it,
+    or instead of it, is never read as the answer.
+    """
+    content = payload.get("content")
+    if not isinstance(content, list):
+        return None
+    for block in content:
+        if (
+            isinstance(block, Mapping)
+            and block.get("type") == "tool_use"
+            and block.get("name") == tool_name
+        ):
+            return json.dumps(block.get("input"), ensure_ascii=False)
+    return None
+
+
 def _stream_ai_answer(
     *,
     client: Any,
     body: str,
+    tool_name: str,
     on_step: Callable[[int, str], None],
     correlation_id: str | None,
     deadline_monotonic: float | None,
@@ -392,7 +416,11 @@ def _stream_ai_answer(
     observed_at: datetime | None,
     invocation_class: AIInvocationClass,
 ) -> AIProviderResult[dict]:
-    """Invoke the model as a stream, reporting each step as it completes."""
+    """Invoke the model as a stream, reporting each step as it completes.
+
+    The answer is the input of the call of `tool_name`, streamed as
+    `input_json_delta` pieces; any other content block is not read.
+    """
     response = client.invoke_model_with_response_stream(
         modelId=config.settings().bedrock_model_id, body=body
     )
@@ -404,7 +432,8 @@ def _stream_ai_answer(
     if deadline_monotonic is not None and clock() >= deadline_monotonic:
         raise AIInvocationFailure("deadline_exceeded")
 
-    raw_text = ""
+    tool_input: str | None = None
+    tool_index: object = None
     reported = 0
     usage: dict[str, Any] = {}
     stop_reason = None
@@ -423,9 +452,25 @@ def _stream_ai_answer(
         except (KeyError, TypeError, json.JSONDecodeError):
             raise AIInvocationFailure("malformed_response") from None
         kind = payload.get("type")
-        if kind == "content_block_delta":
-            raw_text += payload.get("delta", {}).get("text", "")
-            steps = completed_steps(raw_text)
+        if kind == "content_block_start":
+            block = payload.get("content_block") or {}
+            if (
+                tool_input is None
+                and block.get("type") == "tool_use"
+                and block.get("name") == tool_name
+            ):
+                tool_index = payload.get("index")
+                tool_input = ""
+        elif kind == "content_block_delta":
+            delta = payload.get("delta") or {}
+            if (
+                tool_input is None
+                or payload.get("index") != tool_index
+                or delta.get("type") != "input_json_delta"
+            ):
+                continue
+            tool_input += delta.get("partial_json", "")
+            steps = completed_steps(tool_input)
             while reported < len(steps):
                 # A step that cannot be delivered is not worth losing the
                 # answer over; the full result still arrives at the end.
@@ -443,22 +488,22 @@ def _stream_ai_answer(
             message_id = message.get("id", message_id)
             model_id = message.get("model", model_id)
 
-    if not raw_text:
+    if message_id is None and tool_input is None:
+        # Nothing came back at all: no reply, and no usage, to read.
         raise AIInvocationFailure("malformed_response")
     emit_private_event(
         "ai_response_received",
-        output_size=len(raw_text),
+        output_size=len(tool_input or ""),
         correlation_id=correlation_id,
     )
     result = {
         "id": message_id,
         "model": model_id,
-        "content": [{"text": raw_text}],
         "usage": usage,
         "stop_reason": stop_reason,
     }
     return _answer_result(
-        raw_text,
+        tool_input,
         result,
         response=response,
         effect_id=effect_id or correlation_id or "unbound-user-allowance-effect",
@@ -468,7 +513,7 @@ def _stream_ai_answer(
 
 
 def _answer_result(
-    raw_text: str,
+    raw_text: str | None,
     payload: Mapping[str, object],
     *,
     response: Mapping[str, object],
@@ -476,13 +521,20 @@ def _answer_result(
     observed_at: datetime | None,
     invocation_class: AIInvocationClass,
 ) -> AIProviderResult[dict]:
-    """Turn a structured answer into a result, or a failure that keeps its usage.
+    """Turn the tool input into a result, or a failure that keeps its usage.
 
-    A reply cut off at `max_tokens` is refused before it is parsed: a cut can
-    land where the JSON happens to close, and the answer is still unfinished.
+    `raw_text` is the input of the forced tool call as JSON text, None when
+    the reply made no such call. A reply cut off at `max_tokens` is refused
+    before it is parsed: a cut can land where the JSON happens to close, and
+    the answer is still unfinished.
     """
     if payload.get("stop_reason") == "max_tokens":
         failure = AIInvocationFailure("incomplete_output")
+    elif raw_text is None:
+        emit_private_event(
+            "model_output_parse_failed", output_size=0, level=logging.WARNING
+        )
+        failure = AIInvocationFailure("malformed_response")
     else:
         try:
             validated = _validate_output(_parse_ai_response(raw_text), raw_text)
@@ -510,43 +562,38 @@ def _answer_result(
     raise failure
 
 
-def _looks_like_json_object(text: str) -> bool:
-    return _strip_code_fence(text).startswith("{")
-
-
-def _strip_code_fence(text: str) -> str:
-    stripped = re.sub(r"^```(?:json)?\s*", "", text.strip())
-    return re.sub(r"\s*```$", "", stripped)
-
-
 def _parse_ai_response(text: str) -> dict:
-    """Parse AI response, handling possible markdown code block wrappers."""
+    """Read the tool input as the answer it must be, or refuse it.
+
+    The API writes the input, constrained to the tool's schema (#412), so
+    nothing is repaired here: an input that does not read as one object (one
+    that never closed), or whose `steps` or `answer` is missing or of the
+    wrong shape, is `malformed_response`, and no part of it is shown.
+    """
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
     except json.JSONDecodeError:
-        pass
-
-    stripped = _strip_code_fence(text)
-    try:
-        return json.loads(stripped)
-    except json.JSONDecodeError:
-        pass
-
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group())
-        except json.JSONDecodeError:
-            pass
-
-    emit_private_event(
-        "model_output_parse_failed", output_size=len(text), level=logging.WARNING
-    )
-    if stripped.startswith("{"):
-        # An object that does not close was cut off or garbled. Shown as the
-        # answer, the student reads half a JSON document.
+        parsed = None
+    if not _is_answer(parsed):
+        emit_private_event(
+            "model_output_parse_failed", output_size=len(text), level=logging.WARNING
+        )
         raise AIInvocationFailure("malformed_response")
-    return {"steps": [], "answer": text, "hints": [], "similar_exercises": [], "suggest_teacher": False}
+    return parsed
+
+
+def _is_answer(parsed: object) -> bool:
+    """An object with the two sections every answer is shown by.
+
+    The other sections are `ask_answer`'s to check: an entry of the wrong
+    shape there is left out rather than failing an answer already paid for.
+    """
+    if not isinstance(parsed, dict):
+        return False
+    steps = parsed.get("steps")
+    if not isinstance(steps, list) or any(not isinstance(step, str) for step in steps):
+        return False
+    return isinstance(parsed.get("answer"), str)
 
 
 
@@ -581,14 +628,16 @@ def invoke_answer(
     observed_at: datetime | None = None,
     invocation_class: AIInvocationClass = AIInvocationClass.USER_ALLOWANCE,
     on_step: Callable[[int, str], None] | None = None,
+    tool: Mapping[str, Any],
 ) -> AIProviderResult[dict]:
     """Ask the model for one structured answer to a prompt already built.
 
-    The prompt is the caller's (`ask_answer` builds the Ask one, #176); this
-    sends it, streamed when `on_step` is given, under the deadline, and turns
-    the reply into a parsed answer with its usage, or a failure that keeps the
-    usage of a reply that was paid for. `input_size` and `attachment_count`
-    describe the student's turn for telemetry only.
+    The prompt and the `tool` the answer is handed over through are the
+    caller's (`ask_answer` builds the Ask ones, #176, #412); this sends them,
+    the tool forced, streamed when `on_step` is given, under the deadline, and
+    turns the tool's input into a parsed answer with its usage, or a failure
+    that keeps the usage of a reply that was paid for. `input_size` and
+    `attachment_count` describe the student's turn for telemetry only.
     """
     clock = clock or time.monotonic
     remaining = None
@@ -611,6 +660,7 @@ def invoke_answer(
         "temperature": 0.4,
         "system": system_prompt,
         "messages": messages,
+        **answer_tool_request(tool),
     })
 
     emit_private_event(
@@ -625,6 +675,7 @@ def invoke_answer(
         return _stream_ai_answer(
             client=client,
             body=body,
+            tool_name=tool["name"],
             on_step=on_step,
             correlation_id=correlation_id,
             deadline_monotonic=deadline_monotonic,
@@ -648,7 +699,6 @@ def invoke_answer(
         result = json.loads(read())
         if not isinstance(result, dict):
             raise AIInvocationFailure("malformed_response")
-        raw_text = result["content"][0]["text"]
     except AIInvocationFailure:
         raise
     except Exception:
@@ -664,11 +714,10 @@ def invoke_answer(
             close_ok = False
     if not close_ok:
         raise AIInvocationFailure("response_cleanup_failed")
-    if not isinstance(raw_text, str) or not raw_text:
-        raise AIInvocationFailure("malformed_response")
+    raw_text = _tool_input_text(result, tool["name"])
     emit_private_event(
         "ai_response_received",
-        output_size=len(raw_text),
+        output_size=len(raw_text or ""),
         correlation_id=correlation_id,
     )
 

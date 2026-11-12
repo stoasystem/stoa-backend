@@ -1402,16 +1402,18 @@ def test_streaming_reports_steps_and_still_returns_the_whole_answer(monkeypatch)
     }
     text = _json.dumps(answer, ensure_ascii=False)
 
-    def _events():
+    def _events(tool_name):
         yield {"chunk": {"bytes": _json.dumps({"type": "message_start", "message": {"id": "msg-1", "model": "anthropic.claude-sonnet-4-6", "usage": {"input_tokens": 11}}}).encode()}}
+        # The answer is the input of the forced tool call, streamed (#412).
+        yield {"chunk": {"bytes": _json.dumps({"type": "content_block_start", "index": 0, "content_block": {"type": "tool_use", "id": "toolu-1", "name": tool_name, "input": {}}}).encode()}}
         for piece in (text[i : i + 7] for i in range(0, len(text), 7)):
-            yield {"chunk": {"bytes": _json.dumps({"type": "content_block_delta", "delta": {"text": piece}}).encode()}}
-        yield {"chunk": {"bytes": _json.dumps({"type": "message_delta", "usage": {"output_tokens": 22}, "delta": {"stop_reason": "end_turn"}}).encode()}}
+            yield {"chunk": {"bytes": _json.dumps({"type": "content_block_delta", "index": 0, "delta": {"type": "input_json_delta", "partial_json": piece}}).encode()}}
+        yield {"chunk": {"bytes": _json.dumps({"type": "message_delta", "usage": {"output_tokens": 22}, "delta": {"stop_reason": "tool_use"}}).encode()}}
 
     class _Client:
         def invoke_model_with_response_stream(self, **kwargs):
-            del kwargs
-            return {"body": _events(), "ResponseMetadata": {"RequestId": "req-1"}}
+            tool_name = _json.loads(kwargs["body"])["tool_choice"]["name"]
+            return {"body": _events(tool_name), "ResponseMetadata": {"RequestId": "req-1"}}
 
     seen = []
     result = ask_answer.answer(

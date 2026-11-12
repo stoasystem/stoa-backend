@@ -4,7 +4,8 @@ When the model stops at `max_tokens`, or returns JSON that does not close, the
 text used to be kept as the answer and persisted with `status="sent"`. These
 tests hold the two checks that stop that, on both invocation paths, and hold
 that the failure still carries the provider's usage evidence so the student's
-reserved allowance can be released.
+reserved allowance can be released. The JSON is now the input of the forced
+tool call (#412); the fakes stream it as `input_json_delta` pieces.
 """
 
 from __future__ import annotations
@@ -27,10 +28,11 @@ from fakes.ask_question import (
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa import aws
 from stoa.aws import Kind
-from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
-from stoa.services import ai_service, ask_question
+from stoa.security.attachment_errors import AttachmentDecisionError
+from stoa.services import ai_service, ask_answer, ask_question
 from stoa.services.ask_question import _admission
 from stoa.services.ask_question._admission import UsageEvidence
+from stoa.services.ask_question_errors import AskQuestionErrorCode
 from fakes.ask_question import AtomicAllowanceTable
 
 
@@ -64,6 +66,7 @@ def _invoke(
         "effect_id": client.effect_id,
         "client": client,
         "observed_at": NOW,
+        "tool": ask_answer.answer_tool(star_map=False),
     }
     if streamed:
         kwargs["on_step"] = lambda _index, _step: None
@@ -136,10 +139,11 @@ def test_the_parser_no_longer_turns_broken_json_into_the_answer() -> None:
     assert captured.value.category == "malformed_response"
 
 
-def test_a_complete_object_followed_by_stray_text_is_still_read() -> None:
-    """Control: the parser's existing rescue for trailing text still applies."""
-    parsed = ai_service._parse_ai_response(_COMPLETE + "\n\nViel Erfolg!")
-    assert parsed["answer"] == "Die vollständige Antwort"
+def test_a_complete_object_followed_by_stray_text_is_refused() -> None:
+    """The tool input is the API's to write (#412): nothing around it is cut away."""
+    with pytest.raises(ai_service.AIInvocationFailure) as captured:
+        ai_service._parse_ai_response(_COMPLETE + "\n\nViel Erfolg!")
+    assert captured.value.category == "malformed_response"
 
 
 def test_the_raw_text_fallback_does_not_readmit_a_json_object() -> None:
@@ -150,11 +154,12 @@ def test_the_raw_text_fallback_does_not_readmit_a_json_object() -> None:
     assert captured.value.category == "malformed_response"
 
 
-def test_prose_without_json_is_still_kept_as_the_answer() -> None:
-    """Control: the raw-text fallback exists for replies that were never JSON."""
+def test_prose_is_no_longer_kept_as_the_answer() -> None:
+    """The answer is the tool's input (#412); text that is not one is refused."""
     prose = "Kürze Zähler und Nenner durch denselben Teiler."
-    parsed = ai_service._validate_output(ai_service._parse_ai_response(prose), prose)
-    assert parsed["answer"] == prose
+    with pytest.raises(ai_service.AIInvocationFailure) as captured:
+        ai_service._parse_ai_response(prose)
+    assert captured.value.category == "malformed_response"
 
 
 # ── Controls: a complete answer on a normal stop still succeeds ──────────────
@@ -206,7 +211,8 @@ def test_a_truncated_streamed_answer_is_not_sent_and_its_reservation_is_released
     )
 
     assert isinstance(outcome, AttachmentDecisionError)
-    assert outcome.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    # Paid for and unusable, the message failed for good; no upload was in it (#412).
+    assert outcome.code is AskQuestionErrorCode.MESSAGE_FAILED
     assert _command_row(table, "truncation-key")["status"] == "failed"
     assert _messages(table, "assistant") == []
     counter = allowance.counter()

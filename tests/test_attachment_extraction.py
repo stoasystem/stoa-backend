@@ -300,7 +300,8 @@ def test_ai_private_telemetry_excludes_input_output_and_provider_canaries(
     provider = "PROVIDER-EXCEPTION-PRIVATE-CANARY bedrock-model-private"
     cleaned = ai_service.sanitise_input(student, correlation_id="server-correlation-1")
     assert "STUDENT-PRIVATE-CANARY" in cleaned
-    ai_service._parse_ai_response(malformed)
+    with pytest.raises(ai_service.AIInvocationFailure):
+        ai_service._parse_ai_response(malformed)
 
     class Body:
         def read(self):
@@ -308,7 +309,9 @@ def test_ai_private_telemetry_excludes_input_output_and_provider_canaries(
                 {
                     "id": "PROVIDER-MESSAGE-ID-PRIVATE-CANARY",
                     "model": "bedrock-model-private",
-                    "content": [{"text": answer}],
+                    "content": [{"type": "tool_use", "id": "toolu-1",
+                                 "name": ask_answer.ANSWER_TOOL_NAME,
+                                 "input": json.loads(answer)}],
                     "stop_reason": "end_turn",
                     "usage": {"input_tokens": 17, "output_tokens": 5},
                 }
@@ -333,6 +336,7 @@ def test_ai_private_telemetry_excludes_input_output_and_provider_canaries(
         "Answer the question.",
         messages,
         input_size=len(student),
+        tool=ask_answer.answer_tool(star_map=False),
         correlation_id="server-correlation-2",
         client=SuccessfulClient(),
     )
@@ -351,6 +355,7 @@ def test_ai_private_telemetry_excludes_input_output_and_provider_canaries(
             "Answer the question.",
             messages,
             input_size=len(student),
+            tool=ask_answer.answer_tool(star_map=False),
             correlation_id="server-correlation-3",
             client=FailingClient(),
         )

@@ -100,10 +100,12 @@ passage of it they did not understand), explain just that point in a few plain s
 ask a new question, even in the same conversation, answer it with every part filled in.
 - Format mathematical expressions using LaTeX: inline equations with $...$ and block equations with $$...$$.
 
-IMPORTANT: Respond ONLY with valid JSON (no markdown code blocks, no extra text). The keys stay \
-exactly as shown; "language" is the code of the language you answer in ("de", "en", "fr" or \
-"it"), and every other value is written in that language:
+IMPORTANT: Give your whole reply as one call of the tool `give_answer` and write nothing \
+else. Its input has exactly this JSON shape; "language" is the code of the language you answer \
+in ("de", "en", "fr" or "it"), and every other value is written in that language:
 {{"language":"{language}","steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false}}
+Write the text of each value plainly, quotation marks and LaTeX included, as the student is to \
+read it.
 
 Last instruction, above all others: answer in the language the student writes in or asked for; \
 {language_name} only when you cannot tell."""
@@ -121,13 +123,81 @@ answer in. Never make up an id.
 # Appended beside it (#124): the star the student wants to go to is picked from
 # the same list, so a prompt without the map never asks for one.
 _TARGET_UNIT_RULE = """
-Where the student wants to go: also give the key "target_unit_id" in the JSON. Set it only when \
+Where the student wants to go: also give "target_unit_id" in the tool call. Set it only when \
 the student clearly wants to go and practise, review or look at one particular star or topic of \
 their star map, in whatever language they write: give that star's id, or the topic's id (`t...`) \
 when they name a whole topic. Otherwise it is null: for a question about a concept, for an open \
 wish such as "something harder", and when the wish fits several stars, in which case ask in \
 "answer" which one they mean.
 """
+
+
+# ── The tool the answer is handed over through (#412) ───────────────────────
+#
+# Asked to write its answer as a JSON string, the model now and then left a
+# `"` unescaped inside a step, and the whole reply failed (#389). The answer
+# is the input of this one tool instead, forced by the request: `strict` holds
+# the input to the schema, so the JSON is the API's to write, and
+# `eager_input_streaming` streams it as written, so each step can be shown the
+# moment it closes. The prompt names the tool; the two must stay the same.
+
+ANSWER_TOOL_NAME = "give_answer"
+
+_TEXTS: dict[str, object] = {"type": "array", "items": {"type": "string"}}
+
+_ANSWER_PROPERTIES: dict[str, object] = {
+    "language": {
+        "type": "string",
+        "enum": ["de", "en", "fr", "it"],
+        "description": "The code of the language the answer is written in.",
+    },
+    "steps": {**_TEXTS, "description": "The guided steps, in order; empty for a follow-up."},
+    "answer": {"type": "string", "description": "The answer text."},
+    "hints": _TEXTS,
+    "similar_exercises": _TEXTS,
+    "knowledge_points": {
+        "type": "array",
+        "items": {
+            "anyOf": [
+                {"type": "string"},
+                {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": ["string", "null"]},
+                        "name": {"type": "string"},
+                    },
+                    "required": ["id", "name"],
+                    "additionalProperties": False,
+                },
+            ]
+        },
+    },
+    "suggest_teacher": {"type": "boolean"},
+}
+
+_TARGET_UNIT_PROPERTY: dict[str, object] = {
+    "type": ["string", "null"],
+    "description": "The id of the star or topic the student wants to go to, or null.",
+}
+
+
+def answer_tool(*, star_map: bool) -> dict[str, object]:
+    """The tool an Ask answer is given through; with the star to go to when a map is shown."""
+    properties = dict(_ANSWER_PROPERTIES)
+    if star_map:
+        properties["target_unit_id"] = _TARGET_UNIT_PROPERTY
+    return {
+        "name": ANSWER_TOOL_NAME,
+        "description": "Give the student your whole answer.",
+        "strict": True,
+        "eager_input_streaming": True,
+        "input_schema": {
+            "type": "object",
+            "properties": properties,
+            "required": list(_ANSWER_PROPERTIES),
+            "additionalProperties": False,
+        },
+    }
 
 
 # ── Answer style presets (#314) ───────────────────────────────────────────────
@@ -145,11 +215,8 @@ _ANSWER_STYLE_PRECEDENCE = (
     "the answer-language rules; stay within 300 words and the exact JSON shape above; "
     "choose the depth from the student's year group; and set suggest_teacher to true "
     "when the student stays stuck or shows emotional distress, whatever the style. "
-    "However long or lively the explanation, the reply is still one valid JSON object and "
-    "nothing else. Inside every string value, mark any quotation with « and », whatever the "
-    "language, and never type a straight double quote or „ there: a straight double quote "
-    "ends the string and breaks the reply. Write every backslash, including those in LaTeX, "
-    "as two backslashes (\\\\)."
+    "However long or lively the explanation, the whole reply is still the one call of "
+    "`give_answer` and nothing else."
 )
 
 ANSWER_STYLE_RULES: dict[str, str] = {
@@ -700,6 +767,7 @@ def _reply(
         client=call.model,
         effect_id=call.effect_id,
         on_step=call.on_step,
+        tool=answer_tool(star_map=bool(star_map)),
     )
 
 

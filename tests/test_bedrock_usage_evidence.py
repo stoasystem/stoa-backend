@@ -9,6 +9,7 @@ import pytest
 
 from stoa.models.allowance import ProviderUsageEvidence
 from stoa.services import ai_service
+from stoa.services import ask_answer
 from stoa.services.bedrock_token_count_service import (
     ProviderTokenCountUnavailable,
     TokenCountEndpoint,
@@ -44,15 +45,16 @@ def _provider_payload(
         "model": MODEL_ID,
         "content": [
             {
-                "text": json.dumps(
-                    {
-                        "steps": ["First inspect the known values."],
-                        "answer": "Continue with the next algebraic step.",
-                        "hints": [],
-                        "similar_exercises": [],
-                        "knowledge_points": ["linear equations"],
-                    }
-                )
+                "type": "tool_use",
+                "id": "toolu-1",
+                "name": ask_answer.ANSWER_TOOL_NAME,
+                "input": {
+                    "steps": ["First inspect the known values."],
+                    "answer": "Continue with the next algebraic step.",
+                    "hints": [],
+                    "similar_exercises": [],
+                    "knowledge_points": ["linear equations"],
+                },
             }
         ],
         "stop_reason": "end_turn",
@@ -86,6 +88,7 @@ def test_answer_result_embeds_exact_provider_usage_without_content() -> None:
         "Answer the question.",
         [{"role": "user", "content": "PRIVATE-STUDENT-PROMPT"}],
         input_size=1,
+        tool=ask_answer.answer_tool(star_map=False),
         correlation_id="server-correlation",
         effect_id=EFFECT_ID,
         observed_at=OBSERVED_AT,
@@ -142,6 +145,7 @@ def test_missing_or_malformed_usage_fails_closed(field: str, value: object) -> N
             "Answer the question.",
             [{"role": "user", "content": "question"}],
             input_size=1,
+            tool=ask_answer.answer_tool(star_map=False),
             effect_id=EFFECT_ID,
             client=_InvokeClient(payload),
         )

@@ -55,15 +55,16 @@ def test_ai_prompt_context_differs_for_language_subject(monkeypatch):
                     "model": "anthropic.claude-sonnet-4-6",
                     "content": [
                         {
-                            "text": json.dumps(
-                                {
-                                    "steps": ["Review the grammar."],
-                                    "answer": "Corrected sentence.",
-                                    "hints": [],
-                                    "similar_exercises": [],
-                                    "knowledge_points": ["word order"],
-                                }
-                            )
+                            "type": "tool_use",
+                            "id": "toolu-1",
+                            "name": ask_answer.ANSWER_TOOL_NAME,
+                            "input": {
+                                "steps": ["Review the grammar."],
+                                "answer": "Corrected sentence.",
+                                "hints": [],
+                                "similar_exercises": [],
+                                "knowledge_points": ["word order"],
+                            },
                         }
                     ],
                     "stop_reason": "end_turn",

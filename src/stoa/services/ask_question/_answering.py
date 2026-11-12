@@ -1355,6 +1355,11 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 correlation_id=command_id,
                 level=logging.ERROR,
             )
+            if evidence is not None:
+                # A reply that came back and cannot be used (`malformed_response`,
+                # `incomplete_output`) failed the message for good, as the command
+                # now says; it has nothing to do with an upload (#412).
+                raise AttachmentDecisionError(AskQuestionErrorCode.MESSAGE_FAILED) from None
             raise AttachmentDecisionError(
                 AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
             ) from None
