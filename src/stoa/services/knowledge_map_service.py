@@ -114,6 +114,8 @@ def _recommended_unit(
 #: student's: its HarmoS year (`learning_profile_service`). A stage counts from
 #: its first year - a student who said only "lower secondary" starts where it
 #: starts - and upper secondary comes after the last year of compulsory school.
+#: Upper secondary is the profile's `grade_secondary_ii` too (#419); it has no
+#: HarmoS year, so it is ranked here and only here.
 SCHOOL_YEAR: dict[str, int] = {
     **{
         code: year

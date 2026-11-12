@@ -26,7 +26,14 @@ from stoa.routers import students
 from stoa.security import declared_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.main import RequestLocaleMiddleware
-from stoa.services import ask_answer, learning_profile_service, locale_service, message_catalog
+from stoa.services import (
+    ask_answer,
+    knowledge_base_catalog,
+    knowledge_map_service,
+    learning_profile_service,
+    locale_service,
+    message_catalog,
+)
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from scripts import backfill_student_grade_codes as backfill
@@ -139,6 +146,40 @@ def test_the_stage_band_names_a_stage_and_says_the_year_is_missing(locale, stage
     assert unsaid in label
     # Negative control: it must not claim a year it was never told.
     assert not any(character.isdigit() for character in label)
+
+
+@pytest.mark.parametrize(
+    ("locale", "stage"),
+    [
+        ("de", "Sekundarstufe II"),
+        ("en", "upper secondary"),
+        ("fr", "secondaire II"),
+        ("it", "media superiore"),
+    ],
+)
+def test_upper_secondary_names_the_stage_and_no_year(locale, stage):
+    """#419: the stage after compulsory school, said as a stage in each language."""
+    for key in ("grade.grade_secondary_ii", "choice.grade.grade_secondary_ii"):
+        label = message_catalog.TEXT[key][locale]
+        assert stage.lower() in label.lower(), key
+        assert not any(character.isdigit() for character in label), key
+        # Negative control: it is not the lower-secondary band's wording.
+        assert label != message_catalog.TEXT[key.replace("_ii", "_i")][locale], key
+
+
+def test_upper_secondary_is_the_catalog_s_own_stage_and_comes_last():
+    """#419: spelled as the curriculum files it, offered after lower secondary."""
+    codes = learning_profile_service.GRADE_LEVEL_CODES
+    assert codes[-1] == knowledge_base_catalog.UPPER_SECONDARY == "grade_secondary_ii"
+    assert codes.index("grade_secondary_i") == len(codes) - 2
+    assert learning_profile_service.GRADE_LEVEL_HARMOS_YEARS["grade_secondary_ii"] is None
+    # The star map ranks it once, after the last compulsory year.
+    assert knowledge_map_service.SCHOOL_YEAR["grade_secondary_ii"] == 12
+    assert knowledge_map_service.SCHOOL_YEAR["grade_secondary_ii"] > max(
+        year
+        for code, year in knowledge_map_service.SCHOOL_YEAR.items()
+        if code != "grade_secondary_ii"
+    )
 
 
 def test_the_catalog_holds_no_year_group_the_code_set_disowns():
@@ -273,7 +314,7 @@ def test_every_code_is_accepted_by_the_profile_route(profile_client):
 @pytest.mark.parametrize(
     "sent",
     # Meant as codes - a client choosing from the list - and none is one.
-    ["grade_6", "grade_10_secondary", "GRADE_6_PRIMARY", "grade_secondary_ii", " grade_x "],
+    ["grade_6", "grade_10_secondary", "GRADE_6_PRIMARY", "grade_secondary_iii", "GRADE_SECONDARY_II", " grade_x "],
 )
 def test_a_code_the_list_does_not_offer_is_refused_and_nothing_is_written(
     profile_client, sent
@@ -406,6 +447,27 @@ def test_the_profile_carries_every_grade_code_in_school_order_named_in_the_reade
         ]
 
 
+@pytest.mark.parametrize("locale", LOCALES)
+def test_upper_secondary_is_offered_last_and_can_be_stored(profile_client, locale):
+    """#419: a Gymnasium student can say so, in any of the four languages."""
+    client, writes = profile_client
+    response = client.patch(
+        "/students/me/profile",
+        json={"grade": "grade_secondary_ii"},
+        headers={"Accept-Language": locale},
+    )
+    assert response.status_code == 200
+    assert response.json()["grade"] == "grade_secondary_ii"
+    assert writes[-1]["expression_attribute_values"][":g"] == "grade_secondary_ii"
+    offered = response.json()["choices"]["grade"]
+    assert offered[-1] == {
+        "code": "grade_secondary_ii",
+        "label": message_catalog.TEXT["choice.grade.grade_secondary_ii"][locale],
+    }
+    assert learning_profile_service.normalize_grade("grade_secondary_ii") == "grade_secondary_ii"
+    assert learning_profile_service.resolve_grade_code("grade_secondary_ii") == "grade_secondary_ii"
+
+
 def test_every_list_chosen_field_is_named_in_all_four_languages():
     """The whole declaration against the whole catalog, both ways."""
     declared = {
@@ -465,6 +527,19 @@ def test_every_code_reaches_the_model_as_words_and_never_as_a_code():
         prompt = _system_prompt(grade=code, language="de")
         assert f"The student is in {message_catalog.TEXT[f'grade.{code}']['de']}:" in prompt
         assert code not in prompt
+
+
+@pytest.mark.parametrize("language", LOCALES)
+def test_upper_secondary_reaches_the_model_as_its_stage(language):
+    """#419: the prompt names the stage, in the answer language, never the code."""
+    prompt = _system_prompt(grade="grade_secondary_ii", language=language)
+    named = message_catalog.TEXT["grade.grade_secondary_ii"][language]
+    assert f"The student is in {named}:" in prompt
+    assert "grade_secondary_ii" not in prompt
+    # Negative controls: not lower secondary, not "unknown", not "unreadable".
+    assert message_catalog.TEXT["grade.grade_secondary_i"][language] not in prompt
+    assert ask_answer.UNKNOWN_GRADE not in prompt
+    assert ask_answer.UNREADABLE_GRADE not in prompt
 
 
 @pytest.mark.parametrize("blank", ["", "   "])

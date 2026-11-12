@@ -75,6 +75,13 @@ def subject_prompt_context(subject: str) -> str:
 # the same reason "14" is not mapped at all: legacy "Sek1" says which stage a
 # student is in and not which year of it, and choosing a year for them would
 # invent precision the stored value never had.
+#
+# `grade_secondary_ii` is the other stage, and the last member (#419): upper
+# secondary - Gymnasium, Mittelschule, collège, liceo - which comes after
+# compulsory school and spans several years. It is spelled exactly as
+# `knowledge_base_catalog.UPPER_SECONDARY`, the stage the curriculum files its
+# upper-secondary lessons under; the catalog has no per-year code for it, so a
+# per-year profile code would have nothing to match.
 GRADE_LEVEL_CODES: tuple[str, ...] = (
     "grade_1_primary",
     "grade_2_primary",
@@ -86,6 +93,7 @@ GRADE_LEVEL_CODES: tuple[str, ...] = (
     "grade_8_secondary",
     "grade_9_secondary",
     "grade_secondary_i",
+    "grade_secondary_ii",
 )
 
 # Which year of compulsory school each code is, counted the one way the whole
@@ -107,6 +115,11 @@ GRADE_LEVEL_CODES: tuple[str, ...] = (
 # = 7H, 1ª media = 8H ... 4ª media = 11H, Ticino keeping 5+4 under a derogation).
 # The seed's own label, "6. Primarklasse (ZAP)", is the ZAP year, ~12 years old,
 # and lands on HarmoS 8 in all three.
+#
+# HarmoS stops at 11, the end of compulsory school, so upper secondary has no
+# HarmoS year at all: it is `None` like the lower-secondary band, and where the
+# star map needs to rank it, `knowledge_map_service.SCHOOL_YEAR` places it after
+# the last compulsory year.
 GRADE_LEVEL_HARMOS_YEARS: dict[str, int | None] = {
     "grade_1_primary": 3,
     "grade_2_primary": 4,
@@ -119,6 +132,8 @@ GRADE_LEVEL_HARMOS_YEARS: dict[str, int | None] = {
     "grade_9_secondary": 11,
     # The band names a stage, so it has no single year: HarmoS 9 to 11.
     "grade_secondary_i": None,
+    # Beyond compulsory school, and several years long: no HarmoS year.
+    "grade_secondary_ii": None,
 }
 
 # What the free text already in the table means. Read-only: a row written before

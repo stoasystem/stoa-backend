@@ -470,6 +470,15 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "degré secondaire I (année non précisée)",
         "it": "scuola media (anno non indicato)",
     },
+    # Upper secondary (#419) is a stage after compulsory school, so it has no
+    # HarmoS year to count from and names the stage alone, in each area's word
+    # for its schools.
+    "grade.grade_secondary_ii": {
+        "de": "Sekundarstufe II (Gymnasium, Mittelschule)",
+        "en": "upper secondary school (Gymnasium)",
+        "fr": "degré secondaire II (gymnase, collège, lycée)",
+        "it": "scuola media superiore (liceo)",
+    },
     # ── profile choices, named for the student picking one (#310) ────────
     #
     # `learning_profile_service.PROFILE_CHOICES` is the set and the order;
@@ -536,6 +545,12 @@ _COPY: dict[str, dict[str, str]] = {
         "en": "Lower secondary, not sure which year",
         "fr": "Secondaire I, je ne sais pas quelle année",
         "it": "Scuola media, non so quale anno",
+    },
+    "choice.grade.grade_secondary_ii": {
+        "de": "Sekundarstufe II (Gymnasium, Mittelschule)",
+        "en": "Upper secondary (Gymnasium)",
+        "fr": "Secondaire II (gymnase, collège, lycée)",
+        "it": "Scuola media superiore (liceo)",
     },
     # How the assistant answers (#314), in the order the student is offered
     # them. Named for what the student gets; never "cold" for the short one.
