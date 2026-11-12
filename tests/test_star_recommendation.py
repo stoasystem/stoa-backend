@@ -511,6 +511,11 @@ def test_lower_secondary_with_no_year_given_starts_at_its_first_year() -> None:
     assert recommended(build_graded("grade_secondary_i")) == [by_grade("t7-s1")]
 
 
+def test_upper_secondary_starts_at_the_latest_year_the_sky_has() -> None:
+    """#419: a Gymnasium student is older than every chapter here, not unplaced."""
+    assert recommended(build_graded("grade_secondary_ii")) == [by_grade("t9a-s1")]
+
+
 def test_a_legacy_spelling_the_profile_can_read_counts_as_its_year() -> None:
     assert recommended(build_graded("Grade 6")) == [by_grade("t6-s1")]
 

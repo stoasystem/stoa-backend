@@ -26,7 +26,14 @@ from stoa.routers import students
 from stoa.security import declared_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.main import RequestLocaleMiddleware
-from stoa.services import ask_answer, learning_profile_service, locale_service, message_catalog
+from stoa.services import (
+    ask_answer,
+    knowledge_base_catalog,
+    knowledge_map_service,
+    learning_profile_service,
+    locale_service,
+    message_catalog,
+)
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from scripts import backfill_student_grade_codes as backfill
@@ -139,6 +146,91 @@ def test_the_stage_band_names_a_stage_and_says_the_year_is_missing(locale, stage
     assert unsaid in label
     # Negative control: it must not claim a year it was never told.
     assert not any(character.isdigit() for character in label)
+
+
+# ── Upper secondary (#419) ───────────────────────────────────────────────────
+#
+# A Gymnasium student could only pick year 9 or nothing, though the catalog
+# already files lessons under `grade_secondary_ii`. It is a stage, like
+# `grade_secondary_i`, and spelled exactly as the catalog spells it, so a
+# per-year code with nothing to match is not invented.
+
+UPPER = knowledge_base_catalog.UPPER_SECONDARY
+
+
+def test_upper_secondary_is_offered_last_under_the_catalog_s_own_spelling():
+    codes = learning_profile_service.GRADE_LEVEL_CODES
+    assert UPPER == "grade_secondary_ii"
+    assert codes[-1] == UPPER
+    # School order: right after the lower-secondary stage, and only once.
+    assert codes[-2] == "grade_secondary_i"
+    assert codes.count(UPPER) == 1
+
+
+def test_upper_secondary_has_no_single_harmos_year():
+    """It lies beyond HarmoS 11 and spans several years."""
+    assert UPPER in learning_profile_service.GRADE_LEVEL_HARMOS_YEARS
+    assert learning_profile_service.GRADE_LEVEL_HARMOS_YEARS[UPPER] is None
+
+
+@pytest.mark.parametrize(
+    ("locale", "stage", "lower"),
+    [
+        ("de", "Sekundarstufe II", "Sekundarstufe I "),
+        ("en", "upper secondary", "lower secondary"),
+        ("fr", "secondaire II", "secondaire I "),
+        ("it", "media superiore", "scuola media ("),
+    ],
+)
+def test_upper_secondary_is_named_as_its_stage_in_every_language(locale, stage, lower):
+    for key in (f"grade.{UPPER}", f"choice.grade.{UPPER}"):
+        label = message_catalog.TEXT[key][locale]
+        # The stand-alone choice is capitalised and the in-sentence one is not.
+        said = f"{label} ".lower()
+        assert stage.lower() in said, (key, label)
+        # Negative control: not the lower stage, and no year it was never told.
+        assert lower.lower() not in said, (key, label)
+        assert not any(character.isdigit() for character in label), (key, label)
+
+
+def test_an_upper_secondary_student_can_store_it(profile_client):
+    client, writes = profile_client
+    response = client.patch("/students/me/profile", json={"grade": UPPER})
+    assert response.status_code == 200
+    assert response.json()["grade"] == UPPER
+    assert [write["expression_attribute_values"][":g"] for write in writes] == [UPPER]
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_the_choice_list_ends_with_upper_secondary_in_the_reader_s_language(
+    profile_client, locale
+):
+    client, _writes = profile_client
+    response = client.get("/students/me/profile", headers={"Accept-Language": locale})
+    assert response.status_code == 200
+    last = response.json()["choices"]["grade"][-1]
+    assert last == {
+        "code": UPPER,
+        "label": message_catalog.TEXT[f"choice.grade.{UPPER}"][locale],
+    }
+
+
+@pytest.mark.parametrize("language", LOCALES)
+def test_the_model_is_told_the_student_is_in_upper_secondary(language):
+    prompt = _system_prompt(grade=UPPER, language=language)
+    assert f"The student is in {message_catalog.TEXT[f'grade.{UPPER}'][language]}:" in prompt
+    assert UPPER not in prompt
+    assert ask_answer.UNREADABLE_GRADE not in prompt
+
+
+def test_every_storable_year_group_has_a_place_in_school_for_the_star_map():
+    """The star map compares years; a code it cannot place compares as nothing."""
+    for code in learning_profile_service.GRADE_LEVEL_CODES:
+        assert code in knowledge_map_service.SCHOOL_YEAR, code
+    assert knowledge_map_service.SCHOOL_YEAR[UPPER] == 12
+    assert knowledge_map_service.SCHOOL_YEAR[UPPER] > max(
+        year for code, year in knowledge_map_service.SCHOOL_YEAR.items() if code != UPPER
+    )
 
 
 def test_the_catalog_holds_no_year_group_the_code_set_disowns():
@@ -273,7 +365,7 @@ def test_every_code_is_accepted_by_the_profile_route(profile_client):
 @pytest.mark.parametrize(
     "sent",
     # Meant as codes - a client choosing from the list - and none is one.
-    ["grade_6", "grade_10_secondary", "GRADE_6_PRIMARY", "grade_secondary_ii", " grade_x "],
+    ["grade_6", "grade_10_secondary", "GRADE_6_PRIMARY", "grade_secondary_iii", " grade_x "],
 )
 def test_a_code_the_list_does_not_offer_is_refused_and_nothing_is_written(
     profile_client, sent

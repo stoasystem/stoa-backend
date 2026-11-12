@@ -71,10 +71,15 @@ def subject_prompt_context(subject: str) -> str:
 # same way. The number is the Swiss Klasse number, so it keeps counting across
 # the stage boundary: 6. Primarklasse, then 7. Klasse in der Sek.
 #
-# `grade_secondary_i` is the one member naming a stage rather than a year, for
-# the same reason "14" is not mapped at all: legacy "Sek1" says which stage a
-# student is in and not which year of it, and choosing a year for them would
-# invent precision the stored value never had.
+# `grade_secondary_i` names a stage rather than a year, for the same reason
+# "14" is not mapped at all: legacy "Sek1" says which stage a student is in and
+# not which year of it, and choosing a year for them would invent precision the
+# stored value never had.
+#
+# `grade_secondary_ii` (#419) is the other stage, upper secondary: Gymnasium,
+# Mittelschule, collège, liceo. It is spelled exactly as
+# `knowledge_base_catalog.UPPER_SECONDARY` files its lessons, and it stays one
+# stage because the catalog has no per-year rows a finer code could match.
 GRADE_LEVEL_CODES: tuple[str, ...] = (
     "grade_1_primary",
     "grade_2_primary",
@@ -86,6 +91,7 @@ GRADE_LEVEL_CODES: tuple[str, ...] = (
     "grade_8_secondary",
     "grade_9_secondary",
     "grade_secondary_i",
+    "grade_secondary_ii",
 )
 
 # Which year of compulsory school each code is, counted the one way the whole
@@ -107,6 +113,12 @@ GRADE_LEVEL_CODES: tuple[str, ...] = (
 # = 7H, 1ª media = 8H ... 4ª media = 11H, Ticino keeping 5+4 under a derogation).
 # The seed's own label, "6. Primarklasse (ZAP)", is the ZAP year, ~12 years old,
 # and lands on HarmoS 8 in all three.
+#
+# The two stages have no single year and map to None: lower secondary spans
+# HarmoS 9-11, and upper secondary lies beyond HarmoS altogether (it starts
+# after year 11 and runs three to four years, depending on the school). Where
+# a stage has to be placed among the years, `knowledge_map_service.SCHOOL_YEAR`
+# does it.
 GRADE_LEVEL_HARMOS_YEARS: dict[str, int | None] = {
     "grade_1_primary": 3,
     "grade_2_primary": 4,
@@ -119,6 +131,8 @@ GRADE_LEVEL_HARMOS_YEARS: dict[str, int | None] = {
     "grade_9_secondary": 11,
     # The band names a stage, so it has no single year: HarmoS 9 to 11.
     "grade_secondary_i": None,
+    # Past compulsory school: beyond HarmoS 11, several years long.
+    "grade_secondary_ii": None,
 }
 
 # What the free text already in the table means. Read-only: a row written before
