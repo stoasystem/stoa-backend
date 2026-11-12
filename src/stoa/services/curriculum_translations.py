@@ -243,6 +243,247 @@ TITLE_TRANSLATIONS: dict[str, dict[str, str]] = {
         "fr": "Priorité des opérations dans les calculs avec fractions",
         "it": "Ordine delle operazioni nelle espressioni con frazioni",
     },
+    # Lessons of the ZAP1 adaptations (#423), created by migration under the ZAP stars.
+    "zap1-bru-vergleichen": {
+        "en": "Comparing fractions and decimals",
+        "fr": "Comparer fractions et nombres décimaux",
+        "it": "Confrontare frazioni e numeri decimali",
+    },
+    "zap1-bru-anteil-menge": {
+        "en": "A fraction of a quantity · Part 3",
+        "fr": "Fraction d'une grandeur · partie 3",
+        "it": "Frazione di una grandezza · parte 3",
+    },
+    "zap1-bru-ganzes-rest": {
+        "en": "From the part to the whole · Part 2",
+        "fr": "De la partie au tout · partie 2",
+        "it": "Dalla parte all'intero · parte 2",
+    },
+    "zap1-bru-anteil-zahlenstrahl": {
+        "en": "Parts, number line and sums of fractions",
+        "fr": "Parts, droite graduée et sommes de fractions",
+        "it": "Parti, retta numerica e somme di frazioni",
+    },
+    "zap1-dat-tabellen-1": {
+        "en": "Reading data from texts · Part 1",
+        "fr": "Lire des données dans un texte · Partie 1",
+        "it": "Leggere dati da un testo · Parte 1",
+    },
+    "zap1-dat-durchschnitt-1": {
+        "en": "Working backwards from the average · Part 1",
+        "fr": "Raisonner à rebours avec la moyenne · Partie 1",
+        "it": "Ragionare a ritroso con la media · Parte 1",
+    },
+    "zap1-dat-kombi-moeglichkeiten-1": {
+        "en": "Counting possibilities systematically · Part 1",
+        "fr": "Compter les possibilités avec méthode · Partie 1",
+        "it": "Contare le possibilità in modo sistematico · Parte 1",
+    },
+    "zap1-dat-kombi-zahlen-1": {
+        "en": "Counting numbers with conditions · Part 1",
+        "fr": "Compter des nombres soumis à des conditions · Partie 1",
+        "it": "Contare numeri con condizioni · Parte 1",
+    },
+    "zap1-geo-flaeche-rechteck": {
+        "en": "Area and perimeter · Part 1",
+        "fr": "Aire et périmètre · Partie 1",
+        "it": "Area e perimetro · Parte 1",
+    },
+    "zap1-geo-umfang-knobeln": {
+        "en": "Area and perimeter · Part 2",
+        "fr": "Aire et périmètre · Partie 2",
+        "it": "Area e perimetro · Parte 2",
+    },
+    "zap1-geo-volumen-oberflaeche": {
+        "en": "Cuboids: volume and surface area",
+        "fr": "Pavés : volume et aire totale",
+        "it": "Parallelepipedi: volume e superficie",
+    },
+    "zap1-geo-koordinaten": {
+        "en": "Coordinates and transformations",
+        "fr": "Coordonnées et transformations",
+        "it": "Coordinate e trasformazioni",
+    },
+    "zap1-geo-raum": {
+        "en": "Spatial reasoning",
+        "fr": "Représentation dans l'espace",
+        "it": "Visualizzazione spaziale",
+    },
+    "zap1-gl-platzhalter-1": {
+        "en": "Finding the missing number by working backwards · Part 1",
+        "fr": "Trouver le nombre manquant à rebours · Partie 1",
+        "it": "Trovare il numero mancante a ritroso · Parte 1",
+    },
+    "zap1-gl-platzhalter-2": {
+        "en": "Finding the missing number by working backwards · Part 2",
+        "fr": "Trouver le nombre manquant à rebours · Partie 2",
+        "it": "Trovare il numero mancante a ritroso · Parte 2",
+    },
+    "zap1-gl-sachaufgaben-1": {
+        "en": "Word problems with equations · Part 1",
+        "fr": "Problèmes avec des équations · Partie 1",
+        "it": "Problemi con le equazioni · Parte 1",
+    },
+    "zap1-gr-umrechnen": {
+        "en": "Converting units · Basics",
+        "fr": "Convertir des unités · Bases",
+        "it": "Convertire unità di misura · Basi",
+    },
+    "zap1-gr-zeit-umrechnen": {
+        "en": "Calculating with units of time",
+        "fr": "Calculer avec des unités de temps",
+        "it": "Calcolare con unità di tempo",
+    },
+    "zap1-gr-einheiten-terme-1": {
+        "en": "Calculating with units · Part 1",
+        "fr": "Calculer avec des unités · Partie 1",
+        "it": "Calcolare con le unità di misura · Parte 1",
+    },
+    "zap1-gr-einheiten-terme-2": {
+        "en": "Calculating with units · Part 2",
+        "fr": "Calculer avec des unités · Partie 2",
+        "it": "Calcolare con le unità di misura · Parte 2",
+    },
+    "zap1-gr-zeit-gleichung": {
+        "en": "Times in equations",
+        "fr": "Durées dans des équations",
+        "it": "Durate nelle equazioni",
+    },
+    "zap1-gr-geld-1": {
+        "en": "Money and prices · Part 1",
+        "fr": "Argent et prix · Partie 1",
+        "it": "Denaro e prezzi · Parte 1",
+    },
+    "zap1-gr-geld-2": {
+        "en": "Money and prices · Part 2",
+        "fr": "Argent et prix · Partie 2",
+        "it": "Denaro e prezzi · Parte 2",
+    },
+    "zap1-gr-geld-3": {
+        "en": "Money and prices · Part 3",
+        "fr": "Argent et prix · Partie 3",
+        "it": "Denaro e prezzi · Parte 3",
+    },
+    "zap1-gr-zeit-uhrzeiten": {
+        "en": "Clock times and time spans",
+        "fr": "Heures et durées",
+        "it": "Orari e intervalli di tempo",
+    },
+    "zap1-gr-tempo-grundlagen": {
+        "en": "Speed, time and distance · Part 1",
+        "fr": "Vitesse, temps et distance · Partie 1",
+        "it": "Velocità, tempo e distanza · Parte 1",
+    },
+    "zap1-gr-tempo-fahrplan": {
+        "en": "Speed, time and distance · Part 2",
+        "fr": "Vitesse, temps et distance · Partie 2",
+        "it": "Velocità, tempo e distanza · Parte 2",
+    },
+    "zap1-gr-tempo-durchschnitt": {
+        "en": "Speed, time and distance · Part 3",
+        "fr": "Vitesse, temps et distance · Partie 3",
+        "it": "Velocità, tempo e distanza · Parte 3",
+    },
+    "zap1-gr-tempo-unterbruch": {
+        "en": "Speed, time and distance · Part 4",
+        "fr": "Vitesse, temps et distance · Partie 4",
+        "it": "Velocità, tempo e distanza · Parte 4",
+    },
+    "zap1-gr-tempo-begegnen": {
+        "en": "Speed, time and distance · Part 5",
+        "fr": "Vitesse, temps et distance · Partie 5",
+        "it": "Velocità, tempo e distanza · Parte 5",
+    },
+    "zap1-proz-indirekt-1": {
+        "en": "Inverse proportionality · Part 1",
+        "fr": "Proportionnalité inverse · Partie 1",
+        "it": "Proporzionalità inversa · Parte 1",
+    },
+    "zap1-proz-indirekt-2": {
+        "en": "Inverse proportionality · Part 2",
+        "fr": "Proportionnalité inverse · Partie 2",
+        "it": "Proporzionalità inversa · Parte 2",
+    },
+    "zap1-proz-indirekt-3": {
+        "en": "Inverse proportionality · Part 3",
+        "fr": "Proportionnalité inverse · Partie 3",
+        "it": "Proporzionalità inversa · Parte 3",
+    },
+    "zap1-proz-indirekt-4": {
+        "en": "Inverse proportionality · Part 4",
+        "fr": "Proportionnalité inverse · Partie 4",
+        "it": "Proporzionalità inversa · Parte 4",
+    },
+    "zap1-proz-direkt-1": {
+        "en": "Direct proportionality · Part 1",
+        "fr": "Proportionnalité directe · Partie 1",
+        "it": "Proporzionalità diretta · Parte 1",
+    },
+    "zap1-proz-direkt-2": {
+        "en": "Direct proportionality · Part 2",
+        "fr": "Proportionnalité directe · Partie 2",
+        "it": "Proporzionalità diretta · Parte 2",
+    },
+    "zap1-proz-direkt-3": {
+        "en": "Direct proportionality · Part 3",
+        "fr": "Proportionnalité directe · Partie 3",
+        "it": "Proporzionalità diretta · Parte 3",
+    },
+    "zap1-proz-verhaeltnis-1": {
+        "en": "Ratios and parts",
+        "fr": "Rapports et parts",
+        "it": "Rapporti e parti",
+    },
+    "zap1-zahl-geschickt": {
+        "en": "Clever calculation with decimals",
+        "fr": "Calculer astucieusement avec des nombres décimaux",
+        "it": "Calcolare in modo furbo con i numeri decimali",
+    },
+    "zap1-zahl-lange-terme": {
+        "en": "Combining long expressions",
+        "fr": "Regrouper de longues expressions",
+        "it": "Raggruppare espressioni lunghe",
+    },
+    "zap1-zahl-brueche-dezimal": {
+        "en": "Expressions with fractions and decimals",
+        "fr": "Expressions avec fractions et nombres décimaux",
+        "it": "Espressioni con frazioni e numeri decimali",
+    },
+    "zap1-zahl-sachaufgaben": {
+        "en": "Word problems and number walls",
+        "fr": "Problèmes et murs de nombres",
+        "it": "Problemi e muri di numeri",
+    },
+    "zap1-zahl-ziffern": {
+        "en": "Digits and digit sum",
+        "fr": "Chiffres et somme des chiffres",
+        "it": "Cifre e somma delle cifre",
+    },
+    "zap1-zahl-strahl-mauern": {
+        "en": "Number line, number walls and number squares",
+        "fr": "Droite numérique, murs de nombres et carrés de calcul",
+        "it": "Retta numerica, muri di numeri e quadrati di calcolo",
+    },
+    "zap1-zahl-teiler": {
+        "en": "Divisors: groups of equal size",
+        "fr": "Diviseurs : groupes de même taille",
+        "it": "Divisori: gruppi della stessa grandezza",
+    },
+    "zap1-zahl-vielfache": {
+        "en": "Common multiples",
+        "fr": "Multiples communs",
+        "it": "Multipli comuni",
+    },
+    "zap1-zahl-figurenfolgen": {
+        "en": "Sequences of figures",
+        "fr": "Suites de figures",
+        "it": "Successioni di figure",
+    },
+    "zap1-zahl-folgen": {
+        "en": "Number sequences and patterns",
+        "fr": "Suites de nombres et motifs",
+        "it": "Successioni di numeri e schemi",
+    },
 }
 
 
