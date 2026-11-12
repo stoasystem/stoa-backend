@@ -66,6 +66,8 @@ def table() -> FakeTable:
         {"PK": f"USER#{GONE}", "SK": "PROFILE", "user_id": GONE, "status": "deleted",
          "owner_deletion_generation": 2},
         {"PK": f"USER#{GONE}", "SK": "DELETE_COMMAND#x", "user_id": GONE},
+        {"PK": f"USER#{GONE}", "SK": "PROVIDER_REVOKE#00000000000000000002", "user_id": GONE,
+         "generation": 2, "status": "complete"},
         owner_registry.registry_item(GONE, "UPLOAD#u9"),
     )
     return double
