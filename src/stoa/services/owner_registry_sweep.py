@@ -69,8 +69,15 @@ NOT_OWNED_PREFIXES: tuple[str, ...] = (
 # a deletion for the registry path (#397).
 RUN_MARKER_KEY = {"PK": "JOB#owner_registry_sweep", "SK": "LAST_RUN"}
 
-# Rows deletion keeps under the deleted account's own partition.
-_RETAINED_ACCOUNT_SK_PREFIXES = ("ACCOUNT_FENCE", "DELETE_COMMAND#", "DELETE_ACCOUNTING#")
+# Rows deletion keeps under the deleted account's own partition: its own
+# bookkeeping, down to the receipt that the identity provider was told to revoke
+# the account (`PROVIDER_REVOKE#{generation}` - an id, a status, no content).
+_RETAINED_ACCOUNT_SK_PREFIXES = (
+    "ACCOUNT_FENCE",
+    "DELETE_COMMAND#",
+    "DELETE_ACCOUNTING#",
+    "PROVIDER_REVOKE#",
+)
 
 # Where an id names the owner rather than someone the row only mentions.
 _OWNER_ATTRIBUTES = frozenset(
