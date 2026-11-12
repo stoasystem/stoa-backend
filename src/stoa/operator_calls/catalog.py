@@ -98,7 +98,10 @@ _EXPIRY_DESCRIPTION = (
     "How long the activation link stays valid, in seconds (60 to 1209600). "
     "Default 259200 (three days)."
 )
-_LOCALE_DESCRIPTION = "Language of the activation email. Default de (German)."
+_LOCALE_DESCRIPTION = (
+    "Language of the activation email. Leave it out when the invitee's language is not "
+    "known: the email then says everything in German, French, Italian and English."
+)
 _INVITATION_ID_DESCRIPTION = (
     "The invitation id, e.g. accountinvite_..., as get_account shows it."
 )

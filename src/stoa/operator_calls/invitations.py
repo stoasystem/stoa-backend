@@ -42,6 +42,8 @@ from stoa.services.account_errors import AccountErrorCode, AccountViolation
 
 
 LANGUAGES = {"de": "German", "en": "English", "fr": "French", "it": "Italian"}
+# What `emailLanguage` says when no language was named: the email is in all four (#415).
+ALL_LANGUAGES = "all"
 
 
 def operator_actor() -> dict[str, Any]:
@@ -64,6 +66,8 @@ def operator_actor() -> dict[str, Any]:
 
 def _language(locale: str | None) -> tuple[str, str]:
     code = notify_service.account_invitation_locale(locale)
+    if code is None:
+        return ALL_LANGUAGES, "four-language (German, French, Italian, English)"
     return code, LANGUAGES.get(code, code)
 
 

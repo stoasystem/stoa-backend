@@ -218,6 +218,25 @@ def send_fenced_weekly_report_email(
     return report_repo.classify_report_delivery_outcome(response=response, error=error)
 
 
+def _account_invitation_blocks(
+    lang: str, *, link: str, expires_at: str, role: str | None, button_locale: bool = False
+) -> list[email_layout.Block]:
+    def copy(key: str, **values: object) -> str:
+        return message_catalog.text(f"email.account_invitation.{key}", lang, **values)
+
+    role_key = f"email.account_invitation.role.{str(role or '').strip().lower()}"
+    blocks: list[email_layout.Block] = [email_layout.Paragraph(copy("intro"))]
+    if role_key in message_catalog.TEXT:
+        blocks.append(email_layout.Paragraph(message_catalog.text(role_key, lang)))
+    return blocks + [
+        email_layout.Paragraph(copy("next_step")),
+        email_layout.Action(copy("action"), link, locale=lang if button_locale else None),
+        email_layout.Paragraph(
+            copy("expiry", expires=email_layout.format_datetime(expires_at, lang)), small=True
+        ),
+    ]
+
+
 def account_invitation_message(
     *,
     activation_token: str,
@@ -226,35 +245,51 @@ def account_invitation_message(
     locale: str | None = None,
     role: str | None = None,
 ) -> email_layout.Rendered:
-    """The activation email of an invited account, in one language (#374).
+    """The activation email of an invited account (#374, #415).
 
     `role` adds one line on what the account is for; without one the email names
-    no role. `locale` falls back to the default (German), never to the language of
-    whoever sent the invitation.
+    no role. With a `locale` the email is written in that language. Without one,
+    nobody knows yet which language the invitee reads, so it says everything in
+    all four - German, French, Italian, English - one after the other, each with
+    its own button to the same single-use link. Never in the language of whoever
+    sent the invitation.
     """
-    lang = _lang(locale)
     base = config.settings().app_base_url.rstrip("/")
     link = f"{base}/activate?token={quote(activation_token, safe='')}"
 
-    def copy(key: str, **values: object) -> str:
-        return message_catalog.text(f"email.account_invitation.{key}", lang, **values)
+    if locale is None or not str(locale).strip():
+        def text(key: str, lang: str) -> str:
+            return message_catalog.text(f"email.account_invitation.{key}", lang)
 
-    role_key = f"email.account_invitation.role.{str(role or '').strip().lower()}"
-    blocks: list[email_layout.Block] = [email_layout.Paragraph(copy("intro"))]
-    if role_key in message_catalog.TEXT:
-        blocks.append(email_layout.Paragraph(message_catalog.text(role_key, lang)))
-    blocks += [
-        email_layout.Paragraph(copy("next_step")),
-        email_layout.Action(copy("action"), link),
-        email_layout.Paragraph(
-            copy("expiry", expires=email_layout.format_datetime(expires_at, lang)), small=True
-        ),
-    ]
+        langs = email_layout.ALL_LOCALES
+        return email_layout.render_multilingual(
+            subject=" · ".join(text("title", lang) for lang in langs),
+            title=" · ".join(text("title", lang) for lang in langs),
+            sections=[
+                email_layout.Section(
+                    locale=lang,
+                    greeting=email_layout.greeting(full_name, lang),
+                    blocks=tuple(
+                        _account_invitation_blocks(
+                            lang, link=link, expires_at=expires_at, role=role, button_locale=True
+                        )
+                    ),
+                    footer_reason=text("footer", lang),
+                )
+                for lang in langs
+            ],
+        )
+
+    lang = _lang(locale)
+
+    def copy(key: str) -> str:
+        return message_catalog.text(f"email.account_invitation.{key}", lang)
+
     return email_layout.render(
         subject=copy("subject"),
         title=copy("title"),
         greeting=email_layout.greeting(full_name, lang),
-        blocks=blocks,
+        blocks=_account_invitation_blocks(lang, link=link, expires_at=expires_at, role=role),
         locale=lang,
         footer_reason=copy("footer"),
     )
@@ -286,16 +321,20 @@ def send_account_invitation_email(
     )
 
 
-def account_invitation_locale(locale: str | None) -> str:
-    """The language an invitee is written to: the one named, else the default (#374).
+def account_invitation_locale(locale: str | None) -> str | None:
+    """The language an invitee is written to (#374, #415).
 
-    Never the language of whoever sends the invitation; that is who sent it, not who
-    reads it. An unknown or malformed name falls back to the default too.
+    The one named; None when none is named, which means all four languages, since
+    nobody knows yet which one the invitee reads. Never the language of whoever
+    sends the invitation; that is who sent it, not who reads it. A name that is not
+    one of STOA's languages counts as none named.
     """
+    if locale is None or not str(locale).strip():
+        return None
     try:
-        return locale_service.normalize_locale(locale or locale_service.DEFAULT_LOCALE)
+        return locale_service.normalize_locale(locale)
     except ValueError:
-        return locale_service.DEFAULT_LOCALE
+        return None
 
 
 def account_invitation_delivery(locale: str | None) -> Callable[..., None]:

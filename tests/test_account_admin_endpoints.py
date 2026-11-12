@@ -1485,27 +1485,51 @@ def test_发信失败不谎称已送达_账号仍然建成(
     )
 
 
-def test_未指定语言时用默认德语_不崩(table: AccountAdminTable, ses: RecordingSes) -> None:
+FOUR = ("de", "fr", "it", "en")
+
+
+def test_未指定语言时四种语言都写_每种一个按钮(table: AccountAdminTable, ses: RecordingSes) -> None:
+    """Nobody knows yet which language a new invitee reads, so the email says it in all four."""
     client = TestClient(_app(_admin_user()))
 
     response = client.post(
-        "/admin/users/invitations", json={"role": "student", "email": "neu@stoa.test"}
+        "/admin/users/invitations",
+        json={"role": "student", "email": "neu@stoa.test", "fullName": "Anna Muster"},
     )
 
     assert response.status_code == 200, response.text
-    assert ses.sent[0]["Message"]["Subject"]["Data"] == message_catalog.text(
-        "email.account_invitation.subject", "de"
-    )
+    message = ses.sent[0]["Message"]
+    subject = message["Subject"]["Data"]
+    html = message["Body"]["Html"]["Data"]
+    text = message["Body"]["Text"]["Data"]
+    token = response.json()["activationToken"]
+    for lang in FOUR:
+        assert message_catalog.text("email.account_invitation.title", lang) in subject
+        for key in ("intro", "next_step", "action", "footer"):
+            assert message_catalog.text(f"email.account_invitation.{key}", lang) in text
+        assert message_catalog.text("email.account_invitation.role.student", lang) in text
+        assert message_catalog.text("email.common.link_fallback", lang) in html
+        assert message_catalog.text("email.common.greeting", lang, name="Anna Muster") in text
+        assert f'lang="{lang}"' in html
+    # Each section has its own button, all to the one single-use link.
+    assert html.count(f"/activate?token={token}") == 3 * len(FOUR)  # button, fallback href, fallback text
+    # German first, then French, Italian, English.
+    positions = [
+        text.index(message_catalog.text("email.account_invitation.intro", lang)) for lang in FOUR
+    ]
+    assert positions == sorted(positions)
 
 
-def test_管理员界面是英语时_邀请信仍用默认德语(table: AccountAdminTable, ses: RecordingSes) -> None:
+def test_管理员界面是英语时_邀请信仍不按管理员的语言(table: AccountAdminTable, ses: RecordingSes) -> None:
     """Who sent the invitation does not decide its language; the invitee's does (#374)."""
     client = TestClient(_app(_admin_user()))
 
     locale_service.set_request_locale("en")
     try:
-        # The administrator's screen speaks English; the delivery still picks German.
-        assert admin._invitation_delivery(None).keywords["locale"] == "de"
+        # The administrator's screen speaks English; the delivery still names no language.
+        assert admin._invitation_delivery(None).keywords["locale"] is None
+        assert admin._invitation_delivery("es").keywords["locale"] is None
+        assert admin._invitation_delivery("fr").keywords["locale"] == "fr"
         response = client.post(
             "/admin/users/invitations", json={"role": "student", "email": "neu@stoa.test"}
         )
@@ -1513,9 +1537,27 @@ def test_管理员界面是英语时_邀请信仍用默认德语(table: AccountA
         locale_service.set_request_locale(None)
 
     assert response.status_code == 200, response.text
-    assert ses.sent[0]["Message"]["Subject"]["Data"] == message_catalog.text(
-        "email.account_invitation.subject", "de"
+    subject = ses.sent[0]["Message"]["Subject"]["Data"]
+    assert all(
+        message_catalog.text("email.account_invitation.title", lang) in subject for lang in FOUR
     )
+
+
+def test_指定了语言时只写那一种(table: AccountAdminTable, ses: RecordingSes) -> None:
+    client = TestClient(_app(_admin_user()))
+
+    response = client.post(
+        "/admin/users/invitations",
+        json={"role": "student", "email": "neu@stoa.test", "locale": "it"},
+    )
+
+    assert response.status_code == 200, response.text
+    message = ses.sent[0]["Message"]
+    assert message["Subject"]["Data"] == message_catalog.text(
+        "email.account_invitation.subject", "it"
+    )
+    text = message["Body"]["Text"]["Data"]
+    assert message_catalog.text("email.account_invitation.intro", "de") not in text
 
 
 def test_邀请信带纯文本版本_回复地址是有人看的邮箱_并说出角色(
