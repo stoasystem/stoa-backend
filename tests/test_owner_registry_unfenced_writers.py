@@ -111,6 +111,7 @@ REVIEWED: dict[str, str] = {
     "src/stoa/services/owner_registry_sweep.py::record_run": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::begin_account_deletion": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::claim_deletion_command": "deletion_flow",
+    "src/stoa/db/repositories/account_deletion_repo.py::close_unused_provider_revoke_debt": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::complete_provider_revoke_debt": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::create_provider_revoke_debt": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::delete_owned_row": "deletion_flow",

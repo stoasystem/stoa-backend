@@ -252,3 +252,66 @@ def test_teacher_activation_commands_are_a_reviewed_exclusion():
     report = sweep.run(table=double)
 
     assert not report.unregistered and not report.leftovers
+
+
+# -- stale references into a deleted account ---------------------------------------
+
+
+def _with_references_into_a_deleted_account() -> FakeTable:
+    double = FakeTable()
+    double.seed(
+        _fence(STUDENT),
+        _fence(TEACHER),
+        _fence(GONE, status="deleted"),
+        # What deletion keeps of the account: nothing in it names anyone else.
+        {"PK": f"USER#{GONE}", "SK": "PROFILE", "user_id": GONE, "status": "deleted",
+         "owner_deletion_generation": 2},
+        # True once, when the profile named its inviter; nothing removed it.
+        owner_registry.registry_item(TEACHER, f"USER#{GONE}", owner_registry.ROLE_REFERENCE),
+        # Still true: a row in the deleted account's partition names the student.
+        {"PK": f"PROGRESS#{GONE}", "SK": "SHARED#1", "entity_type": "shared_note",
+         "reviewer_id": STUDENT},
+        owner_registry.registry_item(STUDENT, f"PROGRESS#{GONE}", owner_registry.ROLE_REFERENCE),
+        # A reference into a living account's partition is not this finding.
+        {"PK": f"USER#{STUDENT}", "SK": "PROFILE", "user_id": STUDENT, "invited_by": TEACHER},
+        owner_registry.registry_item(TEACHER, f"USER#{STUDENT}", owner_registry.ROLE_REFERENCE),
+    )
+    return double
+
+
+def test_the_sweep_lists_a_registry_row_that_points_into_a_deleted_account():
+    table = _with_references_into_a_deleted_account()
+
+    report = sweep.run(table=table)
+
+    assert report.stale_references == [
+        {"PK": f"USER#{TEACHER}", "SK": f"REFERENCED_IN#USER#{GONE}"}
+    ]
+    assert report.as_dict()["stale_references"] == 1
+    assert table.calls["put_item"] == table.calls["delete_item"] == 0
+
+
+def test_a_resumed_walk_lists_no_stale_reference():
+    table = _with_references_into_a_deleted_account()
+    table.page_item_cap = 2
+    first = sweep.run(table=table, max_pages=1)
+
+    resumed = sweep.run(table=table, start=first.last_key)
+
+    assert resumed.complete and resumed.stale_references == []
+
+
+def test_the_daily_job_removes_only_the_stale_reference():
+    table = _with_references_into_a_deleted_account()
+    db_table.install(table)
+    try:
+        before = dict(table.rows)
+        summary = account_deletion_job.handler({"job": "owner_registry_sweep"}, None)
+    finally:
+        db_table.install(None)
+
+    table.rows.pop((sweep.RUN_MARKER_KEY["PK"], sweep.RUN_MARKER_KEY["SK"]))
+    gone = set(before) - set(table.rows)
+    assert gone == {(f"USER#{TEACHER}", f"REFERENCED_IN#USER#{GONE}")}
+    assert summary["stale_references_removed"] == 1
+    assert sweep.run(table=table).stale_references == []

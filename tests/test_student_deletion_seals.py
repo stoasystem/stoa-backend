@@ -135,4 +135,42 @@ def test_a_student_with_a_conversation_and_practice_can_be_deleted(table, monkey
     left = [key for key, row in table.rows.items() if any(text in json.dumps(row, default=str) for text in PRIVATE)]
     assert left == [], left
     assert ("ACCOUNT_INVITATION#digest-1", "META") not in table.rows
+    # The revoke debt the identity branch opens is closed one way or the other.
+    debts = [row for (_, sk), row in table.rows.items() if sk.startswith("PROVIDER_REVOKE#")]
+    assert debts and all(row["status"] != "pending" for row in debts), debts
     assert table.rows[("ACCOUNT_INVITATION#digest-2", "META")]["full_name"] == "Other Person"
+
+
+def test_an_account_with_no_provider_identity_does_not_leave_its_revoke_debt_pending(table):
+    """Invited and never signed in: nothing answers to the debt the branch opens.
+
+    The first deletion on the registry path left `PROVIDER_REVOKE#…` saying
+    `pending` for good. It is closed as `nothing_to_revoke` once the identity
+    branch has found nothing left, and a debt a revoke did close is not rewritten.
+    """
+    from stoa.db.repositories import account_deletion_repo
+
+    aws.install({Kind.S3: _ExternalClient(), Kind.COGNITO: _ExternalClient()})
+    student = lifecycle.STUDENT
+    for key in [key for key, row in table.rows.items()
+                if row.get("entity_type") in {"identity_binding", "user_identity_inventory"}]:
+        del table.rows[key]
+    command = {"user_id": student, "generation": 1, "command_id": COMMAND_ID}
+    handler = service.BRANCH_HANDLERS["identity_cross_account"]
+    debt = (f"USER#{student}", f"PROVIDER_REVOKE#{1:020d}")
+
+    previous: dict = {}
+    for _run in range(6):
+        result = handler(command=command, previous=previous)
+        if result.status == "complete":
+            break
+        assert table.rows[debt]["status"] == "pending"
+        previous = result.persisted(NOW, generation=1, handler_version="v", subfamilies=[])
+    assert result.status == "complete"
+    assert table.rows[debt]["status"] == account_deletion_repo.PROVIDER_REVOKE_UNUSED
+
+    table.rows[debt]["status"] = "complete"
+    assert not account_deletion_repo.close_unused_provider_revoke_debt(
+        user_id=student, generation=1, closed_at=NOW
+    )
+    assert table.rows[debt]["status"] == "complete"

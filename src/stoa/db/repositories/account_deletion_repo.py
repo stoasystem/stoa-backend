@@ -1787,6 +1787,68 @@ def complete_provider_revoke_debt(
             raise
 
 
+PROVIDER_REVOKE_UNUSED = "nothing_to_revoke"
+
+
+def close_unused_provider_revoke_debt(
+    *,
+    user_id: str,
+    generation: int,
+    closed_at: str,
+    table: Any | None = None,
+) -> bool:
+    """Close a revoke debt that no provider identity ever answered to.
+
+    The identity branch opens the debt before it knows whether the account has
+    a provider identity. An account that was invited and never signed in has
+    none, so nothing revoked it and the row said `pending` for good. Called once
+    the branch has found nothing left: a debt still pending then is recorded as
+    `nothing_to_revoke`, which says what happened instead of claiming a revoke.
+    A debt already closed either way is left alone. Returns whether it wrote.
+    """
+    # Named apart from `now_iso`: the inventory's semantic check counts the
+    # validations of that name, and this one must not stand in for another.
+    closed_at = _valid_lifecycle_timestamp(closed_at)
+    target = table or db_table.table()
+    key = {"PK": f"USER#{user_id}", "SK": f"PROVIDER_REVOKE#{generation:020d}"}
+    existing = get_row(key, table=target)
+    if (
+        existing is None
+        or existing.get("user_id") != user_id
+        or existing.get("generation") != generation
+        or existing.get("status") != "pending"
+    ):
+        return False
+    hook = getattr(target, "close_unused_provider_revoke_debt", None)
+    if callable(hook):
+        hook(key, user_id, generation, closed_at)
+        return True
+    _transact(
+        [
+            deletion_fence_condition(user_id, generation),
+            {
+                "Update": {
+                    "Key": key,
+                    "UpdateExpression": "SET #status=:unused, completed_at=:now",
+                    "ConditionExpression": (
+                        "user_id=:user AND generation=:generation AND #status=:pending"
+                    ),
+                    "ExpressionAttributeNames": {"#status": "status"},
+                    "ExpressionAttributeValues": {
+                        ":user": user_id,
+                        ":generation": generation,
+                        ":pending": "pending",
+                        ":unused": PROVIDER_REVOKE_UNUSED,
+                        ":now": closed_at,
+                    },
+                }
+            },
+        ],
+        table=target,
+    )
+    return True
+
+
 def scan_pending_deletion_commands(
     *,
     limit: int = 25,
