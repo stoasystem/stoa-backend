@@ -48,7 +48,8 @@ identity with STS, runs only the operations in `src/stoa/operator_calls/catalog.
 each call in the security audit stream of `operator:agent_mcp`. Tool output never carries
 activation tokens or passwords.
 
-Read-only tools: `find_accounts`, `get_account`. Tools that change data take `dryRun`, and the
+Read-only tools: `find_accounts`, `get_account`, and (#386) `list_teacher_applications`,
+`count_review_queues`, `report_email_stats`. Tools that change data take `dryRun`, and the
 agent is told to rehearse with `dryRun: true` and ask you before the real run:
 `invite_account`, `reissue_invitation`, `revoke_invitation` (#384). A dry run writes nothing
 but its audit row; a real run mails the same activation email the console's invitation does,

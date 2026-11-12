@@ -196,6 +196,26 @@ class GetAccountArguments(_Arguments):
         return self
 
 
+# The review states of the console's teacher application queue (#386).
+TeacherApplicationReviewState = Literal["pending_review", "approved", "rejected"]
+
+
+class ListTeacherApplicationsArguments(_Arguments):
+    reviewState: TeacherApplicationReviewState = "pending_review"
+    limit: int = Field(default=20, ge=1, le=50)
+
+
+class CountReviewQueuesArguments(_Arguments):
+    pass
+
+
+class ReportEmailStatsArguments(_Arguments):
+    weekStart: str = Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="The Monday the weekly reports were written for, YYYY-MM-DD.",
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class OperationSpec:
     name: str
@@ -315,6 +335,48 @@ OPERATIONS: tuple[OperationSpec, ...] = (
         ),
         arguments=DeleteAccountArguments,
         destructive=True,
+    ),
+    OperationSpec(
+        name="list_teacher_applications",
+        effect=Effect.READ,
+        title="List teacher applications",
+        description=(
+            "Read only. Lists teacher applications in one review state (pending_review, "
+            "approved or rejected; default pending_review), oldest first, as the "
+            "console's reviewer queue does: application id, version, status, review "
+            "state, submitted time, name, subjects and verified email. Never the "
+            "applicant's statement, documents or attachments. Returns at most `limit` "
+            "applications; `more` says whether there are others. Every call is "
+            "recorded in the audit trail."
+        ),
+        arguments=ListTeacherApplicationsArguments,
+    ),
+    OperationSpec(
+        name="count_review_queues",
+        effect=Effect.READ,
+        title="Count STOA review queues",
+        description=(
+            "Read only. Counts what is waiting for an administrator: teacher "
+            "applications pending review, and moderation cases open or in review. "
+            "Numbers only, no cases or applications. Every call is recorded in the "
+            "audit trail."
+        ),
+        arguments=CountReviewQueuesArguments,
+    ),
+    OperationSpec(
+        name="report_email_stats",
+        effect=Effect.READ,
+        title="Weekly report email statistics",
+        description=(
+            "Read only. Counts the weekly parent reports of one week (weekStart, the "
+            "Monday, YYYY-MM-DD) by email delivery state: sent, failed, pending, "
+            "notStarted and other, as the console's report operations list shows "
+            "them. Covers weekly report emails only, not invitation or verification "
+            "emails. Numbers only: no address, name or error text. `complete` is "
+            "false if the count stopped before reading every report. Every call is "
+            "recorded in the audit trail."
+        ),
+        arguments=ReportEmailStatsArguments,
     ),
 )
 
