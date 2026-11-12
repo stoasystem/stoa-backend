@@ -108,6 +108,9 @@ def test_the_operation_list_is_exactly_this() -> None:
         "list_teacher_applications": catalog.Effect.READ,
         "count_review_queues": catalog.Effect.READ,
         "report_email_stats": catalog.Effect.READ,
+        "get_usage_period": catalog.Effect.READ,
+        "extend_usage_period": catalog.Effect.WRITE,
+        "set_usage_period": catalog.Effect.WRITE,
     }
     assert set(entry.RUNNERS) == set(catalog.OPERATIONS_BY_NAME)
 

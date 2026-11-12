@@ -16,6 +16,7 @@ itself, so adding an operation is a decision a reviewer sees.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from enum import StrEnum
 from typing import Any, Literal
 
@@ -216,6 +217,82 @@ class ReportEmailStatsArguments(_Arguments):
     )
 
 
+_PERIOD_ACCOUNT_DESCRIPTION = (
+    "Account number of the student or parent whose usage period it is, e.g. P26-0001."
+)
+_EXPECTED_VERSION_DESCRIPTION = (
+    "The usage period version get_usage_period or the dry run showed. Required when "
+    "dryRun is false: the change is refused if the period moved since."
+)
+# The service's vocabulary (`usage_period.PeriodUnit`, `PeriodSource`,
+# `PAYMENT_REFERENCE_MAX_LENGTH`); a test holds the two together.
+PeriodUnit = Literal["months", "days"]
+PeriodSource = Literal["paid", "gifted"]
+
+
+class GetUsagePeriodArguments(_Arguments):
+    accountNumber: str = Field(
+        min_length=1, max_length=32, description=_PERIOD_ACCOUNT_DESCRIPTION
+    )
+    recordLimit: int = Field(
+        default=10, ge=1, le=50, description="How many of the newest records to show."
+    )
+    cursor: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="nextCursor from the previous answer, for older records.",
+    )
+
+
+class ExtendUsagePeriodArguments(_Arguments):
+    accountNumber: str = Field(
+        min_length=1, max_length=32, description=_PERIOD_ACCOUNT_DESCRIPTION
+    )
+    unit: PeriodUnit = Field(description="A paid extension is counted in months.")
+    amount: int = Field(ge=1, le=366)
+    source: PeriodSource = Field(
+        description="paid: an offline payment was received. gifted: no payment."
+    )
+    paymentReference: str | None = Field(
+        default=None,
+        max_length=200,
+        description=(
+            "Required when source is paid: the offline payment's reference as the "
+            "bookkeeping knows it, e.g. an invoice number. No account or card numbers."
+        ),
+    )
+    note: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="Optional note kept on the record; name no person and no address.",
+    )
+    expectedVersion: int | None = Field(
+        default=None, ge=0, description=_EXPECTED_VERSION_DESCRIPTION
+    )
+    dryRun: bool = Field(strict=True, description=DRY_RUN_DESCRIPTION)
+
+
+class SetUsagePeriodArguments(_Arguments):
+    accountNumber: str = Field(
+        min_length=1, max_length=32, description=_PERIOD_ACCOUNT_DESCRIPTION
+    )
+    endsOn: date = Field(
+        description="The last day the account may be used (YYYY-MM-DD, Zurich time)."
+    )
+    reason: str = Field(
+        min_length=1,
+        max_length=1000,
+        description=(
+            "Why the end date is put on this day, e.g. 'Corrects a month entered by "
+            "mistake.' Kept on the record; name no person and no address."
+        ),
+    )
+    expectedVersion: int | None = Field(
+        default=None, ge=0, description=_EXPECTED_VERSION_DESCRIPTION
+    )
+    dryRun: bool = Field(strict=True, description=DRY_RUN_DESCRIPTION)
+
+
 @dataclass(frozen=True, slots=True)
 class OperationSpec:
     name: str
@@ -377,6 +454,60 @@ OPERATIONS: tuple[OperationSpec, ...] = (
             "recorded in the audit trail."
         ),
         arguments=ReportEmailStatsArguments,
+    ),
+    OperationSpec(
+        name="get_usage_period",
+        effect=Effect.READ,
+        title="Show a STOA usage period",
+        description=(
+            "Read only. Shows the usage period of one student or parent account, named "
+            "by accountNumber, as the admin console does: its own end date, state "
+            "(active, expired or none) and version; the students it reaches with each "
+            "one's effective period and who pays for it (for a parent, every child it "
+            "is currently linked to; for a student, the student); and the newest set "
+            "and extension records, `recordLimit` at a time (pass `nextCursor` back as "
+            "`cursor` for older ones). Every call is recorded in the audit trail."
+        ),
+        arguments=GetUsagePeriodArguments,
+    ),
+    OperationSpec(
+        name="extend_usage_period",
+        effect=Effect.WRITE,
+        title="Extend a STOA usage period",
+        description=(
+            "Changes data. Before calling, confirm with the person: run with "
+            "dryRun=true first, show them the end date before and after and every "
+            "student it reaches, and only call with dryRun=false, passing the version "
+            "the dry run showed as expectedVersion, once they have said yes. Extends a "
+            "student's or parent's usage period by months or days, counted from today "
+            "or the current end, whichever is later, as the admin console does. A paid "
+            "extension is counted in months and names its offline payment; a gift may "
+            "be days. A parent's period reaches each child it is currently linked to, "
+            "unless the child's own or another parent's period ends later. A dry run "
+            "answers with the period before and after and each student's effective "
+            "period before and after; the real run also with the record it kept. Every "
+            "call, dry runs included, is recorded in the audit trail."
+        ),
+        arguments=ExtendUsagePeriodArguments,
+    ),
+    OperationSpec(
+        name="set_usage_period",
+        effect=Effect.WRITE,
+        title="Set a STOA usage period's end date",
+        description=(
+            "Changes data. Can end a period early. Before calling, confirm with the "
+            "person: run with dryRun=true first, show them the end date before and "
+            "after and every student it reaches (and who would lose access), and only "
+            "call with dryRun=false, passing the version the dry run showed as "
+            "expectedVersion, once they have said yes. Puts the end of a student's or "
+            "parent's usage period on the given day, with a reason, as the admin "
+            "console does: to correct a mistake or end a period early. A dry run "
+            "answers with the period before and after and each student's effective "
+            "period before and after; the real run also with the record it kept. Every "
+            "call, dry runs included, is recorded in the audit trail."
+        ),
+        arguments=SetUsagePeriodArguments,
+        destructive=True,
     ),
 )
 
