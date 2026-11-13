@@ -129,13 +129,64 @@ def _sso_session(config: Config) -> Any:
     )
 
 
+# A direct invocation takes at most 6 MB of payload (Lambda's synchronous limit).
+MAX_PAYLOAD_BYTES = 6_000_000
+MANIFEST_FIELD = "manifest"
+MANIFEST_PATH_FIELD = "manifestPath"
+
+
+def _input_schema(spec: catalog.OperationSpec) -> dict[str, Any]:
+    """The catalog's schema; an operation taking a manifest may name a local file instead."""
+    schema = spec.input_schema()
+    properties = schema.get("properties", {})
+    if MANIFEST_FIELD in properties:
+        properties[MANIFEST_PATH_FIELD] = {
+            "type": "string",
+            "title": "Manifestpath",
+            "description": (
+                "Path of a local manifest .json file; this server reads it into "
+                "`manifest`. Give either manifestPath or manifest."
+            ),
+        }
+        schema["required"] = [name for name in schema.get("required", []) if name != MANIFEST_FIELD]
+    return schema
+
+
+def _with_manifest_file(arguments: dict[str, Any]) -> dict[str, Any]:
+    """The arguments with `manifestPath` replaced by the file's content."""
+    if MANIFEST_PATH_FIELD not in arguments:
+        return arguments
+    arguments = dict(arguments)
+    raw_path = arguments.pop(MANIFEST_PATH_FIELD)
+    if MANIFEST_FIELD in arguments:
+        raise ToolFailure("Give either manifestPath or manifest, not both.")
+    path = Path(str(raw_path)).expanduser()
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        raise ToolFailure(f"Cannot read {path}: {exc.strerror or exc}.") from exc
+    if size > catalog.MAX_MANIFEST_BYTES:
+        raise ToolFailure(
+            f"{path} is {size} bytes; one call takes a manifest of at most "
+            f"{catalog.MAX_MANIFEST_BYTES}. Split it into smaller manifests."
+        )
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ToolFailure(f"{path} is not a readable JSON file ({type(exc).__name__}).") from exc
+    if not isinstance(manifest, dict):
+        raise ToolFailure(f"{path} does not hold a JSON object.")
+    arguments[MANIFEST_FIELD] = manifest
+    return arguments
+
+
 def tool_definitions() -> list[dict[str, Any]]:
     return [
         {
             "name": spec.name,
             "title": spec.title,
             "description": spec.description,
-            "inputSchema": spec.input_schema(),
+            "inputSchema": _input_schema(spec),
             "annotations": {
                 "title": spec.title,
                 "readOnlyHint": spec.effect is catalog.Effect.READ,
@@ -165,6 +216,8 @@ class Server:
     def call(self, name: str, arguments: dict[str, Any]) -> Any:
         if name not in catalog.OPERATIONS_BY_NAME:
             raise ToolFailure(f"Unknown tool {name!r}.")
+        if MANIFEST_FIELD in catalog.OPERATIONS_BY_NAME[name].arguments.model_fields:
+            arguments = _with_manifest_file(arguments)
         try:
             session = self.session_factory(self.config)
             signed = sign_caller_identity(session, self.config.region)
@@ -182,11 +235,17 @@ class Server:
                 "agent": self.agent,
             }
         }
+        body = json.dumps(payload).encode("utf-8")
+        if len(body) > MAX_PAYLOAD_BYTES:
+            raise ToolFailure(
+                f"The call is {len(body)} bytes; a direct invocation takes at most "
+                f"{MAX_PAYLOAD_BYTES}. Split the manifest into smaller ones."
+            )
         try:
             response = session.client("lambda", region_name=self.config.region).invoke(
                 FunctionName=self.config.function_name,
                 Qualifier=self.config.alias,
-                Payload=json.dumps(payload).encode("utf-8"),
+                Payload=body,
             )
         except ClientError as exc:
             code = exc.response.get("Error", {}).get("Code", "ClientError")

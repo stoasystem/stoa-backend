@@ -133,6 +133,17 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
     or failed call stops the run and says where (an access token that expired, a stale
     published version); run the dry run again and apply its new code to go on - published
     sets are skipped, and a set left in review or approved continues from there.
+
+    An agent does steps 11 and 12 through the stoa-admin MCP server
+    (`scripts/stoa_admin_mcp.py`) on the operator's SSO session instead, with no admin
+    token: `dry_run_curriculum_migration` → `apply_curriculum_migration` →
+    `publish_curriculum_drafts` (dry run, then the real run), reading back with
+    `get_migration` and `get_lesson_state`, and `rollback_lesson` to undo one lesson.
+    It passes a manifest as `manifestPath`. Two confirmations go further than the
+    script: an import naming a lesson that is live now (an `update` row) is refused
+    unless `confirmUpdates` names exactly those lessons, and a publish replacing a live
+    version unless `confirmReplacements` does (stoa-backend#426). One publish call moves
+    at most 60 lessons and pauses after about 18 seconds; a new dry run goes on.
 13. **Go live:** `seed_practice.py --knowledge-base-live` writes the stars and nebulae
     active, and the English and physics subjects with them.
 

@@ -127,6 +127,12 @@ def test_write_tools_say_so_and_ask_for_a_rehearsal_first() -> None:
         "get_usage_period": (True, False),
         "extend_usage_period": (False, False),
         "set_usage_period": (False, True),
+        "get_lesson_state": (True, False),
+        "get_migration": (True, False),
+        "dry_run_curriculum_migration": (True, False),
+        "apply_curriculum_migration": (False, False),
+        "publish_curriculum_drafts": (False, False),
+        "rollback_lesson": (False, True),
     }
     for name in ("invite_account", "reissue_invitation", "revoke_invitation", "delete_account"):
         assert "dryRun" in tools[name]["inputSchema"]["required"]
@@ -264,3 +270,86 @@ def test_signing_needs_credentials() -> None:
         stoa_admin_mcp.sign_caller_identity(
             SimpleNamespace(get_credentials=lambda: None), "eu-central-2"
         )
+
+
+# -- curriculum manifests (#426) --------------------------------------------------------
+
+
+def test_a_manifest_tool_takes_a_local_file_instead_of_pasted_json(tmp_path) -> None:
+    manifest = {"source": {"sourceId": "zap1"}, "lessons": [{"publicLessonId": "zap1-001"}]}
+    path = tmp_path / "manifest-zap1.json"
+    path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+    lambda_client = FakeLambda({"ok": True, "result": {"migrationId": "migration_x"}})
+
+    replies = _rpc(
+        _server(lambda_client),
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+        _call("dry_run_curriculum_migration", {"manifestPath": str(path)}),
+    )
+
+    tools = {tool["name"]: tool for tool in replies[0]["result"]["tools"]}
+    schema = tools["dry_run_curriculum_migration"]["inputSchema"]
+    assert "manifestPath" in schema["properties"]
+    assert "manifest" not in schema.get("required", [])
+    assert replies[1]["result"]["isError"] is False
+    (invocation,) = lambda_client.invocations
+    call = json.loads(invocation["Payload"])[catalog.OPERATOR_CALL_KEY]
+    assert call["arguments"] == {"manifest": manifest}
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"manifestPath": "does-not-exist.json"},
+        {"manifestPath": "PATH", "manifest": {"lessons": []}},
+        {"manifestPath": "TOO_LARGE"},
+    ],
+)
+def test_a_manifest_file_that_cannot_be_sent_is_refused_locally(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, arguments
+) -> None:
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps({"lessons": [{"publicLessonId": "x" * 200}]}), encoding="utf-8")
+    monkeypatch.setattr(catalog, "MAX_MANIFEST_BYTES", 100)
+    if arguments["manifestPath"] in {"PATH", "TOO_LARGE"}:
+        arguments = {**arguments, "manifestPath": str(path)}
+    if "manifest" in arguments:
+        monkeypatch.setattr(catalog, "MAX_MANIFEST_BYTES", 10_000)
+    lambda_client = FakeLambda({"ok": True, "result": {}})
+
+    (reply,) = _rpc(_server(lambda_client), _call("dry_run_curriculum_migration", arguments))
+
+    assert reply["result"]["isError"] is True
+    assert lambda_client.invocations == []
+
+
+def test_a_call_too_large_for_one_invocation_is_refused_locally(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(stoa_admin_mcp, "MAX_PAYLOAD_BYTES", 1_000)
+    lambda_client = FakeLambda({"ok": True, "result": {}})
+
+    (reply,) = _rpc(
+        _server(lambda_client),
+        _call("dry_run_curriculum_migration", {"manifest": {"lessons": ["x" * 2_000]}}),
+    )
+
+    assert reply["result"]["isError"] is True
+    assert "at most 1000" in reply["result"]["content"][0]["text"]
+    assert lambda_client.invocations == []
+
+
+def test_publishing_without_an_sso_session_asks_for_a_login_and_invokes_nothing() -> None:
+    lambda_client = FakeLambda({"ok": True, "result": {}})
+
+    def no_session(_config):
+        raise AwsOperatorIdentityError("No SSO session; run 'aws sso login --sso-session stoa'.")
+
+    (reply,) = _rpc(
+        _server(lambda_client, factory=no_session),
+        _call("publish_curriculum_drafts", {"migrationId": "migration_x", "dryRun": False}),
+    )
+
+    assert reply["result"]["isError"] is True
+    assert "aws sso login" in reply["result"]["content"][0]["text"]
+    assert lambda_client.invocations == []
