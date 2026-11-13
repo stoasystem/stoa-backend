@@ -145,7 +145,12 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
     version unless `confirmReplacements` does (stoa-backend#426). One publish call moves
     at most 60 lessons and pauses after about 18 seconds; a new dry run goes on.
 13. **Go live:** `seed_practice.py --knowledge-base-live` writes the stars and nebulae
-    active, and the English and physics subjects with them.
+    active, and the English and physics subjects with them. A subject goes live once
+    its own lessons are published, so the flag can name subjects:
+    `--knowledge-base-live mathematics` writes the mathematics stars active and keeps
+    the English and physics nebulae and stars in preview, without their subject rows.
+    The seed stamps that run as the mode `live:mathematics`, and the deploy check
+    recomputes the hash in it.
 
 ### Running the seed again
 

@@ -11,7 +11,6 @@ no stamp, or the stamp could not be read - always with exit code 0.
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -279,11 +278,10 @@ def test_the_key_and_the_modes_are_the_seed_s_own() -> None:
             assert 'knowledge_base or "off"' in source
             continue
         assert argument == mode
-        assert re.search(
-            rf'"{re.escape(flag)}", dest="knowledge_base", action="store_const", '
-            rf'const="{mode}"',
-            source,
-        ), flag
+        assert seed_practice.parse_args(flag.split()).knowledge_base == mode, flag
+    # A mode with some subjects live is told with the flags that seed it again.
+    argument, flag = check.mode_entry("live:mathematics")
+    assert seed_practice.parse_args(flag.split()).knowledge_base == argument == "live:mathematics"
 
 
 def test_the_real_code_hash_is_the_one_the_seed_prints() -> None:
