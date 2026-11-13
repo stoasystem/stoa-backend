@@ -144,6 +144,13 @@ def put_version(item: CurriculumItem) -> None:
     )
 
 
+# Every read of a lesson's versions, pointer and manifests is strongly consistent.
+# The workflow reads back what it has just written - submit-review, then approve
+# in the same request - and an eventually consistent read could still see the
+# state before the write: a bulk publish was refused `not_in_review` that way
+# right after its own submit-review, publishing the ZAP1 batch (#423).
+
+
 def get_version(public_id: str, version_id: str) -> CurriculumItem | None:
     table = db_table.table()
     resp = _get_item(
@@ -152,6 +159,7 @@ def get_version(public_id: str, version_id: str) -> CurriculumItem | None:
             "PK": f"CURRICULUM_VERSION#{public_id}",
             "SK": f"VERSION#{version_id}",
         },
+        ConsistentRead=True,
     )
     item = resp.get("Item")
     return _mapping(item) if item is not None else None
@@ -166,6 +174,7 @@ def list_versions(public_id: str) -> list[CurriculumItem]:
         KeyConditionExpression=(
             Key("PK").eq(f"CURRICULUM_VERSION#{public_id}") & Key("SK").begins_with("VERSION#")
         ),
+        ConsistentRead=True,
     )
     return _items(rows)
 
@@ -175,6 +184,7 @@ def get_manifest(public_id: str, manifest_id: str) -> CurriculumItem | None:
     resp = _get_item(
         table,
         Key={"PK": f"CURRICULUM_MANIFEST#{public_id}", "SK": f"MANIFEST#{manifest_id}"},
+        ConsistentRead=True,
     )
     item = resp.get("Item")
     return _mapping(item) if item is not None else None
@@ -182,7 +192,9 @@ def get_manifest(public_id: str, manifest_id: str) -> CurriculumItem | None:
 
 def get_pointer(public_id: str) -> CurriculumItem | None:
     table = db_table.table()
-    resp = _get_item(table, Key={"PK": f"CURRICULUM_POINTER#{public_id}", "SK": "META"})
+    resp = _get_item(
+        table, Key={"PK": f"CURRICULUM_POINTER#{public_id}", "SK": "META"}, ConsistentRead=True
+    )
     item = resp.get("Item")
     return _mapping(item) if item is not None else None
 
@@ -294,6 +306,7 @@ def get_migration_evidence(migration_id: str) -> CurriculumItem | None:
             "PK": f"CURRICULUM_MIGRATION#{migration_id}",
             "SK": "EVIDENCE",
         },
+        ConsistentRead=True,
     )
     item = resp.get("Item")
     return _mapping(item) if item is not None else None
