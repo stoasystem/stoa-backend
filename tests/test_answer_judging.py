@@ -68,6 +68,45 @@ def test_a_different_value_is_still_wrong(submitted: str, key: str) -> None:
     assert not answer_judging.judge(submitted, key)
 
 
+@pytest.mark.parametrize(
+    ("submitted", "key"),
+    [
+        # A list of values is written with "; " so "3,2" is never read as 3.2
+        # (stoa-backend#422); French puts a space before it, others leave both out.
+        ("7 ; -7", "7; -7"),
+        ("7;-7", "7; -7"),
+        ("x = 7 ; x = -7", "x=7; x=-7"),
+        ("1 ; 2 ; 3", "1; 2; 3"),
+        # A point's coordinates are written with a bar in Switzerland: P(2 | 3).
+        ("P(16 | 15)", "P(16|15)"),
+        ("(2|3)", "( 2 | 3 )"),
+        # An iPad turns ' into ’; a key may use the prime ′ for minutes.
+        ("63°12’", "63°12′"),
+        ("63°12'", "63°12′"),
+        ("63° 12’", "63°12′"),
+        ("37 ° 42 ′", "37°42′"),
+    ],
+)
+def test_spacing_around_list_and_point_separators_and_the_apostrophes_are_forgiven(
+    submitted: str, key: str
+) -> None:
+    assert answer_judging.judge(submitted, key)
+
+
+@pytest.mark.parametrize(
+    ("submitted", "key"),
+    [
+        ("3,2", "3; 2"),
+        ("3.2", "3; 2"),
+        ("2; 3", "3; 2"),
+        ("63°21′", "63°12′"),
+        ("(3|2)", "(2|3)"),
+    ],
+)
+def test_a_list_or_point_with_other_values_is_still_wrong(submitted: str, key: str) -> None:
+    assert not answer_judging.judge(submitted, key)
+
+
 def test_choices_and_list_answers_compare_item_by_item() -> None:
     assert answer_judging.judge(["1/2", "0,75"], ["1/2", "0.75"])
     assert not answer_judging.judge(["0,75", "1/2"], ["1/2", "0.75"])
