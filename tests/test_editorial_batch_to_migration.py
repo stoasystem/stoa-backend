@@ -398,6 +398,25 @@ def test_the_fractions_batch_lessons_have_their_titles_in_every_locale(lesson_id
     assert len(set(titles.values())) == 3
 
 
+def test_the_zap1_adaptation_lessons_have_their_titles_in_every_locale() -> None:
+    """The 48 lessons the ZAP1 adaptations (#423) create under the ZAP stars."""
+    from stoa.services import curriculum_translations
+
+    lesson_ids = [
+        lesson_id
+        for lesson_id in curriculum_translations.TITLE_TRANSLATIONS
+        if lesson_id.startswith("zap1-")
+    ]
+    assert len(lesson_ids) == 48
+    for lesson_id in lesson_ids:
+        titles = {
+            locale: curriculum_translations.translated_title(lesson_id, "Deutscher Titel", locale)
+            for locale in ("en", "fr", "it")
+        }
+        assert "Deutscher Titel" not in titles.values(), lesson_id
+        assert all(title.strip() for title in titles.values()), lesson_id
+
+
 def test_a_translated_draft_publishes_and_judges_in_its_locale(table: FakeTable) -> None:
     question = _question(
         "EX-D0001-1A", correct_feedback="Richtig!", translations={"fr": _french()}
