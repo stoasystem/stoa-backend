@@ -237,3 +237,26 @@ def test_one_exercise_id_twice_in_a_lesson_does_not_validate(table: FakeTable) -
 
     assert refused.value.code is CurriculumErrorCode.VALIDATION_FAILED
     assert "exercises[1].exercise_id" in refused.value.public["fields"]
+
+
+def test_the_workflow_reads_back_its_own_writes_consistently(table: FakeTable) -> None:
+    """submit-review then approve in one run: the approve must see `in_review`.
+
+    DynamoDB's default read may still return the version as it was before the
+    write; a bulk publish of the ZAP1 batch stopped `not_in_review` that way.
+    """
+    version_id = _approved(_payload(_exercise(1)))
+    curriculum_ops_repo.get_migration_evidence("migration_none")
+    curriculum_ops_repo.list_versions(LESSON_ID)
+    versions_query = table.requests[-1]
+
+    reads = [
+        request
+        for operation, request in table.requests
+        if operation in {"get_item", "query"}
+        and str(request.get("Key", {}).get("PK", "")).startswith("CURRICULUM_")
+    ]
+    assert reads and all(request.get("ConsistentRead") is True for request in reads)
+    operation, request = versions_query
+    assert operation == "query" and request.get("ConsistentRead") is True
+    assert curriculum_ops_repo.get_version(LESSON_ID, version_id)["state"] == "approved"
