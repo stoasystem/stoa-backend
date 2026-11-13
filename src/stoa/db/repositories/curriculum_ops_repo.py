@@ -157,6 +157,29 @@ def get_version(public_id: str, version_id: str) -> CurriculumItem | None:
     return _mapping(item) if item is not None else None
 
 
+def list_versions(public_id: str) -> list[CurriculumItem]:
+    """Every version of one lesson, across every page."""
+    table = db_table.table()
+    rows = db_table.rows(
+        "query",
+        table=table,
+        KeyConditionExpression=(
+            Key("PK").eq(f"CURRICULUM_VERSION#{public_id}") & Key("SK").begins_with("VERSION#")
+        ),
+    )
+    return _items(rows)
+
+
+def get_manifest(public_id: str, manifest_id: str) -> CurriculumItem | None:
+    table = db_table.table()
+    resp = _get_item(
+        table,
+        Key={"PK": f"CURRICULUM_MANIFEST#{public_id}", "SK": f"MANIFEST#{manifest_id}"},
+    )
+    item = resp.get("Item")
+    return _mapping(item) if item is not None else None
+
+
 def get_pointer(public_id: str) -> CurriculumItem | None:
     table = db_table.table()
     resp = _get_item(table, Key={"PK": f"CURRICULUM_POINTER#{public_id}", "SK": "META"})

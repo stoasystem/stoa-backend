@@ -111,6 +111,12 @@ def test_the_operation_list_is_exactly_this() -> None:
         "get_usage_period": catalog.Effect.READ,
         "extend_usage_period": catalog.Effect.WRITE,
         "set_usage_period": catalog.Effect.WRITE,
+        "get_lesson_state": catalog.Effect.READ,
+        "get_migration": catalog.Effect.READ,
+        "dry_run_curriculum_migration": catalog.Effect.READ,
+        "apply_curriculum_migration": catalog.Effect.WRITE,
+        "publish_curriculum_drafts": catalog.Effect.WRITE,
+        "rollback_lesson": catalog.Effect.WRITE,
     }
     assert set(entry.RUNNERS) == set(catalog.OPERATIONS_BY_NAME)
 

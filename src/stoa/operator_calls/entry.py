@@ -36,7 +36,7 @@ from pydantic import BaseModel, ValidationError
 from stoa import config
 from stoa.db.repositories import security_audit_repo
 from stoa.operator_calls import accounts, caller_identity, catalog, deletions, invitations
-from stoa.operator_calls import overview
+from stoa.operator_calls import curriculum, overview
 from stoa.operator_calls import usage_periods
 from stoa.operator_calls.outcome import OperatorCallRefused, Outcome
 from stoa.rule_violation import RuleViolation
@@ -59,6 +59,12 @@ RUNNERS: Mapping[str, Runner] = {
     "get_usage_period": usage_periods.get_usage_period,
     "extend_usage_period": usage_periods.extend_usage_period,
     "set_usage_period": usage_periods.set_usage_period,
+    "get_lesson_state": curriculum.get_lesson_state,
+    "get_migration": curriculum.get_migration,
+    "dry_run_curriculum_migration": curriculum.dry_run_curriculum_migration,
+    "apply_curriculum_migration": curriculum.apply_curriculum_migration,
+    "publish_curriculum_drafts": curriculum.publish_curriculum_drafts,
+    "rollback_lesson": curriculum.rollback_lesson,
 }
 
 _AGENT_PATTERN = re.compile(r"[^A-Za-z0-9._-]")

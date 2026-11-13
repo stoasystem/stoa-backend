@@ -296,6 +296,150 @@ class SetUsagePeriodArguments(_Arguments):
     dryRun: bool = Field(strict=True, description=DRY_RUN_DESCRIPTION)
 
 
+# -- curriculum (#426) ---------------------------------------------------------------
+
+# The largest migration manifest one call carries, as compact JSON. A direct
+# invocation takes at most 6 MB of payload; this leaves room for the rest of the
+# call. The knowledge-base manifests run to a few hundred KB.
+MAX_MANIFEST_BYTES = 4_000_000
+# How many lessons one publish call moves. The run stops between lessons when it
+# reaches this, and a new dry run and call go on from there.
+MAX_PUBLISH_LESSONS = 60
+
+_LESSON_ID_DESCRIPTION = "The lesson's publicLessonId, e.g. zap1-brueche-addieren-001."
+_MIGRATION_ID_DESCRIPTION = (
+    "The migrationId dry_run_curriculum_migration gave for the manifest, e.g. migration_..."
+)
+_MANIFEST_DESCRIPTION = (
+    "The migration manifest, as the console's migration import takes it: source, "
+    "operatorNote and lessons. At most 4 MB as JSON. The stoa-admin MCP server also "
+    "takes manifestPath, a local .json file it reads into this field, so the agent "
+    "need not paste it."
+)
+_LESSON_LIST_DESCRIPTION = "publicLessonIds; at most 500."
+
+
+def _lesson_ids(values: list[str] | None) -> list[str] | None:
+    if values is None:
+        return None
+    cleaned = [value.strip() for value in values]
+    if any(not value for value in cleaned):
+        raise ValueError("a publicLessonId must not be blank")
+    return cleaned
+
+
+class GetLessonStateArguments(_Arguments):
+    publicLessonId: str = Field(min_length=1, max_length=160, description=_LESSON_ID_DESCRIPTION)
+    auditLimit: int = Field(
+        default=10, ge=0, le=50, description="How many of the newest lifecycle events to show."
+    )
+
+
+class GetMigrationArguments(_Arguments):
+    migrationId: str = Field(min_length=1, max_length=64, description=_MIGRATION_ID_DESCRIPTION)
+
+
+class DryRunCurriculumMigrationArguments(_Arguments):
+    manifest: dict[str, Any] = Field(description=_MANIFEST_DESCRIPTION)
+
+
+class ApplyCurriculumMigrationArguments(_Arguments):
+    migrationId: str = Field(min_length=1, max_length=64, description=_MIGRATION_ID_DESCRIPTION)
+    confirmationCode: str = Field(
+        min_length=1,
+        max_length=64,
+        description="The confirmationCode the dry run gave for this same manifest.",
+    )
+    manifest: dict[str, Any] = Field(description=_MANIFEST_DESCRIPTION)
+    confirmUpdates: list[str] = Field(
+        default_factory=list,
+        max_length=500,
+        description=(
+            "Required when the dry run listed `updates`: exactly those publicLessonIds, "
+            "after the person agreed that each of those live lessons gets a new version. "
+            "Leave empty when it listed none."
+        ),
+    )
+    dryRun: bool = Field(strict=True, description=DRY_RUN_DESCRIPTION)
+
+    @model_validator(mode="after")
+    def _clean_updates(self) -> "ApplyCurriculumMigrationArguments":
+        self.confirmUpdates = _lesson_ids(self.confirmUpdates) or []
+        return self
+
+
+class PublishCurriculumDraftsArguments(_Arguments):
+    migrationId: str = Field(min_length=1, max_length=64, description=_MIGRATION_ID_DESCRIPTION)
+    onlyLessonIds: list[str] | None = Field(
+        default=None,
+        max_length=500,
+        description="Publish only these lessons of the migration. " + _LESSON_LIST_DESCRIPTION,
+    )
+    excludeLessonIds: list[str] = Field(
+        default_factory=list,
+        max_length=500,
+        description="Leave these lessons of the migration out. " + _LESSON_LIST_DESCRIPTION,
+    )
+    confirmationCode: str | None = Field(
+        default=None,
+        max_length=64,
+        description=(
+            "Required when dryRun is false: the confirmationCode of the dry run the "
+            "person agreed to. Refused if the plan changed since."
+        ),
+    )
+    confirmReplacements: list[str] = Field(
+        default_factory=list,
+        max_length=500,
+        description=(
+            "Required when the dry run listed `replacements`: exactly those "
+            "publicLessonIds, after the person agreed that each replaces the version "
+            "students see now. Leave empty when it listed none."
+        ),
+    )
+    dryRun: bool = Field(strict=True, description=DRY_RUN_DESCRIPTION)
+
+    @model_validator(mode="after")
+    def _clean_lists(self) -> "PublishCurriculumDraftsArguments":
+        self.onlyLessonIds = _lesson_ids(self.onlyLessonIds)
+        self.excludeLessonIds = _lesson_ids(self.excludeLessonIds) or []
+        self.confirmReplacements = _lesson_ids(self.confirmReplacements) or []
+        return self
+
+
+class RollbackLessonArguments(_Arguments):
+    publicLessonId: str = Field(min_length=1, max_length=160, description=_LESSON_ID_DESCRIPTION)
+    versionId: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        description=(
+            "The version to put live again. Leave it out for the version that was live "
+            "before the current one."
+        ),
+    )
+    reason: str = Field(
+        min_length=1,
+        max_length=300,
+        description="Why, e.g. 'Exercise 3 has a wrong answer key.' Kept in the lesson's audit.",
+    )
+    expectedPublishedVersionId: str | None = Field(
+        default=None,
+        max_length=128,
+        description=(
+            "Required when dryRun is false: the live version the dry run showed. "
+            "Refused if another version went live since."
+        ),
+    )
+    dryRun: bool = Field(strict=True, description=DRY_RUN_DESCRIPTION)
+
+    @model_validator(mode="after")
+    def _reason_says_something(self) -> "RollbackLessonArguments":
+        if not self.reason.strip():
+            raise ValueError("reason must not be blank")
+        return self
+
+
 @dataclass(frozen=True, slots=True)
 class OperationSpec:
     name: str
@@ -510,6 +654,113 @@ OPERATIONS: tuple[OperationSpec, ...] = (
             "call, dry runs included, is recorded in the audit trail."
         ),
         arguments=SetUsagePeriodArguments,
+        destructive=True,
+    ),
+    OperationSpec(
+        name="get_lesson_state",
+        effect=Effect.READ,
+        title="Show a curriculum lesson's versions",
+        description=(
+            "Read only. Shows one curriculum lesson, named by publicLessonId, as the "
+            "console's curriculum desk does: the live version (publishedVersionId, the "
+            "one students see, and the version that was live before it), every version "
+            "with its state (draft, in_review, changes_requested, approved, published, "
+            "superseded or archived), title, migration and last change, and the newest "
+            "lifecycle events. Lesson content and exercises are not included. Every "
+            "call is recorded in the audit trail."
+        ),
+        arguments=GetLessonStateArguments,
+    ),
+    OperationSpec(
+        name="get_migration",
+        effect=Effect.READ,
+        title="Show a curriculum migration",
+        description=(
+            "Read only. Shows the record of an applied curriculum migration, named by "
+            "migrationId: status, source, who applied it and when, the summary, and "
+            "each row's lesson, action (create, update or skip), status and the "
+            "version it wrote, with the version that was live before it. Every call is "
+            "recorded in the audit trail."
+        ),
+        arguments=GetMigrationArguments,
+    ),
+    OperationSpec(
+        name="dry_run_curriculum_migration",
+        effect=Effect.READ,
+        title="Check a curriculum migration manifest",
+        description=(
+            "Read only. Writes no content. Checks a migration manifest as the console's "
+            "migration dry run does and answers with its migrationId and "
+            "confirmationCode, a summary, and each row's action: create (a new lesson), "
+            "update (a new version of a lesson that is live now), skip (content "
+            "unchanged), error (validation issues) or conflict (expectedPublishedVersionId "
+            "does not match). `updates` lists every update row with the version live "
+            "now: show it to the person on its own, because applying writes a new "
+            "version of each and publishing replaces what students see. "
+            "`publishReady` is false while there are errors or conflicts. Every call is "
+            "recorded in the audit trail."
+        ),
+        arguments=DryRunCurriculumMigrationArguments,
+    ),
+    OperationSpec(
+        name="apply_curriculum_migration",
+        effect=Effect.WRITE,
+        title="Import a curriculum migration as drafts",
+        description=(
+            "Changes data. Before calling, confirm with the person: run "
+            "dry_run_curriculum_migration (or this with dryRun=true), show them the "
+            "summary and every row in `updates`, and only call with dryRun=false, "
+            "passing the migrationId and confirmationCode of that dry run and, in "
+            "confirmUpdates, exactly the lessons `updates` listed, once they have said "
+            "yes. Imports the manifest as drafts: every create and update row becomes a "
+            "new draft version, nothing goes live, and rows marked publish in the "
+            "manifest are refused (publish with publish_curriculum_drafts instead). "
+            "Refused while the manifest has errors or conflicts, when the code does "
+            "not match the manifest, or when confirmUpdates is not exactly the update "
+            "rows. Applying the same manifest again changes nothing and says so. Every "
+            "call, dry runs included, is recorded in the audit trail with the migration."
+        ),
+        arguments=ApplyCurriculumMigrationArguments,
+    ),
+    OperationSpec(
+        name="publish_curriculum_drafts",
+        effect=Effect.WRITE,
+        title="Publish a curriculum migration's drafts",
+        description=(
+            "Changes data. Students see the result. Before calling, confirm with the "
+            "person: run with dryRun=true first, show them how many lessons would go "
+            "live, which are skipped and why, and every row in `replacements`, and only "
+            "call with dryRun=false, passing the dry run's confirmationCode and, in "
+            "confirmReplacements, exactly the lessons `replacements` listed, once they "
+            "have said yes. Moves the drafts an applied migration wrote (narrowed by "
+            "onlyLessonIds and excludeLessonIds) through review, approval and "
+            "publication, lesson after lesson, as the console's buttons do; a lesson "
+            "already published, sent back for changes or failing validation is skipped. "
+            "A replacement is published only if the version live when the migration "
+            "was applied is still live. The first refusal, such as another version "
+            "having gone live in between, stops the run there: the answer says which "
+            "lessons were published and where it stopped; run the dry run again to go "
+            "on. One call publishes at most 60 lessons and pauses after about 18 seconds, saying where; a new dry run goes on from there. Every call, dry runs included, is "
+            "recorded in the audit trail with the migration and the lessons."
+        ),
+        arguments=PublishCurriculumDraftsArguments,
+    ),
+    OperationSpec(
+        name="rollback_lesson",
+        effect=Effect.WRITE,
+        title="Roll back a curriculum lesson",
+        description=(
+            "Changes data. Students see the result. Before calling, confirm with the "
+            "person: run with dryRun=true first, show them which version is live now "
+            "and which would be live after, and only call with dryRun=false, passing "
+            "the live version the dry run showed as expectedPublishedVersionId, once "
+            "they have said yes. Puts an earlier version of one lesson live again, as "
+            "the console's rollback does: by default the version that was live before "
+            "the current one, or the versionId given. Refused if another version went "
+            "live since the dry run. Every call, dry runs included, is recorded in the "
+            "audit trail with its reason."
+        ),
+        arguments=RollbackLessonArguments,
         destructive=True,
     ),
 )
