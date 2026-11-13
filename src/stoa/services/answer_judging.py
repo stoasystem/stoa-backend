@@ -8,7 +8,14 @@ differences in how a value is *written*, never in what it is:
   (`x - 8 = 17` is `x-8=17`);
 - a Swiss decimal comma (`31,4` is `31.4`), trailing decimal zeros (`10.80` is
   `10.8`), a thousands apostrophe (`1'200` is `1200`) and a price written `34.–`;
-- the Unicode minus and a trailing full stop.
+- the Unicode minus and a trailing full stop;
+- spaces next to the separators of a list (`7 ; -7` is `7;-7`) and of a point's
+  coordinates (`P(2 | 3)`), and next to the degree sign;
+- the typographic apostrophe an iPad types and the prime of minutes (`63°12’`
+  and `63°12′` are `63°12'`).
+
+A list of values is written with `; `, never with a comma: `3,2` stays the
+decimal 3.2 (stoa-backend#422).
 
 It does not make different values equal. `4/6` is not `2/3`: several exercises ask
 for the reduced fraction, so which equivalent forms count is the author's call,
@@ -30,12 +37,14 @@ from typing import Any
 MAX_ACCEPTED_ANSWERS = 20
 MAX_ACCEPTED_ANSWER_LENGTH = 200
 
-_MINUS_SIGNS = str.maketrans({"−": "-", "⁄": "/", "∕": "/"})
+_SAME_SIGNS = str.maketrans(
+    {"−": "-", "⁄": "/", "∕": "/", "’": "'", "‘": "'", "ʼ": "'", "′": "'"}
+)
 # 34.– / 34.- / 34.— : Swiss prices with no centimes.
 _WHOLE_PRICE = re.compile(r"(\d)\.[-–—]+(?!\d)")
 # A number as a pupil writes it: optional apostrophe thousands, optional , or . decimals.
 _NUMBER = re.compile(r"(?<![\d.,])\d+(?:['’]\d{3})*(?:[.,]\d+)?(?![\d'’])")
-_OPERATOR_SPACING = re.compile(r"\s*([=+\-*/:·×()<>])\s*")
+_OPERATOR_SPACING = re.compile(r"\s*([=+\-*/:·×()<>;|°'])\s*")
 _DIGIT_THEN_LETTER = re.compile(r"(\d)([^\W\d_])")
 _WHITESPACE = re.compile(r"\s+")
 
@@ -53,7 +62,7 @@ def _canonical_number(match: re.Match[str]) -> str:
 
 def normalize_answer(value: object) -> str:
     """One answer in the form two writings of the same value share."""
-    text = unicodedata.normalize("NFKC", str(value)).translate(_MINUS_SIGNS).lower()
+    text = unicodedata.normalize("NFKC", str(value)).translate(_SAME_SIGNS).lower()
     text = _WHITESPACE.sub(" ", text).strip()
     text = _WHOLE_PRICE.sub(r"\1", text)
     text = _NUMBER.sub(_canonical_number, text)
