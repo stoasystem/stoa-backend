@@ -69,9 +69,13 @@ jobs:
         working-directory: stoa-backend
         run: uv run ruff check .
 
+      # One worker per core. `--dist load` hands out single tests rather than
+      # whole files: a few files are far longer than the rest, and keeping each
+      # on one worker left the run waiting on it (trial 2026-11-15: load 149 s
+      # and 163 s, loadfile 187 s and 244 s, serial 421 s).
       - name: Run test suite
         working-directory: stoa-backend
-        run: uv run pytest -q
+        run: uv run pytest -q -n auto --dist load
 
   deploy:
     name: Build package and update Lambda
