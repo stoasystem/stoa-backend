@@ -1,5 +1,8 @@
 """The teacher's prep for a help request names the student's commonest recent 错因 (#452).
 
+The cause may have been authored on a distractor (#452) or inferred from a
+typed answer by a rule (#453).
+
 Read from the student's answer receipts as they are stored: the cause each
 wrong answer recorded when it was given. Nothing is asked of a model.
 """
@@ -11,7 +14,7 @@ from typing import Any
 import pytest
 from fakes.dynamodb import FakeTable
 
-from stoa.services import student_evidence
+from stoa.services import error_causes, student_evidence
 from test_chat_help_request_lifecycle import STUDENT, REQUEST, TEACHER, _client, _dispatch_to
 from test_chat_help_request_lifecycle import table as table  # noqa: F401 - the fixture
 from test_error_causes import ADDS_DENOMINATORS, DENOMINATORS, SIGN
@@ -83,3 +86,20 @@ def test_the_request_opens_when_the_answers_cannot_be_read(
     )
 
     assert _detail()["commonErrorCause"] is None
+
+
+def test_a_cause_inferred_from_a_typed_answer_reaches_the_prep(table: FakeTable) -> None:
+    """A rule's cause (#453) is stored like an authored one and read the same way."""
+    inferred = error_causes.rule_cause(error_causes.RULE_SIGN)
+    _dispatch_to(table, TEACHER)
+    table.rows[(f"USER#{TEACHER}", "PROFILE")]["preferred_locale"] = "fr"
+    _attempt(table, 1, ADDS_DENOMINATORS)
+    _attempt(table, 2, inferred)
+    _attempt(table, 3, inferred)
+
+    assert _detail()["commonErrorCause"] == {
+        "category": "deviation",
+        "misconception": inferred["misconception"]["fr"],
+        "count": 2,
+        "recentMistakes": 3,
+    }

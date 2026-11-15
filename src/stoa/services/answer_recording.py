@@ -14,8 +14,9 @@ What an answer leads to depends on where it was given, the mode:
   receipt says whether the student asked Ask about this exercise in the same
   learning session before answering (#449); that is decided once, here, and
   never changes afterwards. A wrong answer's receipt also says why it was
-  wrong (`error_causes`, #452): the cause the picked distractor was tagged
-  with when it was authored, else unclassified. No model is asked.
+  wrong (`error_causes`): the cause the picked distractor was tagged with
+  when it was authored (#452), for a typed answer the cause a fixed rule finds
+  (#453), else unclassified. No model is asked.
 * **quiz answer** (`judge`, then `record_quiz_answer`): only the usage event.
   A quiz answer is not an attempt; the quiz keeps its own log. The event is
   written once the quiz has taken the answer, because it carries the quiz's
