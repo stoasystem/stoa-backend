@@ -414,6 +414,11 @@ def test_the_image_is_in_the_body_that_is_counted_and_the_body_that_is_sent(
     assert response.status_code == 200, response.text
     [counted] = bedrock.counted_bodies
     [sent] = bedrock.requests
-    assert counted == sent
+    # Counted as sent, less the stream-only tool field CountTokens refuses (#454).
+    expected = json.loads(json.dumps(sent))
+    for tool in expected.get("tools", []):
+        tool.pop("eager_input_streaming", None)
+    assert counted == expected
+    assert counted["messages"] == sent["messages"]
     [block] = _image_blocks(sent)
     assert block["source"]["data"] == base64.b64encode(data).decode("ascii")
