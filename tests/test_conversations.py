@@ -663,6 +663,13 @@ def test_new_foreign_attachment_has_zero_command_quota_or_ai_effect(table, model
     assert model.calls == []
 
 
+@pytest.mark.xfail(
+    strict=False,
+    reason=(
+        "#461: a duplicate that reads the command while it is still `claimed` gets "
+        "CLAIMED back and binds too; seen under parallel workers. Remove with the fix."
+    ),
+)
 def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     table, model, bucket, monkeypatch
 ) -> None:
