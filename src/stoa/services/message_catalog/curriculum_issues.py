@@ -215,4 +215,28 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Trop de réponses acceptées, ou des réponses acceptées trop longues.",
         "it": "Troppe risposte accettate, o risposte accettate troppo lunghe.",
     },
+    "curriculum_issue.option_error_causes_mismatch": {
+        "de": "Fehlerursachen gibt es nur bei Auswahlaufgaben, eine pro Option, leer, wo eine Option keine hat.",
+        "en": "Error causes go on choice exercises only, one per option, empty where an option has none.",
+        "fr": "Les causes d’erreur ne vont que sur les exercices à choix, une par option, vide lorsqu’une option n’en a pas.",
+        "it": "Le cause d’errore vanno solo sugli esercizi a scelta, una per opzione, vuota dove un’opzione non ne ha.",
+    },
+    "curriculum_issue.error_cause_on_answer": {
+        "de": "Die richtige Option hat keine Fehlerursache.",
+        "en": "The right option has no error cause.",
+        "fr": "La bonne option n’a pas de cause d’erreur.",
+        "it": "L’opzione corretta non ha una causa d’errore.",
+    },
+    "curriculum_issue.error_cause_category_unknown": {
+        "de": "Unbekannte Fehlerursache «{category}»: strukturell, Abweichung, Anwendung oder metakognitiv.",
+        "en": "Unknown error cause '{category}': structural, deviation, application or metacognitive.",
+        "fr": "Cause d’erreur inconnue « {category} » : structurelle, écart, application ou métacognitive.",
+        "it": "Causa d’errore sconosciuta «{category}»: strutturale, deviazione, applicazione o metacognitiva.",
+    },
+    "curriculum_issue.error_cause_misconception_missing": {
+        "de": "Die Fehlvorstellung fehlt oder ist zu lang in: {locales}.",
+        "en": "The misconception is missing or too long in: {locales}.",
+        "fr": "L’idée fausse manque ou est trop longue en : {locales}.",
+        "it": "Il malinteso manca o è troppo lungo in: {locales}.",
+    },
 }

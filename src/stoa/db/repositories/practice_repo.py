@@ -637,6 +637,7 @@ def put_attempt(
     account_fence_generation: int | None = None,
     self_reported: bool = False,
     asked_ai: bool = False,
+    error_cause: Mapping[str, Any] | None = None,
 ) -> dict:
     """Immutably record every answer and return its durable owner receipt.
 
@@ -654,6 +655,11 @@ def put_attempt(
     exercise in the same learning session (#449). Like `self_reported`, only
     the marked ones carry it: a receipt without it, every one written before
     the mark existed included, was answered independently.
+
+    `error_cause` is why a wrong answer was wrong (`error_causes`, #452): the
+    cause of the distractor it picked, or `unclassified`. Only wrong answers
+    given now carry it; a wrong one without it predates it and reads as
+    unclassified.
     """
     table = db_table.table()
     generation = _write_generation(student_id, account_fence_generation, table)
@@ -681,6 +687,8 @@ def put_attempt(
         item["self_reported"] = True
     if asked_ai:
         item["asked_ai"] = True
+    if error_cause:
+        item["error_cause"] = dict(error_cause)
     snapshot_fields = {
         "challenge_version": challenge_version,
         "challenge_content_hash": challenge_content_hash,

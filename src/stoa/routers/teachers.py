@@ -54,6 +54,8 @@ from stoa.services import (
     attachment_service,
     help_requests,
     learning_session,
+    locale_service,
+    student_evidence,
     teacher_assistance_service,
     teacher_dispatch_service,
     teacher_reply_service,
@@ -273,6 +275,17 @@ class TeacherNoteOut(BaseModel):
     attachments: list[AttachmentSummary] = Field(default_factory=list)
 
 
+class TeacherErrorCause(BaseModel):
+    """Why the student's recent wrong answers were wrong, most often (错因, #452)."""
+
+    # structural | deviation | application | metacognitive
+    category: str
+    misconception: str
+    # How many of the recent wrong answers had this cause, and how many were read.
+    count: int
+    recentMistakes: int
+
+
 class TeacherHelpRequestDetail(BaseModel):
     requestId: str
     conversationId: str
@@ -288,6 +301,10 @@ class TeacherHelpRequestDetail(BaseModel):
     # the answers in this conversation named, newest first, as the prep summary
     # of a question names its topics. Empty when none were recorded.
     weakTopics: list[str] = Field(default_factory=list)
+    # The student's commonest error cause among their recent wrong answers
+    # (#452), with its misconception in the teacher's language; `null` when
+    # none of them is tagged with a cause.
+    commonErrorCause: TeacherErrorCause | None = None
 
 
 def _help_request_summary(
@@ -902,6 +919,7 @@ async def list_help_requests(
 async def get_help_request(
     request_id: str,
     authorized: AuthorizedResource = Depends(_help_request(AuthorizationAction.READ)),
+    actor: Actor = Depends(get_actor),
 ):
     """Get full detail of a specific help request including conversation messages."""
     table = db_table.table()
@@ -956,6 +974,9 @@ async def get_help_request(
         firstTeacherActionAt=view.first_teacher_action_at,
         sla=view.sla,
         weakTopics=_asked_topics(conv_id),
+        commonErrorCause=_common_error_cause(
+            student_id, locale_service.reader_locale(actor.user_id)
+        ),
     )
 
 
@@ -982,6 +1003,30 @@ def _asked_topics(conversation_id: str) -> list[str]:
             if isinstance(name, str) and name.casefold() not in topics:
                 topics[name.casefold()] = name
     return list(topics.values())[:_PREP_TOPIC_LIMIT]
+
+
+def _common_error_cause(student_id: str, locale: str) -> TeacherErrorCause | None:
+    """The student's commonest recent error cause, from their answer receipts (#452).
+
+    As the asked topics, the request opens without it rather than not at all.
+    """
+    try:
+        evidence = student_evidence.for_student(student_id, locale=locale)
+        common = evidence.most_common_error_cause
+        recent = sum(item.count for item in evidence.recent_error_causes)
+    except Exception as exc:
+        logger.warning(
+            "help_request_error_causes_unavailable error_class=%s", type(exc).__name__
+        )
+        return None
+    if common is None:
+        return None
+    return TeacherErrorCause(
+        category=common.category,
+        misconception=common.misconception_in(locale),
+        count=common.count,
+        recentMistakes=recent,
+    )
 
 
 @router.get("/me/help-requests/{request_id}/attachments/{attachment_id}/content")

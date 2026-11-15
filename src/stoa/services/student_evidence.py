@@ -41,6 +41,7 @@ from zoneinfo import ZoneInfo
 from stoa.db.repositories import practice_repo, review_repo
 from stoa.services import (
     curriculum_service,
+    error_causes,
     knowledge_mastery_service,
     practice_projection_service,
 )
@@ -298,6 +299,40 @@ def _newest_first(attempt: Mapping[str, Any]) -> tuple[str, str]:
     return (str(attempt.get("created_at") or ""), str(attempt.get("attempt_id") or ""))
 
 
+#: How many of the newest checked wrong answers the error-cause tally reads (#452).
+RECENT_ERROR_CAUSE_ANSWERS = 20
+
+
+@dataclass(frozen=True, slots=True)
+class ErrorCauseCount:
+    """One error cause among the recent wrong answers, and how often (#452).
+
+    `misconception` is the sentence per locale, empty for `unclassified`.
+    """
+
+    category: str
+    misconception: tuple[tuple[str, str], ...]
+    count: int
+
+    def misconception_in(self, locale: str) -> str:
+        """The misconception in `locale`, else German; empty when it has none."""
+        sentences = dict(self.misconception)
+        return sentences.get(locale) or sentences.get("de", "")
+
+
+def _error_cause_key(attempt: Mapping[str, Any]) -> tuple[str, tuple[tuple[str, str], ...]]:
+    """A wrong answer's cause as a tally key; one without a whole cause is unclassified."""
+    cause = attempt.get("error_cause")
+    if isinstance(cause, Mapping) and cause.get("category") in error_causes.CATEGORIES:
+        misconception = cause.get("misconception")
+        if isinstance(misconception, Mapping):
+            return (
+                str(cause["category"]),
+                tuple(sorted((str(k), str(v)) for k, v in misconception.items())),
+            )
+    return (error_causes.UNCLASSIFIED, ())
+
+
 @dataclass(frozen=True, slots=True)
 class RightAnswers:
     """One star's exercises answered right, split by how (#449).
@@ -541,6 +576,42 @@ class StudentEvidence:
                     reverse=True,
                 )
             ),
+        )
+
+    @property
+    def recent_error_causes(self) -> tuple[ErrorCauseCount, ...]:
+        """Why the recent wrong answers were wrong, most common first (#452).
+
+        The newest `RECENT_ERROR_CAUSE_ANSWERS` checked wrong answers - a
+        self-reported one was never judged wrong by anyone - each counted under
+        the cause its receipt records. One recorded before causes were, or
+        with no whole cause, is unclassified. A tie goes to the cause seen
+        most recently.
+        """
+
+        def build() -> tuple[ErrorCauseCount, ...]:
+            checked = [item for item in self.mistakes if _judged(item)]
+            counts: Counter[tuple[str, tuple[tuple[str, str], ...]]] = Counter()
+            last_seen: dict[tuple[str, tuple[tuple[str, str], ...]], int] = {}
+            for position, attempt in enumerate(checked[:RECENT_ERROR_CAUSE_ANSWERS]):
+                key = _error_cause_key(attempt)
+                counts[key] += 1
+                last_seen.setdefault(key, position)
+            return tuple(
+                ErrorCauseCount(category=category, misconception=misconception, count=count)
+                for (category, misconception), count in sorted(
+                    counts.items(), key=lambda item: (-item[1], last_seen[item[0]])
+                )
+            )
+
+        return self._once("recent_error_causes", build)
+
+    @property
+    def most_common_error_cause(self) -> ErrorCauseCount | None:
+        """The commonest known cause among the recent wrong answers; none when all are unclassified."""
+        return next(
+            (item for item in self.recent_error_causes if item.category != error_causes.UNCLASSIFIED),
+            None,
         )
 
     def mistakes_between(self, start: datetime, end: datetime) -> tuple[dict[str, Any], ...]:

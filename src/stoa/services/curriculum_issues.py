@@ -63,6 +63,11 @@ class IssueCode(StrEnum):
     TRANSLATION_ANSWER_NOT_THE_OPTION = "translation_answer_not_the_option"
     TRANSLATION_ANSWER_MISSING = "translation_answer_missing"
     ACCEPTED_ANSWERS_OUT_OF_BOUNDS = "accepted_answers_out_of_bounds"
+    # The error causes of the options (`error_causes`, #452).
+    OPTION_ERROR_CAUSES_MISMATCH = "option_error_causes_mismatch"
+    ERROR_CAUSE_ON_ANSWER = "error_cause_on_answer"
+    ERROR_CAUSE_CATEGORY_UNKNOWN = "error_cause_category_unknown"
+    ERROR_CAUSE_MISCONCEPTION_MISSING = "error_cause_misconception_missing"
 
 
 def catalog_key(code: IssueCode | str) -> str:
