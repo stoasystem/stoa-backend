@@ -3501,6 +3501,109 @@
         "title": "CurriculumLessonDraftRequest",
         "type": "object"
       },
+      "CurriculumLessonPreview": {
+        "additionalProperties": false,
+        "description": "Student curriculum lesson detail without exercise explanations or answer derivatives.\n\nThe lesson's own explanation cards (`sections`) are for students and are sent.",
+        "properties": {
+          "difficulty": {
+            "default": "practice",
+            "title": "Difficulty",
+            "type": "string"
+          },
+          "estimatedMinutes": {
+            "default": 10,
+            "minimum": 0.0,
+            "title": "Estimatedminutes",
+            "type": "integer"
+          },
+          "exerciseCount": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Exercisecount",
+            "type": "integer"
+          },
+          "exercises": {
+            "items": {
+              "$ref": "#/components/schemas/PracticeExercisePreview"
+            },
+            "title": "Exercises",
+            "type": "array"
+          },
+          "gradeLevel": {
+            "default": "",
+            "title": "Gradelevel",
+            "type": "string"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "nextStep": {
+            "default": "",
+            "title": "Nextstep",
+            "type": "string"
+          },
+          "objective": {
+            "default": "",
+            "title": "Objective",
+            "type": "string"
+          },
+          "prerequisiteLessonIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Prerequisitelessonids",
+            "type": "array"
+          },
+          "rolloutState": {
+            "default": "active",
+            "title": "Rolloutstate",
+            "type": "string"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/LessonSection"
+            },
+            "title": "Sections",
+            "type": "array"
+          },
+          "source": {
+            "default": "practice_backfill",
+            "title": "Source",
+            "type": "string"
+          },
+          "subjectId": {
+            "minLength": 1,
+            "title": "Subjectid",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "topicId": {
+            "minLength": 1,
+            "title": "Topicid",
+            "type": "string"
+          },
+          "unitId": {
+            "default": "",
+            "title": "Unitid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subjectId",
+          "topicId",
+          "title",
+          "exercises"
+        ],
+        "title": "CurriculumLessonPreview",
+        "type": "object"
+      },
       "CurriculumLessonVersionResponse": {
         "description": "A version next to its lesson's live version, as the worklist and preview give it.\n\n`publishedVersionId` is the version the lesson's pointer names, or null when the\nlesson has never been published; send it as `expectedPublishedVersionId`.\n`state` is read against it: `published` for the live version only, `superseded`\nfor one a later publish replaced (#111).",
         "properties": {
@@ -5144,6 +5247,34 @@
           }
         },
         "title": "LessonQuizStartRequest",
+        "type": "object"
+      },
+      "LessonSection": {
+        "additionalProperties": false,
+        "description": "One explanation card of a lesson, in the reader's language (#465).\n\nShown before the lesson's exercises, in the lesson's order. `body` may hold\nLaTeX. The stored `translations` the card was chosen from are not sent.",
+        "properties": {
+          "body": {
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "body"
+        ],
+        "title": "LessonSection",
         "type": "object"
       },
       "LitAcknowledgement": {
@@ -9134,6 +9265,150 @@
         "title": "PracticeAttemptResult",
         "type": "object"
       },
+      "PracticeChallengePreview": {
+        "additionalProperties": false,
+        "description": "The complete challenge shape safe to send before a recorded attempt.",
+        "properties": {
+          "challengeId": {
+            "minLength": 1,
+            "title": "Challengeid",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
+          "figure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Figure"
+          },
+          "gradeLevel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gradelevel"
+          },
+          "hintAvailable": {
+            "title": "Hintavailable",
+            "type": "boolean"
+          },
+          "lessonId": {
+            "minLength": 1,
+            "title": "Lessonid",
+            "type": "string"
+          },
+          "optionFigures": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optionfigures"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          },
+          "prompt": {
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "subjectId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subjectid"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "topicId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topicid"
+          },
+          "type": {
+            "minLength": 1,
+            "title": "Type",
+            "type": "string"
+          },
+          "unitId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unitid"
+          }
+        },
+        "required": [
+          "challengeId",
+          "lessonId",
+          "prompt",
+          "type",
+          "hintAvailable"
+        ],
+        "title": "PracticeChallengePreview",
+        "type": "object"
+      },
       "PracticeContextReference": {
         "additionalProperties": false,
         "description": "The exercise a question is asked beside, named by id only (#61).\n\n`extra=\"forbid\"` is the rule itself, not tidiness: the wording of a question\nis read from the store by these ids, and a client that sends its own is\nrefused rather than believed.",
@@ -9163,6 +9438,119 @@
           "unitId"
         ],
         "title": "PracticeContextReference",
+        "type": "object"
+      },
+      "PracticeExercisePreview": {
+        "additionalProperties": false,
+        "description": "Answer-free curriculum exercise projection.",
+        "properties": {
+          "choices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choices"
+          },
+          "difficulty": {
+            "default": "practice",
+            "title": "Difficulty",
+            "type": "string"
+          },
+          "estimatedMinutes": {
+            "default": 5,
+            "minimum": 0.0,
+            "title": "Estimatedminutes",
+            "type": "integer"
+          },
+          "figure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Figure"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "lessonId": {
+            "minLength": 1,
+            "title": "Lessonid",
+            "type": "string"
+          },
+          "optionFigures": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optionfigures"
+          },
+          "prompt": {
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "rolloutState": {
+            "default": "active",
+            "title": "Rolloutstate",
+            "type": "string"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
+          "source": {
+            "default": "practice_backfill",
+            "title": "Source",
+            "type": "string"
+          },
+          "subjectId": {
+            "minLength": 1,
+            "title": "Subjectid",
+            "type": "string"
+          },
+          "topicId": {
+            "minLength": 1,
+            "title": "Topicid",
+            "type": "string"
+          },
+          "type": {
+            "minLength": 1,
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "lessonId",
+          "subjectId",
+          "topicId",
+          "type",
+          "prompt"
+        ],
+        "title": "PracticeExercisePreview",
         "type": "object"
       },
       "PracticeHintRequest": {
@@ -9219,6 +9607,86 @@
           "hintAvailable"
         ],
         "title": "PracticeHintResponse",
+        "type": "object"
+      },
+      "PracticeLessonPreview": {
+        "additionalProperties": false,
+        "description": "Answer-free lesson projection shared by overview, path, and lesson reads.",
+        "properties": {
+          "challenges": {
+            "items": {
+              "$ref": "#/components/schemas/PracticeChallengePreview"
+            },
+            "title": "Challenges",
+            "type": "array"
+          },
+          "difficulty": {
+            "default": "practice",
+            "title": "Difficulty",
+            "type": "string"
+          },
+          "estimatedMinutes": {
+            "default": 10,
+            "minimum": 0.0,
+            "title": "Estimatedminutes",
+            "type": "integer"
+          },
+          "gradeLevel": {
+            "default": "",
+            "title": "Gradelevel",
+            "type": "string"
+          },
+          "id": {
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/LessonSection"
+            },
+            "title": "Sections",
+            "type": "array"
+          },
+          "status": {
+            "default": "available",
+            "title": "Status",
+            "type": "string"
+          },
+          "subjectId": {
+            "minLength": 1,
+            "title": "Subjectid",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "topic": {
+            "default": "",
+            "title": "Topic",
+            "type": "string"
+          },
+          "topicId": {
+            "minLength": 1,
+            "title": "Topicid",
+            "type": "string"
+          },
+          "unitId": {
+            "default": "",
+            "title": "Unitid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subjectId",
+          "topicId",
+          "title",
+          "challenges"
+        ],
+        "title": "PracticeLessonPreview",
         "type": "object"
       },
       "PracticeMistake": {
@@ -31031,7 +31499,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CurriculumLessonPreview"
+                }
               }
             },
             "description": "Successful Response"
@@ -31846,7 +32316,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PracticeLessonPreview"
+                }
               }
             },
             "description": "Successful Response"

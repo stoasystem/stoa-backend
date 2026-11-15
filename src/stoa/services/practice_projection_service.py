@@ -20,7 +20,7 @@ from stoa.models.practice import (
     PrivilegedPracticeAnswer,
 )
 from stoa.db.repositories import practice_repo
-from stoa.services import exercise_localization, locale_service, message_catalog
+from stoa.services import exercise_localization, lesson_sections, locale_service, message_catalog
 from stoa.services.curriculum_translations import translated_title
 
 
@@ -152,6 +152,7 @@ def build_lesson_preview(
             difficulty=raw.get("difficulty", "practice"),
             status=status,
             estimatedMinutes=raw.get("estimated_minutes", 10),
+            sections=lesson_sections.localized(raw.get("sections"), locale),
             challenges=[PracticeChallengePreview.model_validate(item) for item in challenges],
         )
     )
@@ -200,6 +201,7 @@ def build_curriculum_lesson_preview(
             exerciseCount=len(exercises),
             source=raw.get("source", "practice_backfill"),
             prerequisiteLessonIds=raw.get("prerequisite_lesson_ids", []),
+            sections=lesson_sections.localized(raw.get("sections"), locale),
             exercises=[PracticeExercisePreview.model_validate(item) for item in exercises],
             nextStep=raw.get("next_step", ""),
         )

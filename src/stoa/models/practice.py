@@ -53,6 +53,18 @@ class PracticeChallengePreview(_PracticeContract):
     difficulty: str | None = None
 
 
+class LessonSection(_PracticeContract):
+    """One explanation card of a lesson, in the reader's language (#465).
+
+    Shown before the lesson's exercises, in the lesson's order. `body` may hold
+    LaTeX. The stored `translations` the card was chosen from are not sent.
+    """
+
+    id: NonEmptyText
+    title: NonEmptyText
+    body: NonEmptyText
+
+
 class PracticeLessonPreview(_PracticeContract):
     """Answer-free lesson projection shared by overview, path, and lesson reads."""
 
@@ -66,6 +78,7 @@ class PracticeLessonPreview(_PracticeContract):
     difficulty: str = "practice"
     status: str = "available"
     estimated_minutes: int = Field(default=10, alias="estimatedMinutes", ge=0)
+    sections: list[LessonSection] = Field(default_factory=list)
     challenges: list[PracticeChallengePreview]
 
 
@@ -89,7 +102,10 @@ class PracticeExercisePreview(_PracticeContract):
 
 
 class CurriculumLessonPreview(_PracticeContract):
-    """Student curriculum lesson detail without explanations or answer derivatives."""
+    """Student curriculum lesson detail without exercise explanations or answer derivatives.
+
+    The lesson's own explanation cards (`sections`) are for students and are sent.
+    """
 
     lesson_id: NonEmptyText = Field(alias="id")
     subject_id: NonEmptyText = Field(alias="subjectId")
@@ -106,6 +122,7 @@ class CurriculumLessonPreview(_PracticeContract):
     prerequisite_lesson_ids: list[str] = Field(
         default_factory=list, alias="prerequisiteLessonIds"
     )
+    sections: list[LessonSection] = Field(default_factory=list)
     exercises: list[PracticeExercisePreview]
     next_step: str = Field(default="", alias="nextStep")
 

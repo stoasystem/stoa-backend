@@ -34,6 +34,13 @@ class IssueCode(StrEnum):
     PREREQUISITE_UNRELATED = "prerequisite_unrelated"
     PREREQUISITE_CYCLE = "prerequisite_cycle"
     EXERCISE_REQUIRED = "exercise_required"
+    # The lesson's explanation cards (`lesson_sections`, #465). A card's
+    # translation is also checked with `TRANSLATIONS_NOT_A_MAP` and
+    # `TRANSLATION_LOCALE_UNSUPPORTED`.
+    SECTIONS_NOT_A_LIST = "sections_not_a_list"
+    SECTION_FIELD_MISSING = "section_field_missing"
+    SECTION_ID_REPEATED = "section_id_repeated"
+    SECTION_TRANSLATION_INCOMPLETE = "section_translation_incomplete"
     # An exercise.
     EXERCISE_ID_REPEATED = "exercise_id_repeated"
     EXERCISE_FIELD_MISSING = "exercise_field_missing"
