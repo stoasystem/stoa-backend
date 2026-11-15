@@ -5,23 +5,32 @@ deviation (knows it, got it wrong), application (fails once the setting
 changes), metacognitive (does not know they do not know) - and, when it is
 known, the misconception it stands for: one sentence in each locale.
 
-Causes come from authoring, never from a model: each wrong option of a choice
-exercise may carry one (`option_error_causes`, one entry per option, `None`
-where an option has none). A wrong answer that picks a tagged option records
-that cause on its receipt; every other wrong answer records `unclassified`.
+Causes come from authoring or from fixed rules, never from a model:
+
+* each wrong option of a choice exercise may carry one (`option_error_causes`,
+  one entry per option, `None` where an option has none), and a wrong answer
+  that picks a tagged option records that cause on its receipt (#452);
+* a wrong typed answer (any exercise that is not a choice) is compared with
+  the key by the rules in `infer` (#453): the same number with the other sign,
+  or a number very close to the key, is a deviation, with the rule's fixed
+  misconception sentence from the message catalog (`error_cause.<rule>`).
+
+Every other wrong answer records `unclassified`.
 
 Stored forms:
 
 * on the exercise, `option_error_causes`: ``[None | {"category", "misconception": {locale: text}}]``
-* on the receipt, `error_cause`: the picked option's cause, or ``{"category": "unclassified"}``
+* on the receipt, `error_cause`: the picked option's cause, a rule's cause, or
+  ``{"category": "unclassified"}``
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from decimal import Decimal
 from typing import Any
 
-from stoa.services import answer_judging
+from stoa.services import answer_judging, message_catalog
 from stoa.services.curriculum_issues import Issue, IssueCode
 
 #: The categories an author may tag a distractor with.
@@ -149,15 +158,104 @@ def _valid(cause: object) -> dict[str, Any] | None:
     }
 
 
+# ── rules for typed answers (#453) ───────────────────────────────────────────
+
+#: The answer is the key's number with the other sign: `5` for `-5`.
+RULE_SIGN = "sign"
+#: The answer's number is very close to the key's: see `_close`.
+RULE_CLOSE = "close"
+#: In the order they are tried; the first that explains the answer wins.
+RULES: tuple[str, ...] = (RULE_SIGN, RULE_CLOSE)
+
+#: How far, relative to the key, a number may be off and still count as close:
+#: 2 % takes a rounding slip (3.1 for 3.14) or a slip in the last digit of a
+#: larger number (98 for 100), and leaves a guess in the neighbourhood (97 for
+#: 100, 3 for 3.14) unexplained. Conservative on purpose: a cause recorded
+#: wrongly misleads the teacher, an unclassified one only says nothing.
+CLOSE_RELATIVE_ERROR = Decimal("0.02")
+#: A whole number off by exactly one is a slipped calculation step (57 for
+#: 7 · 8) - but only from this size of key up; under it, 4 for 5 is as likely
+#: a different answer as a slip.
+CLOSE_OFF_BY_ONE_FROM = Decimal(10)
+
+
+def rule_cause(rule: str) -> dict[str, Any]:
+    """The cause a rule records: a deviation, with the rule's sentence in every locale."""
+    sentences = message_catalog.TEXT[f"error_cause.{rule}"]
+    return {
+        "category": "deviation",
+        "misconception": {locale: sentences[locale] for locale in LOCALES},
+    }
+
+
+def _whole(number: Decimal) -> bool:
+    return number == number.to_integral_value()
+
+
+def _close(given: Decimal, expected: Decimal) -> bool:
+    """Not the key, the same sign, and within `CLOSE_RELATIVE_ERROR` or off by one."""
+    if given == expected or expected == 0 or (given < 0) != (expected < 0):
+        return False
+    off = abs(given - expected)
+    if off <= CLOSE_RELATIVE_ERROR * abs(expected):
+        return True
+    return (
+        off == 1
+        and _whole(given)
+        and _whole(expected)
+        and abs(expected) >= CLOSE_OFF_BY_ONE_FROM
+    )
+
+
+def _matches(rule: str, given: Decimal, expected: Decimal) -> bool:
+    if rule == RULE_SIGN:
+        return expected != 0 and given == -expected
+    return _close(given, expected)
+
+
+def infer(answer: object, keys: Iterable[object]) -> dict[str, Any] | None:
+    """The cause a rule finds for a wrong typed answer, else `None`.
+
+    The answer and each writing of the key must each hold one number, read the
+    way judging reads it (`answer_judging.single_number`), with the same text
+    around it: `x = 5` is compared with `x = -5`, never with `-5` or `5 cm`.
+    """
+    if not isinstance(answer, str):
+        return None
+    given = answer_judging.single_number(answer)
+    if given is None:
+        return None
+    expected = [
+        found[1]
+        for found in (answer_judging.single_number(key) for key in keys if isinstance(key, str))
+        if found is not None and found[0] == given[0]
+    ]
+    for rule in RULES:
+        if any(_matches(rule, given[1], number) for number in expected):
+            return rule_cause(rule)
+    return None
+
+
+def _keys(*exercises: Mapping[str, Any]) -> list[object]:
+    keys: list[object] = []
+    for exercise in exercises:
+        keys.append(exercise.get("correct_answer", exercise.get("answer_key")))
+        keys.extend(answer_judging.accepted_answers(exercise))
+    return keys
+
+
 def of_wrong_answer(
     challenge: Mapping[str, Any], shown: Mapping[str, Any], answer: object
 ) -> dict[str, Any]:
-    """The cause a wrong answer records: the picked option's, else unclassified.
+    """The cause a wrong answer records: the picked option's, a rule's, else unclassified.
 
     The answer is matched to an option the way it was judged - against the
     option as the reader saw it and as it is stored, so an answer written in
     the stored language still finds its option after a switch of language.
+    A typed answer is compared by the rules with the key the same two ways.
     """
+    if challenge.get("type") != "multiple_choice":
+        return infer(answer, _keys(shown, challenge)) or {"category": UNCLASSIFIED}
     causes = challenge.get(FIELD)
     stored = challenge.get("options")
     seen = shown.get("options")

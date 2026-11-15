@@ -71,6 +71,30 @@ def normalize_answer(value: object) -> str:
     return text.rstrip(".").strip()
 
 
+# A number in a normalized answer, with its minus only where that cannot be an
+# operator: `x=-5` holds -5, `x-5` holds 5 after the operator `-`.
+_SIGNED_NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w.])")
+
+
+def single_number(value: object) -> tuple[str, Decimal] | None:
+    """An answer that holds exactly one number: the text around it, and the number.
+
+    The answer is normalized first, so the number is read as judging reads it
+    (`31,4`, `1'200`, `−5`), and the text around it comes back with `#` in the
+    number's place: `x = -5` is ``("x=#", Decimal("-5"))``. An answer with no
+    number, several (`2/5`, `7; -7`) or digits that do not form one, is `None`.
+    """
+    text = normalize_answer(value)
+    found = list(_SIGNED_NUMBER.finditer(text))
+    if len(found) != 1:
+        return None
+    match = found[0]
+    around = f"{text[: match.start()]}#{text[match.end() :]}"
+    if any(character.isdigit() for character in around):
+        return None
+    return around, Decimal(match.group(0))
+
+
 def _normalized(value: object) -> str:
     if isinstance(value, list):
         return "|".join(normalize_answer(item) for item in value)

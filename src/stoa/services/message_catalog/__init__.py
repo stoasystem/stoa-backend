@@ -12,7 +12,8 @@ file per domain in `errors/` (#211); `stoa.rule_violation` renders it in the
 language the request asked for. The frame of three emails that used to speak
 one language each is in `emails.py` (#278). So are the codes of two reports a client
 translates: the curriculum validation report (`curriculum_issue.<code>`,
-#112) and the usage reconciliation (`reconciliation.<code>`, #114). What is
+#112) and the usage reconciliation (`reconciliation.<code>`, #114), and the
+misconception a rule-inferred error cause records (`error_cause.<rule>`, #453). What is
 **not** here, on purpose:
 
 * **Internal error details**: what a log line or an `internal_detail` says.
@@ -35,6 +36,7 @@ from typing import Any
 from stoa.services import locale_service
 from stoa.services.message_catalog.curriculum_issues import TEXT as _ISSUE_TEXT
 from stoa.services.message_catalog.emails import TEXT as _EMAIL_TEXT
+from stoa.services.message_catalog.error_causes import TEXT as _ERROR_CAUSE_TEXT
 from stoa.services.message_catalog.errors import TEXT as _ERROR_TEXT
 from stoa.services.message_catalog.usage_reconciliation import TEXT as _RECONCILIATION_TEXT
 
@@ -619,7 +621,7 @@ def _merged(*tables: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
 
 
 TEXT: dict[str, dict[str, str]] = _merged(
-    _COPY, _EMAIL_TEXT, _ERROR_TEXT, _ISSUE_TEXT, _RECONCILIATION_TEXT
+    _COPY, _EMAIL_TEXT, _ERROR_CAUSE_TEXT, _ERROR_TEXT, _ISSUE_TEXT, _RECONCILIATION_TEXT
 )
 
 
