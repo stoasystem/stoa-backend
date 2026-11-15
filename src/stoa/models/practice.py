@@ -218,6 +218,22 @@ class PracticeMistakesResponse(_PracticeContract):
     items: list[PracticeMistake]
 
 
+class ReviewReason(_PracticeContract):
+    """Why a question is due now (#447).
+
+    The numbers are for the client to reason with; a student is shown the
+    `bandLabel`, never `retrievability` as a percentage. `band` and
+    `retrievability` are null for a card with no answer behind it.
+    """
+
+    days_overdue: int = Field(default=0, alias="daysOverdue")
+    retrievability: float | None = None
+    target_retention: float = Field(alias="targetRetention")
+    latest_wrong: bool = Field(default=False, alias="latestWrong")
+    band: Literal["fresh", "fading", "forgetting", "forgotten"] | None = None
+    band_label: str | None = Field(default=None, alias="bandLabel")
+
+
 class ReviewCard(_PracticeContract):
     """A question due to be attempted again, without its answer."""
 
@@ -233,6 +249,7 @@ class ReviewCard(_PracticeContract):
     due_at: str = Field(default="", alias="dueAt")
     lapses: int = 0
     reps: int = 0
+    reason: ReviewReason | None = None
 
 
 class ReviewDueResponse(_PracticeContract):

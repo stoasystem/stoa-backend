@@ -38,6 +38,9 @@ MAX_INTERVAL_DAYS = 365
 # little, which is what keeps the second look from inflating the schedule.
 RELEARNING_DELAY = timedelta(0)
 
+# The chance of recall a card is allowed to fall to before it is asked again.
+TARGET_RETENTION = 0.9
+
 AGAIN = 1
 HARD = 2
 GOOD = 3
@@ -148,7 +151,7 @@ def review(
     grade: int,
     *,
     now: datetime,
-    requested_retention: float = 0.9,
+    requested_retention: float = TARGET_RETENTION,
     weights: tuple[float, ...] = DEFAULT_WEIGHTS,
 ) -> CardState:
     """Fold one answer into the card and say when it should come back."""
@@ -189,6 +192,78 @@ def review(
         last_reviewed_at=now,
         reps=state.reps + 1,
         lapses=state.lapses + (1 if grade == AGAIN and not state.is_new else 0),
+    )
+
+
+# How sure the model is that the student still remembers a card, in words a
+# child can act on rather than a percentage (decided on #447). Each band starts
+# at its lower bound, inclusive; the first whose bound the recall reaches wins.
+# A card coming back on schedule sits near the target retention, so it lands in
+# `fading`; one missed a moment ago is still `fresh`, and `latest_wrong` says
+# why it is back.
+BAND_FRESH = "fresh"
+BAND_FADING = "fading"
+BAND_FORGETTING = "forgetting"
+BAND_FORGOTTEN = "forgotten"
+RECALL_BANDS: tuple[tuple[float, str], ...] = (
+    (0.95, BAND_FRESH),
+    (0.80, BAND_FADING),
+    (0.50, BAND_FORGETTING),
+    (0.0, BAND_FORGOTTEN),
+)
+
+
+@dataclass(frozen=True)
+class ReviewReason:
+    """Why a card is in front of the student now, as facts rather than copy.
+
+    `retrievability` and `band` are None for a card with no answer behind it,
+    whose recall the model has nothing to estimate from.
+    """
+
+    days_overdue: int
+    retrievability: float | None
+    target_retention: float
+    latest_wrong: bool
+    band: str | None
+
+
+def recall_band(recall: float) -> str:
+    """The band a chance of recall falls in."""
+    for lower_bound, band in RECALL_BANDS:
+        if recall >= lower_bound:
+            return band
+    return BAND_FORGOTTEN
+
+
+def review_reason(
+    state: CardState,
+    *,
+    now: datetime,
+    target_retention: float = TARGET_RETENTION,
+) -> ReviewReason:
+    """Why `state` is due at `now`: how late it is, how much of it is likely
+    still remembered, and whether the last answer was a miss."""
+    days_overdue = max(int((now - state.due_at).total_seconds() // 86400), 0)
+    if state.last_reviewed_at is None:
+        return ReviewReason(
+            days_overdue=days_overdue,
+            retrievability=None,
+            target_retention=target_retention,
+            latest_wrong=False,
+            band=None,
+        )
+    recall = retrievability(state, now=now)
+    # A correct answer is never asked again sooner than a day later
+    # (`interval_days` floors at one), and a miss comes back after
+    # `RELEARNING_DELAY`, so the gap the last answer left says which it was.
+    latest_wrong = state.due_at - state.last_reviewed_at < timedelta(days=1)
+    return ReviewReason(
+        days_overdue=days_overdue,
+        retrievability=recall,
+        target_retention=target_retention,
+        latest_wrong=latest_wrong,
+        band=recall_band(recall),
     )
 
 

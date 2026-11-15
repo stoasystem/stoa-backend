@@ -12,6 +12,7 @@ from fakes.dynamodb import FakeTable
 
 from stoa.db import table as db_table
 from stoa.db.repositories import review_repo
+from stoa.models.practice import ReviewDueResponse
 from stoa.services import review_scheduler, review_service, student_evidence
 
 NOW = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
@@ -256,3 +257,76 @@ def test_the_streak_falls_back_to_lessons_when_study_days_cannot_be_read(monkeyp
 
     assert evidence.study_days == frozenset()
     assert evidence.study_streak == 2
+
+
+# ── why each due question is back (#447) ─────────────────────────────────
+
+
+def test_a_missed_question_comes_back_saying_it_was_missed(monkeypatch):
+    use_table(monkeypatch)
+    monkeypatch.setattr(review_service.practice_repo, "get_challenge", lambda challenge_id: CHALLENGE)
+    review_service.record_answer(
+        student_id="student-1", challenge=CHALLENGE, correct=False, answered_at=NOW
+    )
+
+    result = review_service.due_review(
+        student_id="student-1", now=NOW + timedelta(hours=1), locale="fr"
+    )
+
+    reason = result["items"][0]["reason"]
+    assert reason["latestWrong"] is True
+    assert reason["daysOverdue"] == 0
+    assert reason["targetRetention"] == 0.9
+    assert reason["band"] == "fresh"
+    assert reason["bandLabel"] == "Encore frais"
+    assert "%" not in reason["bandLabel"]
+    ReviewDueResponse.model_validate(result)
+
+
+def test_a_question_left_late_reports_the_days_and_the_band(monkeypatch):
+    use_table(monkeypatch)
+    monkeypatch.setattr(review_service.practice_repo, "get_challenge", lambda challenge_id: CHALLENGE)
+    review_service.record_answer(
+        student_id="student-1", challenge=CHALLENGE, correct=True, answered_at=NOW
+    )
+    due_at = review_repo.state_from_item(
+        review_repo.get_card("student-1", CHALLENGE["challenge_id"]), now=NOW
+    ).due_at
+
+    result = review_service.due_review(student_id="student-1", now=due_at + timedelta(days=200))
+
+    reason = result["items"][0]["reason"]
+    assert reason["daysOverdue"] == 200
+    assert reason["latestWrong"] is False
+    assert reason["band"] == "forgotten"
+    assert reason["bandLabel"] == "Wahrscheinlich vergessen"
+    assert 0 < reason["retrievability"] < 0.5
+
+
+def test_a_card_stored_without_its_schedule_still_comes_back(monkeypatch):
+    table = use_table(monkeypatch)
+    monkeypatch.setattr(review_service.practice_repo, "get_challenge", lambda challenge_id: CHALLENGE)
+    review_service.record_answer(
+        student_id="student-1", challenge=CHALLENGE, correct=False, answered_at=NOW
+    )
+    row = table.rows[("REVIEW#student-1", "CARD#brueche-l1-c1")]
+    for field in ("stability", "difficulty", "last_reviewed_at", "reps", "lapses"):
+        row.pop(field, None)
+
+    result = review_service.due_review(student_id="student-1", now=NOW + timedelta(days=2))
+
+    reason = result["items"][0]["reason"]
+    assert reason["band"] is None
+    assert reason["bandLabel"] is None
+    assert reason["retrievability"] is None
+    assert reason["daysOverdue"] == 2
+    ReviewDueResponse.model_validate(result)
+
+
+def test_every_band_has_copy_in_every_language():
+    from stoa.services import locale_service, message_catalog
+
+    for _, band in review_scheduler.RECALL_BANDS:
+        variants = message_catalog.TEXT[f"review.band.{band}"]
+        assert set(variants) == set(locale_service.SUPPORTED_LOCALES)
+        assert all(text and "%" not in text for text in variants.values())

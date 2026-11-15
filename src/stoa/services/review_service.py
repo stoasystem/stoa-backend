@@ -9,12 +9,18 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Any
 
 from stoa.db.repositories import practice_repo, review_repo
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
-from stoa.services import exercise_localization, review_scheduler, student_evidence
+from stoa.services import (
+    exercise_localization,
+    message_catalog,
+    review_scheduler,
+    student_evidence,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +85,33 @@ def record_answer(
         return None
 
 
+def _reason(card: Mapping[str, Any], *, now: datetime, locale: str) -> dict[str, Any] | None:
+    """Why this card is due, or None when the stored row cannot say.
+
+    A card written before its schedule was stored in full has no stability to
+    estimate recall from; its recall is reported as unknown rather than read
+    off the scheduler's fallback, which would call every such card forgotten.
+    """
+    try:
+        state = review_repo.state_from_item(card, now=now)
+        if card.get("stability") in (None, ""):
+            state = replace(state, last_reviewed_at=None)
+        reason = review_scheduler.review_reason(state, now=now)
+    except Exception:  # noqa: BLE001
+        logger.warning("Review reason unavailable", exc_info=True)
+        return None
+    return {
+        "daysOverdue": reason.days_overdue,
+        "retrievability": reason.retrievability,
+        "targetRetention": reason.target_retention,
+        "latestWrong": reason.latest_wrong,
+        "band": reason.band,
+        "bandLabel": (
+            message_catalog.text(f"review.band.{reason.band}", locale) if reason.band else None
+        ),
+    }
+
+
 def due_review(
     *,
     student_id: str,
@@ -128,6 +161,7 @@ def due_review(
                 "dueAt": _text(card.get("due_at")),
                 "lapses": review_repo.as_int(card.get("lapses")),
                 "reps": review_repo.as_int(card.get("reps")),
+                "reason": _reason(card, now=moment, locale=locale),
             }
         )
 
