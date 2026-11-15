@@ -37,7 +37,9 @@ from stoa.security.declared_authorization import (
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.models.practice import (
+    CurriculumLessonPreview,
     PracticeAnswerSubmission,
+    PracticeLessonPreview,
     PracticeAttemptResult,
     QuizAnswerSubmission,
     PracticeMistakesResponse,
@@ -271,7 +273,11 @@ async def get_curriculum_catalog(
     )
 
 
-@router.get("/curriculum/lessons/{lesson_id}")
+@router.get(
+    "/curriculum/lessons/{lesson_id}",
+    response_model=CurriculumLessonPreview,
+    response_model_exclude_none=True,
+)
 async def get_curriculum_lesson(
     lesson_id: str,
     include_preview: bool = Query(default=False, alias="includePreview"),
@@ -691,7 +697,11 @@ async def get_roadmap(
     }
 
 
-@router.get("/lessons/{lesson_id}")
+@router.get(
+    "/lessons/{lesson_id}",
+    response_model=PracticeLessonPreview,
+    response_model_exclude_none=True,
+)
 async def get_lesson(
     lesson_id: str,
     actor: Actor = Depends(_practice_read),

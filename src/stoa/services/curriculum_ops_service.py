@@ -16,6 +16,7 @@ from stoa.services import (
     curriculum_translations,
     error_causes,
     exercise_localization,
+    lesson_sections,
 )
 from stoa.rule_violation import RuleViolation
 from stoa.services.curriculum_errors import CurriculumErrorCode
@@ -753,6 +754,10 @@ def _validation_issues(
             issues.append(_validation_issue(key, Issue.of(IssueCode.LESSON_FIELD_MISSING)))
     issues.extend(_attribution_issues(lesson))
     issues.extend(_lesson_prerequisite_issues(lesson))
+    issues.extend(
+        _validation_issue(field, issue)
+        for field, issue in lesson_sections.issues(lesson.get("sections"))
+    )
     if level in {"review", "publish"} and not exercises:
         issues.append(_validation_issue("exercises", Issue.of(IssueCode.EXERCISE_REQUIRED)))
     seen_exercise_ids: set[object] = set()

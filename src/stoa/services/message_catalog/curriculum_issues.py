@@ -167,6 +167,30 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Une figure par option, vide lorsqu’une option n’en a pas.",
         "it": "Una figura per opzione, vuota dove un’opzione non ne ha.",
     },
+    "curriculum_issue.sections_not_a_list": {
+        "de": "Die Erklärkarten der Lektion müssen eine Liste sein.",
+        "en": "The lesson's explanation cards must be a list.",
+        "fr": "Les fiches d’explication de la leçon doivent être une liste.",
+        "it": "Le schede di spiegazione della lezione devono essere un elenco.",
+    },
+    "curriculum_issue.section_field_missing": {
+        "de": "Einer Erklärkarte fehlt: {fields}.",
+        "en": "An explanation card is missing: {fields}.",
+        "fr": "Il manque à une fiche d’explication : {fields}.",
+        "it": "A una scheda di spiegazione manca: {fields}.",
+    },
+    "curriculum_issue.section_id_repeated": {
+        "de": "Zwei Erklärkarten der Lektion haben dieselbe ID.",
+        "en": "Two explanation cards of the lesson share an id.",
+        "fr": "Deux fiches d’explication de la leçon ont le même identifiant.",
+        "it": "Due schede di spiegazione della lezione hanno lo stesso ID.",
+    },
+    "curriculum_issue.section_translation_incomplete": {
+        "de": "Die Übersetzung einer Erklärkarte braucht Titel und Text.",
+        "en": "A card translation needs its title and body.",
+        "fr": "La traduction d’une fiche a besoin de son titre et de son texte.",
+        "it": "La traduzione di una scheda ha bisogno di titolo e testo.",
+    },
     "curriculum_issue.translations_not_a_map": {
         "de": "Übersetzungen müssen einer Sprache ihren Text zuordnen.",
         "en": "Translations must map a locale to its text.",
