@@ -13,7 +13,9 @@ What an answer leads to depends on where it was given, the mode:
   analytics signal, the review card, the usage event, and the feedback. The
   receipt says whether the student asked Ask about this exercise in the same
   learning session before answering (#449); that is decided once, here, and
-  never changes afterwards.
+  never changes afterwards. A wrong answer's receipt also says why it was
+  wrong (`error_causes`, #452): the cause the picked distractor was tagged
+  with when it was authored, else unclassified. No model is asked.
 * **quiz answer** (`judge`, then `record_quiz_answer`): only the usage event.
   A quiz answer is not an attempt; the quiz keeps its own log. The event is
   written once the quiz has taken the answer, because it carries the quiz's
@@ -35,6 +37,7 @@ from stoa.models.practice import PracticeAttemptResult
 from stoa.services import (
     answer_judging,
     curriculum_analytics_service,
+    error_causes,
     exercise_localization,
     learning_session,
     practice_projection_service,
@@ -123,6 +126,11 @@ def answer_practice(
     next_challenge_id = _next_challenge_id(challenge_id, lesson_id)
     created_at = datetime.now(timezone.utc).isoformat()
     asked_ai = _asked_ai(student_id, challenge_id, conversation_id)
+    error_cause = (
+        None
+        if judgement.correct
+        else error_causes.of_wrong_answer(challenge, shown, judgement.answer)
+    )
     try:
         receipt = practice_repo.put_attempt(
             student_id,
@@ -146,6 +154,7 @@ def answer_practice(
             challenge_type=str(challenge.get("type") or ""),
             created_at=created_at,
             asked_ai=asked_ai,
+            error_cause=error_cause,
         )
         result = practice_projection_service.build_attempt_result(receipt)
     except Exception as error:  # noqa: BLE001

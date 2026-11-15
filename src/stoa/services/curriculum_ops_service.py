@@ -14,6 +14,7 @@ from stoa.services import (
     curriculum_analytics_service,
     curriculum_service,
     curriculum_translations,
+    error_causes,
     exercise_localization,
 )
 from stoa.rule_violation import RuleViolation
@@ -104,6 +105,8 @@ EXERCISE_FIELD_ALIASES = {
     "figure": "figure",
     "option_figures": "option_figures",
     "optionFigures": "option_figures",
+    "option_error_causes": "option_error_causes",
+    "optionErrorCauses": "option_error_causes",
     "hint": "hint",
     "hints": "hints",
     "explanation": "explanation",
@@ -541,6 +544,11 @@ def _exercise_payloads(public_id: str, exercises: list[dict[str, Any]]) -> list[
             item["option_figures"] = [str(f or "").strip() for f in option_figures]
         else:
             item.pop("option_figures", None)
+        causes = error_causes.normalize(error_causes.authored(exercise))
+        if causes:
+            item[error_causes.FIELD] = causes
+        else:
+            item.pop(error_causes.FIELD, None)
         translations = exercise_localization.normalize_translations(exercise.get("translations"))
         for text in translations.values():
             # A translated feedback is held to the stored one's length.
@@ -783,6 +791,10 @@ def _validation_issues(
             for field, issue in exercise_localization.translation_issues(
                 exercise, max_text=MAX_EXERCISE_TEXT
             )
+        )
+        issues.extend(
+            _validation_issue(f"exercises[{index}].{field}", issue)
+            for field, issue in error_causes.issues(exercise)
         )
     issues.extend(_skill_issues(lesson, exercises))
     return issues

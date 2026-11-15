@@ -828,6 +828,21 @@ class CurriculumExerciseTranslation(BaseModel):
     option_figures: list[str | None] = Field(default_factory=list, alias="optionFigures", max_length=10)
 
 
+class CurriculumErrorCause(BaseModel):
+    """Why picking one wrong option is wrong (错因, #452): its category and misconception.
+
+    The category is checked by the validation report (`error_causes.issues`),
+    so an unknown one is reported with the draft's other problems.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # structural | deviation | application | metacognitive
+    category: str = Field(..., min_length=1, max_length=40)
+    # One sentence per locale: de, en, fr and it.
+    misconception: dict[str, str] = Field(default_factory=dict, max_length=4)
+
+
 class CurriculumExerciseDraftRequest(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
@@ -852,6 +867,10 @@ class CurriculumExerciseDraftRequest(BaseModel):
     knowledge_point: str | None = Field(default=None, alias="knowledgePoint", max_length=200)
     figure: str | None = Field(default=None, max_length=32_000)
     option_figures: list[str | None] = Field(default_factory=list, alias="optionFigures", max_length=10)
+    # One entry per option, `null` for the right option and for an untagged one (#452).
+    option_error_causes: list[CurriculumErrorCause | None] = Field(
+        default_factory=list, alias="optionErrorCauses", max_length=10
+    )
     skills: list[str] = Field(default_factory=list)
 
 

@@ -3053,6 +3053,31 @@
         "title": "CurriculumDiffResponse",
         "type": "object"
       },
+      "CurriculumErrorCause": {
+        "additionalProperties": false,
+        "description": "Why picking one wrong option is wrong (错因, #452): its category and misconception.\n\nThe category is checked by the validation report (`error_causes.issues`),\nso an unknown one is reported with the draft's other problems.",
+        "properties": {
+          "category": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Category",
+            "type": "string"
+          },
+          "misconception": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 4,
+            "title": "Misconception",
+            "type": "object"
+          }
+        },
+        "required": [
+          "category"
+        ],
+        "title": "CurriculumErrorCause",
+        "type": "object"
+      },
       "CurriculumExerciseDraftRequest": {
         "additionalProperties": true,
         "properties": {
@@ -3156,6 +3181,21 @@
               }
             ],
             "title": "Knowledgepoint"
+          },
+          "optionErrorCauses": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CurriculumErrorCause"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 10,
+            "title": "Optionerrorcauses",
+            "type": "array"
           },
           "optionFigures": {
             "items": {
@@ -13361,6 +13401,35 @@
         "title": "TeacherAvailabilityUpdate",
         "type": "object"
       },
+      "TeacherErrorCause": {
+        "description": "Why the student's recent wrong answers were wrong, most often (错因, #452).",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "misconception": {
+            "title": "Misconception",
+            "type": "string"
+          },
+          "recentMistakes": {
+            "title": "Recentmistakes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "category",
+          "misconception",
+          "count",
+          "recentMistakes"
+        ],
+        "title": "TeacherErrorCause",
+        "type": "object"
+      },
       "TeacherHelpRequest": {
         "additionalProperties": false,
         "properties": {
@@ -13388,6 +13457,16 @@
       },
       "TeacherHelpRequestDetail": {
         "properties": {
+          "commonErrorCause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeacherErrorCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "conversationId": {
             "title": "Conversationid",
             "type": "string"
