@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 import json
+import logging
 from typing import Mapping, Protocol
 
 from botocore.auth import SigV4Auth
@@ -15,6 +16,8 @@ from stoa import aws
 from stoa.aws import Kind
 from stoa.models.allowance import MAX_EXACT_COUNT
 
+
+logger = logging.getLogger(__name__)
 
 MANTLE_ACTION = "bedrock-mantle:CountTokens"
 RUNTIME_ACTION = "bedrock:CountTokens"
@@ -39,6 +42,10 @@ _INVOKE_ONLY_FIELDS = frozenset(
         "stop_sequences",
     }
 )
+# Tool fields that shape only how the reply is streamed. CountTokens refuses
+# them ("Extra inputs are not permitted") and they add no input tokens, so the
+# count is asked without them (#412 sends `eager_input_streaming`).
+_STREAM_ONLY_TOOL_FIELDS = frozenset({"eager_input_streaming"})
 
 
 class ProviderTokenCountUnavailable(Exception):
@@ -106,8 +113,59 @@ def _parse_invoke_body(request_body: str) -> dict[str, object]:
     return parsed
 
 
-def _mantle_payload(request_body: str, *, model_id: str) -> dict[str, object]:
+def _without_stream_only_tool_fields(parsed: dict[str, object]) -> dict[str, object]:
+    """`parsed` with the stream-only tool fields taken out; the same dict when it has none."""
+    tools = parsed.get("tools")
+    if not isinstance(tools, list) or not any(
+        isinstance(tool, dict) and _STREAM_ONLY_TOOL_FIELDS.intersection(tool)
+        for tool in tools
+    ):
+        return parsed
+    return {
+        **parsed,
+        "tools": [
+            {k: v for k, v in tool.items() if k not in _STREAM_ONLY_TOOL_FIELDS}
+            if isinstance(tool, dict)
+            else tool
+            for tool in tools
+        ],
+    }
+
+
+def _runtime_count_body(request_body: str) -> str:
+    """The InvokeModel body as CountTokens takes it.
+
+    Byte for byte the body that is sent when it carries no stream-only tool
+    field; otherwise the same request with those fields removed.
+    """
     parsed = _parse_invoke_body(request_body)
+    counted = _without_stream_only_tool_fields(parsed)
+    if counted is parsed:
+        return request_body
+    return json.dumps(counted, ensure_ascii=False)
+
+
+def _log_count_failure(error: Exception) -> None:
+    """Say why the count failed without anything the provider echoed back.
+
+    Only the exception's class and, for an AWS error, its code: the message
+    may quote the request, which holds the student's question.
+    """
+    code = ""
+    response = getattr(error, "response", None)
+    if isinstance(response, Mapping):
+        details = response.get("Error")
+        if isinstance(details, Mapping) and isinstance(details.get("Code"), str):
+            code = details["Code"]
+    logger.warning(
+        "provider_token_count_failed error=%s code=%s",
+        type(error).__name__,
+        code or "-",
+    )
+
+
+def _mantle_payload(request_body: str, *, model_id: str) -> dict[str, object]:
+    parsed = _without_stream_only_tool_fields(_parse_invoke_body(request_body))
     unsupported = set(parsed).difference(_MANTLE_INPUT_FIELDS | _INVOKE_ONLY_FIELDS)
     if unsupported:
         raise ProviderTokenCountUnavailable()
@@ -225,7 +283,7 @@ def count_input_tokens_with_evidence(
                 raise ProviderTokenCountUnavailable()
             return TokenCountResult(count, MANTLE_ACTION, request_id.strip())
 
-        _parse_invoke_body(request_body)
+        count_body = _runtime_count_body(request_body)
         selected_runtime_client = runtime_client or aws.client(
             Kind.BEDROCK_RUNTIME, region=region
         )
@@ -234,7 +292,7 @@ def count_input_tokens_with_evidence(
             raise ProviderTokenCountUnavailable()
         response = count_tokens(
             modelId=model_id,
-            input={"invokeModel": {"body": request_body}},
+            input={"invokeModel": {"body": count_body}},
         )
         if not isinstance(response, Mapping):
             raise ProviderTokenCountUnavailable()
@@ -248,7 +306,8 @@ def count_input_tokens_with_evidence(
         return TokenCountResult(count, RUNTIME_ACTION, raw_request_id.strip())
     except ProviderTokenCountUnavailable:
         raise
-    except Exception:
+    except Exception as error:
+        _log_count_failure(error)
         raise ProviderTokenCountUnavailable() from None
 
 
