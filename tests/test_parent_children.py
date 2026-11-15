@@ -55,7 +55,7 @@ def _app_for_user(user: dict) -> FastAPI:
             return AuthorizationFacts(
                 parent=ParentAuthorizationFacts(
                     Verdict(
-                        Standing.CURRENT,
+                        Standing(user.get("standing", Standing.CURRENT)),
                         current_actor.user_id,
                         resource.student_id,
                         relationship="child",
@@ -952,6 +952,7 @@ def test_parent_child_summary_empty_state(monkeypatch):
         "practiceLessonsCompletedThisWeek": 0,
         "weakTopics": [],
         "recentActivity": [],
+        "starAnswers": [],
     }
 
 
@@ -1298,3 +1299,70 @@ def test_parent_child_report_routes_reject_non_parent_roles(role):
     expected = 403 if role == "admin" else 404
     assert client.get("/parents/me/children/child-1/report").status_code == expected
     assert client.get("/parents/me/children/child-1/reports/2026-06-01").status_code == expected
+
+
+# ── independent and asked-AI right answers per star (#449) ─────────────────
+
+_STAR_CATALOG = {
+    "subjects": [{"id": "math", "name": "Mathematik", "order": 0}],
+    "topics": [{"id": "t1", "subjectId": "math", "title": "Brüche", "order": 0}],
+    "units": [
+        {"id": "u1", "subjectId": "math", "topicId": "t1", "title": "Kürzen", "order": 0},
+        {"id": "u2", "subjectId": "math", "topicId": "t1", "title": "Erweitern", "order": 1},
+        {"id": "u3", "subjectId": "math", "topicId": "t1", "title": "Teilen", "order": 2},
+    ],
+    "lessons": [],
+}
+
+
+def _quiet_summary_sources(monkeypatch) -> None:
+    monkeypatch.setattr(parents.question_repo, "list_by_student", lambda child_id, limit=20, last_key=None: {"Items": []})
+    monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
+    monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: None)
+
+
+def test_parent_child_summary_splits_right_answers_per_star(monkeypatch):
+    _quiet_summary_sources(monkeypatch)
+    right = {"correct": True, "created_at": "2026-06-02T08:30:00+00:00"}
+    asked = fake_evidence.install(
+        monkeypatch,
+        fake_evidence.evidence(
+            "child-1",
+            catalog=_STAR_CATALOG,
+            attempts=[
+                {**right, "challenge_id": "e1", "unit_id": "u2"},
+                {**right, "challenge_id": "e2", "unit_id": "u2", "asked_ai": True},
+                {**right, "challenge_id": "e3", "unit_id": "u1", "asked_ai": True},
+            ],
+        ),
+    )
+
+    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
+    response = client.get("/parents/me/children/child-1/summary")
+
+    assert response.status_code == 200
+    # In the catalog's order; a star with no right answer is left out.
+    assert response.json()["starAnswers"] == [
+        {"unitId": "u1", "title": "Kürzen", "independent": 0, "askedAi": 1},
+        {"unitId": "u2", "title": "Erweitern", "independent": 1, "askedAi": 1},
+    ]
+    assert asked == ["child-1"]
+
+
+@pytest.mark.parametrize(
+    ("standing", "refused"), [("known", 403), ("unknown", 404)], ids=["revoked", "never linked"]
+)
+def test_parent_child_summary_counts_need_a_current_relationship(monkeypatch, standing, refused):
+    def fail(*args, **kwargs):
+        raise AssertionError("child evidence should not be read")
+
+    _quiet_summary_sources(monkeypatch)
+    monkeypatch.setattr(parents.student_evidence, "for_student", fail)
+
+    client = TestClient(
+        _app_for_user({"sub": "parent-local", "role": "parent", "standing": standing})
+    )
+    response = client.get("/parents/me/children/child-1/summary")
+
+    assert response.status_code == refused
+    assert "starAnswers" not in response.text

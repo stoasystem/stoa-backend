@@ -636,6 +636,7 @@ def put_attempt(
     created_at: str | None = None,
     account_fence_generation: int | None = None,
     self_reported: bool = False,
+    asked_ai: bool = False,
 ) -> dict:
     """Immutably record every answer and return its durable owner receipt.
 
@@ -648,6 +649,11 @@ def put_attempt(
     `submitted_answer` is stored as given: the caller normalizes it first
     (`practice_projection_service.normalize_submitted_answer`), and its shape
     is the one `SUBMITTED_ANSWER_SCHEMA_VERSION` names.
+
+    `asked_ai` marks an answer given after the student asked Ask about this
+    exercise in the same learning session (#449). Like `self_reported`, only
+    the marked ones carry it: a receipt without it, every one written before
+    the mark existed included, was answered independently.
     """
     table = db_table.table()
     generation = _write_generation(student_id, account_fence_generation, table)
@@ -673,6 +679,8 @@ def put_attempt(
         # Only the unchecked ones carry a mark: every row already in the table
         # was written by the backend's own judge, so absence means judged.
         item["self_reported"] = True
+    if asked_ai:
+        item["asked_ai"] = True
     snapshot_fields = {
         "challenge_version": challenge_version,
         "challenge_content_hash": challenge_content_hash,

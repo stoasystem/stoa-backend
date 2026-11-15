@@ -189,6 +189,15 @@ class ParentChildSummaryStudent(BaseModel):
     grade: str | None = None
 
 
+class ParentChildStarAnswers(BaseModel):
+    """One star's exercises answered right: independently, or after asking AI (#449)."""
+
+    unitId: str
+    title: str
+    independent: int
+    askedAi: int
+
+
 class ParentChildSummaryResponse(BaseModel):
     student: ParentChildSummaryStudent
     questionsAskedThisWeek: int
@@ -197,6 +206,8 @@ class ParentChildSummaryResponse(BaseModel):
     practiceLessonsCompletedThisWeek: int
     weakTopics: list[str]
     recentActivity: list[ParentChildActivity]
+    # Every star with an exercise answered right, in the catalog's order.
+    starAnswers: list[ParentChildStarAnswers] = Field(default_factory=list)
 
 
 class LearningSubjectDefinition(BaseModel):
@@ -969,6 +980,25 @@ def _conversation_activity(item: dict[str, Any]) -> ParentChildActivity | None:
     )
 
 
+def _star_answers(evidence: student_evidence.StudentEvidence) -> list[ParentChildStarAnswers]:
+    """Per star, the exercises answered right independently and after asking AI (#449).
+
+    The stars the catalog shows, in its order; one with nothing answered right
+    is left out.
+    """
+    counts = evidence.right_answers_by_unit
+    return [
+        ParentChildStarAnswers(
+            unitId=unit_id,
+            title=_response_text(unit.get("title")) or unit_id,
+            independent=counts[unit_id].independent,
+            askedAi=counts[unit_id].asked_ai,
+        )
+        for unit in evidence.content.units
+        if (unit_id := str(unit.get("id") or "")) in counts
+    ]
+
+
 def _report_activity(report: dict[str, Any]) -> ParentChildActivity | None:
     created_at = _response_text(report.get("created_at") or report.get("week_start"))
     if not created_at:
@@ -1541,6 +1571,7 @@ async def get_child_summary(
             for topic, _ in sorted(weak_topics_counter.items(), key=lambda item: (-item[1], item[0]))
         ][:10],
         recentActivity=_sort_activities(activities, limit=5),
+        starAnswers=_star_answers(evidence),
     )
 
 

@@ -299,6 +299,20 @@ def _newest_first(attempt: Mapping[str, Any]) -> tuple[str, str]:
 
 
 @dataclass(frozen=True, slots=True)
+class RightAnswers:
+    """One star's exercises answered right, split by how (#449).
+
+    `independent`: answered right at least once without asking Ask about it
+    first. `asked_ai`: answered right only after asking. Each exercise is
+    counted once, in one of the two, so together they are the exercises of
+    this star the student has answered right - the ones the star lights by.
+    """
+
+    independent: int = 0
+    asked_ai: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class Completion:
     """One finished lesson.
 
@@ -476,6 +490,40 @@ class StudentEvidence:
                 and (exercise := _attempt_exercise(attempt))
             ),
         )
+
+    @property
+    def right_answers_by_unit(self) -> dict[str, RightAnswers]:
+        """Per star, its exercises answered right independently and after asking AI (#449).
+
+        Judged answers only, as `answered_right`. A receipt without the
+        `asked_ai` mark - every one written before it existed - is independent.
+        One without its star is counted under its lesson's. For showing only:
+        whether a star lights is decided on `answered_right`, as before.
+        """
+
+        def build() -> dict[str, RightAnswers]:
+            asked: dict[str, set[str]] = {}
+            alone: dict[str, set[str]] = {}
+            for attempt in self._rows("attempts"):
+                exercise = _attempt_exercise(attempt)
+                if attempt.get("correct") is not True or not _judged(attempt) or not exercise:
+                    continue
+                unit_id = str(attempt.get("unit_id") or "") or self._once(
+                    "unit_of_lesson", self.content.unit_of_lesson
+                ).get(str(attempt.get("lesson_id") or ""), "")
+                if not unit_id:
+                    continue
+                kind = asked if attempt.get("asked_ai") is True else alone
+                kind.setdefault(unit_id, set()).add(exercise)
+            return {
+                unit_id: RightAnswers(
+                    independent=len(alone.get(unit_id, set())),
+                    asked_ai=len(asked.get(unit_id, set()) - alone.get(unit_id, set())),
+                )
+                for unit_id in sorted(set(asked) | set(alone))
+            }
+
+        return self._once("right_answers_by_unit", build)
 
     @property
     def mistakes(self) -> tuple[dict[str, Any], ...]:

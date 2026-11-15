@@ -3887,6 +3887,12 @@
   {
     "authorization": [
       {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      },
+      {
         "action": "update",
         "capability": null,
         "purpose": "self_service",
@@ -3896,11 +3902,15 @@
     "classification": "authorized",
     "family": "practice",
     "identifiers": [
-      "challenge_id"
+      "challenge_id",
+      "conversationId"
     ],
     "method": "POST",
     "path": "/practice/challenges/{challenge_id}/answer",
-    "sensitive": true
+    "sensitive": true,
+    "serviceEnforced": [
+      "learning_session.asked_about"
+    ]
   },
   {
     "authorization": [

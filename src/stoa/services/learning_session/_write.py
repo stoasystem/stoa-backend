@@ -28,7 +28,7 @@ ROLES: frozenset[str] = frozenset({"student", "assistant", "teacher", "system"})
 
 # The keyword arguments each role takes, and which of them it must be given.
 _ROLE_FIELDS: dict[str, frozenset[str]] = {
-    "student": frozenset({"attachment_ids", "quote"}),
+    "student": frozenset({"attachment_ids", "quote", "practice_challenge_id"}),
     "assistant": frozenset({"structured", "target_unit_id", "allowance"}),
     "teacher": frozenset(
         {"teacher_response_rich", "teacher_response_format", "author_name", "attachment_ids"}
@@ -105,7 +105,8 @@ def append(
     any other role (`ValueError`):
 
     - student: `attachment_ids` (required, stored as a list also when empty),
-      `quote` (stored when not `None`).
+      `quote` (stored when not `None`), `practice_challenge_id` (the exercise
+      the question was asked beside, stored when set; #449).
     - assistant: `structured` (required, stored as given), `target_unit_id`
       (stored when set), `allowance` (its keys merged into the row; a key the
       row already has is refused).
@@ -153,6 +154,11 @@ def append(
         row["attachment_ids"] = _id_list(fields["attachment_ids"], field="attachment_ids")
         if fields.get("quote") is not None:
             row["quote"] = fields["quote"]
+        practice_challenge_id = fields.get("practice_challenge_id")
+        if practice_challenge_id:
+            if not isinstance(practice_challenge_id, str):
+                raise ValueError("practice_challenge_id must be an exercise id")
+            row["practice_challenge_id"] = practice_challenge_id
     elif role == "assistant":
         row["structured"] = fields["structured"]
         if fields.get("target_unit_id"):

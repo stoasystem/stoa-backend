@@ -368,3 +368,77 @@ def test_one_adaptive_memory_summary_reads_progress_once(monkeypatch) -> None:
         assert [item["challengeId"] for item in snapshots[topic]["recent_exercise_attempts"]] == [
             f"{topic}-c1"
         ]
+
+
+# ── independent and asked-AI right answers (#449) ──────────────────────────
+
+
+def _right(challenge: str, unit: str = "u1", **fields: Any) -> dict[str, Any]:
+    return {"challenge_id": challenge, "correct": True, "unit_id": unit, "created_at": MOMENT, **fields}
+
+
+def test_right_answers_per_star_are_split_by_whether_the_student_asked_ai() -> None:
+    evidence = fake_evidence.evidence(
+        catalog=CATALOG,
+        attempts=[
+            _right("c1"),
+            # A receipt written before the mark existed reads as independent.
+            _right("c2", asked_ai=None),
+            _right("c3", asked_ai=True),
+            _right("c4", asked_ai=True),
+            # Answered right both ways: the exercise was shown independently.
+            _right("c4"),
+            # Twice after asking is still one exercise.
+            _right("c5", "u2", asked_ai=True),
+            _right("c5", "u2", asked_ai=True),
+            # Wrong, or never checked, counts for neither.
+            {"challenge_id": "c6", "correct": False, "unit_id": "u2", "asked_ai": True},
+            _right("c7", "u2", self_reported=True),
+            # A receipt without its star is counted under its lesson's.
+            {"challenge_id": "c8", "correct": True, "lesson_id": "l3"},
+        ],
+    )
+
+    counts = evidence.right_answers_by_unit
+
+    assert counts == {
+        "u1": student_evidence.RightAnswers(independent=3, asked_ai=1),
+        "u2": student_evidence.RightAnswers(independent=0, asked_ai=1),
+        "u3": student_evidence.RightAnswers(independent=1, asked_ai=0),
+    }
+    # The split is of the same right answers the stars are lit by.
+    assert sum(item.independent + item.asked_ai for item in counts.values()) == len(
+        evidence.answered_right
+    )
+
+
+def test_the_split_reads_the_answers_once_with_the_other_answer_facts() -> None:
+    evidence = fake_evidence.evidence(attempts=[_right("c1", asked_ai=True)])
+
+    assert evidence.right_answers_by_unit == {
+        "u1": student_evidence.RightAnswers(independent=0, asked_ai=1)
+    }
+    assert evidence.answered_right == {"c1"}
+    assert evidence.right_answers_by_unit is evidence.right_answers_by_unit
+
+    assert evidence.source.reads == ["attempts"]
+
+
+def test_a_star_answered_right_only_after_asking_ai_lights_as_before() -> None:
+    """The split is for showing; it never changes whether a star lights (#449)."""
+    facts = {
+        "catalog": CATALOG,
+        "exercises": {"l1": ["l1-c1", "l1-c2"]},
+        "completed": ["l1"],
+    }
+    independent = fake_evidence.evidence(attempts=[_right("l1-c1"), _right("l1-c2")], **facts)
+    helped = fake_evidence.evidence(
+        attempts=[_right("l1-c1", asked_ai=True), _right("l1-c2", asked_ai=True)], **facts
+    )
+
+    judged = knowledge_mastery_service.unit_states(helped)
+
+    assert judged["u1"].state is knowledge_mastery_service.LearningState.LIT
+    assert {unit: item.state for unit, item in judged.items()} == {
+        unit: item.state for unit, item in knowledge_mastery_service.unit_states(independent).items()
+    }

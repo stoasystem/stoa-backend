@@ -1,5 +1,7 @@
 import logging
 
+import pytest
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -241,6 +243,40 @@ def test_answer_is_revealed_only_after_every_attempt_is_persisted(monkeypatch):
     assert correct.json()["standardAnswer"] == "x = 5"
     assert [write[3] for write in writes] == [False, True]
     assert [write[2] for write in writes] == ["x = 4", "x = 5"]
+
+
+@pytest.mark.parametrize(
+    ("body", "looked_up"),
+    [
+        ({"answer": "x = 5", "conversationId": "conv-1"}, [("conv-1", "challenge-1")]),
+        ({"answer": "x = 5"}, []),
+    ],
+    ids=["names its learning session", "names none"],
+)
+def test_an_answer_may_name_the_learning_session_it_was_given_in(monkeypatch, body, looked_up):
+    """The session is where `answer_recording` looks for a question about this exercise (#449)."""
+    _install_answer_dependencies(monkeypatch)
+    receipts = []
+    asked = []
+
+    def put_attempt(student_id, challenge_id, submitted_answer, correct, **metadata):
+        receipts.append(metadata)
+        return {"attempt_id": "attempt-1", "student_id": student_id, "challenge_id": challenge_id,
+                "student_answer": submitted_answer, "correct": correct, **metadata}
+
+    def asked_about(conversation_id, *, student_id, challenge_id):
+        asked.append((conversation_id, challenge_id))
+        return True
+
+    monkeypatch.setattr(practice.practice_repo, "put_attempt", put_attempt)
+    monkeypatch.setattr(answer_recording.learning_session, "asked_about", asked_about)
+
+    response = _client().post("/practice/challenges/challenge-1/answer", json=body)
+
+    assert response.status_code == 200
+    assert asked == looked_up
+    assert receipts[0]["asked_ai"] is bool(looked_up)
+    assert "askedAi" not in response.json()
 
 
 def test_attempt_write_failure_returns_no_answer_or_provider_detail(monkeypatch, caplog):
