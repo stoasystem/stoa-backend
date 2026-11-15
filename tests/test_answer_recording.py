@@ -18,6 +18,7 @@ from stoa.db.repositories import practice_repo
 from stoa.services import (
     answer_recording,
     curriculum_analytics_service,
+    learning_session,
     message_catalog,
     review_service,
     usage_ledger_service,
@@ -287,3 +288,76 @@ def test_judging_and_feedback_read_the_same_localized_exercise(monkeypatch: pyte
     # The stored row is never changed.
     assert exercise["prompt"] == "Berechne 1/4 + 3/4."
     assert "correct_feedback" not in exercise
+
+
+# ── asked AI before answering (#449) ──────────────────────────────────────
+
+
+class _Sessions:
+    """`learning_session.asked_about`, answered from (session, student, exercise) triples."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, asked: set[tuple[str, str, str]]) -> None:
+        self.asked = asked
+        self.calls: list[tuple[str, str, str]] = []
+        monkeypatch.setattr(learning_session, "asked_about", self._asked_about)
+
+    def _asked_about(self, conversation_id: str, *, student_id: str, challenge_id: str) -> bool:
+        self.calls.append((conversation_id, student_id, challenge_id))
+        return (conversation_id, student_id, challenge_id) in self.asked
+
+
+@pytest.mark.parametrize("answer", ["1", "2"], ids=["right", "wrong"])
+def test_an_answer_after_asking_about_this_exercise_in_this_session_is_marked(
+    monkeypatch: pytest.MonkeyPatch, answer: str
+) -> None:
+    recorded = _Writes(monkeypatch, [EXERCISE])
+    _Sessions(monkeypatch, {("conv-1", "student-1", "exercise-1")})
+
+    answer_recording.answer_practice(
+        "student-1", EXERCISE, answer, locale="de", conversation_id="conv-1"
+    )
+
+    [receipt] = recorded.by_kind["receipt"]
+    assert receipt["asked_ai"] is True
+
+
+@pytest.mark.parametrize(
+    "conversation_id",
+    [None, "conv-2"],
+    ids=["no session named", "asked in another session"],
+)
+def test_an_answer_without_a_question_in_its_session_is_independent(
+    monkeypatch: pytest.MonkeyPatch, conversation_id: str | None
+) -> None:
+    recorded = _Writes(monkeypatch, [EXERCISE])
+    sessions = _Sessions(monkeypatch, {("conv-1", "student-1", "exercise-1")})
+
+    answer_recording.answer_practice(
+        "student-1", EXERCISE, "1", locale="de", conversation_id=conversation_id
+    )
+
+    [receipt] = recorded.by_kind["receipt"]
+    assert receipt["asked_ai"] is False
+    if conversation_id is None:
+        # Nothing to look in: the session is not read at all.
+        assert sessions.calls == []
+
+
+def test_a_session_that_cannot_be_read_leaves_the_answer_independent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Whether the student asked is worth less than the answer: the receipt is still written."""
+    recorded = _Writes(monkeypatch, [EXERCISE])
+
+    def unavailable(*_args, **_kwargs):
+        raise RuntimeError("table unavailable")
+
+    monkeypatch.setattr(learning_session, "asked_about", unavailable)
+
+    result = answer_recording.answer_practice(
+        "student-1", EXERCISE, "1", locale="de", conversation_id="conv-1"
+    )
+
+    [receipt] = recorded.by_kind["receipt"]
+    assert receipt["asked_ai"] is False
+    assert result.correct is True

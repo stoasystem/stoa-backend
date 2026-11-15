@@ -8187,6 +8187,35 @@
         "title": "ParentChildReportWeakTopic",
         "type": "object"
       },
+      "ParentChildStarAnswers": {
+        "description": "One star's exercises answered right: independently, or after asking AI (#449).",
+        "properties": {
+          "askedAi": {
+            "title": "Askedai",
+            "type": "integer"
+          },
+          "independent": {
+            "title": "Independent",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unitId": {
+            "title": "Unitid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unitId",
+          "title",
+          "independent",
+          "askedAi"
+        ],
+        "title": "ParentChildStarAnswers",
+        "type": "object"
+      },
       "ParentChildSummaryResponse": {
         "properties": {
           "aiResolvedThisWeek": {
@@ -8206,6 +8235,13 @@
               "$ref": "#/components/schemas/ParentChildActivity"
             },
             "title": "Recentactivity",
+            "type": "array"
+          },
+          "starAnswers": {
+            "items": {
+              "$ref": "#/components/schemas/ParentChildStarAnswers"
+            },
+            "title": "Staranswers",
             "type": "array"
           },
           "student": {
@@ -8969,6 +9005,19 @@
         "properties": {
           "answer": {
             "title": "Answer"
+          },
+          "conversationId": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversationid"
           }
         },
         "required": [
@@ -30486,6 +30535,12 @@
         "x-stoa-authorization": {
           "authorization": [
             {
+              "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "conversation"
+            },
+            {
               "action": "update",
               "capability": null,
               "purpose": "self_service",
@@ -30494,7 +30549,11 @@
           ],
           "classification": "authorized",
           "identifiers": [
-            "challenge_id"
+            "challenge_id",
+            "conversationId"
+          ],
+          "serviceEnforced": [
+            "learning_session.asked_about"
           ]
         }
       }

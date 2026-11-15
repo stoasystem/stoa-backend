@@ -738,6 +738,9 @@ def test_the_resolved_practice_context_is_stored_on_the_command(table, model, mo
     assert stored["challengePrompt"] == "Wie viel ist 1/4 + 1/4?"
     assert stored["reviewDue"] == 2
     assert run["ai"]["practice_context"] == stored
+    # The question row keeps which exercise it was asked beside, so an answer
+    # given later in this session can tell it was asked about (#449).
+    assert run["message"]["practice_challenge_id"] == PRACTICE_CONTEXT["challengeId"]
 
 
 def test_the_quote_is_stored_on_the_student_message_and_handed_to_the_model(table, model):
@@ -768,6 +771,7 @@ def test_a_message_without_the_new_fields_hands_the_model_neither(table, model):
     assert run["ai"]["practice_context"] is None
     assert run["command"]["generation_context"]["practice_context"] is None
     assert "quote" not in run["message"]
+    assert "practice_challenge_id" not in run["message"]
 
 
 # ── Read-back ────────────────────────────────────────────────────────────────

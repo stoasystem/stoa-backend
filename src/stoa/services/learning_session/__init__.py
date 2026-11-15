@@ -22,6 +22,8 @@ made by `append`. The entry points:
   `committed_message` is the one checked row its replay reads back.
 - `append` is the put that adds a message, by any role, to the caller's
   transaction.
+- `asked_about` says whether the student asked Ask about one exercise in
+  the session (#449).
 
 A record or message the session cannot be read back from raises
 `AttachmentDecisionError` (`UPLOAD_SERVICE_UNAVAILABLE`).
@@ -45,6 +47,7 @@ __all__ = [
     "active_conversation_generation",
     "anchored_history",
     "append",
+    "asked_about",
     "build_conversation_write_transaction",
     "committed_message",
     "conv_pk",
@@ -184,6 +187,24 @@ def conversation_grade(record: Mapping[str, object]) -> str:
 
 
 # ── The messages ─────────────────────────────────────────────────────────────
+
+
+def asked_about(conversation_id: str, *, student_id: str, challenge_id: str) -> bool:
+    """Whether the student asked Ask about this exercise in this session (#449).
+
+    A question asked beside an exercise keeps its id (`practice_challenge_id`
+    on the student's message). Only this session counts: a question about the
+    same exercise in another session does not, and neither does a session
+    that is not the student's own. Every message is read, strongly, every page.
+    """
+    if not challenge_id or not owned_by(conversation_id, student_id):
+        return False
+    return any(
+        row.get("role") == "student"
+        and row.get("student_id") == student_id
+        and row.get("practice_challenge_id") == challenge_id
+        for row in history_rows(conversation_id)
+    )
 
 
 def history(conversation_id: str) -> list[Message]:

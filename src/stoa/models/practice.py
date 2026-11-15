@@ -121,6 +121,11 @@ class PracticeAnswerSubmission(_PracticeContract):
     # input object-valued also lets the route return one redacted error contract
     # instead of echoing unsupported values through validation diagnostics.
     answer: object
+    # The learning session the answer is given in: the Ask conversation open
+    # beside the exercise, if any. The receipt records whether the student
+    # asked about this exercise there before answering (#449). One that is not
+    # the student's own counts as no session.
+    conversationId: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class QuizAnswerSubmission(_PracticeContract):

@@ -50,6 +50,7 @@ from stoa.security.declared_authorization import (
     STUDENT_CONTENT_READ,
     STUDENT_SELF,
     safe_public,
+    service_enforced,
 )
 from stoa.services import (
     answer_recording,
@@ -105,6 +106,15 @@ _authorized_challenge_update = authorized(
     path("challenge_id"),
     STUDENT_SELF,
     kind=CHALLENGE,
+)
+# An answer may name the learning session it was given in (#449): the route
+# reads that conversation, and `learning_session.asked_about` reads only a
+# session that is the student's own.
+_answer_session_read = service_enforced(
+    "learning_session.asked_about",
+    ResourceType.CONVERSATION,
+    AuthorizationAction.READ,
+    STUDENT_SELF,
 )
 _authorized_attempt_read = authorized(
     ResourceType.PRACTICE,
@@ -874,6 +884,7 @@ async def submit_answer(
     body: PracticeAnswerSubmission,
     actor: Actor = Depends(_practice_update),
     authorized_challenge: AuthorizedResource = Depends(_authorized_challenge_update),
+    _session: Actor = Depends(_answer_session_read),
 ):
     """Judge a practice answer in the reader's language and record it (`answer_recording`)."""
     try:
@@ -882,6 +893,7 @@ async def submit_answer(
             dict(authorized_challenge.value),
             body.answer,
             locale=_actor_locale(actor),
+            conversation_id=body.conversationId,
         )
     except answer_recording.AnswerInvalid as error:
         raise PracticeViolation(_P.PRACTICE_ANSWER_INVALID) from error

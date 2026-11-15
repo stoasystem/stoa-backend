@@ -944,6 +944,11 @@ def commit_message_command(
         # beside it, so reading the conversation back shows the quote above the
         # question exactly as it was asked.
         student_quote = _quote_payload(body.quote) if body.quote is not None else None
+        # The exercise it was asked beside, already resolved by the route: an
+        # answer given later in this session reads it back (#449).
+        practice_challenge_id = (
+            body.practiceContext.challengeId if body.practiceContext is not None else None
+        )
 
         def student_message_put(
             attachment_ids: list[str], generation: int
@@ -958,6 +963,7 @@ def commit_message_command(
                 created_at=created_at,
                 attachment_ids=attachment_ids,
                 quote=student_quote,
+                practice_challenge_id=practice_challenge_id,
             )
 
         command_attachment_ids = command.get("deterministic_attachment_ids")

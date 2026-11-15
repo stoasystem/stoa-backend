@@ -10,7 +10,10 @@ brings none of its own (#128).
 What an answer leads to depends on where it was given, the mode:
 
 * **practice** (`answer_practice`): the immutable receipt, the curriculum
-  analytics signal, the review card, the usage event, and the feedback.
+  analytics signal, the review card, the usage event, and the feedback. The
+  receipt says whether the student asked Ask about this exercise in the same
+  learning session before answering (#449); that is decided once, here, and
+  never changes afterwards.
 * **quiz answer** (`judge`, then `record_quiz_answer`): only the usage event.
   A quiz answer is not an attempt; the quiz keeps its own log. The event is
   written once the quiz has taken the answer, because it carries the quiz's
@@ -33,6 +36,7 @@ from stoa.services import (
     answer_judging,
     curriculum_analytics_service,
     exercise_localization,
+    learning_session,
     practice_projection_service,
     review_service,
     usage_ledger_service,
@@ -92,9 +96,18 @@ def judge(challenge: Mapping[str, Any], raw_answer: object, *, locale: str) -> J
 
 
 def answer_practice(
-    student_id: str, challenge: Mapping[str, Any], raw_answer: object, *, locale: str
+    student_id: str,
+    challenge: Mapping[str, Any],
+    raw_answer: object,
+    *,
+    locale: str,
+    conversation_id: str | None = None,
 ) -> PracticeAttemptResult:
     """Practice mode: judge the answer and record everything it leads to.
+
+    `conversation_id` is the learning session the answer was given in, when
+    the client names one: the receipt is marked `asked_ai` when the student
+    asked Ask about this exercise there first (`_asked_ai`).
 
     The receipt is written first and is the one write that must succeed: the
     standard answer is revealed only once the answer is on record. Raises
@@ -109,6 +122,7 @@ def answer_practice(
     lesson_id = str(versioned.get("lesson_id") or "")
     next_challenge_id = _next_challenge_id(challenge_id, lesson_id)
     created_at = datetime.now(timezone.utc).isoformat()
+    asked_ai = _asked_ai(student_id, challenge_id, conversation_id)
     try:
         receipt = practice_repo.put_attempt(
             student_id,
@@ -131,6 +145,7 @@ def answer_practice(
             options=shown.get("options") if isinstance(shown.get("options"), list) else None,
             challenge_type=str(challenge.get("type") or ""),
             created_at=created_at,
+            asked_ai=asked_ai,
         )
         result = practice_projection_service.build_attempt_result(receipt)
     except Exception as error:  # noqa: BLE001
@@ -225,6 +240,24 @@ def record_practice_usage(
         )
     except Exception:  # noqa: BLE001
         logger.warning("Practice usage ledger write failed", exc_info=True)
+
+
+def _asked_ai(student_id: str, challenge_id: str, conversation_id: str | None) -> bool:
+    """Whether the student asked Ask about this exercise in this session first (#449).
+
+    No session named, another session, or a session that cannot be read: the
+    answer counts as independent. Whether help was asked for is worth less
+    than the answer itself, which is recorded either way.
+    """
+    if not conversation_id:
+        return False
+    try:
+        return learning_session.asked_about(
+            conversation_id, student_id=student_id, challenge_id=challenge_id
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Learning session unreadable; answer recorded as independent")
+        return False
 
 
 def _next_challenge_id(challenge_id: str, lesson_id: str) -> str | None:

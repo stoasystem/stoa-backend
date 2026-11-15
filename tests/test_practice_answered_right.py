@@ -131,3 +131,20 @@ def test_an_attempt_is_only_marked_when_it_was_not_judged(monkeypatch) -> None:
 
     assert "self_reported" not in judged
     assert unchecked["self_reported"] is True
+
+
+def test_an_attempt_is_only_marked_asked_ai_when_it_was(monkeypatch) -> None:
+    """The mark is written only when true: every older receipt reads as independent (#449)."""
+    table = FakeTable()
+    table.seed_active_account("student-1")
+    db_table.install(table)
+
+    independent = practice_repo.put_attempt("student-1", "c-0", "4", True, lesson_id="lesson-1")
+    asked = practice_repo.put_attempt(
+        "student-1", "c-1", "4", True, lesson_id="lesson-1", asked_ai=True
+    )
+
+    assert "asked_ai" not in independent
+    assert asked["asked_ai"] is True
+    stored = table.rows[("ATTEMPTS#student-1", f"ATTEMPT#{asked['attempt_id']}")]
+    assert stored["asked_ai"] is True

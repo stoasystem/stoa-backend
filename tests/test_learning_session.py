@@ -489,3 +489,60 @@ def test_history_snapshot_rejects_missing_duplicate_changed_and_malformed_rows(
         _anchored(fingerprint)
 
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+
+
+# ── asked about an exercise (#449) ───────────────────────────────────────────
+
+
+def test_a_student_message_keeps_the_exercise_it_was_asked_beside_only_when_given():
+    beside = _row(_append("student", attachment_ids=[], practice_challenge_id="exercise-1"))
+    plain = _row(_append("student", attachment_ids=[]))
+
+    assert beside["practice_challenge_id"] == "exercise-1"
+    assert "practice_challenge_id" not in plain
+
+
+def _question(table, message_id: str, *, conversation_id: str = CONVERSATION, **fields) -> None:
+    seed_message(
+        table,
+        conversation_id=conversation_id,
+        role="student",
+        message_id=message_id,
+        student_id=STUDENT,
+        content="Wie geht das?",
+        created_at=CREATED_AT,
+        **fields,
+    )
+
+
+def test_asked_about_is_true_for_a_question_beside_that_exercise_in_that_session(table):
+    seed_conversation(table, conversation_id=CONVERSATION, student_id=STUDENT)
+    _question(table, "q-1")
+    _question(table, "q-2", practice_challenge_id="exercise-1")
+
+    assert learning_session.asked_about(
+        CONVERSATION, student_id=STUDENT, challenge_id="exercise-1"
+    ) is True
+
+
+def test_asked_about_another_exercise_or_in_another_session_is_false(table):
+    seed_conversation(table, conversation_id=CONVERSATION, student_id=STUDENT)
+    seed_conversation(table, conversation_id="conv-2", student_id=STUDENT)
+    _question(table, "q-1", practice_challenge_id="exercise-2")
+    _question(table, "q-2", conversation_id="conv-2", practice_challenge_id="exercise-1")
+
+    assert learning_session.asked_about(
+        CONVERSATION, student_id=STUDENT, challenge_id="exercise-1"
+    ) is False
+
+
+def test_asked_about_in_a_session_that_is_not_the_student_s_is_false(table):
+    seed_conversation(table, conversation_id=CONVERSATION, student_id=STUDENT)
+    _question(table, "q-1", practice_challenge_id="exercise-1")
+
+    assert learning_session.asked_about(
+        CONVERSATION, student_id="student-2", challenge_id="exercise-1"
+    ) is False
+    assert learning_session.asked_about(
+        "conv-missing", student_id=STUDENT, challenge_id="exercise-1"
+    ) is False
