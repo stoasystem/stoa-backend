@@ -441,12 +441,12 @@ def test_committed_ecdsa_exception_is_exact_approved_expiring_and_source_support
             "advisory": "PYSEC-2026-1325",
             "advisory_aliases": ["CVE-2024-23342", "GHSA-wj6h-64fc-37mp"],
             "installed_version": "0.19.2",
-            "lock_sha256": "6178733a023d0ccd322561bedcb1b5559bdbc8ebaf095fb1ba0dd07a5ac56411",
+            "lock_sha256": "9be0623aa3f07b074149c96370d5242fd2775e5c37fab8d67ff349f428f0f3ff",
             "dependency_scope": "runtime",
             "severity": "unavailable",
             "reachability": "proven-unreachable",
             "reachability_evidence": (
-                "Re-verified 2026-10-21 after the tzdata lock change. "
+                "Re-verified 2026-11-15 after the pytest-xdist lock change. "
                 "src/stoa/security/tokens.py rejects any alg other "
                 "than RS256 and passes algorithms RS256 only. src/stoa/security/jwks.py "
                 "accepts kty RSA alone and constructs RSAKey alone. A search of src for "
@@ -455,9 +455,10 @@ def test_committed_ecdsa_exception_is_exact_approved_expiring_and_source_support
             ),
             "owner": "project-owner",
             "approval_evidence": (
-                "Owner directed in Claude Code conversation on 2026-10-21: the lock changed "
-                "only by adding tzdata for win32 alone so it never enters the Lambda runtime "
-                "and this exception is rebound to the new lock with its expiry unchanged. "
+                "Owner directed in Claude Code conversation on 2026-11-15: the lock changed "
+                "only by adding pytest-xdist and execnet as dev dependencies so the runtime "
+                "export is byte-identical and this exception is rebound to the new lock with "
+                "its expiry unchanged. "
                 "Upstream ecdsa still publishes "
                 "0.19.2 as latest so neither exit named in the target is available yet."
             ),
@@ -566,7 +567,7 @@ def test_committed_ecdsa_exception_accepts_only_the_exact_audit_identity():
             "advisory": "PYSEC-2026-1325",
             "advisory_aliases": ["CVE-2024-23342", "GHSA-wj6h-64fc-37mp"],
             "installed_version": "0.19.2",
-            "lock_sha256": "6178733a023d0ccd322561bedcb1b5559bdbc8ebaf095fb1ba0dd07a5ac56411",
+            "lock_sha256": "9be0623aa3f07b074149c96370d5242fd2775e5c37fab8d67ff349f428f0f3ff",
             "reachability": "proven-unreachable",
             "expires_at": "2026-12-21T09:00:00Z",
         }
