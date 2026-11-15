@@ -11230,6 +11230,16 @@
             "title": "Prompt",
             "type": "string"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "reps": {
             "default": 0,
             "title": "Reps",
@@ -11299,6 +11309,70 @@
           "items"
         ],
         "title": "ReviewDueResponse",
+        "type": "object"
+      },
+      "ReviewReason": {
+        "additionalProperties": false,
+        "description": "Why a question is due now (#447).\n\nThe numbers are for the client to reason with; a student is shown the\n`bandLabel`, never `retrievability` as a percentage. `band` and\n`retrievability` are null for a card with no answer behind it.",
+        "properties": {
+          "band": {
+            "anyOf": [
+              {
+                "enum": [
+                  "fresh",
+                  "fading",
+                  "forgetting",
+                  "forgotten"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band"
+          },
+          "bandLabel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bandlabel"
+          },
+          "daysOverdue": {
+            "default": 0,
+            "title": "Daysoverdue",
+            "type": "integer"
+          },
+          "latestWrong": {
+            "default": false,
+            "title": "Latestwrong",
+            "type": "boolean"
+          },
+          "retrievability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrievability"
+          },
+          "targetRetention": {
+            "title": "Targetretention",
+            "type": "number"
+          }
+        },
+        "required": [
+          "targetRetention"
+        ],
+        "title": "ReviewReason",
         "type": "object"
       },
       "ReviewSummaryResponse": {

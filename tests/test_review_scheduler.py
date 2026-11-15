@@ -20,7 +20,9 @@ from stoa.services.review_scheduler import (
     interval_days,
     new_card,
     retrievability,
+    recall_band,
     review,
+    review_reason,
 )
 
 NOW = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
@@ -174,3 +176,71 @@ def test_difficulty_stays_within_its_bounds_under_repeated_failure():
 
     assert 1.0 <= card.difficulty <= 10.0
     assert card.stability > 0
+
+
+# ── why a card is due (#447) ─────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("recall", "band"),
+    [
+        (1.0, "fresh"),
+        (0.95, "fresh"),
+        (0.9499, "fading"),
+        (0.9, "fading"),
+        (0.80, "fading"),
+        (0.7999, "forgetting"),
+        (0.50, "forgetting"),
+        (0.4999, "forgotten"),
+        (0.0, "forgotten"),
+    ],
+)
+def test_the_band_boundaries_are_inclusive_at_their_lower_bound(recall, band):
+    assert recall_band(recall) == band
+
+
+def test_a_card_never_answered_has_no_recall_to_report():
+    reason = review_reason(new_card(now=NOW), now=NOW)
+
+    assert reason.retrievability is None
+    assert reason.band is None
+    assert reason.latest_wrong is False
+    assert reason.days_overdue == 0
+    assert reason.target_retention == 0.9
+
+
+def test_a_card_missed_just_now_is_fresh_and_says_it_was_missed():
+    missed = review(answer_correctly(new_card(now=NOW), at=NOW), AGAIN, now=NOW + timedelta(days=3))
+
+    reason = review_reason(missed, now=NOW + timedelta(days=3))
+
+    assert reason.latest_wrong is True
+    assert reason.days_overdue == 0
+    assert reason.band == "fresh"
+
+
+def test_a_card_on_schedule_is_fading_near_the_target():
+    card = answer_correctly(answer_correctly(new_card(now=NOW), at=NOW), at=NOW + timedelta(days=3))
+
+    reason = review_reason(card, now=card.due_at)
+
+    assert reason.latest_wrong is False
+    assert reason.days_overdue == 0
+    assert reason.retrievability == retrievability(card, now=card.due_at)
+    assert reason.band == "fading"
+
+
+def test_a_card_left_long_after_its_day_counts_whole_days_late_and_is_forgotten():
+    card = answer_correctly(new_card(now=NOW), at=NOW)
+
+    reason = review_reason(card, now=card.due_at + timedelta(days=120, hours=23))
+
+    assert reason.days_overdue == 120
+    assert reason.latest_wrong is False
+    assert reason.band == "forgotten"
+
+
+def test_a_card_not_yet_due_is_not_overdue():
+    card = answer_correctly(new_card(now=NOW), at=NOW)
+
+    assert review_reason(card, now=NOW).days_overdue == 0

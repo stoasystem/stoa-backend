@@ -578,6 +578,33 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "Avec des comparaisons et des exemples",
         "it": "Con paragoni ed esempi",
     },
+    # ── review: how well a due question is likely still remembered (#447) ─
+    # One per `review_scheduler.RECALL_BANDS` band. Words, never a percentage:
+    # a child cannot act on "62 %".
+    "review.band.fresh": {
+        "de": "Noch frisch",
+        "en": "Still fresh",
+        "fr": "Encore frais",
+        "it": "Ancora fresco",
+    },
+    "review.band.fading": {
+        "de": "Etwas verschwommen",
+        "en": "Getting fuzzy",
+        "fr": "Un peu flou",
+        "it": "Un po’ sfocato",
+    },
+    "review.band.forgetting": {
+        "de": "Fast vergessen",
+        "en": "Almost forgotten",
+        "fr": "Presque oublié",
+        "it": "Quasi dimenticato",
+    },
+    "review.band.forgotten": {
+        "de": "Wahrscheinlich vergessen",
+        "en": "Probably forgotten",
+        "fr": "Sans doute oublié",
+        "it": "Probabilmente dimenticato",
+    },
 }
 
 
