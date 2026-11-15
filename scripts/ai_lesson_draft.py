@@ -631,7 +631,12 @@ CHECK_SYSTEM = (
     "de); \"reject\" wenn die Aufgabe falsch oder unbrauchbar ist; sonst \"doubtful\". In "
     "failed die Codes der nicht erfüllten Prüfungen, in note kurz warum (deutsch). Rechne "
     "jede Rechenaufgabe selbst nach. Beurteile jede Aufgabe für sich; woher sie kommt, weisst "
-    "du nicht und spielt keine Rolle."
+    "du nicht und spielt keine Rolle.\n\nSo bewertet die Plattform eine kurze Antwort, das musst "
+    "du nicht in acceptedAnswers verlangen: correctAnswer selbst zählt immer; Gross-/Kleinschreibung, "
+    "Leerzeichen zwischen Zahl und Einheit (\"5N\" = \"5 N\"), Dezimalkomma statt -punkt (\"0,5\" = "
+    "\"0.5\"), nachgestellte Nullen (\"3.0\" = \"3\"), Tausender-Apostroph und ein Schlusspunkt "
+    "gelten als gleich. Verlange nur Schreibweisen, die sich darüber hinaus unterscheiden (Einheitenname, "
+    "Zahl ohne oder mit Einheit, andere Einheit desselben Werts)."
 )
 CHECK_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -723,16 +728,36 @@ def bucket(a: Mapping[str, Any], b: Mapping[str, Any]) -> str:
     return "doubtful"
 
 
+def judge_covered(verdict: Mapping[str, Any], item: Mapping[str, Any]) -> dict[str, Any]:
+    """A checker's verdict with the spellings the platform's judge already accepts taken out:
+    a verdict that only asked for those is a pass. Checkers do not know the judge forgives
+    `5N`, `0,5` and the key itself; asked for, those are not missing."""
+    if set(verdict.get("failed") or []) != {"equivalents"} or verdict["verdict"] not in {
+        "missing_equivalents", "doubtful"
+    }:
+        return dict(verdict)
+    de = item.get("de") or {}
+    key, accepted = de.get("correctAnswer", ""), de.get("acceptedAnswers") or []
+    missing = [s for s in verdict.get("suggestedAccepted") or [] if not answer_judging.judge(s, key, accepted)]
+    if missing:
+        return {**verdict, "verdict": "missing_equivalents", "suggestedAccepted": missing}
+    return {**verdict, "verdict": "pass", "failed": [], "judgeCovered": True, "suggestedAccepted": []}
+
+
 def verdicts(chunks: Mapping[str, Sequence[Mapping[str, Any]]], results: Mapping[str, Mapping[str, Any]],
              key: Mapping[str, Mapping[str, str]]) -> list[dict[str, Any]]:
+    """Both checkers' verdicts per item, bucketed as #422 did (`rawBucket`) and again with what
+    the judge already accepts taken out (`bucket`)."""
     out = []
     for name, items in chunks.items():
         a = {v["id"]: v for v in results[f"{name}.A"]["verdicts"]}
         b = {v["id"]: v for v in results[f"{name}.B"]["verdicts"]}
         for item in items:
-            va, vb = a[item["id"]], b[item["id"]]
+            raw = bucket(a[item["id"]], b[item["id"]])
+            va, vb = judge_covered(a[item["id"]], item), judge_covered(b[item["id"]], item)
             out.append({"id": item["id"], **key[item["id"]], "star": item["star"], "bucket": bucket(va, vb),
-                        "disagree": va["verdict"] != vb["verdict"],
+                        "rawBucket": raw,
+                        "disagree": a[item["id"]]["verdict"] != b[item["id"]]["verdict"],
                         "failed": sorted(set(va.get("failed") or []) | set(vb.get("failed") or [])),
                         "notes": [va.get("note") or "", vb.get("note") or ""],
                         "suggestedAccepted": sorted(set(va.get("suggestedAccepted") or [])
@@ -822,7 +847,9 @@ def _manifest_exercise(unit_id: str, exercise: Mapping[str, Any], order: int, sk
 def local_dry_run(manifests: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Each manifest through the real dry run, against a table held in memory and seeded with
     the knowledge base stars the way the seed writes them. Nothing reaches AWS."""
-    sys.path.insert(0, str(ROOT / "tests"))
+    for folder in (ROOT, ROOT / "tests"):
+        if str(folder) not in sys.path:
+            sys.path.insert(0, str(folder))
     from fakes.dynamodb import FakeTable  # noqa: PLC0415 - the suite's table double
 
     from scripts import seed_practice
@@ -870,11 +897,13 @@ def comparison(verdict_rows: Sequence[Mapping[str, Any]], ledger: Sequence[Mappi
     """The comparison table, the failure reasons, and each star's cost and time, as markdown."""
     lines = ["| 来源 | 题数 | " + " | ".join(BUCKET_NAMES.values()) + " | 两位意见不一致 |",
              "| --- | ---: | " + " | ".join("---:" for _ in BUCKET_NAMES) + " | ---: |"]
-    for origin, name in (("drafted", "AI 起草"), ("imported", "导入草稿")):
-        rows = [v for v in verdict_rows if v["origin"] == origin]
-        counts = Counter(v["bucket"] for v in rows)
-        lines.append(f"| {name} | {len(rows)} | " + " | ".join(_rate(counts[b], len(rows)) for b in BUCKET_NAMES)
-                     + f" | {_rate(sum(v['disagree'] for v in rows), len(rows))} |")
+    for field, how in (("rawBucket", "核对者原判"), ("bucket", "去掉判题已认的写法后")):
+        for origin, name in (("drafted", "AI 起草"), ("imported", "导入草稿")):
+            rows = [v for v in verdict_rows if v["origin"] == origin]
+            counts = Counter(v.get(field, v["bucket"]) for v in rows)
+            lines.append(f"| {name}（{how}） | {len(rows)} | "
+                         + " | ".join(_rate(counts[b], len(rows)) for b in BUCKET_NAMES)
+                         + f" | {_rate(sum(v['disagree'] for v in rows), len(rows))} |")
     lines += ["", "**存疑和剔除的原因**（至少一位核对者标了这一项；一道题可以有几项）", "",
               "| 检查项 | AI 起草 | 导入草稿 |", "| --- | ---: | ---: |"]
     for code in CHECKS:
@@ -981,6 +1010,8 @@ def _guard(planned: Sequence[tuple[str, int]], args: argparse.Namespace) -> None
     print(f"{calls} model calls planned with {args.model}: {usd}")
     if args.plan:
         raise SystemExit(0)
+    if not calls:
+        return
     if calls > args.max_calls:
         raise DraftError(f"{calls} calls planned, more than --max-calls {args.max_calls}")
     if not args.confirm_cost:
@@ -1061,7 +1092,7 @@ def main(argv: Sequence[str] | None = None, model: Model | None = None) -> int:
     if args.command == "outline":
         todo = [unit for unit in stars if not work.outline(unit).exists()]
         _guard([("outline", len(todo))], args)
-        call = the_model()
+        call = the_model() if todo else None
         errors = _run_jobs([(work.outline(u), lambda u=u: make_outline(stars[u], call)) for u in todo],
                            args.workers, args.fail)
         records = [_read(work.outline(u)) for u in stars if work.outline(u).exists()]
@@ -1081,7 +1112,7 @@ def main(argv: Sequence[str] | None = None, model: Model | None = None) -> int:
         todo = [(unit, name, planned) for unit, record in records.items()
                 for name, planned in blocks_of(record["outline"]) if not work.block(unit, name).exists()]
         _guard([("generate", len(todo))], args)
-        call = the_model()
+        call = the_model() if todo else None
         # A block is told what the earlier blocks of its star hold, so a star's blocks go
         # one after another; the stars go side by side.
 
@@ -1121,7 +1152,7 @@ def main(argv: Sequence[str] | None = None, model: Model | None = None) -> int:
         chunks = _read(work.check("chunks"))
         todo = [(name, checker) for name in chunks for checker in "AB" if not work.check(f"{name}.{checker}").exists()]
         _guard([("check", len(todo))], args)
-        call = the_model(checker=True)
+        call = the_model(checker=True) if todo else None
         errors = _run_jobs([(work.check(f"{n}.{c}"), lambda n=n, c=c: run_checker(n, chunks[n], c, call))
                             for n, c in todo], args.workers, args.fail)
         if not errors:

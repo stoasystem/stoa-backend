@@ -118,6 +118,16 @@ def test_buckets_are_those_of_422() -> None:
     assert draft.bucket(v("pass"), v("missing_equivalents")) == "doubtful"
 
 
+def test_spellings_the_judge_already_accepts_are_not_missing() -> None:
+    item = {"de": {"correctAnswer": "0.5", "acceptedAnswers": ["0.5 m"]}}
+    asked = {"verdict": "missing_equivalents", "failed": ["equivalents"], "suggestedAccepted": ["0,5", "0.5m", "0.5"]}
+    assert draft.judge_covered(asked, item)["verdict"] == "pass"
+    asked["suggestedAccepted"] = ["0,5", "50 cm"]
+    assert draft.judge_covered(asked, item)["suggestedAccepted"] == ["50 cm"]
+    wrong = {"verdict": "doubtful", "failed": ["answer", "equivalents"], "suggestedAccepted": []}
+    assert draft.judge_covered(wrong, item)["verdict"] == "doubtful"
+
+
 def test_the_pool_is_blind() -> None:
     pool, key = draft.blind_pool([("ai-1", {"star": STAR, "x": 1})], [("kb-1", {"star": STAR, "x": 2})], seed=1)
     assert {item["id"] for item in pool} == set(key)
@@ -169,7 +179,7 @@ def test_a_failed_block_is_redone_alone_and_the_whole_line_dry_runs_clean(tmp_pa
     result = json.loads((work / "dry-run.json").read_text(encoding="utf-8"))[0]
     assert result["summary"]["errors"] == 0 and result["summary"]["conflicts"] == 0
     assert _run(model, work, "report") == 0
-    assert "AI 起草 | 6 |" in (work / "report.md").read_text(encoding="utf-8")
+    assert "AI 起草（核对者原判） | 6 |" in (work / "report.md").read_text(encoding="utf-8")
 
 
 def test_a_run_that_calls_the_model_needs_the_operators_yes(tmp_path: Path) -> None:
