@@ -269,6 +269,93 @@ def test_regional_model_uses_sdk_count_tokens_with_identical_body() -> None:
     ]
 
 
+def _answer_tool_request_body() -> str:
+    """The body an Ask answer is sent with: the forced `give_answer` tool (#412)."""
+    body = json.loads(_request_body())
+    body.update(ai_service.answer_tool_request(ask_answer.answer_tool(star_map=False)))
+    return json.dumps(body)
+
+
+def test_runtime_count_drops_eager_input_streaming_the_count_api_refuses() -> None:
+    """CountTokens rejects `eager_input_streaming` ("Extra inputs are not
+    permitted"); it only shapes the stream and adds no input tokens, so the
+    count is asked without it and with every other field as sent."""
+    runtime = _RuntimeCountClient(
+        {
+            "inputTokens": 705,
+            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "request-id"},
+        }
+    )
+    request_body = _answer_tool_request_body()
+    assert json.loads(request_body)["tools"][0]["eager_input_streaming"] is True
+
+    count = count_input_tokens(
+        request_body,
+        model_id=MODEL_ID,
+        inference_profile_id=PROFILE_ID,
+        region="eu-central-1",
+        runtime_client=runtime,
+    )
+
+    assert count == 705
+    counted = json.loads(runtime.calls[0]["input"]["invokeModel"]["body"])
+    expected = json.loads(request_body)
+    del expected["tools"][0]["eager_input_streaming"]
+    assert counted == expected
+    assert counted["tools"][0]["strict"] is True
+    assert counted["tool_choice"] == {"type": "tool", "name": "give_answer"}
+
+
+def test_mantle_count_drops_eager_input_streaming() -> None:
+    mantle = _MantleCountClient(
+        {"input_tokens": 705, "request_id": "request-id", "http_status": 200}
+    )
+
+    count_input_tokens(
+        _answer_tool_request_body(),
+        model_id=MODEL_ID,
+        inference_profile_id=PROFILE_ID,
+        region="eu-central-1",
+        count_endpoint=TokenCountEndpoint.MANTLE,
+        mantle_client=mantle,
+    )
+
+    payload = mantle.calls[0]["payload"]
+    assert "eager_input_streaming" not in payload["tools"][0]
+    assert payload["tool_choice"] == {"type": "tool", "name": "give_answer"}
+
+
+def test_count_failure_logs_its_kind_but_no_provider_text(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from botocore.exceptions import ClientError
+
+    class RefusingRuntime:
+        def count_tokens(self, **_kwargs: object) -> dict[str, object]:
+            raise ClientError(
+                {
+                    "Error": {
+                        "Code": "ValidationException",
+                        "Message": "PRIVATE-PROMPT-CANARY is not permitted",
+                    }
+                },
+                "CountTokens",
+            )
+
+    with caplog.at_level("WARNING"), pytest.raises(ProviderTokenCountUnavailable):
+        count_input_tokens(
+            _request_body(),
+            model_id=MODEL_ID,
+            inference_profile_id=PROFILE_ID,
+            region="eu-central-1",
+            runtime_client=RefusingRuntime(),
+        )
+
+    assert "provider_token_count_failed" in caplog.text
+    assert "ValidationException" in caplog.text
+    assert "PRIVATE" not in caplog.text
+
+
 def test_explicit_mantle_capability_remains_count_only() -> None:
     mantle = _MantleCountClient(
         {
