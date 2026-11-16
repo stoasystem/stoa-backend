@@ -3519,6 +3519,22 @@
   {
     "authorization": [
       {
+        "action": "respond",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "conversations",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/conversations/{conv_id}/classroom",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
         "action": "read",
         "capability": null,
         "purpose": "self_service",
@@ -4332,6 +4348,24 @@
     ],
     "method": "POST",
     "path": "/teachers/ai-tools/exercise-drafts",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "respond",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "teacher_help_request"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "request_id"
+    ],
+    "method": "POST",
+    "path": "/teachers/me/help-requests/{request_id}/classroom",
     "sensitive": true
   },
   {

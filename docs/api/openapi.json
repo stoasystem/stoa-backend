@@ -2592,6 +2592,47 @@
         "title": "ChildSummary",
         "type": "object"
       },
+      "ClassroomEntry": {
+        "description": "The caller's whiteboard address and voice credentials, valid until `expiresAt`.",
+        "properties": {
+          "expiresAt": {
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "voice": {
+            "$ref": "#/components/schemas/ClassroomVoice"
+          },
+          "whiteboardUrl": {
+            "title": "Whiteboardurl",
+            "type": "string"
+          }
+        },
+        "required": [
+          "whiteboardUrl",
+          "voice",
+          "expiresAt"
+        ],
+        "title": "ClassroomEntry",
+        "type": "object"
+      },
+      "ClassroomVoice": {
+        "properties": {
+          "roomUrl": {
+            "title": "Roomurl",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "roomUrl",
+          "token"
+        ],
+        "title": "ClassroomVoice",
+        "type": "object"
+      },
       "CompleteUploadRequest": {
         "additionalProperties": false,
         "properties": {
@@ -26940,6 +26981,86 @@
         }
       }
     },
+    "/conversations/{conv_id}/classroom": {
+      "post": {
+        "description": "The student's credentials for this conversation's classroom (#467).\n\nOpen while the conversation's help request is pending or in progress.",
+        "operationId": "enter_classroom_conversations__conv_id__classroom_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conv_id",
+            "required": true,
+            "schema": {
+              "title": "Conv Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassroomEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Enter Classroom",
+        "tags": [
+          "conversations"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "respond",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "conversation"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
     "/conversations/{conv_id}/generation": {
       "get": {
         "description": "Return the steps of an answer still being written.\n\nNamed by its idempotency key, the message's command is reported too, with\nonly the steps its current attempt wrote.",
@@ -36089,6 +36210,88 @@
           "classification": "authorized",
           "identifiers": [
             "attachment_id",
+            "request_id"
+          ]
+        }
+      }
+    },
+    "/teachers/me/help-requests/{request_id}/classroom": {
+      "post": {
+        "description": "The teacher's credentials for this help request's classroom (#467).\n\nOnly the teacher holding the request, while it is in progress; an offer\nalone does not let a teacher in.",
+        "operationId": "enter_classroom_teachers_me_help_requests__request_id__classroom_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassroomEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Enter Classroom",
+        "tags": [
+          "teachers"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "respond",
+              "capability": null,
+              "purpose": "teacher_help",
+              "resource_type": "teacher_help_request"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": [
             "request_id"
           ]
         }

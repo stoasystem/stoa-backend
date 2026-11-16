@@ -877,6 +877,19 @@
         "retryable": true
       }
     },
+    "classroom_unavailable": {
+      "action": "retry_later",
+      "domain": "classroom",
+      "http_status": 503,
+      "message_key": "error.classroom_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 1,
+        "retry_after_seconds": null,
+        "retryable": true
+      }
+    },
     "credential_documents_deferred": {
       "action": "correct_input",
       "domain": "account",

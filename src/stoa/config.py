@@ -508,6 +508,14 @@ class Settings(BaseSettings):
     stripe_twint_capability_confirmed: bool = False
     stripe_allow_unsigned_test_webhooks: bool = False
 
+    # Virtual classroom (#467): the shared whiteboard (a self-hosted WBO) and
+    # Daily voice for a help request. Any one empty, entering the classroom is
+    # `classroom_unavailable` and the help request carries on without it. The
+    # secret is WBO's `AUTH_SECRET_KEY`; neither secret is ever in source control.
+    wbo_base_url: str = ""
+    wbo_auth_secret: str = ""
+    daily_api_key: str = ""
+
     # Support handoff delivery (v4.5)
     support_internal_queue_approved: bool = False
     support_third_party_provider_approved: bool = False
