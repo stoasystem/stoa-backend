@@ -185,6 +185,23 @@ def _configuration_from_the_environment():
     config.install(None)
 
 
+@pytest.fixture(autouse=True)
+def _no_request_locale():
+    """Every test starts with no request language bound.
+
+    `locale_service` keeps the language a request asked for in a ContextVar that
+    `main`'s middleware sets on every request. A test that sets it by hand, or
+    drives an app built without that middleware, would otherwise leave its
+    language for whichever test the same worker runs next - which then gets its
+    error messages in English or French instead of the default.
+    """
+    from stoa.services import locale_service
+
+    locale_service.set_request_locale(None)
+    yield
+    locale_service.set_request_locale(None)
+
+
 @pytest.fixture
 def link_rows(fake_table):
     """Link rows the relationship judge reads, served as the link table (#208).
