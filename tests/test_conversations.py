@@ -663,13 +663,6 @@ def test_new_foreign_attachment_has_zero_command_quota_or_ai_effect(table, model
     assert model.calls == []
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "#461: a duplicate that reads the command while it is still `claimed` gets "
-        "CLAIMED back and binds too; seen under parallel workers. Remove with the fix."
-    ),
-)
 def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     table, model, bucket, monkeypatch
 ) -> None:
@@ -723,6 +716,123 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     command_id = _command_row(table, "concurrent-key")["command_id"]
     expected_attachment_id = str(uuid5(UUID(command_id), "attachment:0"))
     assert tuple(attachment_repo.attachment_key(expected_attachment_id).values()) in table.rows
+
+
+def _claim_left_unbound(table, bucket, monkeypatch, effects: dict[str, int]) -> dict[str, Any]:
+    """A question claimed by a request whose bind failed for a passing reason.
+
+    It stays `claimed`, and that request ended its own claim lease, so the
+    student's next send takes it over at once. Every later bind runs for real
+    and is counted in `effects["bind"]`.
+    """
+    _parse_in_process(monkeypatch)
+    monkeypatch.setattr(dispatch, "override", dispatch.in_process)
+    _upload(table, bucket, "fresh-upload-1", b"private text", filename="notes.txt", media_type="text/plain")
+    bind = attachment_service.bind_message_attachments
+
+    def bind_failing_first(**kwargs: Any) -> Any:
+        effects["bind"] = effects.get("bind", 0) + 1
+        if effects["bind"] == 1:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        return bind(**kwargs)
+
+    monkeypatch.setattr(attachment_service, "bind_message_attachments", bind_failing_first)
+    with pytest.raises(AttachmentDecisionError) as failed:
+        _submit("claimed-key", content="claimed content", attachmentIds=[{"uploadId": "fresh-upload-1"}])
+    assert failed.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    row = _command_row(table, "claimed-key")
+    assert row["status"] == "claimed"
+    assert "claim_expires_at" not in row
+    return row
+
+
+def test_a_duplicate_does_not_bind_while_the_claim_lease_is_held(
+    table, model, bucket, monkeypatch
+) -> None:
+    effects: dict[str, int] = {}
+    row = _claim_left_unbound(table, bucket, monkeypatch, effects)
+    # Another request holds the claim and is binding it right now.
+    row["claim_expires_at"] = int(datetime.now(timezone.utc).timestamp()) + 30
+    monkeypatch.setattr(_answering, "_MESSAGE_POLL_SECONDS", 0)
+
+    with pytest.raises(AttachmentDecisionError) as held:
+        _submit("claimed-key", content="claimed content", attachmentIds=[{"uploadId": "fresh-upload-1"}])
+
+    assert held.value.code.value == "message_in_progress"
+    assert effects == {"bind": 1}
+    assert _messages(table, "student") == []
+    assert model.calls == []
+
+
+@pytest.mark.parametrize("lease", ["expired", "released"])
+def test_a_claim_whose_lease_ran_out_is_taken_over(
+    table, model, bucket, monkeypatch, lease: str
+) -> None:
+    effects: dict[str, int] = {}
+    row = _claim_left_unbound(table, bucket, monkeypatch, effects)
+    if lease == "expired":
+        # The claiming request died before binding.
+        row["claim_expires_at"] = 1
+    # Released, as by the failed bind, reads as a command claimed before
+    # commands carried a lease.
+
+    answered = _submit("claimed-key", content="claimed content", attachmentIds=[{"uploadId": "fresh-upload-1"}])
+
+    assert isinstance(answered, ask_question.Answered)
+    assert effects == {"bind": 2}
+    assert len(_messages(table, "student")) == len(_messages(table, "assistant")) == 1
+    assert len(model.calls) == 1
+    [quota] = [row for key, row in table.rows.items() if key[1].startswith("CHAT#")]
+    assert quota["count"] == 1
+
+
+def test_a_duplicate_held_by_the_claim_is_answered_once_the_message_is_bound(
+    table, model, bucket, monkeypatch
+) -> None:
+    _parse_in_process(monkeypatch)
+    monkeypatch.setattr(dispatch, "override", dispatch.in_process)
+    _upload(table, bucket, "fresh-upload-1", b"private text", filename="notes.txt", media_type="text/plain")
+    claimed = threading.Event()
+    waiting = threading.Event()
+    effects: dict[str, int] = {}
+    bind = attachment_service.bind_message_attachments
+
+    duplicate_thread = threading.main_thread()
+
+    def bind_once_the_duplicate_waits(**kwargs: Any) -> Any:
+        effects["bind"] = effects.get("bind", 0) + 1
+        if threading.current_thread() is duplicate_thread:
+            # The duplicate binding as well is the fault itself; let the first
+            # request go on so the assertions below report it.
+            waiting.set()
+        else:
+            claimed.set()
+            assert waiting.wait(timeout=10)
+        return bind(**kwargs)
+
+    monkeypatch.setattr(attachment_service, "bind_message_attachments", bind_once_the_duplicate_waits)
+    sleep = _answering.time.sleep
+
+    def noting_the_wait(seconds: float) -> None:
+        if threading.current_thread() is duplicate_thread:
+            waiting.set()
+        sleep(seconds)
+
+    monkeypatch.setattr(_answering.time, "sleep", noting_the_wait)
+    send = {"content": "held content", "attachmentIds": [{"uploadId": "fresh-upload-1"}]}
+    first: list[Any] = []
+    thread = threading.Thread(target=lambda: first.append(_submit("held-key", **send)))
+    thread.start()
+    assert claimed.wait(timeout=10)
+
+    duplicate = _submit("held-key", **send)
+    thread.join(timeout=10)
+
+    assert waiting.is_set()
+    assert [answer.model_dump() for answer in first] == [duplicate.model_dump()]
+    assert effects == {"bind": 1}
+    assert len(model.calls) == 1
+    assert len(_messages(table, "student")) == len(_messages(table, "assistant")) == 1
 
 
 def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
