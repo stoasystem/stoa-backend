@@ -166,15 +166,12 @@ def create_invitation(item: Mapping[str, object], *, table: object | None = None
     # row that names the accounts (#397): the invited account, whose deletion
     # removes the invitation, and the inviter, whom the daily sweep would
     # otherwise report as named in an unregistered partition.
+    # An operator call invites as `operator:agent_mcp`, which is no account and
+    # gets no registry row.
     for field in ("account_id", "invited_by"):
-        account = row.get(field)
-        if isinstance(account, str) and account.strip():
-            _put_item(
-                target,
-                Item=owner_registry.registry_item(
-                    account.strip(), str(row["PK"]), owner_registry.ROLE_REFERENCE
-                ),
-            )
+        registration = owner_registry.reference_put(row.get(field), str(row["PK"]))
+        if registration is not None:
+            _put_item(target, Item=registration["Put"]["Item"])
     _conditional_put(row, table=target)
     return row
 

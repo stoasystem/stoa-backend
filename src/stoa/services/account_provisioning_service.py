@@ -20,12 +20,14 @@ import secrets
 from typing import Any, Callable
 from uuid import uuid4
 
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
     account_email_claim_repo,
     account_invitation_repo,
+    account_number_repo,
     capability_repo,
     identity_repo,
     public_identity_repo,
@@ -729,10 +731,15 @@ def _attach_account_number(*, account_id: str, role: str, now: datetime) -> str:
         expected_version=_profile_version(profile),
         additional_condition_expression="attribute_not_exists(#account_number)",
     )
+    # The claim row names the account from a partition of its own, and was
+    # written before this, outside `fenced`: register it with the profile (#397).
+    registration = owner_registry.reference_put(
+        account_id, account_number_repo.claim_key(account_number)["PK"]
+    )
     try:
         db_table.fenced(
             account_id,
-            [operation],
+            [operation, *([registration] if registration is not None else [])],
         )
     except (
         account_deletion_repo.AccountDeletionConflict,

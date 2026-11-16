@@ -147,7 +147,6 @@ REVIEWED: dict[str, str] = {
     "src/stoa/db/repositories/report_repo.py::claim_report_email_intent": "derived_partition",
     "src/stoa/db/repositories/usage_ledger_repo.py::set_daily_question_counter": "derived_partition",
     "src/stoa/db/repositories/user_repo.py::put_user": "derived_partition",
-    "src/stoa/db/repositories/user_repo.py::put_user_with_email_claim": "derived_partition",
     "src/stoa/routers/parents.py::admit_parent_link_request": "derived_partition",
     "src/stoa/services/password_change_code_service.py::admit_send": "derived_partition",
     "src/stoa/services/password_change_code_service.py::release_send": "derived_partition",
