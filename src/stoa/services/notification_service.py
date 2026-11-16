@@ -891,8 +891,7 @@ def emit_teacher_help_reply(
 ) -> None:
     """Tell the student a teacher answered in their conversation (#65), once per reply.
 
-    A reply that takes the request in the same write is this one event: the
-    student hears about the answer, not separately about the take-over.
+    A reply never takes the request (#479): the take-over was its own event.
     """
     student_id = str(conversation.get("student_id") or "")
     locale = _recipient_locale(student_id)
