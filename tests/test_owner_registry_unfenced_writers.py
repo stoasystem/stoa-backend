@@ -174,6 +174,7 @@ REVIEWED: dict[str, str] = {
     "src/stoa/services/ask_question/_store.py::fail_message_command": "existing_partition",
     "src/stoa/services/ask_question/_store.py::mark_message_command_terminal": "existing_partition",
     "src/stoa/services/ask_question/_store.py::record_message_generation_context": "existing_partition",
+    "src/stoa/services/ask_question/_store.py::release_claim_lease": "existing_partition",
     "src/stoa/services/ask_question/_store.py::reopen_failed_message_command": "existing_partition",
     "src/stoa/services/learning_session/_store.py::retitle_conversation": "existing_partition",
     "src/stoa/services/uploads/_store.py::_apply": "existing_partition",

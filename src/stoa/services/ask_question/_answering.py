@@ -395,6 +395,75 @@ def _wait_for_message_command(
     raise AttachmentDecisionError(AskQuestionErrorCode.MESSAGE_IN_PROGRESS)
 
 
+def _claim_held(state: ask_question_store.MessageCommandResult) -> bool:
+    """Whether another request has claimed this question and is still binding it."""
+    return (
+        state.disposition is ask_question_store.MessageCommandDisposition.LEASE_HELD
+        and (state.command or {}).get("status") == "claimed"
+    )
+
+
+def _after_claim_released(
+    *,
+    conv_id: str,
+    student_id: str,
+    subject: str,
+    grade: str,
+    body: SendMessageRequest,
+    command_context: dict,
+    table,
+) -> "SendMessageResponse | CommittedMessage":
+    """Wait out another request's claim, then go on as a later duplicate would.
+
+    The request that claimed the question binds its message within a moment;
+    once it has, this one is answered from the stored message like any copy
+    sent after it (#461), rather than being told the question is in progress.
+    A claim still held after the wait, or held again once this request comes
+    back, is reported as in progress.
+    """
+    if command_context.get("claim_waited"):
+        raise AttachmentDecisionError(AskQuestionErrorCode.MESSAGE_IN_PROGRESS)
+    fingerprint = str(command_context["fingerprint"])
+    for _ in range(_MESSAGE_POLL_ATTEMPTS):
+        command = _conversation_repository_call(
+            lambda: ask_question_store.get_message_command(
+                conv_id, body.idempotencyKey, table=table
+            )
+        )
+        state = ask_question_store.classify_message_command(
+            command,
+            owner_id=student_id,
+            fingerprint=fingerprint,
+            now_epoch=int(datetime.now(timezone.utc).timestamp()),
+        )
+        if not _claim_held(state):
+            context = {
+                key: value
+                for key, value in command_context.items()
+                if key not in {"existing", "state"}
+            }
+            return commit_message_command(
+                conv_id=conv_id,
+                student_id=student_id,
+                subject=subject,
+                grade=grade,
+                body=body,
+                command_context={
+                    **context,
+                    "existing": command,
+                    "state": state,
+                    "claim_waited": True,
+                },
+            )
+        time.sleep(_MESSAGE_POLL_SECONDS)
+    emit_private_event(
+        "message_replay_wait_exhausted",
+        correlation_id=str((command or {}).get("command_id") or "message-command"),
+        level=logging.WARNING,
+    )
+    raise AttachmentDecisionError(AskQuestionErrorCode.MESSAGE_IN_PROGRESS)
+
+
 def _validate_replay_command(
     command: Any,
     *,
@@ -744,6 +813,16 @@ def commit_message_command(
         )
     if response := _result_response(state):
         return response
+    if _claim_held(state):
+        return _after_claim_released(
+            conv_id=conv_id,
+            student_id=student_id,
+            subject=subject,
+            grade=grade,
+            body=body,
+            command_context=command_context,
+            table=table,
+        )
     if state.disposition is ask_question_store.MessageCommandDisposition.LEASE_HELD:
         return _wait_for_message_command(
             conv_id,
@@ -923,6 +1002,16 @@ def commit_message_command(
             if claim_result.disposition is not ask_question_store.MessageCommandDisposition.CLAIMED:
                 if response := _result_response(claim_result):
                     return response
+                if _claim_held(claim_result):
+                    return _after_claim_released(
+                        conv_id=conv_id,
+                        student_id=student_id,
+                        subject=subject,
+                        grade=grade,
+                        body=body,
+                        command_context=command_context,
+                        table=table,
+                    )
                 if claim_result.disposition in {
                     ask_question_store.MessageCommandDisposition.RESUME,
                     ask_question_store.MessageCommandDisposition.LEASE_HELD,
@@ -1036,6 +1125,20 @@ def commit_message_command(
                 )
                 if response := _result_response(reread):
                     return response
+                if _claim_held(reread):
+                    # Still this request's own claim: binding failed for a
+                    # reason that may pass. Its lease ends here, so the
+                    # student's retry takes the claim over at once.
+                    ask_question_store.release_claim_lease(
+                        conversation_id=conv_id,
+                        idempotency_key=body.idempotencyKey,
+                        owner_id=student_id,
+                        fingerprint=fingerprint,
+                        table=table,
+                    )
+                    raise AttachmentDecisionError(
+                        AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                    )
                 if reread.disposition not in {
                     ask_question_store.MessageCommandDisposition.RESUME,
                     ask_question_store.MessageCommandDisposition.LEASE_HELD,

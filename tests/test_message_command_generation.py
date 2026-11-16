@@ -104,13 +104,17 @@ def test_a_reply_without_a_language_is_labelled_in_the_display_language(table, m
 def test_generating_takes_the_language_from_the_command_not_the_request(
     table, model
 ) -> None:
-    locale_service.set_request_locale("fr")
-    _commit("key-1")
-    assert _command_row(table, "key-1")["status"] == "message_committed"
+    try:
+        locale_service.set_request_locale("fr")
+        _commit("key-1")
+        assert _command_row(table, "key-1")["status"] == "message_committed"
 
-    # Whatever request is around when the answer is generated no longer counts.
-    locale_service.set_request_locale("en")
-    outcome = ask_question.answer(CONV, "key-1")
+        # Whatever request is around when the answer is generated no longer counts.
+        locale_service.set_request_locale("en")
+        outcome = ask_question.answer(CONV, "key-1")
+    finally:
+        # Left set, it is the next test's request language on this thread.
+        locale_service.set_request_locale(None)
 
     assert outcome == "completed"
     assert default_language(model) == "fr"

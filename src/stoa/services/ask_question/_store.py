@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from itertools import islice
@@ -52,6 +53,11 @@ class MessageCommandResult:
 # A generation is tried this many times under one command, whichever way the
 # earlier attempts ended.
 MESSAGE_AI_MAX_ATTEMPTS = 3
+
+# How long the request that claims a command keeps it before another may take
+# over (#461). Claiming to binding is one message and one transaction, well
+# under a second; a request that died in between is taken over this much later.
+CLAIM_LEASE_SECONDS = 30
 
 
 # What `fail_message_command` writes and the next lease claim clears.
@@ -276,11 +282,19 @@ def classify_message_command(
     counter_value = _optional_positive_int(persisted.get("counter_value"))
     if status == "claimed":
         expires_at = _optional_positive_int(persisted.get("expires_at"))
-        disposition = (
-            MessageCommandDisposition.EXPIRED
-            if expires_at is not None and expires_at <= now_epoch
-            else MessageCommandDisposition.CLAIMED
-        )
+        claim_expiry = _optional_positive_int(persisted.get("claim_expires_at"))
+        if expires_at is not None and expires_at <= now_epoch:
+            disposition = MessageCommandDisposition.EXPIRED
+        elif claim_expiry is not None and claim_expiry > now_epoch:
+            # The request that claimed it is still binding its message: wait
+            # for it rather than bind a second time (#461).
+            disposition = MessageCommandDisposition.LEASE_HELD
+        else:
+            # Its claim lease ran out (or it was claimed before there was one):
+            # that request most likely died before binding, so this one takes
+            # over. The bind is one transaction conditioned on `claimed`, so
+            # two takers still commit the message only once.
+            disposition = MessageCommandDisposition.CLAIMED
     elif status == "message_committed":
         disposition = MessageCommandDisposition.RESUME
     elif status == "ai_running":
@@ -564,10 +578,19 @@ def claim_message_command_and_quota(
     account_fence_generation: int = 1,
     table: object | None = None,
 ) -> MessageCommandResult:
-    """Atomically create a message command and charge its daily quota once."""
+    """Atomically create a message command and charge its daily quota once.
+
+    The command is stored with a claim lease (`claim_expires_at`): until it
+    runs out, a duplicate of the same question waits for this request to bind
+    the message instead of binding it too (#461).
+    """
     target = table or db_table.table()
     fingerprint = str(command["fingerprint"])
     now_epoch = max(0, expires_at - 172800)
+    command = {
+        **command,
+        "claim_expires_at": int(datetime.now(UTC).timestamp()) + CLAIM_LEASE_SECONDS,
+    }
     existing = read_message_command_result(
         str(command["conversation_id"]),
         str(command["idempotency_key"]),
@@ -1010,6 +1033,44 @@ def record_message_generation_context(
     if stored_context is None:
         raise attachment_repo.AttachmentRepositoryConflict("dependency_failure")
     return dict(stored_context)
+
+
+def release_claim_lease(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    fingerprint: str,
+    table: object | None = None,
+) -> bool:
+    """End the claim lease of a command whose own bind failed for a passing reason.
+
+    The student's next send of the same question takes the claim over at once,
+    as it did before claims had a lease (#461), instead of waiting it out. Only
+    while the command is still `claimed`: a bind another request committed
+    meanwhile is left alone.
+    """
+    try:
+        attachment_repo._update_item(
+            table or db_table.table(),
+            Key=message_command_key(conversation_id, idempotency_key),
+            UpdateExpression="REMOVE claim_expires_at",
+            ConditionExpression=(
+                "owner_id=:owner AND fingerprint=:fingerprint AND #status=:claimed"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":fingerprint": fingerprint,
+                ":claimed": "claimed",
+            },
+        )
+    except db_table.WriteRefused:
+        return False
+    except db_table.TableUnavailable:
+        # The lease then runs out by itself.
+        return False
+    return True
 
 
 def reopen_failed_message_command(
@@ -1476,7 +1537,12 @@ def reject_message_command_and_compensate(
         fingerprint=fingerprint,
         now_epoch=0,
     )
-    if current.disposition is not MessageCommandDisposition.CLAIMED:
+    # The request rejecting it is the one binding it, so its own claim lease
+    # may still be live (#461): that is still a claim to reject.
+    if current.disposition not in {
+        MessageCommandDisposition.CLAIMED,
+        MessageCommandDisposition.LEASE_HELD,
+    } or (current.command or {}).get("status") != "claimed":
         return current
     assert current.command is not None
     command_id = attachment_repo._required_text(current.command.get("command_id"))
