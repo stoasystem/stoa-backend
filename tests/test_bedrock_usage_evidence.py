@@ -306,6 +306,39 @@ def test_runtime_count_drops_eager_input_streaming_the_count_api_refuses() -> No
     assert counted["tool_choice"] == {"type": "tool", "name": "give_answer"}
 
 
+def test_fake_bedrock_refuses_the_count_body_the_real_one_refuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#430: the fake Bedrock the Ask tests run on refuses a CountTokens body
+    as the real one does, so a request the count cannot take fails here too.
+
+    The answer body as it is sent is counted; the same body with the
+    stream-only field left in is refused, and the count is unavailable."""
+    from fakes.bedrock import FakeBedrock
+
+    request_body = _answer_tool_request_body()
+    counted = count_input_tokens(
+        request_body,
+        model_id=MODEL_ID,
+        inference_profile_id=PROFILE_ID,
+        region="eu-central-1",
+        runtime_client=FakeBedrock(),
+    )
+    assert counted == 90
+
+    monkeypatch.setattr(
+        "stoa.services.bedrock_token_count_service._STREAM_ONLY_TOOL_FIELDS", frozenset()
+    )
+    with pytest.raises(ProviderTokenCountUnavailable):
+        count_input_tokens(
+            request_body,
+            model_id=MODEL_ID,
+            inference_profile_id=PROFILE_ID,
+            region="eu-central-1",
+            runtime_client=FakeBedrock(),
+        )
+
+
 def test_mantle_count_drops_eager_input_streaming() -> None:
     mantle = _MantleCountClient(
         {"input_tokens": 705, "request_id": "request-id", "http_status": 200}
