@@ -11,6 +11,9 @@ With none left it answers with `answer` (`ANSWER` unless given). An
 allowance client records the call: the model was never asked. A `gate`, when
 set, holds every answer until it opens.
 
+`count_tokens` refuses what the real CountTokens refuses (#430): a tool field
+it does not know, such as `eager_input_streaming`, is a `ValidationException`.
+
 Only the provider is stood in for: the prompt, the reply's checks and the
 allowance client in front of it run as production runs them.
 """
@@ -21,6 +24,8 @@ import io
 import json
 import threading
 from typing import Any
+
+from botocore.exceptions import ClientError
 
 from fakes import model_reply
 
@@ -33,6 +38,33 @@ ANSWER: dict[str, Any] = {
     "knowledge_points": ["Brüche kürzen"],
     "suggest_teacher": False,
 }
+
+
+# The tool fields CountTokens takes, as measured against production Bedrock on
+# 2026-11-15 (#430). Any other is refused with "Extra inputs are not permitted".
+_COUNTED_TOOL_FIELDS = frozenset({"name", "description", "input_schema", "strict"})
+
+
+def _refuse_uncountable(kwargs: dict[str, object]) -> None:
+    """Raise as CountTokens does for a body whose tools carry a field it refuses."""
+    try:
+        body = json.loads(kwargs["input"]["invokeModel"]["body"])  # type: ignore[index]
+    except (KeyError, TypeError, ValueError):
+        return
+    tools = body.get("tools") if isinstance(body, dict) else None
+    for index, tool in enumerate(tools if isinstance(tools, list) else ()):
+        extra = sorted(set(tool).difference(_COUNTED_TOOL_FIELDS)) if isinstance(tool, dict) else []
+        if extra:
+            raise ClientError(
+                {
+                    "Error": {
+                        "Code": "ValidationException",
+                        "Message": f"tools.{index}.custom.{extra[0]}: Extra inputs are not permitted",
+                    },
+                    "ResponseMetadata": {"HTTPStatusCode": 400, "RequestId": "count-refused"},
+                },
+                "CountTokens",
+            )
 
 
 class Unsent:
@@ -77,10 +109,11 @@ class FakeBedrock:
 
     # ── The runtime ──────────────────────────────────────────────────────────
 
-    def count_tokens(self, **_kwargs: object) -> dict[str, object]:
+    def count_tokens(self, **kwargs: object) -> dict[str, object]:
         self.counted += 1
         if self.outcomes and isinstance(self.outcomes[0], Unsent):
             raise self.outcomes.pop(0).exception
+        _refuse_uncountable(kwargs)
         return {
             "inputTokens": 90,
             "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": f"count-{self.counted}"},
