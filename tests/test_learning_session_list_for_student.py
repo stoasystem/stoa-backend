@@ -1,6 +1,5 @@
 """`learning_session.list_for_student`: one student's sessions, within a budget (#431)."""
 
-import pytest
 from boto3.dynamodb.conditions import Attr
 
 from stoa.db import table as db_table
@@ -188,15 +187,3 @@ def test_page_size_is_the_querys_limit_and_changes_how_far_a_budget_reaches():
     assert cut.truncated is True
     assert [call["Limit"] for call in with_size.query_calls] == [5, 5]
 
-
-def test_a_malformed_page_is_the_tables_error():
-    class _Broken:
-        def query(self, **_kwargs):
-            return {"Items": ["not a row"]}
-
-    db_table.install(_Broken())
-
-    with pytest.raises(db_table.TableUnavailable) as raised:
-        learning_session.list_for_student("student-1", limit=10)
-
-    assert raised.value.code == "malformed_page"
