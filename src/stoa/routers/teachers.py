@@ -22,6 +22,7 @@ from stoa.db.repositories import (
 from stoa.db import table as db_table
 from stoa.deps import get_actor
 from stoa.models.attachment import AttachmentSummary, ReplyImageReference
+from stoa.models.classroom import ClassroomEntry
 from stoa.security.attachment_errors import (
     AttachmentDecisionError,
     AttachmentErrorCode,
@@ -52,6 +53,7 @@ from stoa.services.ai_teacher_tools_errors import AiTeacherToolsViolation
 from stoa.services import (
     ai_teacher_tools_service,
     attachment_service,
+    classroom,
     help_requests,
     learning_session,
     locale_service,
@@ -1073,6 +1075,25 @@ async def update_help_request(
     )
     view = help_requests.teacher_view(written)
     return _help_request_summary(view, student_name=_get_student_name(view.student_id))
+
+
+@router.post("/me/help-requests/{request_id}/classroom", response_model=ClassroomEntry)
+async def enter_classroom(
+    request_id: str,
+    authorized: AuthorizedResource = Depends(_help_request(AuthorizationAction.RESPOND)),
+    actor: Actor = Depends(get_actor),
+):
+    """The teacher's credentials for this help request's classroom (#467).
+
+    Only the teacher holding the request, while it is in progress; an offer
+    alone does not let a teacher in.
+    """
+    help_requests.admit_teacher_to_classroom(authorized.value, actor.user_id)
+    credentials = classroom.enter(
+        authorized.ref.resource_id,
+        user_name=classroom.display_name(actor.user_id, fallback="Teacher"),
+    )
+    return ClassroomEntry.of(credentials)
 
 
 @router.post("/me/help-requests/{request_id}/notes", response_model=TeacherNoteOut)

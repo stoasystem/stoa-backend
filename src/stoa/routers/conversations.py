@@ -42,6 +42,7 @@ from stoa.security.declared_authorization import (
     service_enforced,
 )
 from stoa.security.identity import Actor
+from stoa.models.classroom import ClassroomEntry
 from stoa.models.error import (
     AttachmentErrorResponse,
     FirstMessageRefusalResponse,
@@ -57,6 +58,7 @@ from stoa.security.declared_authorization import CONVERSATION_CONTENT_READ, STUD
 from stoa.services import (
     ask_question,
     attachment_service,
+    classroom,
     curriculum_service,
     help_requests,
     learning_profile_service,
@@ -775,6 +777,25 @@ async def stream_message(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/{conv_id}/classroom", response_model=ClassroomEntry)
+async def enter_classroom(
+    authorized: AuthorizedResource = Depends(_conversation_respond),
+):
+    """The student's credentials for this conversation's classroom (#467).
+
+    Open while the conversation's help request is pending or in progress.
+    """
+    request_id = authorized.ref.resource_id
+    help_requests.admit_student_to_classroom(
+        help_requests.get(request_id, table=db_table.table())
+    )
+    credentials = classroom.enter(
+        request_id,
+        user_name=classroom.display_name(authorized.ref.student_id, fallback="Student"),
+    )
+    return ClassroomEntry.of(credentials)
 
 
 # ── Teacher-help router (separate prefix: /teacher-help) ──────────────────────

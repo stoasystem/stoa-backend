@@ -516,6 +516,35 @@ def teacher_may(
     return False
 
 
+def admit_student_to_classroom(record: Mapping[str, Any] | None) -> None:
+    """Refuse the student entry to the request's classroom unless it is open (#467).
+
+    The student may wait in the classroom while the request is pending and
+    stay while a teacher has it in progress. A conversation that never asked
+    is `teacher_help_not_requested`; one that ended, however it ended, is
+    `teacher_help_request_closed`.
+    """
+    if record is None:
+        raise HelpRequestViolation(HelpRequestErrorCode.TEACHER_HELP_NOT_REQUESTED)
+    if stored_status(record) not in OPEN:
+        raise HelpRequestViolation(HelpRequestErrorCode.TEACHER_HELP_REQUEST_CLOSED)
+
+
+def admit_teacher_to_classroom(record: Mapping[str, Any], teacher_id: str) -> None:
+    """Refuse the teacher entry to the request's classroom unless they hold it in progress (#467).
+
+    Being offered the request is not enough: the teacher takes it first. A
+    request this teacher does not hold is `help_request_not_held`; one they
+    held that has ended is `teacher_help_request_closed`.
+    """
+    if str(record.get("teacher_id") or "") != teacher_id:
+        raise HelpRequestConflict(
+            "teacher does not hold the request", code=HelpRequestErrorCode.HELP_REQUEST_NOT_HELD
+        )
+    if stored_status(record) != IN_PROGRESS:
+        raise HelpRequestViolation(HelpRequestErrorCode.TEACHER_HELP_REQUEST_CLOSED)
+
+
 def sla(record: Mapping[str, Any]) -> dict[str, Any]:
     """How long the student waited for a first reply (#189 Q4: the first reply).
 
