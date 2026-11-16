@@ -39,6 +39,7 @@ from stoa.services import (
     message_catalog,
     parent_link_service,
     student_evidence,
+    voice_questions,
 )
 from stoa.routers import conversations as conversation_routes
 from stoa.routers.parents import (
@@ -867,3 +868,20 @@ async def request_parent_link(
     except parent_link_repo.ParentLinkConflict as exc:
         raise parent_link_request_conflict() from exc
     return _parent_request_item(link)
+
+
+# --- Voice questions: whether a parent has allowed them (#476) -------------------
+
+
+class StudentVoiceQuestionsResponse(BaseModel):
+    allowed: bool
+
+
+@router.get("/me/voice-questions", response_model=StudentVoiceQuestionsResponse)
+async def get_my_voice_questions(
+    actor: Actor = Depends(_own_account_read),
+) -> StudentVoiceQuestionsResponse:
+    """Whether this student may ask by voice. Off with no linked parent, or until one allows it."""
+    return StudentVoiceQuestionsResponse(
+        allowed=voice_questions.allowed_for_student(actor.user_id)
+    )

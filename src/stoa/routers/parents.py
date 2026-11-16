@@ -56,6 +56,7 @@ from stoa.services import (
     subscription_service,
     teacher_support_allowance_service,
     usage_period,
+    voice_questions,
 )
 from stoa.services.billing_errors import BillingErrorCode
 
@@ -1875,3 +1876,83 @@ async def request_child_link(
     except parent_link_repo.ParentLinkConflict as exc:
         raise parent_link_request_conflict() from exc
     return parent_link_request_item(link)
+
+
+# --- Voice questions: the parent's consent switch (#476) -------------------------
+
+_parent_child_update = authorized(
+    ResourceType.STUDENT,
+    AuthorizationAction.UPDATE,
+    path("child_id"),
+    {CanonicalRole.PARENT: AuthorizationPurpose.PARENT_OVERSIGHT},
+)
+
+
+class ParentVoiceQuestionsResponse(BaseModel):
+    """The switch, and who changed it last: this parent (`changedByMe`) or another."""
+
+    studentId: str
+    allowed: bool
+    changedAt: str | None = None
+    changedByMe: bool | None = None
+
+
+class ParentVoiceQuestionsCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    allowed: bool = Field(strict=True)
+
+
+def _voice_questions_response(
+    child_id: str, parent_id: str, switch: voice_questions.VoiceQuestionSwitch
+) -> ParentVoiceQuestionsResponse:
+    return ParentVoiceQuestionsResponse(
+        studentId=child_id,
+        allowed=switch.allowed,
+        changedAt=switch.changed_at,
+        changedByMe=(switch.changed_by == parent_id) if switch.changed_by else None,
+    )
+
+
+@router.get(
+    "/me/children/{child_id}/voice-questions",
+    response_model=ParentVoiceQuestionsResponse,
+)
+async def get_child_voice_questions(
+    child_id: str,
+    actor: Actor = Depends(get_actor),
+    authorized_child: AuthorizedResource = Depends(_parent_child_read),
+) -> ParentVoiceQuestionsResponse:
+    """Whether this child may ask by voice; off until a linked parent turns it on."""
+    child_id = authorized_child.ref.student_id
+    return _voice_questions_response(
+        child_id, actor.user_id, voice_questions.for_parent(child_id)
+    )
+
+
+@router.put(
+    "/me/children/{child_id}/voice-questions",
+    response_model=ParentVoiceQuestionsResponse,
+)
+async def set_child_voice_questions(
+    child_id: str,
+    body: ParentVoiceQuestionsCommand,
+    actor: Actor = Depends(get_actor),
+    authorized_child: AuthorizedResource = Depends(_parent_child_update),
+) -> ParentVoiceQuestionsResponse:
+    """Turn voice questions on or off for this child. Any linked parent may; the last change wins.
+
+    Each change is recorded with who made it and when, as the consent record.
+    """
+    child_id = authorized_child.ref.student_id
+    parent_facts = authorized_child.facts.parent
+    verdict = parent_facts.verdict if parent_facts else None
+    if verdict is None or not verdict.about(actor.user_id, child_id):
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
+    try:
+        switch = voice_questions.set_by_parent(verdict, body.allowed)
+    except voice_questions.RelationshipNotCurrent as exc:
+        raise SecurityDecisionError(
+            SecurityErrorCode.ACTION_NOT_ALLOWED, internal_detail=str(exc)
+        ) from exc
+    return _voice_questions_response(child_id, actor.user_id, switch)

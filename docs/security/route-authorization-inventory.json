@@ -1344,6 +1344,24 @@
       {
         "action": "read",
         "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [
+      "child_id"
+    ],
+    "method": "GET",
+    "path": "/parents/me/children/{child_id}/voice-questions",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
         "purpose": "self_service",
         "resource_type": "parent_binding"
       }
@@ -1753,6 +1771,22 @@
     "identifiers": [],
     "method": "GET",
     "path": "/students/me/profile",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "students",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/students/me/voice-questions",
     "sensitive": true
   },
   {
@@ -4490,6 +4524,24 @@
     ],
     "method": "PUT",
     "path": "/admin/users/{user_id}/usage-period",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [
+      "child_id"
+    ],
+    "method": "PUT",
+    "path": "/parents/me/children/{child_id}/voice-questions",
     "sensitive": true
   }
 ]
