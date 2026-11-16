@@ -435,7 +435,7 @@ def test_the_registry_is_read_with_one_strong_query(small_table: FakeTable) -> N
 def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     table = lifecycle.table.__wrapped__(monkeypatch)
     lifecycle._dispatch_to(table, lifecycle.TEACHER)
-    assert lifecycle._reply(lifecycle._client(), PRIVATE[0]).status_code in {200, 201}
+    lifecycle._accept_and_reply(lifecycle._client(), PRIVATE[0])
     student = lifecycle.STUDENT
     seed_message(
         table, conversation_id=lifecycle.CONV, role="student", message_id="student-1",

@@ -12,9 +12,9 @@ from __future__ import annotations
 from test_chat_help_request_lifecycle import (
     CONV,
     TEACHER,
+    _accept_and_reply,
     _client,
     _dispatch_to,
-    _reply,
     _student_client,
 )
 from test_chat_help_request_lifecycle import table as table  # noqa: F401 - the fixture
@@ -29,7 +29,7 @@ def _teacher_messages(student) -> list[dict]:
 def test_a_reply_carries_its_teachers_name_as_written(table) -> None:
     table.rows[(f"USER#{TEACHER}", "PROFILE")]["name"] = "Frau Keller"
     _dispatch_to(table, TEACHER)
-    assert _reply(_client(), "Probier jetzt 15 : 5.").status_code in {200, 201}
+    _accept_and_reply(_client(), "Probier jetzt 15 : 5.")
 
     # The name is the one at the time of writing, not looked up afterwards.
     table.rows[(f"USER#{TEACHER}", "PROFILE")]["name"] = "Someone Else"
@@ -43,7 +43,7 @@ def test_a_teacher_without_a_name_is_not_named_by_email(table) -> None:
     profile["name"] = "  "
     profile["email"] = "frau.keller@example.com"
     _dispatch_to(table, TEACHER)
-    assert _reply(_client()).status_code in {200, 201}
+    _accept_and_reply(_client())
 
     student = _student_client()
     [message] = _teacher_messages(student)

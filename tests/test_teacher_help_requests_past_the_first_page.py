@@ -53,6 +53,7 @@ def test_the_teacher_opens_and_answers_a_request_beyond_the_first_page(table) ->
     teacher = _client()
 
     assert teacher.get(f"/teachers/me/help-requests/{REQUEST}").status_code == 200
+    assert _set_status(teacher, "in_progress").status_code == 200
     assert _reply(teacher).status_code in {200, 201}
     assert _set_status(teacher, "resolved").status_code == 200
     assert _help(table)["escalation_status"] == "resolved"
