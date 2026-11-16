@@ -736,3 +736,77 @@ def test_a_record_is_not_deleted_behind_a_fence_that_is_not_this_deletions(
         _run_profile_branch(STUDENT, passes=1)
 
     assert (f"USER#{STUDENT}", _record_row(STUDENT)["SK"]) in table.rows
+
+
+# ---------------------------------------------------------------------------
+# #397: what opening an account and setting its period leave for the daily sweep
+# ---------------------------------------------------------------------------
+
+
+def test_an_account_opened_and_extended_by_an_administrator_leaves_nothing_unregistered(
+    admin_table: AccountAdminTable,
+) -> None:
+    """The daily sweep finds every account these rows name already registered.
+
+    A missing registration closes the registry path for every deletion until
+    somebody backfills it, and each of these writes once left one: the number
+    claim and the email claim (written outside `fenced`), the profile's
+    `created_by` and the period record's `actor_id` (the administrator, whom
+    `fenced` does not register).
+    """
+    from test_account_admin_endpoints import _issue
+
+    from stoa.db import owner_registry
+    from stoa.services import owner_registry_sweep
+
+    _seed_profile(admin_table, "admin-1", "admin")
+    issued = _issue(admin_table)
+    account = issued["userId"]
+    claimed = TestClient(_app({"sub": "nobody", "role": "student"})).post(
+        "/auth/invitations/claim",
+        json={"token": issued["activationToken"], "password": "Startpass1"},
+    )
+    assert claimed.status_code == 200, claimed.text
+    version = int(admin_table.rows[(f"USER#{account}", "PROFILE")]["version"])
+    assert _extend(_client(), account, version=version).status_code == 200
+
+    report = owner_registry_sweep.run(table=admin_table)
+
+    assert report.complete
+    # The identity binding is left out: against the real table it goes through
+    # `fenced`, and only this double takes `create_identity_binding`'s plain-put
+    # fallback, which registers nothing.
+    assert [
+        sample
+        for sample in report.unregistered_samples
+        if not sample["PK"].startswith("IDENTITY#")
+    ] == []
+    registered = {
+        (row["registry_account"], row["registered_pk"].split("#")[0])
+        for row in admin_table.rows.values()
+        if owner_registry.is_registry_row(row)
+    }
+    assert {(account, "ACCOUNT_NUMBER"), (account, "EMAIL"), ("admin-1", "USER")} <= registered
+
+
+def test_an_operators_extension_registers_no_account_for_the_operator(
+    admin_table: AccountAdminTable,
+) -> None:
+    """`operator:agent_mcp` is an audit id, not an account: it gets no registry row."""
+    from stoa.db import owner_registry
+
+    _seed_profile(admin_table, STUDENT, "student")
+
+    usage_period.extend(
+        STUDENT,
+        actor_id="operator:agent_mcp",
+        unit=PeriodUnit.MONTHS,
+        amount=1,
+        source=PeriodSource.GIFTED,
+        payment_reference=None,
+        note=None,
+        expected_version=1,
+    )
+
+    assert _records(admin_table, STUDENT)
+    assert not [row for row in admin_table.rows.values() if owner_registry.is_registry_row(row)]

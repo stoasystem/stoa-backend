@@ -1328,6 +1328,10 @@ def test_建号事务恰好写下profile围栏与占位行(
         (f"USER#{issued['userId']}", "PROFILE"),
         (f"USER#{issued['userId']}", "ACCOUNT_FENCE"),
         ("EMAIL#atomic@example.ch#student", account_email_claim_repo.CLAIM_SK),
+        # #397: the claim's partition under the new account, and the new
+        # account's under the administrator who opened it.
+        (f"USER#{issued['userId']}", "REFERENCED_IN#EMAIL#atomic@example.ch#student"),
+        ("USER#admin-1", f"REFERENCED_IN#USER#{issued['userId']}"),
     }
 
 

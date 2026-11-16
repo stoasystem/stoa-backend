@@ -106,6 +106,27 @@ def registry_item(user_id: str, partition: str, role: str = ROLE_OWNER) -> dict[
     }
 
 
+def reference_put(account: object, partition: str) -> dict[str, Any] | None:
+    """The Put that registers `partition` under an account a row there only names.
+
+    For a row `fenced` does not register by itself: one written outside it (a
+    new profile's email claim), or one that names an account in a field the
+    deletion's matcher does not read (who opened the account, who set its usage
+    period) - the daily sweep counts every account a row names. `None` when
+    `account` is not an account id, or the partition is the account's own: an
+    operator call signs its writes `operator:agent_mcp`, and no account id
+    holds one of the separators a key is built with.
+    """
+    if not isinstance(account, str) or not account.strip():
+        return None
+    name = account.strip()
+    if any(separator in name for separator in ("#", ":", "/")):
+        return None
+    if is_derived_for(partition, name):
+        return None
+    return {"Put": {"Item": registry_item(name, partition, ROLE_REFERENCE)}}
+
+
 def is_registry_row(item: Mapping[str, Any]) -> bool:
     return item.get("entity_type") == ENTITY_TYPE or str(item.get("SK") or "").startswith(
         (OWNER_PREFIX, REFERENCE_PREFIX)

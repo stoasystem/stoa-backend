@@ -10,6 +10,7 @@ import re
 from typing import Any, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -102,14 +103,26 @@ def put_user_with_email_claim(
     consistent - so it comes from the conditional claim, and the claim only means
     anything if it is decided in the same commit as the row it protects. Either the
     pair is taken and the profile exists, or neither happened.
+
+    The same commit registers what `fenced` would have (#397), this being the one
+    profile write made before the account has a fence to write behind: the claim's
+    partition under the new account, and the new account's partition under the
+    account that opened it (`created_by`).
     """
+    operations = [
+        *account_deletion_repo.materialize_profile_with_fence(
+            dict(item), now_iso=_profile_created_at(item)
+        ),
+        claim_operation,
+    ]
+    account = item.get("user_id")
+    claim = claim_operation.get("Put", {}).get("Item", {})
+    registrations = [
+        owner_registry.reference_put(account, str(claim.get("PK") or "")) if claim else None,
+        owner_registry.reference_put(item.get("created_by"), f"USER#{account}"),
+    ]
     db_table.transact(
-        [
-            *account_deletion_repo.materialize_profile_with_fence(
-                dict(item), now_iso=_profile_created_at(item)
-            ),
-            claim_operation,
-        ],
+        [*operations, *(found for found in registrations if found is not None)],
     )
 
 
