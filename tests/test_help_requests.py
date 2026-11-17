@@ -425,20 +425,52 @@ def test_the_offered_teacher_takes_it_and_its_first_reply_is_the_first_response(
     assert world.record["first_teacher_action_at"] == at(7)
 
 
-def test_replying_to_an_offer_takes_it_in_the_same_write(world) -> None:
+def test_a_reply_to_an_offer_not_yet_accepted_is_refused_and_writes_nothing(world) -> None:
+    # A reply never takes the request (#479): the offered teacher accepts first.
     world.ask()
     world.events.clear()
+    before = world.record
+    rows_before = set(world.table.rows)
+
+    with pytest.raises(help_requests.HelpRequestConflict) as refused:
+        _reply(world.record, now=at(3), table=world.table)
+
+    assert refused.value.code == help_requests.HelpRequestErrorCode.HELP_REQUEST_NOT_ACCEPTED
+    assert world.record == before
+    assert world.record["escalation_status"] == "pending"
+    assert set(world.table.rows) == rows_before
+    assert world.events == []
+
+
+def test_once_accepted_the_reply_lands_and_the_student_hears_of_each(world) -> None:
+    world.ask()
+    world.events.clear()
+    help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
 
     written = _reply(world.record, now=at(3), table=world.table)
 
     record = world.record
     assert record["teacher_id"] == TEACHER
     assert record["escalation_status"] == "in_progress"
+    assert record["accepted_at"] == at(2)
     assert record["first_teacher_action_at"] == at(3)
     assert (f"CONV#{CONV}", f"NOTE#{written.id}") in world.table.rows
-    assert [row for key, row in world.table.rows.items() if key[1].startswith("MSG#") and row["role"] == "teacher"]
-    # The student hears of the reply, not separately of the take-over.
-    assert [name for name, _ in world.events] == ["emit_teacher_help_reply"]
+    assert [name for name, _ in world.events] == [
+        "emit_teacher_help_takeover",
+        "emit_teacher_help_reply",
+    ]
+
+
+def test_a_reply_to_a_request_another_teacher_accepted_is_refused(world) -> None:
+    world.ask()
+    help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
+    before = world.record
+
+    with pytest.raises(help_requests.HelpRequestConflict) as refused:
+        _reply(world.record, now=at(3), table=world.table, teacher_id=OTHER)
+
+    assert refused.value.code == help_requests.HelpRequestErrorCode.HELP_REQUEST_NOT_HELD
+    assert world.record == before
 
 
 def test_a_teacher_without_the_offer_cannot_take_it(world) -> None:
@@ -877,6 +909,7 @@ def test_a_reply_is_one_transaction_and_one_notice(world, monkeypatch) -> None:
 
 def test_a_reply_without_a_name_is_signed_teacher(world) -> None:
     world.ask()
+    help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
 
     written = _reply(world.record, now=at(3), table=world.table, author_name=None)
 
@@ -888,8 +921,9 @@ def test_a_teacher_neither_holding_nor_offered_cannot_reply(world) -> None:
     world.ask()
     world.events.clear()
 
-    with pytest.raises(help_requests.HelpRequestConflict):
+    with pytest.raises(help_requests.HelpRequestConflict) as refused:
         _reply(world.record, now=at(3), table=world.table, teacher_id=OTHER)
+    assert refused.value.code == help_requests.HelpRequestErrorCode.HELP_REQUEST_NOT_HELD
     assert not [key for key in world.table.rows if key[1].startswith("NOTE#")]
     assert world.events == []
 

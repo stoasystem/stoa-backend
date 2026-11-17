@@ -1,6 +1,6 @@
 """A help request's refusals (`stoa.services.help_requests.HelpRequestErrorCode`).
 
-The first three are read by the teacher working on a request, addressed as the
+The first four are read by the teacher working on a request, addressed as the
 teacher notifications are: `Sie`, `vous`, `Lei`. The rest are read by the
 student who asked, addressed as the web client addresses them: `du`, `tu`,
 `tu`.
@@ -22,6 +22,12 @@ TEXT: dict[str, dict[str, str]] = {
             "Solo l'insegnante che segue questa richiesta di aiuto o a cui è stata proposta "
             "può modificarla."
         ),
+    },
+    "error.help_request_not_accepted": {
+        "de": "Bitte nehmen Sie diese Anfrage zuerst an, bevor Sie antworten.",
+        "en": "Accept this help request before you reply to it.",
+        "fr": "Acceptez d'abord cette demande d'aide avant d'y répondre.",
+        "it": "Accetti prima questa richiesta di aiuto, poi potrà rispondere.",
     },
     "error.help_request_changed": {
         "de": "Diese Anfrage hat sich geändert. Bitte laden Sie sie neu und versuchen Sie es noch einmal.",

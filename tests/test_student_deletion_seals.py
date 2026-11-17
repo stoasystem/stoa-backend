@@ -56,7 +56,7 @@ class _ExternalClient:
 def table(monkeypatch):
     table = lifecycle.table.__wrapped__(monkeypatch)
     lifecycle._dispatch_to(table, lifecycle.TEACHER)
-    assert lifecycle._reply(lifecycle._client(), PRIVATE[0]).status_code in {200, 201}
+    lifecycle._accept_and_reply(lifecycle._client(), PRIVATE[0])
     student = lifecycle.STUDENT
     seed_message(
         table,

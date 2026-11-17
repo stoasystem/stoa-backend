@@ -36634,7 +36634,7 @@
     },
     "/teachers/me/help-requests/{request_id}/notes": {
       "post": {
-        "description": "Add a teacher note to a help request (stored in the conversation).\n\nOnly the teacher the request is with posts into it, and its images with it\n(#145): the request's authorization is settled before an upload is looked at.",
+        "description": "Add a teacher note to a help request (stored in the conversation).\n\nOnly the teacher the request is with posts into it, and its images with it\n(#145): the request's authorization is settled before an upload is looked at.\nThe teacher it is only offered to accepts it first (`PATCH status=in_progress`);\ntheir reply is refused `help_request_not_accepted` and changes nothing (#479).",
         "operationId": "add_note_teachers_me_help_requests__request_id__notes_post",
         "parameters": [
           {

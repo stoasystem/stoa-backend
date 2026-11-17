@@ -32,9 +32,9 @@ from test_chat_help_request_lifecycle import (
     STUDENT,
     TEACHER,
     _client as _teacher_client,
+    _accept_and_reply,
     _dispatch_to,
     _help,
-    _reply,
     _set_status,
 )
 from test_chat_help_request_lifecycle import table as table  # noqa: F401 - the fixture
@@ -134,7 +134,7 @@ def test_a_report_names_the_ai_answer_it_is_about(said) -> None:
 
 def test_a_student_reports_the_teacher_reply_in_their_help_request(said) -> None:
     _dispatch_to(said, TEACHER)
-    assert _reply(_teacher_client(TEACHER), TEACHER_REPLY).status_code in {200, 201}
+    _accept_and_reply(_teacher_client(TEACHER), TEACHER_REPLY)
 
     response = _report(_client(STUDENT, "student"), "teacher_reply")
 

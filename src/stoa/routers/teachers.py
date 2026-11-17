@@ -1152,6 +1152,8 @@ async def add_note(
 
     Only the teacher the request is with posts into it, and its images with it
     (#145): the request's authorization is settled before an upload is looked at.
+    The teacher it is only offered to accepts it first (`PATCH status=in_progress`);
+    their reply is refused `help_request_not_accepted` and changes nothing (#479).
     """
     conv = dict(authorized.value)
     teacher_id = actor.user_id

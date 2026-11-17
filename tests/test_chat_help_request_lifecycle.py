@@ -171,6 +171,12 @@ def _reply(client: TestClient, content: str = "Look at the denominators first.")
     return client.post(f"/teachers/me/help-requests/{REQUEST}/notes", json={"content": content})
 
 
+def _accept_and_reply(client: TestClient, content: str = "Look at the denominators first.") -> None:
+    """Accepting is its own step; a reply never takes the request (#479)."""
+    assert _set_status(client, "in_progress").status_code == 200
+    assert _reply(client, content).status_code in {200, 201}
+
+
 
 
 def test_the_dispatched_teacher_accepts_by_marking_it_in_progress(table):
@@ -226,20 +232,51 @@ def test_resolving_straight_from_the_offer_accepts_and_resolves_in_one_write(tab
     _nothing_waits()
 
 
-def test_replying_to_an_offer_accepts_it_with_the_reply(table):
+def test_replying_to_an_offer_not_yet_accepted_is_refused_and_changes_nothing(table):
+    # A reply no longer takes the request (#479): the teacher accepts it first.
     _dispatch_to(table, TEACHER)
+    before = (dict(_conv(table)), dict(_help(table)))
+    rows_before = set(table.rows)
 
     response = _reply(_client())
 
-    assert response.status_code in {200, 201}
+    assert_violation(response, "help_request_not_accepted", action="accept_help_request")
+    assert _unchanged(table, before)
+    assert set(table.rows) == rows_before
+    assert _help(table)["escalation_status"] == "pending"
+    assert "teacher_id" not in _help(table)
+
+
+def test_once_accepted_the_teachers_reply_is_taken(table):
+    _dispatch_to(table, TEACHER)
+    client = _client()
+    assert _set_status(client, "in_progress").status_code == 200
+    accepted_at = _help(table)["accepted_at"]
+
+    response = _reply(client)
+
+    assert response.status_code in {200, 201}, response.text
     record = _help(table)
     assert record["teacher_id"] == TEACHER
     assert record["escalation_status"] == "in_progress"
+    assert record["accepted_at"] == accepted_at
     # The reply is the request's first response (#189).
-    assert record["first_teacher_action_at"] == record["accepted_at"]
+    assert record["first_teacher_action_at"]
     notes = [row for key, row in table.rows.items() if key[0] == f"CONV#{CONV}" and key[1].startswith("NOTE#")]
     assert len(notes) == 1
     assert notes[0]["teacher_id"] == TEACHER
+
+
+def test_a_reply_to_a_request_offered_to_someone_else_is_refused(table):
+    _dispatch_to(table, TEACHER)
+    before = (dict(_conv(table)), dict(_help(table)))
+    rows_before = set(table.rows)
+
+    # The policy does not let a teacher it was not offered to reach it at all.
+    assert _reply(_client(OTHER_TEACHER)).status_code == 404
+
+    assert _unchanged(table, before)
+    assert set(table.rows) == rows_before
 
 
 def test_another_teacher_cannot_take_an_offer_made_to_someone_else(table):
@@ -579,7 +616,7 @@ def _assert_waiting_without(table: FakeTable, teacher_id: str, *, dispatch: str 
 def test_deleting_the_teacher_returns_an_open_request_to_waiting(table, accepted):
     _dispatch_to(table, TEACHER)
     if accepted:
-        assert _reply(_client()).status_code in {200, 201}
+        _accept_and_reply(_client())
 
     results = _delete_teacher(table)
 
@@ -633,7 +670,7 @@ def test_a_request_that_moves_during_the_scrub_is_retried_not_overwritten(table,
     # write, so its version moves); the scrub is bound to what it read, so the
     # pass is retried, then completes.
     _dispatch_to(table, TEACHER)
-    assert _reply(_client()).status_code in {200, 201}
+    _accept_and_reply(_client())
     real_transact = db_table.transact
     moved = []
 
@@ -685,7 +722,7 @@ def _race_once(monkeypatch, mutate) -> list:
 
 def test_a_request_whose_version_moves_during_the_scrub_is_retried(table, monkeypatch):
     _dispatch_to(table, TEACHER)
-    assert _reply(_client()).status_code in {200, 201}
+    _accept_and_reply(_client())
 
     def bump(t):
         t.rows[HELP_KEY]["version"] = t.rows[HELP_KEY]["version"] + 1
@@ -766,8 +803,7 @@ def _student_client() -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-@pytest.mark.parametrize("accept_first", [False, True], ids=["reply_accepts", "accepted_then_reply"])
-def test_the_student_reads_the_teachers_reply_before_and_after_resolving(table, accept_first):
+def test_the_student_reads_the_teachers_reply_before_and_after_resolving(table):
     # The student's history reader refuses the whole conversation if any message
     # breaks the message contract. The teacher's message was written without it,
     # so in production on 2026-09-28 the student could no longer open the
@@ -775,8 +811,7 @@ def test_the_student_reads_the_teachers_reply_before_and_after_resolving(table, 
     _dispatch_to(table, TEACHER)
     teacher, student = _client(), _student_client()
     assert student.get(f"/conversations/{CONV}").status_code == 200
-    if accept_first:
-        assert _set_status(teacher, "in_progress").status_code == 200
+    assert _set_status(teacher, "in_progress").status_code == 200
 
     assert _reply(teacher, "Probier jetzt 15 : 5.").status_code in {200, 201}
     after_reply = student.get(f"/conversations/{CONV}")
@@ -847,14 +882,9 @@ def _notes(table: FakeTable) -> list[dict]:
     return [row for key, row in table.rows.items() if key[0] == f"CONV#{CONV}" and key[1].startswith("NOTE#")]
 
 
-@pytest.mark.parametrize("held", [False, True], ids=["reply_accepts", "holder_replies"])
-def test_a_reply_is_stamped_as_the_students_conversation_row(table, held):
+def test_a_reply_is_stamped_as_the_students_conversation_row(table):
     _dispatch_to(table, TEACHER)
-    client = _client()
-    if held:
-        assert _set_status(client, "in_progress").status_code == 200
-
-    assert _reply(client).status_code in {200, 201}
+    _accept_and_reply(_client())
 
     (note,) = _notes(table)
     assert note["entity_type"] == "conversation_teacher_note"
@@ -879,7 +909,7 @@ def test_a_holders_reply_is_refused_once_the_students_deletion_has_begun(table):
 
 def test_deleting_the_student_removes_the_teachers_replies_from_their_conversation(table):
     _dispatch_to(table, TEACHER)
-    assert _reply(_client(), "Probier jetzt 15 : 5.").status_code in {200, 201}
+    _accept_and_reply(_client(), "Probier jetzt 15 : 5.")
     table.rows[(f"USER#{STUDENT}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
     branch = account_deletion_service.BRANCH_HANDLERS["conversation_messages"]
 
@@ -901,20 +931,6 @@ def test_deleting_the_student_removes_the_teachers_replies_from_their_conversati
     assert "content" not in note
     assert "teacher_name" not in note
     assert "Probier" not in json.dumps(note, default=str)
-
-
-def test_a_reply_that_would_accept_is_refused_once_the_students_deletion_has_begun(table):
-    # The accepting reply is written behind the student's fence, as every
-    # write that puts rows in the student's conversation is (#189).
-    _dispatch_to(table, TEACHER)
-    table.rows[(f"USER#{STUDENT}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
-    rows_before = set(table.rows)
-    before = (dict(_conv(table)), dict(_help(table)))
-
-    assert _reply(_client()).status_code == 409
-
-    assert set(table.rows) == rows_before
-    assert _unchanged(table, before)
 
 
 def test_a_reply_is_stamped_with_the_generation_its_fence_checks(table):

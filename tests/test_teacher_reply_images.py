@@ -207,12 +207,10 @@ def test_a_teacher_uploads_only_images_for_a_reply(api) -> None:
 # --- The reply carries it, and the student reads it ---
 
 
-@pytest.mark.parametrize("accept_first", [False, True], ids=["reply_accepts", "accepted_then_reply"])
-def test_the_student_sees_the_image_a_teacher_replied_with(table, api, accept_first) -> None:
+def test_the_student_sees_the_image_a_teacher_replied_with(table, api) -> None:
     _dispatch_to(table, TEACHER)
     teacher = api.client()
-    if accept_first:
-        assert _set_status(teacher, "in_progress").status_code == 200
+    assert _set_status(teacher, "in_progress").status_code == 200
     data = _png()
     upload_id = api.uploaded(teacher, data)
 
@@ -245,6 +243,8 @@ def test_a_consumed_upload_leaves_the_table_a_week_later_not_before(table, api) 
 
     _dispatch_to(table, TEACHER)
     teacher = api.client()
+    # A reply never takes the request: the teacher accepts it first (#479).
+    assert _set_status(teacher, "in_progress").status_code == 200
     upload_id = api.uploaded(teacher, _png())
     row = table.rows[(f"UPLOAD#{upload_id}", "META")]
     assert "expires_at" not in row
@@ -259,6 +259,7 @@ def test_a_consumed_upload_leaves_the_table_a_week_later_not_before(table, api) 
 def test_the_teacher_sees_their_image_in_the_request_too(table, api) -> None:
     _dispatch_to(table, TEACHER)
     teacher = api.client()
+    assert _set_status(teacher, "in_progress").status_code == 200
     data = _png()
     [sent] = _reply(teacher, api.uploaded(teacher, data)).json()["attachments"]
 
@@ -282,6 +283,7 @@ def test_the_image_goes_with_the_students_conversation(table, api) -> None:
     # it too, stored image and all.
     _dispatch_to(table, TEACHER)
     teacher = api.client()
+    assert _set_status(teacher, "in_progress").status_code == 200
     [sent] = _reply(teacher, api.uploaded(teacher, _png())).json()["attachments"]
     # Neither side removes it from the conversation on its own.
     assert teacher.delete(f"/files/attachments/{sent['attachmentId']}").status_code == 404
@@ -327,6 +329,7 @@ def test_the_teachers_account_deletion_completes_and_the_image_stays_the_student
     # deletion finishes without it, and the student keeps reading it.
     _dispatch_to(table, TEACHER)
     teacher = api.client()
+    assert _set_status(teacher, "in_progress").status_code == 200
     data = _png()
     upload_id = api.uploaded(teacher, data)
     [sent] = _reply(teacher, upload_id).json()["attachments"]
@@ -343,6 +346,7 @@ def test_the_teachers_account_deletion_completes_and_the_image_stays_the_student
 def test_the_students_account_deletion_takes_the_teachers_image(table, api) -> None:
     _dispatch_to(table, TEACHER)
     teacher = api.client()
+    assert _set_status(teacher, "in_progress").status_code == 200
     upload_id = api.uploaded(teacher, _png())
     [sent] = _reply(teacher, upload_id).json()["attachments"]
 
@@ -357,6 +361,7 @@ def test_the_students_account_deletion_takes_the_teachers_image(table, api) -> N
 def test_a_reply_carries_several_images_in_order(table, api) -> None:
     _dispatch_to(table, TEACHER)
     teacher = api.client()
+    assert _set_status(teacher, "in_progress").status_code == 200
     first, second = _png(1), _png(2)
     uploads = [api.uploaded(teacher, first), api.uploaded(teacher, second)]
 
@@ -373,8 +378,10 @@ def test_a_reply_carries_several_images_in_order(table, api) -> None:
 
 def test_a_reply_without_images_is_unchanged(table, api) -> None:
     _dispatch_to(table, TEACHER)
+    teacher = api.client()
+    assert _set_status(teacher, "in_progress").status_code == 200
 
-    replied = api.client().post(
+    replied = teacher.post(
         f"/teachers/me/help-requests/{REQUEST}/notes", json={"content": "Nur Text."}
     )
 
@@ -420,6 +427,7 @@ def test_an_image_moderation_could_not_judge_does_not_make_a_reply(table, api) -
 def test_an_image_is_sent_once(table, api) -> None:
     _dispatch_to(table, TEACHER)
     teacher = api.client()
+    assert _set_status(teacher, "in_progress").status_code == 200
     upload_id = api.uploaded(teacher, _png())
     assert _reply(teacher, upload_id).status_code == 200
 

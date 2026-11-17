@@ -1152,6 +1152,21 @@
         "retryable": false
       }
     },
+    "help_request_not_accepted": {
+      "action": "accept_help_request",
+      "domain": "help_request",
+      "http_status": 409,
+      "message_key": "error.help_request_not_accepted",
+      "public_fields": [
+        "action"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "help_request_not_held": {
       "action": "refresh_help_request",
       "domain": "help_request",

@@ -3,7 +3,7 @@
 A teacher's reply is written into the student's conversation; until now the
 student was never told. Each reply, and each take-over, now leaves one bell
 notification for the conversation's own student, pointing at the conversation.
-A reply that takes the request in the same write is one event, not two.
+A reply never takes the request (#479), so a take-over and a reply are two events.
 """
 
 from __future__ import annotations
@@ -97,14 +97,14 @@ def test_each_reply_tells_the_student_once(table, sent) -> None:
     assert sent[0]["event_id"] != sent[1]["event_id"]
 
 
-def test_a_reply_that_takes_the_offer_is_one_notification(table, sent) -> None:
+def test_a_reply_to_an_offer_not_yet_accepted_tells_nobody(table, sent) -> None:
+    # A reply no longer takes the request (#479): refused, nothing announced.
     _dispatch_to(table, TEACHER)
 
     response = _reply(_client())
 
-    assert response.status_code in {200, 201}, response.text
-    assert [event["event_type"] for event in sent] == ["teacher_reply"]
-    _for_the_student(sent[0])
+    assert response.status_code == 409, response.text
+    assert sent == []
 
 
 def test_a_refused_reply_tells_nobody(table, sent) -> None:

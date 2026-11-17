@@ -114,6 +114,8 @@ class HelpRequestErrorCode(StrEnum):
 
     # A teacher's write (`teachers.py`): the frontend's `CONFLICT_CODES`.
     HELP_REQUEST_NOT_HELD = "help_request_not_held"
+    # Replying to a request only offered: the teacher accepts it first (#479).
+    HELP_REQUEST_NOT_ACCEPTED = "help_request_not_accepted"
     HELP_REQUEST_CHANGED = "help_request_changed"
     HELP_REQUEST_UNAVAILABLE = "help_request_unavailable"
     # The student asking (`conversations.py`). An ended usage period is refused
@@ -138,6 +140,7 @@ class HelpRequestErrorCode(StrEnum):
 
 class HelpRequestClientAction(StrEnum):
     REFRESH_HELP_REQUEST = "refresh_help_request"
+    ACCEPT_HELP_REQUEST = "accept_help_request"
     RETRY_SAME_CASE = "retry_same_case"
     RETRY_LATER = "retry_later"
     CONTACT_ADMINISTRATOR = "contact_administrator"
@@ -156,6 +159,7 @@ _Action = HelpRequestClientAction
 # (`stoa.services.message_catalog.errors.help_request`).
 HELP_REQUEST_ERROR_REGISTRY: dict[HelpRequestErrorCode, RuleContract] = {
     _Code.HELP_REQUEST_NOT_HELD: _sent_with_action(_Action.REFRESH_HELP_REQUEST, 409),
+    _Code.HELP_REQUEST_NOT_ACCEPTED: _sent_with_action(_Action.ACCEPT_HELP_REQUEST, 409),
     _Code.HELP_REQUEST_CHANGED: _sent_with_action(_Action.REFRESH_HELP_REQUEST, 409),
     _Code.HELP_REQUEST_UNAVAILABLE: RuleContract(
         503, _Action.RETRY_LATER, retryable=True, max_attempts=1
@@ -1124,8 +1128,8 @@ def take_or_finish(
 ) -> dict[str, Any]:
     """Take a request (`in_progress`), finish it (`resolved`), or both at once.
 
-    The teacher it is offered to takes it with their first write; the holder
-    moves it on. Returns the record as written. When this write took the
+    The teacher it is offered to takes it here, and only here: a reply does
+    not take a request (#479). The holder moves it on. Returns the record as written. When this write took the
     request, the student is told a teacher has it, once the write has landed
     (#215 decision 4); telling is best effort. Raises `HelpRequestConflict`
     when anything the move was decided on has moved.
@@ -1154,18 +1158,15 @@ def _advance(
     target: str,
     now: str | None = None,
     resolution_note: str | None = None,
-    reply_operations: Sequence[dict[str, Any]] = (),
     table: Any | None = None,
 ) -> dict[str, Any]:
     """Move a request to `target` for `teacher_id`, telling nobody.
 
-    ``reply_operations`` is a reply written in the same transaction - replying
-    to an offer takes it - and a reply is what stamps the first response
-    (#189 Q4). Every condition the decision rested on is in the write: the
-    exact live offer, that this teacher has not let it lapse before, the
-    teacher's active account and profile, the student's fence and the
-    record's version. If any moved, nothing is written and
-    `HelpRequestConflict` is raised.
+    This is the only way a teacher takes a request (#479); a reply never does.
+    Every condition the decision rested on is in the write: the exact live
+    offer, that this teacher has not let it lapse before, the teacher's active
+    account and profile, the student's fence and the record's version. If any
+    moved, nothing is written and `HelpRequestConflict` is raised.
     """
     if target not in TEACHER_TARGETS:
         raise ValueError(f"unsupported help request status: {target}")
@@ -1203,14 +1204,11 @@ def _advance(
         changes["escalation_resolved_at"] = timestamp
         if resolution_note:
             changes["resolution_note"] = resolution_note
-    if reply_operations and not record.get("first_teacher_action_at"):
-        changes["first_teacher_action_at"] = timestamp
     return _write(
         record,
         changes,
         condition=condition,
         values=values,
-        extra=reply_operations,
         fence=True,
         teacher=_teacher_standing(teacher_id, store),
         table=store,
@@ -1251,21 +1249,21 @@ def reply(
     """The holder's reply, and its images, written only while the request is theirs.
 
     The reply is a `NOTE#` row and a teacher message in the student's
-    conversation, written in one transaction with the record. A request the
-    teacher is offered is taken by the reply; a resolved request still takes
-    its holder's replies (#189 decision 2); the first reply is the request's
+    conversation, written in one transaction with the record. Only the
+    teacher holding the request replies: the teacher it is only offered to is
+    refused `help_request_not_accepted` and takes it first with
+    `take_or_finish` (#479); anyone else is refused `help_request_not_held`.
+    A refused reply writes nothing. A resolved request still takes its
+    holder's replies (#189 decision 2); the first reply is the request's
     first response. The rows are the student's: stamped with the student as
     owner and written behind their account fence, so the student's deletion
     removes them and a late reply cannot bring them back (#74). The teacher's
     identity stays on them when the teacher is deleted (user decision,
-    2026-09-28). Once written the student is told of the reply - one event,
-    also when the reply took the request - best effort.
+    2026-09-28). Once written the student is told of the reply, best effort.
     """
     timestamp = now or _now()
     store: Any = table or db_table.table()
-    holds = str(record.get("teacher_id") or "") == teacher_id
-    if not holds and not holder_or_offered(record, teacher_id):
-        raise HelpRequestConflict("help request is not this teacher's")
+    _refuse_reply_unless_held(record, teacher_id)
     conversation_id = _text(record.get("conversation_id"))
     student_id = _text(record.get("student_id"))
     try:
@@ -1328,28 +1326,20 @@ def reply(
         message_put,
         *image_operations,
     )
-    if holds:
-        changes: dict[str, Any] = {"updated_at": timestamp}
-        if not record.get("first_teacher_action_at"):
-            changes["first_teacher_action_at"] = timestamp
-        written = _write(
-            record,
-            changes,
-            condition="teacher_id = :teacher",
-            values={":teacher": teacher_id},
-            extra=reply_operations,
-            fence=True,
-            table=store,
-        )
-    else:
-        written = _advance(
-            record,
-            teacher_id=teacher_id,
-            target=IN_PROGRESS,
-            now=timestamp,
-            reply_operations=reply_operations,
-            table=store,
-        )
+    changes: dict[str, Any] = {"updated_at": timestamp}
+    if not record.get("first_teacher_action_at"):
+        changes["first_teacher_action_at"] = timestamp
+    # The condition holds the reply to the teacher holding it at write time:
+    # a request taken by nobody, or by someone else since the read, is refused.
+    written = _write(
+        record,
+        changes,
+        condition="teacher_id = :teacher",
+        values={":teacher": teacher_id},
+        extra=reply_operations,
+        fence=True,
+        table=store,
+    )
     try:
         notification_service.emit_teacher_help_reply(
             conversation=written, teacher_id=teacher_id, reply_id=note_id
@@ -1366,6 +1356,25 @@ def reply(
         format=format,
         attachment_ids=list(attachment_ids or []),
         attachments=attachments,
+    )
+
+
+def _refuse_reply_unless_held(record: Mapping[str, Any], teacher_id: str) -> None:
+    """Refuse a reply from anyone but the teacher holding the request (#479).
+
+    The teacher it is offered to is told to accept it first; anyone else that
+    it is not theirs.
+    """
+    holder = str(record.get("teacher_id") or "")
+    if holder == teacher_id:
+        return
+    if not holder and holder_or_offered(record, teacher_id):
+        raise HelpRequestConflict(
+            "teacher replied to a request offered, not accepted",
+            code=HelpRequestErrorCode.HELP_REQUEST_NOT_ACCEPTED,
+        )
+    raise HelpRequestConflict(
+        "help request is not this teacher's", code=HelpRequestErrorCode.HELP_REQUEST_NOT_HELD
     )
 
 
