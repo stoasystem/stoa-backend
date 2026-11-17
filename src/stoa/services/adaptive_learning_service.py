@@ -78,6 +78,26 @@ def _question_rows(student_id: str) -> list[dict[str, Any]]:
     return [dict(item) for item in raw_items]
 
 
+def weak_topics(student_id: str) -> list[dict[str, Any]]:
+    """The student's weak topics, as `get_memory_summary` reports them to the student.
+
+    They come from the student's own evidence alone - their questions, their
+    mistakes and what their Ask answers named - so this reads only the
+    student's partitions. `get_memory_summary` also builds practice
+    recommendations, which list the subject's exercises once per weak topic and
+    scan the table for the student's assignments; a question's answer, which
+    needs only these, must not wait for that (#496).
+    """
+    evidence = student_evidence.for_student(student_id)
+    profile = learning_profile_service.build_learning_profile(
+        student_id=student_id,
+        questions=_question_rows(student_id),
+        mistakes=list(evidence.mistakes),
+        asked=asked_knowledge_repo.list_for_student(student_id),
+    )
+    return list(profile.get("weakTopics", []))
+
+
 def get_memory_summary(
     *,
     student_id: str,

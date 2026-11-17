@@ -8,6 +8,12 @@ unlike a test that re-implements the logic.
 Covers the regression where the extraction read snake_case keys that
 `adaptive_learning_service._memory_response` never emits, which silently
 disabled personalisation for every request.
+
+The weak topics are read through `adaptive_learning_service.weak_topics`, not
+the whole memory summary, whose practice recommendations read the published
+curriculum once per weak topic (#496);
+`test_ask_reads_do_not_grow_with_curriculum` holds the two to the same weak
+topics.
 """
 from __future__ import annotations
 
@@ -22,19 +28,20 @@ from stoa.services import adaptive_learning_service, star_map_candidates
 from stoa.services.ask_question import dispatch
 
 
-def _run_message_command(model, monkeypatch, *, memory_summary: Any) -> dict[str, Any]:
+def _run_message_command(model, monkeypatch, *, weak_topics: Any) -> dict[str, Any]:
     """Submit one question, returning what the model was sent.
 
-    `memory_summary` is returned by the patched adaptive-learning service; pass
+    `weak_topics` is returned by the patched adaptive-learning service; pass
     an Exception instance to make the lookup raise.
     """
 
-    def fake_memory_summary(**_kwargs):
-        if isinstance(memory_summary, Exception):
-            raise memory_summary
-        return memory_summary
+    def fake_weak_topics(student_id: str):
+        assert student_id == "student-1"
+        if isinstance(weak_topics, Exception):
+            raise weak_topics
+        return weak_topics
 
-    monkeypatch.setattr(adaptive_learning_service, "get_memory_summary", fake_memory_summary)
+    monkeypatch.setattr(adaptive_learning_service, "weak_topics", fake_weak_topics)
     monkeypatch.setattr(star_map_candidates, "for_student", lambda *_a, **_k: None)
     monkeypatch.setattr(dispatch, "override", dispatch.in_process)
 
@@ -52,27 +59,16 @@ def _memory_context(system: str) -> str | None:
     return system.split(marker, 1)[1].split("\n", 1)[0]
 
 
-def _summary(weak_topics: list[dict[str, Any]]) -> dict[str, Any]:
-    """A memory summary shaped like the real _memory_response output."""
-    return {
-        "studentId": "student-1",
-        "roleView": "student",
-        "weakTopics": weak_topics,
-        "memorySnapshots": [],
-        "recommendations": [],
-    }
-
-
 # ── The regression this suite exists for ─────────────────────────────────────
 
 def test_weak_topics_reach_the_ai_prompt(table, model, monkeypatch):
     captured = _run_message_command(
         model,
         monkeypatch,
-        memory_summary=_summary([
+        weak_topics=[
             {"subject": "math", "topicId": "fractions", "label": "Fractions", "count": 5},
             {"subject": "math", "topicId": "decimals", "label": "Decimals", "count": 2},
-        ]),
+        ],
     )
     context = captured["memory_context"]
     assert context is not None, "memory_context must be populated when weak topics exist"
@@ -80,23 +76,10 @@ def test_weak_topics_reach_the_ai_prompt(table, model, monkeypatch):
     assert "Decimals" in context
 
 
-def test_snake_case_summary_yields_no_context(table, model, monkeypatch):
-    """Documents the exact shape that caused the silent regression."""
-    captured = _run_message_command(
-        model,
-        monkeypatch,
-        memory_summary={
-            "snapshots": [{"weak_knowledge_points": [{"label": "Fractions"}]}],
-            "weak_topics": [{"label": "Fractions"}],
-        },
-    )
-    assert captured["memory_context"] is None
-
-
 # ── Graceful degradation ─────────────────────────────────────────────────────
 
 def test_no_weak_topics_sends_no_context(table, model, monkeypatch):
-    captured = _run_message_command(model, monkeypatch, memory_summary=_summary([]))
+    captured = _run_message_command(model, monkeypatch, weak_topics=[])
     assert captured["memory_context"] is None
 
 
@@ -104,7 +87,7 @@ def test_memory_lookup_failure_does_not_block_the_answer(table, model, monkeypat
     """A broken memory service must degrade to an un-personalised answer."""
     captured = _run_message_command(
         model,
-        monkeypatch, memory_summary=RuntimeError("dynamo unavailable")
+        monkeypatch, weak_topics=RuntimeError("dynamo unavailable")
     )
     assert captured["memory_context"] is None
     assert captured["content"] == "how do I add fractions?"
@@ -116,7 +99,7 @@ def test_topic_id_used_when_label_is_missing(table, model, monkeypatch):
     captured = _run_message_command(
         model,
         monkeypatch,
-        memory_summary=_summary([{"subject": "math", "topicId": "long_division", "count": 3}]),
+        weak_topics=[{"subject": "math", "topicId": "long_division", "count": 3}],
     )
     assert "long_division" in captured["memory_context"]
 
@@ -124,7 +107,7 @@ def test_topic_id_used_when_label_is_missing(table, model, monkeypatch):
 def test_context_is_capped_and_deduplicated(table, model, monkeypatch):
     topics = [{"subject": "math", "topicId": f"t{i}", "label": f"Topic{i}", "count": 1} for i in range(20)]
     topics.append({"subject": "math", "topicId": "t0", "label": "Topic0", "count": 1})
-    captured = _run_message_command(model, monkeypatch, memory_summary=_summary(topics))
+    captured = _run_message_command(model, monkeypatch, weak_topics=topics)
     context = captured["memory_context"]
     assert context.count(",") == 7, "Expected exactly 8 topics (7 separators)"
     assert context.count("Topic0") == 1
@@ -134,7 +117,7 @@ def test_malformed_topic_entries_are_skipped(table, model, monkeypatch):
     captured = _run_message_command(
         model,
         monkeypatch,
-        memory_summary=_summary(["not-a-dict", None, {"label": "Fractions"}, {"label": "  "}]),
+        weak_topics=["not-a-dict", None, {"label": "Fractions"}, {"label": "  "}],
     )
     assert captured["memory_context"] == "Known weak topics for this student: Fractions."
 

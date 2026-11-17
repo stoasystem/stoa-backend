@@ -71,6 +71,7 @@ def stub_memory_summary(monkeypatch: pytest.MonkeyPatch) -> None:
         "get_memory_summary",
         lambda **_kwargs: {"weakTopics": [], "recommendations": [], "memorySnapshots": []},
     )
+    monkeypatch.setattr(adaptive_learning_service, "weak_topics", lambda *_a, **_k: [])
     monkeypatch.setattr(star_map_candidates, "for_student", lambda *_a, **_k: None)
 
 
