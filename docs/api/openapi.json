@@ -13699,6 +13699,35 @@
         "title": "TeacherActivationResponse",
         "type": "object"
       },
+      "TeacherAiHelpedStar": {
+        "description": "A lit star whose right answers came mostly after asking AI (#451).",
+        "properties": {
+          "askedAi": {
+            "title": "Askedai",
+            "type": "integer"
+          },
+          "independent": {
+            "title": "Independent",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unitId": {
+            "title": "Unitid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unitId",
+          "title",
+          "independent",
+          "askedAi"
+        ],
+        "title": "TeacherAiHelpedStar",
+        "type": "object"
+      },
       "TeacherApplicationRequest": {
         "additionalProperties": false,
         "properties": {
@@ -13966,6 +13995,13 @@
       },
       "TeacherHelpRequestDetail": {
         "properties": {
+          "aiHelpedStars": {
+            "items": {
+              "$ref": "#/components/schemas/TeacherAiHelpedStar"
+            },
+            "title": "Aihelpedstars",
+            "type": "array"
+          },
           "commonErrorCause": {
             "anyOf": [
               {
