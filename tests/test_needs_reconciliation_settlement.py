@@ -32,11 +32,12 @@ from fakes.ask_question import (
 )
 from fakes.ask_question import patch_store, store_call
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from fakes.bedrock import FakeBedrock
+from fakes.model import FakeModel, install
 from stoa.db import table as db_table
 from stoa.db.repositories import allowance_repo, weekly_counter
 from stoa.jobs import conversation_generation
 from stoa.services import ai_service, allowance_service
+from stoa.services import model_call
 from stoa.services.ask_question import _admission
 from stoa.services.ask_question import _sweep as ask_question_sweep
 
@@ -50,39 +51,39 @@ def _no_memory_personalisation(stub_memory_summary) -> None:
 
 
 class _Model:
-    """Scripts the allowance client the answer is asked through (#176).
+    """Scripts the allowance's admission the answer is asked with (#176, #436).
 
-    The worker hands `ask_answer` the meter's `MeteredModel`; this
-    one does not admit by itself but takes each outcome as a dict of steps:
-    `reserve` (admission reserved), `usage` (the provider reported these
-    counts), `call` (the call was recorded), and `then`, the answer the Bedrock
-    double writes back or the exception that ends it.
+    The worker hands the model call the meter's admission hook; this one does
+    not admit by itself but takes each outcome as a dict of steps: `reserve`
+    (admission reserved), `usage` (the provider reported these counts), `call`
+    (the call was recorded), and `then`, the answer the model writes back or
+    the exception that ends it.
     """
 
     def __init__(self) -> None:
         self.outcomes: list[dict[str, Any]] = []
         self.calls = 0
-        self.runtime = FakeBedrock(answer=ANSWER)
+        self.runtime = FakeModel(answer=ANSWER)
 
-    def invoke(self, client: Any, method: str, **kwargs: Any) -> Any:
+    def admit(self, admission: Any) -> model_call.Admit:
         self.calls += 1
         outcome = self.outcomes.pop(0) if self.outcomes else {"then": ANSWER}
         if outcome.get("reserve"):
             reserved = allowance_service.reserve_token_allowance(
                 beneficiary_id=STUDENT,
-                effect_id=client.effect_id,
-                plan_id=client.plan_id,
-                allowance_version=client.allowance_version,
+                effect_id=admission.effect_id,
+                plan_id=admission.plan_id,
+                allowance_version=admission.allowance_version,
                 input_tokens=RESERVED_INPUT,
                 max_output_tokens=RESERVED_OUTPUT,
-                observed_at=client._observed_at,
-                account_fence_generation=client.account_fence_generation,
+                observed_at=admission._observed_at,
+                account_fence_generation=admission.account_fence_generation,
             )
             assert reserved.disposition is allowance_repo.ReservationDisposition.ADMITTED
         if usage := outcome.get("usage"):
             observed = allowance_service.record_provider_usage(
                 beneficiary_id=STUDENT,
-                effect_id=client.effect_id,
+                effect_id=admission.effect_id,
                 provider_request_id="req-1",
                 model_id="model-1",
                 input_tokens=usage[0],
@@ -90,25 +91,26 @@ class _Model:
             )
             assert observed.disposition is allowance_repo.ProviderUsageDisposition.RECORDED
         if outcome.get("call"):
-            client.mark_invocation()
+            assert admission._on_invocation() is True
         then = outcome.get("then", ANSWER)
         if isinstance(then, BaseException):
             raise then
         self.runtime.outcomes = [then]
-        return getattr(self.runtime, method)(**kwargs)
+        return model_call.Admit()
 
 
-# Scripts the metered model, so its settlement outcomes can be set one step
-# at a time.
+# Scripts the admission, so its settlement outcomes can be set one step at a
+# time.
 @pytest.fixture
 def model(monkeypatch: pytest.MonkeyPatch, table) -> _Model:
     model = _Model()
 
-    class Scripted(_admission.MeteredModel):
-        def invoke_model(self, **kwargs: object) -> object:
-            return model.invoke(self, self._invocation_method, **kwargs)
+    class Scripted(_admission.Admission):
+        def __call__(self, input_tokens: int, max_output_tokens: int) -> model_call.Admit:
+            return model.admit(self)
 
-    monkeypatch.setattr(_admission, "MeteredModel", Scripted)
+    monkeypatch.setattr(_admission, "Admission", Scripted)
+    install(model.runtime)
     db_table.install(table)
     return model
 

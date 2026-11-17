@@ -33,7 +33,8 @@ from fakes.ask_question import (
 from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from stoa.services import ai_service, ask_question, locale_service
+from fakes.model import Reply, not_sent
+from stoa.services import ask_question, locale_service
 from stoa.services.ask_question import _admission
 from stoa.services.ask_question_errors import AskQuestionErrorCode
 
@@ -122,19 +123,18 @@ def test_generating_takes_the_language_from_the_command_not_the_request(
 
 
 @pytest.mark.parametrize(
-    ("failure", "category"),
-    [
-        (ai_service.AIInvocationFailure("incomplete_output"), "incomplete_output"),
-        (ai_service.AIInvocationFailure("malformed_response"), "malformed_response"),
-        (ai_service.AIInvocationFailure("deadline_exceeded"), "deadline_exceeded"),
-        (RuntimeError("provider went away"), "provider_error"),
-    ],
+    "category",
+    ["deadline_exceeded", "malformed_response", "malformed_provider_usage", "provider_error"],
 )
 def test_a_failed_answer_leaves_the_command_failed_with_its_category(
-    table, model, failure, category
+    table, model, category, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """An answer the model call ends unsent, retryably, under `category`."""
     client = _client()
-    model.outcomes = [failure]
+    if category == "provider_error":
+        model.outcomes = [RuntimeError("provider went away")]
+    else:
+        not_sent(monkeypatch, category)
 
     response = _send(client, "key-1")
 
@@ -152,10 +152,10 @@ def test_a_failed_answer_leaves_the_command_failed_with_its_category(
 
 
 def test_a_retry_with_the_same_key_resumes_the_same_command_after_an_unpaid_failure(
-    table, model
+    table, model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client = _client()
-    model.outcomes = [ai_service.AIInvocationFailure("deadline_exceeded")]
+    not_sent(monkeypatch, "deadline_exceeded")
     assert _send(client, "key-1").status_code == 503
 
     retried = _send(client, "key-1")
@@ -196,7 +196,7 @@ def test_a_failure_the_provider_charged_for_is_not_generated_again(
     """A paid answer that could not be used is a known result, not a retry."""
     charge_failures_as_paid(monkeypatch)
     client = _client()
-    model.outcomes = [ai_service.AIInvocationFailure("incomplete_output")]
+    model.outcomes = [Reply(input=ANSWER, stop_reason="max_tokens")]
     first = _send(client, "key-1")
     # The first attempt already says what the retry says (#412).
     assert first.status_code == 409, first.text
@@ -211,10 +211,12 @@ def test_a_failure_the_provider_charged_for_is_not_generated_again(
     assert _generation(client, "key-1")["status"] == "failed"
 
 
-def test_steps_are_reported_only_for_the_command_that_wrote_them(table, model) -> None:
+def test_steps_are_reported_only_for_the_command_that_wrote_them(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
     client = _client()
     _send(client, "key-1")
-    model.outcomes = [ai_service.AIInvocationFailure("deadline_exceeded")]
+    not_sent(monkeypatch, "deadline_exceeded")
     _send(client, "key-2", content="Und wie erweitere ich?")
 
     assert _generation(client, "key-2")["steps"] == []

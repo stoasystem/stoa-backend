@@ -590,20 +590,30 @@ def bedrock_asker(
     session = require_sso_operator_session(
         profile_name=profile, region_name=region, expected_account_id=account_id
     )
-    client = session.client("bedrock-runtime", region_name=region)
+    from stoa.services.model_call.bedrock import BedrockAdapter
+
+    model = BedrockAdapter(session.client("bedrock-runtime", region_name=region))
 
     def ask(item: dict[str, Any]) -> tuple[Mapping[str, Any], int, int]:
-        return ask_reply(item, client, correlation_id=f"eval-{uuid.uuid4().hex[:12]}")
+        return ask_reply(item, model, correlation_id=f"eval-{uuid.uuid4().hex[:12]}")
 
     return ask
 
 
 def ask_reply(
-    item: dict[str, Any], client: Any, *, correlation_id: str | None = None
+    item: dict[str, Any], model: Any, *, correlation_id: str | None = None
 ) -> tuple[Mapping[str, Any], int, int]:
     """One question asked the way production asks it, without a star map:
-    the reply as the model wrote it, and its token counts."""
-    from stoa.services import ask_answer
+    the reply as the model wrote it, and its token counts.
+
+    `model` is the model-call adapter the question is asked through; it is
+    installed for the call, as the run asks one question at a time.
+    """
+    import time
+
+    from stoa.services import ask_answer, model_call
+
+    model_call.install(model)
 
     result = ask_answer.answer(
         ask_answer.Asked(content=item["question"]),
@@ -615,7 +625,9 @@ def ask_reply(
             answer_style=str(item.get("answer_style") or "standard"),
         ),
         ask_answer.ModelCall(
-            model=client, correlation_id=correlation_id, effect_id=f"eval-{item['id']}"
+            deadline_monotonic=time.monotonic() + 90,
+            correlation_id=correlation_id,
+            effect_id=f"eval-{item['id']}",
         ),
         read_star_map=lambda *_args, **_kwargs: None,
     )

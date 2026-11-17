@@ -1,15 +1,16 @@
 """准入: whether a question may be sent, and what its answer is charged (#206).
 
 The charge goes through `_admission`'s meter and usage evidence, on the real
-ledger over an in-memory allowance table, with only the Bedrock runtime faked;
+ledger over an in-memory allowance table, with only the model faked (the
+in-memory model-call adapter);
 admission at the first submission goes through the message route, with the
 student's eligibility seeded by `fakes.admission`.
 """
 
 from __future__ import annotations
 
-import copy
 import json
+import time
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -28,115 +29,83 @@ from fakes.ask_question import (
     _command,
     _command_key,
     _messages,
+    _generation,
     _patch_allowance_table,
-    _ResponseBody,
     _send,
 )
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from stoa import aws
-from stoa.aws import Kind
+from fakes.model import FakeModel, Reply, Unsent, install
 from stoa.db.repositories import allowance_repo
 from stoa.routers import conversations
 from stoa.services import ai_service, allowance_service, entitlement_service
-from stoa.services import ask_answer
+from stoa.services import ask_answer, model_call
+from stoa.services.model_call.adapter import ProviderError
 from stoa.services.ask_question import _admission, _answering
 from stoa.services.ask_question._admission import AdmissionError, UsageEvidence
 from stoa.services.ask_question_errors import AskQuestionErrorCode
 
 
-class MockBedrockProvider:
-    """CountTokens plus InvokeModel fake; no network/provider access."""
+_CONTENT = {
+    "answer": "The durable conversation answer",
+    "steps": ["First durable step"],
+    "hints": ["The same durable hint"],
+    "similar_exercises": [],
+    "knowledge_points": ["fractions"],
+}
 
-    def __init__(
-        self,
-        *,
-        input_tokens: object = 90,
-        actual_input_tokens: int = 70,
-        actual_output_tokens: int = 25,
-        invoke_error: Exception | None = None,
-    ) -> None:
-        self.input_tokens = input_tokens
-        self.actual_input_tokens = actual_input_tokens
-        self.actual_output_tokens = actual_output_tokens
-        self.invoke_error = invoke_error
-        self.count_calls: list[dict[str, object]] = []
-        self.invoke_calls: list[dict[str, object]] = []
 
-    def count_tokens(self, **kwargs: object) -> dict[str, object]:
-        self.count_calls.append(copy.deepcopy(kwargs))
-        return {
-            "inputTokens": self.input_tokens,
-            "ResponseMetadata": {
-                "HTTPStatusCode": 200,
-                "RequestId": "count-request-1",
-            },
-        }
-
-    def invoke_model(self, **kwargs: object) -> dict[str, object]:
-        self.invoke_calls.append(copy.deepcopy(kwargs))
-        if self.invoke_error is not None:
-            raise self.invoke_error
-        content = {
-            "answer": "The durable conversation answer",
-            "steps": ["First durable step"],
-            "hints": ["The same durable hint"],
-            "similar_exercises": [],
-            "knowledge_points": ["fractions"],
-        }
-        return {
-            "body": _ResponseBody(
-                {
-                    "id": "provider-message-1",
-                    "model": "anthropic.claude-sonnet-4-6",
-                    "stop_reason": "end_turn",
-                    "usage": {
-                        "input_tokens": self.actual_input_tokens,
-                        "output_tokens": self.actual_output_tokens,
-                    },
-                    "content": [{"type": "tool_use", "id": "toolu-1",
-                                 "name": ask_answer.ANSWER_TOOL_NAME, "input": content}],
-                }
-            ),
-            "ResponseMetadata": {
-                "HTTPStatusCode": 200,
-                "RequestId": "invoke-request-1",
-            },
-        }
+def _provider(
+    *,
+    actual_input_tokens: int = 70,
+    actual_output_tokens: int = 25,
+    invoke_error: Exception | None = None,
+    count_error: Exception | None = None,
+) -> FakeModel:
+    """The model, counting 90 input tokens and answering once with the usage given."""
+    reply: object = invoke_error or Reply(
+        input=_CONTENT,
+        stop_reason="end_turn",
+        usage={"input_tokens": actual_input_tokens, "output_tokens": actual_output_tokens},
+    )
+    outcomes = [Unsent(count_error)] if count_error is not None else []
+    return FakeModel(*outcomes, reply)
 
 
 def _use(
     monkeypatch: pytest.MonkeyPatch,
     table: AtomicAllowanceTable,
-    provider: MockBedrockProvider,
+    provider: FakeModel,
 ) -> None:
     _patch_allowance_table(monkeypatch, table)
-    aws.install({Kind.BEDROCK_RUNTIME: provider})
+    install(provider)
 
 
-def _ask(metered: _admission.MeteredModel) -> ai_service.AIProviderResult[dict[str, object]]:
-    return ai_service.invoke_answer(
-        "Answer the question.",
-        [{"role": "user", "content": "private-message-canary"}],
-        input_size=1,
+def _ask(admission: _admission.Admission) -> ai_service.AIProviderResult[dict[str, object]]:
+    """Ask for an answer under `admission`, as `ask_answer` does."""
+    result = model_call.call(
+        system="Answer the question.",
+        messages=[{"role": "user", "content": "private-message-canary"}],
         tool=ask_answer.answer_tool(star_map=False),
+        max_tokens=2048,
+        temperature=ask_answer.ANSWER_TEMPERATURE,
+        deadline=time.monotonic() + 90,
+        admission=admission,
         correlation_id="transport-correlation-that-must-not-own-the-effect",
-        effect_id=metered.effect_id,
-        client=metered,
-        observed_at=NOW,
     )
+    return ai_service.provider_result(result, effect_id=admission.effect_id)
 
 
 def _answered(
     monkeypatch: pytest.MonkeyPatch,
     *,
     table: AtomicAllowanceTable,
-    provider: MockBedrockProvider,
+    provider: FakeModel,
 ) -> tuple[dict[str, object], UsageEvidence]:
     """A command whose answer came back, and the evidence of what it cost."""
     _use(monkeypatch, table, provider)
     command = _command()
-    result = _ask(_admission.meter(command).model())
+    result = _ask(_admission.meter(command).admission())
     evidence = UsageEvidence.from_provider(
         result, effect_id=str(command["allowance_effect_id"])
     )
@@ -191,16 +160,16 @@ def _completed(
 
 def test_count_failure_never_reserves_or_invokes(monkeypatch: pytest.MonkeyPatch) -> None:
     table = AtomicAllowanceTable()
-    provider = MockBedrockProvider(input_tokens="not-an-exact-count")
+    provider = _provider(count_error=ProviderError("ServiceUnavailableException"))
     _use(monkeypatch, table, provider)
 
-    with pytest.raises(AdmissionError) as captured:
-        _ask(_admission.meter(_command()).model())
+    with pytest.raises(ai_service.AIInvocationFailure) as captured:
+        _ask(_admission.meter(_command()).admission())
 
-    assert captured.value.code is AskQuestionErrorCode.PROVIDER_TOKEN_COUNT_UNAVAILABLE
-    assert captured.value.status_code == 503
-    assert len(provider.count_calls) == 1
-    assert provider.invoke_calls == []
+    assert captured.value.category == "provider_token_count_unavailable"
+    assert captured.value.retryable is True
+    assert provider.counted == 1
+    assert provider.requests == []
     assert not any(
         item.get("entity_type") == "allowance_effect"
         for item in table.items.values()
@@ -209,7 +178,7 @@ def test_count_failure_never_reserves_or_invokes(monkeypatch: pytest.MonkeyPatch
 
 def test_allowance_denial_never_invokes_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     table = AtomicAllowanceTable()
-    provider = MockBedrockProvider()
+    provider = _provider()
     _use(monkeypatch, table, provider)
     monkeypatch.setattr(
         allowance_service,
@@ -219,20 +188,42 @@ def test_allowance_denial_never_invokes_provider(monkeypatch: pytest.MonkeyPatch
         ),
     )
 
-    with pytest.raises(AdmissionError) as captured:
-        _ask(_admission.meter(_command()).model())
+    with pytest.raises(ai_service.AIInvocationFailure) as captured:
+        _ask(_admission.meter(_command()).admission())
 
-    assert captured.value.code is AskQuestionErrorCode.ALLOWANCE_EXHAUSTED
-    assert captured.value.status_code == 429
-    assert len(provider.count_calls) == 1
-    assert provider.invoke_calls == []
+    assert captured.value.category == "allowance_exhausted"
+    assert captured.value.retryable is True
+    assert provider.counted == 1
+    assert provider.requests == []
+
+
+def test_an_unrecorded_call_is_never_made(monkeypatch: pytest.MonkeyPatch) -> None:
+    table = AtomicAllowanceTable()
+    provider = _provider()
+    _use(monkeypatch, table, provider)
+
+    with pytest.raises(ai_service.AIInvocationFailure) as lost:
+        _ask(_admission.meter(_command()).admission(on_invocation=lambda: False))
+
+    def broken() -> bool:
+        raise RuntimeError("store-down")
+
+    with pytest.raises(ai_service.AIInvocationFailure) as unrecorded:
+        _ask(_admission.meter(_command()).admission(on_invocation=broken))
+
+    assert (lost.value.category, lost.value.retryable) == ("lease_lost", True)
+    assert (unrecorded.value.category, unrecorded.value.retryable) == (
+        "invocation_not_recorded",
+        True,
+    )
+    assert provider.requests == []
 
 
 def test_a_command_whose_allowance_identity_does_not_hold_is_refused() -> None:
     command = {**_command(), "allowance_week_identity": "1999-W01"}
 
     with pytest.raises(AdmissionError) as captured:
-        _admission.meter(command).model()
+        _admission.meter(command).admission()
 
     assert captured.value.code is AskQuestionErrorCode.ALLOWANCE_UNAVAILABLE
 
@@ -241,15 +232,62 @@ def test_provider_timeout_after_reserve_remains_reserved(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = AtomicAllowanceTable()
-    provider = MockBedrockProvider(invoke_error=TimeoutError("timeout-canary"))
+    provider = _provider(invoke_error=ProviderError("ReadTimeoutError"))
     _use(monkeypatch, table, provider)
 
-    with pytest.raises(TimeoutError):
-        _ask(_admission.meter(_command()).model())
+    with pytest.raises(ai_service.AIInvocationFailure) as captured:
+        _ask(_admission.meter(_command()).admission())
 
+    assert (captured.value.category, captured.value.retryable) == ("provider_error", True)
     assert _effect(table)["state"] == "reserved"
     assert table.counter()["finalized_input_tokens"] == 0
-    assert len(provider.invoke_calls) == 1
+    assert len(provider.requests) == 1
+
+
+# ── Refused before the model is called, through the Ask command ──────────────
+
+
+def test_a_count_the_provider_refuses_fails_the_question_retryably(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#430/#436: a CountTokens body Bedrock refuses (here the stream-only tool
+    field left in) is refused by the fake adapter too; the question is not
+    sent, fails as `provider_token_count_unavailable`, and may be sent again."""
+    monkeypatch.setattr(model_call, "_STREAM_ONLY_TOOL_FIELDS", frozenset())
+    client = _client()
+
+    refused = _send(client, "count-refused")
+
+    assert refused.status_code == 503, refused.text
+    assert refused.json()["detail"]["code"] == "provider_token_count_unavailable"
+    assert model.counted == 1
+    assert model.calls == []
+    generation = _generation(client, "count-refused")
+    assert generation["status"] == "failed"
+    assert generation["failureCategory"] == "provider_token_count_unavailable"
+    assert generation["retryable"] is True
+
+
+def test_a_spent_allowance_at_the_reservation_fails_the_question_retryably(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        allowance_service,
+        "reserve_token_allowance",
+        lambda **_kwargs: allowance_repo.ReservationResult(
+            allowance_repo.ReservationDisposition.LIMIT_EXCEEDED
+        ),
+    )
+    client = _client()
+
+    refused = _send(client, "reserve-refused")
+
+    assert refused.status_code == 429, refused.text
+    assert refused.json()["detail"]["code"] == "allowance_exhausted"
+    assert model.calls == []
+    generation = _generation(client, "reserve-refused")
+    assert generation["failureCategory"] == "allowance_exhausted"
+    assert generation["retryable"] is True
 
 
 # ── After it answered ─────────────────────────────────────────────────────────
@@ -259,7 +297,7 @@ def test_store_ambiguity_keeps_observed_reservation_without_finalizing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = AtomicAllowanceTable()
-    command, evidence = _answered(monkeypatch, table=table, provider=MockBedrockProvider())
+    command, evidence = _answered(monkeypatch, table=table, provider=_provider())
 
     _admission.meter(command).observe(evidence)
 
@@ -274,7 +312,7 @@ def test_evidence_is_stored_in_the_shape_written_before_it_had_a_type(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = AtomicAllowanceTable()
-    command, evidence = _answered(monkeypatch, table=table, provider=MockBedrockProvider())
+    command, evidence = _answered(monkeypatch, table=table, provider=_provider())
 
     stored = evidence.to_json()
 
@@ -297,7 +335,7 @@ def test_stored_token_counts_are_observed_as_the_table_returns_them(
 ) -> None:
     """The evidence reads whole numbers, not only `int` ones."""
     table = AtomicAllowanceTable()
-    command, evidence = _answered(monkeypatch, table=table, provider=MockBedrockProvider())
+    command, evidence = _answered(monkeypatch, table=table, provider=_provider())
     stored = {
         **evidence.to_json(),
         "provider_input_tokens": Decimal(evidence.input_tokens),
@@ -323,7 +361,7 @@ def test_a_failure_without_evidence_gives_none() -> None:
 
 def test_evidence_of_another_effect_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     table = AtomicAllowanceTable()
-    command, evidence = _answered(monkeypatch, table=table, provider=MockBedrockProvider())
+    command, evidence = _answered(monkeypatch, table=table, provider=_provider())
     other = UsageEvidence.from_json({**evidence.to_json(), "allowance_effect_id": "b" * 64})
     assert other is not None
 
@@ -338,7 +376,7 @@ def test_regular_and_sse_replay_finalize_one_exact_debit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = AtomicAllowanceTable()
-    provider = MockBedrockProvider()
+    provider = _provider()
     command, evidence = _answered(monkeypatch, table=table, provider=provider)
     _admission.meter(command).observe(evidence)
     response = _response(
@@ -350,7 +388,7 @@ def test_regular_and_sse_replay_finalize_one_exact_debit(
     sse = _answering._result_response(_completed(command, response, evidence))
 
     assert regular == sse == response
-    assert len(provider.invoke_calls) == 1
+    assert len(provider.requests) == 1
     counter = table.counter()
     assert counter["finalized_input_tokens"] == 70
     assert counter["finalized_output_tokens"] == 25
@@ -363,7 +401,7 @@ def test_finalize_timeout_repairs_from_the_same_durable_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = AtomicAllowanceTable()
-    command, evidence = _answered(monkeypatch, table=table, provider=MockBedrockProvider())
+    command, evidence = _answered(monkeypatch, table=table, provider=_provider())
     _admission.meter(command).observe(evidence)
     response = _response()
     real_finalize = allowance_service.finalize_token_allowance
@@ -413,7 +451,7 @@ def test_terminal_validation_restores_user_and_retains_provider_cost(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = AtomicAllowanceTable()
-    command, evidence = _answered(monkeypatch, table=table, provider=MockBedrockProvider())
+    command, evidence = _answered(monkeypatch, table=table, provider=_provider())
     allowance = _admission.meter(command)
 
     allowance.observe(evidence)
@@ -432,7 +470,7 @@ def test_durable_payload_is_private_and_content_free(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = AtomicAllowanceTable()
-    command, evidence = _answered(monkeypatch, table=table, provider=MockBedrockProvider())
+    command, evidence = _answered(monkeypatch, table=table, provider=_provider())
     response = _response("private-answer-canary")
     public = _answering._completed_command_response(
         _completed(command, response, evidence).command or {}
@@ -453,7 +491,7 @@ def test_release_returns_a_reservation_whose_cost_is_not_known(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = AtomicAllowanceTable()
-    provider = MockBedrockProvider(invoke_error=TimeoutError("timeout-canary"))
+    provider = _provider(invoke_error=ProviderError("ReadTimeoutError"))
     _use(monkeypatch, table, provider)
     real_release = allowance_service.release_unknown_cost_allowance
     monkeypatch.setattr(
@@ -462,8 +500,8 @@ def test_release_returns_a_reservation_whose_cost_is_not_known(
         lambda **kwargs: real_release(**kwargs, table=table),
     )
     command = _command()
-    with pytest.raises(TimeoutError):
-        _ask(_admission.meter(command).model())
+    with pytest.raises(ai_service.AIInvocationFailure):
+        _ask(_admission.meter(command).admission())
 
     assert _admission.meter(command).release() is True
     # Settled already: a second run releases nothing.

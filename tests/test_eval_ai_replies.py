@@ -14,7 +14,6 @@ separately, on the prompt itself.
 
 from __future__ import annotations
 
-import io
 import json
 from pathlib import Path
 import re
@@ -22,8 +21,8 @@ from typing import Any
 
 import pytest
 
-from fakes import model_reply
 from stoa.services import ai_service, ask_answer
+from stoa.services.model_call.fake import FakeAdapter, Reply
 from stoa.services.curriculum_service import SUPPORTED_SUBJECTS
 
 import eval_ai_replies as evaluation
@@ -61,37 +60,30 @@ REFUSALS = {
 }
 
 
-class FakeModel:
+class FakeModel(FakeAdapter):
     """Answers in the default language the prompt names; declines under the pre-E1 sentence."""
 
     def __init__(self) -> None:
-        self.calls = 0
+        super().__init__(respond=self._reply)
 
-    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
-        self.calls += 1
-        request = json.loads(body)
+    def _reply(self, request: dict[str, Any]) -> Reply:
+        return Reply(
+            input=self.content(request),
+            stop_reason="end_turn",
+            usage={"input_tokens": 800, "output_tokens": 300},
+        )
+
+    def content(self, request: dict[str, Any]) -> dict[str, Any]:
         system = request["system"] if isinstance(request["system"], str) else json.dumps(
             request["system"]
         )
         language = re.search(r"DEFAULT LANGUAGE: (\w+)", system).group(1)
         if re.search(r"related to \w+ at .+? level\.", system):
-            content = {"steps": [], "answer": REFUSALS[language], "hints": [],
-                       "knowledge_points": [], "suggest_teacher": False}
-        else:
-            steps, answer = REPLIES[language]
-            content = {"steps": steps, "answer": answer, "hints": [],
-                       "knowledge_points": [], "suggest_teacher": False}
-        payload = {
-            "id": f"msg_{self.calls}",
-            "model": modelId,
-            "stop_reason": "end_turn",
-            "content": model_reply.content(content, request),
-            "usage": {"input_tokens": 800, "output_tokens": 300},
-        }
-        return {
-            "ResponseMetadata": {"RequestId": f"req-{self.calls}"},
-            "body": io.BytesIO(json.dumps(payload).encode()),
-        }
+            return {"steps": [], "answer": REFUSALS[language], "hints": [],
+                    "knowledge_points": [], "suggest_teacher": False}
+        steps, answer = REPLIES[language]
+        return {"steps": steps, "answer": answer, "hints": [],
+                "knowledge_points": [], "suggest_teacher": False}
 
 
 def _asker(model: FakeModel):
@@ -523,19 +515,16 @@ class StyleRecordingModel(FakeModel):
         self.systems: list[str] = []
         self.leaking_style = leaking_style
 
-    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
-        request = json.loads(body)
+    def content(self, request: dict[str, Any]) -> dict[str, Any]:
         system = request["system"] if isinstance(request["system"], str) else json.dumps(
             request["system"]
         )
         self.systems.append(system)
-        response = super().invoke_model(modelId=modelId, body=body)
+        content = super().content(request)
         leak = self.leaking_style
         if leak is not None and ask_answer.ANSWER_STYLE_RULES[leak] in system:
-            payload = json.loads(response["body"].read())
-            payload["content"][0]["input"]["answer"] += " Das Ergebnis ist $\\frac{7}{12}$."
-            response["body"] = io.BytesIO(json.dumps(payload).encode())
-        return response
+            content["answer"] += " Das Ergebnis ist $\\frac{7}{12}$."
+        return content
 
 
 def _styled_as(system: str) -> str:
@@ -702,12 +691,8 @@ class BrokenJsonModel(FakeModel):
     BROKEN_INPUT = {"steps": ["Zuerst «schauen» wir", "dann"]}
     BROKEN = json.dumps(BROKEN_INPUT, ensure_ascii=False)
 
-    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
-        response = super().invoke_model(modelId=modelId, body=body)
-        payload = json.loads(response["body"].read())
-        payload["content"][0]["input"] = self.BROKEN_INPUT
-        response["body"] = io.BytesIO(json.dumps(payload).encode())
-        return response
+    def content(self, request: dict[str, Any]) -> dict[str, Any]:
+        return dict(self.BROKEN_INPUT)
 
 
 def test_a_refused_reply_keeps_its_text_when_asked(items) -> None:

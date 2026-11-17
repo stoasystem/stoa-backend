@@ -4,32 +4,32 @@ The conversation route gave the model a fixed 90 seconds, counted from just
 before the call, inside an API Lambda that is stopped at 29. The allowance
 wrapper also built its Bedrock client without the transport limits the direct
 path uses, and nothing stopped a generation from starting after admission had
-already used the time up. This is the interim fix; answers that need more than
+already used the time up. The model call (#436) now opens one connection per
+call, bounded by the time left, and checks the deadline after admission. This is the interim fix; answers that need more than
 the Lambda's lifetime are E11's.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
-from collections.abc import Callable
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 import pytest
 
 from fakes.ask_question import (
-    NOW,
     _COMPLETE,
     _command,
     _patch_allowance_table,
     _run_message_command,
 )
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from stoa import aws
-from stoa.aws import Kind
-from stoa.services import ai_service, runtime_budget_service
+from fakes.model import FakeModel, Reply, install
+from stoa.services import ai_service, model_call, runtime_budget_service
 from stoa.services import ask_answer
 from stoa.services.ask_question import _admission, _answering
+from stoa.services.model_call import bedrock
+from stoa.services.model_call.adapter import Stream
 from fakes.ask_question import AtomicAllowanceTable
 
 
@@ -44,61 +44,56 @@ class _Clock:
         return self.now
 
 
-class _Provider:
-    """CountTokens and a streamed answer, moving an injected clock."""
+class _Provider(FakeModel):
+    """The model counting and streaming its answer, moving an injected clock."""
 
     def __init__(self, clock: _Clock, *, count_at: float = 0.0, answer_at: float = 1.0,
                  first_event_at: float | None = None) -> None:
+        super().__init__(
+            answer=Reply(input=ANSWER, stop_reason="end_turn",
+                         usage={"input_tokens": 10, "output_tokens": 20}),
+        )
         self.clock = clock
         self.count_at = count_at
         self.answer_at = answer_at
         self.first_event_at = first_event_at
         self.invocations: list[float] = []
 
-    def count_tokens(self, **_kwargs: object) -> dict[str, object]:
+    def count_tokens(self, model_id: str, body: Mapping[str, Any]) -> int:
         self.clock.now = self.count_at
-        return {"inputTokens": 10, "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "c-1"}}
+        return super().count_tokens(model_id, body)
 
-    def invoke_model_with_response_stream(self, **_kwargs: object) -> dict[str, object]:
+    def stream(self, model_id: str, body: Mapping[str, Any]) -> Stream:
         self.invocations.append(self.clock.now)
+        sent = super().stream(model_id, body)
         if self.first_event_at is not None:
             self.clock.now = self.first_event_at
 
-        def events():
-            yield {"chunk": {"bytes": json.dumps({"type": "message_start", "message": {
-                "id": "msg-1", "model": "anthropic.claude-sonnet-4-6",
-                "usage": {"input_tokens": 10}}}).encode()}}
-            self.clock.now = self.answer_at
-            yield {"chunk": {"bytes": json.dumps({"type": "content_block_start", "index": 0,
-                                                  "content_block": {
-                                                      "type": "tool_use", "id": "toolu-1",
-                                                      "name": ask_answer.ANSWER_TOOL_NAME,
-                                                      "input": {}}}).encode()}}
-            yield {"chunk": {"bytes": json.dumps({"type": "content_block_delta", "index": 0,
-                                                  "delta": {"type": "input_json_delta",
-                                                            "partial_json": json.dumps(ANSWER)}}).encode()}}
-            yield {"chunk": {"bytes": json.dumps({"type": "message_delta",
-                                                  "usage": {"output_tokens": 20},
-                                                  "delta": {"stop_reason": "end_turn"}}).encode()}}
+        def events() -> Iterator[Mapping[str, Any]]:
+            for index, event in enumerate(sent.events):
+                if index == 1:
+                    self.clock.now = self.answer_at
+                yield event
 
-        return {"body": events(), "ResponseMetadata": {"RequestId": "invoke-1"}}
+        return Stream(request_id=sent.request_id, events=events())
 
 
-def _factory(
-    monkeypatch: pytest.MonkeyPatch, provider: _Provider
-) -> Callable[[], list[aws.Request]]:
-    """Install `provider` as the Bedrock runtime; returns what was asked of `stoa.aws`."""
-    aws.install({Kind.BEDROCK_RUNTIME: provider})
-    return aws.requests
-
-
-def _answer(client: Any, clock: _Clock, deadline: float) -> Any:
-    return ai_service.invoke_answer(
-        "Answer the question.", [{"role": "user", "content": "What is a half?"}],
-        input_size=15, deadline_monotonic=deadline, clock=clock, client=client,
+def _answer(
+    admission: _admission.Admission | None, clock: _Clock, deadline: float
+) -> ai_service.AIProviderResult[dict]:
+    result = model_call.call(
+        system="Answer the question.",
+        messages=[{"role": "user", "content": "What is a half?"}],
         tool=ask_answer.answer_tool(star_map=False),
-        effect_id=getattr(client, "allowance_effect_id", "effect-1"),
-        observed_at=NOW, on_step=lambda *_: None,
+        max_tokens=2048,
+        temperature=ask_answer.ANSWER_TEMPERATURE,
+        deadline=deadline,
+        admission=admission,
+        on_partial=lambda _partial: None,
+        clock=clock,
+    )
+    return ai_service.provider_result(
+        result, effect_id=admission.effect_id if admission is not None else "effect-1"
     )
 
 
@@ -157,28 +152,23 @@ def test_the_middleware_binds_the_remaining_time_from_the_lambda_context(
     assert seen == [1_000.0 + 16.0]
 
 
-# ── The wrapper builds the same bounded client as the direct path ───────────
+# ── One connection, bounded by the time left, with or without admission ────
 
 
-@pytest.mark.parametrize("through_allowance", [False, True], ids=["direct", "allowance-wrapper"])
-def test_the_allowance_wrapper_uses_the_same_transport_limits(
+@pytest.mark.parametrize("through_allowance", [False, True], ids=["direct", "admitted"])
+def test_the_call_is_bounded_by_the_time_left_with_or_without_admission(
     monkeypatch: pytest.MonkeyPatch, through_allowance: bool
 ) -> None:
     clock = _Clock()
-    provider = _Provider(clock)
-    built = _factory(monkeypatch, provider)
+    provider = install(_Provider(clock))
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    client = (
-        _admission.meter(_command()).model()
-        if through_allowance
-        else None
-    )
+    admission = _admission.meter(_command()).admission() if through_allowance else None
 
-    result = _answer(client, clock, deadline=20.0)
+    result = _answer(admission, clock, deadline=20.0)
 
     assert result.content == ANSWER
-    assert len(built()) == 1
-    config = built()[0].config
+    assert provider.connections == [20.0]
+    config = bedrock.runtime_config(20.0)
     assert config.connect_timeout == 5
     assert config.read_timeout == 15  # 20 seconds left, less the 5-second margin
     assert config.retries["total_max_attempts"] == 1
@@ -191,15 +181,13 @@ def test_no_generation_starts_once_admission_has_used_up_the_time(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = _Clock()
-    provider = _Provider(clock, count_at=21.0)
-    _factory(monkeypatch, provider)
+    provider = install(_Provider(clock, count_at=21.0))
     table = AtomicAllowanceTable()
     _patch_allowance_table(monkeypatch, table)
     command = _command()
-    client = _admission.meter(command).model()
 
     with pytest.raises(ai_service.AIInvocationFailure) as failure:
-        _answer(client, clock, deadline=20.0)
+        _answer(_admission.meter(command).admission(), clock, deadline=20.0)
 
     assert failure.value.category == "deadline_exceeded"
     assert provider.invocations == []
@@ -208,9 +196,8 @@ def test_no_generation_starts_once_admission_has_used_up_the_time(
     assert effect["state"] == "reserved"
 
     clock.now = 0.0
-    retry_provider = _Provider(clock)
-    _factory(monkeypatch, retry_provider)
-    retry = _admission.meter(command).model()
+    retry_provider = install(_Provider(clock))
+    retry = _admission.meter(command).admission()
     assert _answer(retry, clock, deadline=20.0).content == ANSWER
     assert len(retry_provider.invocations) == 1
     effects = [i for i in table.items.values() if i.get("entity_type") == "allowance_effect"]
@@ -221,8 +208,7 @@ def test_a_deadline_passed_before_the_first_stream_event_stops_the_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = _Clock()
-    provider = _Provider(clock, first_event_at=21.0, answer_at=22.0)
-    _factory(monkeypatch, provider)
+    install(_Provider(clock, first_event_at=21.0, answer_at=22.0))
 
     with pytest.raises(ai_service.AIInvocationFailure) as failure:
         _answer(None, clock, deadline=20.0)
@@ -234,12 +220,11 @@ def test_an_answer_that_takes_ten_seconds_still_succeeds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = _Clock()
-    provider = _Provider(clock, count_at=1.0, answer_at=10.0)
-    _factory(monkeypatch, provider)
+    provider = install(_Provider(clock, count_at=1.0, answer_at=10.0))
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    client = _admission.meter(_command()).model()
+    admission = _admission.meter(_command()).admission()
 
-    assert _answer(client, clock, deadline=20.0).content == ANSWER
+    assert _answer(admission, clock, deadline=20.0).content == ANSWER
     assert provider.invocations == [1.0]
 
 

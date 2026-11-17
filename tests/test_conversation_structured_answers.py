@@ -26,7 +26,6 @@ from fakes.ask_question import (
     QUESTION,
     STUDENT,
     _assistant,
-    _CapturingBedrockClient,
     _client,
     _done,
     _events,
@@ -40,9 +39,7 @@ from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fi
 from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from fakes.bedrock import FakeBedrock
-from stoa import aws
-from stoa.aws import Kind
+from fakes.model import FakeModel, asking, install
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.services import ask_answer
@@ -430,11 +427,11 @@ def test_the_fingerprint_tells_two_parts_apart() -> None:
 
 
 def _sent(quote: dict[str, Any]) -> dict[str, Any]:
-    model = FakeBedrock(answer=ANSWERS["de"][0])
+    model = FakeModel(answer=ANSWERS["de"][0])
     ask_answer.answer(
         ask_answer.Asked(content="Diesen Schritt verstehe ich nicht.", quote=quote),
         ask_answer.Asker(student_id=STUDENT, subject="math", grade="Sek1", locale="de"),
-        ask_answer.ModelCall(model=model, effect_id="effect-test-1"),
+        asking(model, effect_id="effect-test-1"),
         read_star_map=lambda *_a, **_k: None,
     )
     return model.requests[-1]
@@ -481,9 +478,8 @@ def test_the_sections_come_through_the_real_model_path(
     """The route, the allowance client, `ask_answer` and the stream parser as
     production runs them, with only the Bedrock runtime stood in for."""
     answer, label = ANSWERS[locale]
-    provider = _CapturingBedrockClient(answer)
+    provider = install(FakeModel(answer=answer))
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    aws.install({Kind.BEDROCK_RUNTIME: provider})
     client = _client()
 
     response = _send(client, "key-1", language=locale)
@@ -494,6 +490,6 @@ def test_the_sections_come_through_the_real_model_path(
     assert assistant["structured"] == _expected(answer)
     assert f"**{label}:** {answer['hints'][0]}" in assistant["content"]
     # The model really was asked, and was told the follow-up rule.
-    assert provider.request_body is not None
-    assert "follows up on your earlier answer" in provider.request_body["system"]
-    assert QUESTION in _student_turn(provider.request_body)
+    assert provider.requests
+    assert "follows up on your earlier answer" in provider.system()
+    assert QUESTION in _student_turn(provider.requests[-1])

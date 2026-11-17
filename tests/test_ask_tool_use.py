@@ -11,17 +11,18 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Any
 
 import pytest
 
-from fakes import model_reply
 from fakes.ask_question import _client, _generation, _send
 from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from fakes.bedrock import FakeBedrock
-from stoa.services import ai_service, ask_answer
+from fakes.model import FakeModel, Prose, install
+from stoa.services import ai_service, ask_answer, model_call
+from stoa.services.model_call.adapter import Stream
 
 # Straight, German and French quotation marks, all inside step strings.
 QUOTED_STEPS = [
@@ -40,41 +41,44 @@ QUOTED_REPLY: dict[str, Any] = {
 }
 
 
-def _invoke(model: FakeBedrock, *, streamed: bool, reported: list[tuple[int, str]] | None = None):
-    kwargs: dict[str, Any] = {
-        "input_size": 12,
-        "client": model,
-        "effect_id": "effect-412",
-        "tool": ask_answer.answer_tool(star_map=False),
-    }
-    if streamed:
-        kwargs["on_step"] = lambda index, step: (reported if reported is not None else []).append(
-            (index, step)
-        )
-    return ai_service.invoke_answer("system", [{"role": "user", "content": "Frage"}], **kwargs)
+def _invoke(model: FakeModel, *, reported: list[tuple[int, str]] | None = None):
+    """Ask `model` for the answer tool's input as `ask_answer` does, and read it as an answer."""
+    install(model)
+    steps = reported if reported is not None else []
+    result = model_call.call(
+        system="system",
+        messages=[{"role": "user", "content": "Frage"}],
+        tool=ask_answer.answer_tool(star_map=False),
+        max_tokens=1024,
+        temperature=ask_answer.ANSWER_TEMPERATURE,
+        deadline=time.monotonic() + 90,
+        on_partial=ask_answer._step_reporter(lambda index, step: steps.append((index, step))),
+    )
+    return ai_service.provider_result(result, effect_id="effect-412")
 
 
 # ── The request ──────────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("streamed", [False, True])
-def test_the_answer_is_asked_for_as_one_forced_tool_call(streamed: bool) -> None:
-    model = FakeBedrock(QUOTED_REPLY)
+def test_the_answer_is_asked_for_as_one_forced_tool_call() -> None:
+    model = FakeModel(QUOTED_REPLY)
 
-    _invoke(model, streamed=streamed)
+    _invoke(model)
 
     request = model.requests[-1]
     tool = ask_answer.answer_tool(star_map=False)
-    assert request["tools"] == [tool]
-    assert request["tool_choice"] == {"type": "tool", "name": tool["name"]}
+    [sent] = request["tools"]
+    assert sent["name"] == tool.name
+    assert sent["input_schema"] == tool.input_schema
+    assert request["tool_choice"] == {"type": "tool", "name": tool.name}
     # Constrained to the schema, and streamed as the model writes it, so a
     # step can be shown the moment it closes.
-    assert tool["strict"] is True
-    assert tool["eager_input_streaming"] is True
+    assert sent["strict"] is True
+    assert sent["eager_input_streaming"] is True
 
 
 def test_the_tool_asks_for_every_section_of_an_answer() -> None:
-    schema = ask_answer.answer_tool(star_map=False)["input_schema"]
+    schema = ask_answer.answer_tool(star_map=False).input_schema
 
     assert set(schema["required"]) == {
         "language", "steps", "answer", "hints", "similar_exercises",
@@ -85,7 +89,7 @@ def test_the_tool_asks_for_every_section_of_an_answer() -> None:
 
 
 def test_with_a_star_map_the_tool_also_takes_the_star_to_go_to() -> None:
-    schema = ask_answer.answer_tool(star_map=True)["input_schema"]
+    schema = ask_answer.answer_tool(star_map=True).input_schema
 
     assert "target_unit_id" in schema["properties"]
     assert "target_unit_id" not in schema["required"]
@@ -103,9 +107,8 @@ def test_the_prompt_no_longer_asks_for_hand_written_json() -> None:
 # ── Quotes inside the steps ──────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("streamed", [False, True])
-def test_steps_with_quotation_marks_come_back_whole(streamed: bool) -> None:
-    result = _invoke(FakeBedrock(QUOTED_REPLY), streamed=streamed)
+def test_steps_with_quotation_marks_come_back_whole() -> None:
+    result = _invoke(FakeModel(QUOTED_REPLY))
 
     assert result.content["steps"] == QUOTED_STEPS
     assert result.content["answer"] == QUOTED_REPLY["answer"]
@@ -114,30 +117,29 @@ def test_steps_with_quotation_marks_come_back_whole(streamed: bool) -> None:
 
 @pytest.mark.parametrize("pieces", [1, 2, 7, 40, 400])
 def test_each_quoted_step_is_reported_once_and_whole(pieces: int) -> None:
-    model = FakeBedrock(QUOTED_REPLY)
+    model = FakeModel(QUOTED_REPLY)
     model.pieces = pieces
     reported: list[tuple[int, str]] = []
 
-    _invoke(model, streamed=True, reported=reported)
+    _invoke(model, reported=reported)
 
     assert reported == list(enumerate(QUOTED_STEPS))
 
 
 def test_text_outside_the_tool_call_is_not_read_as_the_answer() -> None:
-    model = FakeBedrock(QUOTED_REPLY)
-    original = model.invoke_model_with_response_stream
+    class WithPreamble(FakeModel):
+        def stream(self, model_id: str, body: Any) -> Stream:
+            sent = super().stream(model_id, body)
+            events = list(sent.events)
+            preamble = {"type": "content_block_delta", "index": 1,
+                        "delta": {"type": "text_delta", "text": '{"steps": ["falsch"]}'}}
+            events.insert(1, preamble)
+            return Stream(request_id=sent.request_id, events=events)
 
-    def with_preamble(**kwargs: Any) -> dict[str, Any]:
-        response = original(**kwargs)
-        preamble = {"type": "content_block_delta", "index": 1,
-                    "delta": {"type": "text_delta", "text": '{"steps": ["falsch"]}'}}
-        response["body"].insert(1, {"chunk": {"bytes": json.dumps(preamble).encode()}})
-        return response
-
-    model.invoke_model_with_response_stream = with_preamble  # type: ignore[method-assign]
+    model = WithPreamble(QUOTED_REPLY)
     reported: list[tuple[int, str]] = []
 
-    result = _invoke(model, streamed=True, reported=reported)
+    result = _invoke(model, reported=reported)
 
     assert result.content["steps"] == QUOTED_STEPS
     assert reported == list(enumerate(QUOTED_STEPS))
@@ -151,46 +153,42 @@ def _cut_after_two_steps() -> str:
     return text[: text.index(QUOTED_STEPS[2]) - 1]
 
 
-@pytest.mark.parametrize("streamed", [False, True])
-def test_tool_input_that_never_closes_is_malformed(streamed: bool) -> None:
+def test_tool_input_that_never_closes_is_malformed() -> None:
     with pytest.raises(ai_service.AIInvocationFailure) as failure:
-        _invoke(FakeBedrock(_cut_after_two_steps()), streamed=streamed)
+        _invoke(FakeModel(_cut_after_two_steps()))
 
     assert failure.value.category == "malformed_response"
     # It was paid for: the usage rides on the failure.
     assert failure.value.usage is not None
 
 
-@pytest.mark.parametrize("streamed", [False, True])
 @pytest.mark.parametrize("missing", ["steps", "answer"])
-def test_tool_input_without_a_section_is_malformed(streamed: bool, missing: str) -> None:
+def test_tool_input_without_a_section_is_malformed(missing: str) -> None:
     reply = {key: value for key, value in QUOTED_REPLY.items() if key != missing}
 
     with pytest.raises(ai_service.AIInvocationFailure) as failure:
-        _invoke(FakeBedrock(reply), streamed=streamed)
+        _invoke(FakeModel(reply))
 
     assert failure.value.category == "malformed_response"
     assert failure.value.usage is not None
 
 
-@pytest.mark.parametrize("streamed", [False, True])
 @pytest.mark.parametrize(
     ("key", "value"),
     [("steps", "Erst kürzen."), ("steps", [1, 2]), ("answer", ["12"]), ("answer", None)],
 )
-def test_tool_input_of_the_wrong_shape_is_malformed(streamed: bool, key: str, value: object) -> None:
+def test_tool_input_of_the_wrong_shape_is_malformed(key: str, value: object) -> None:
     with pytest.raises(ai_service.AIInvocationFailure) as failure:
-        _invoke(FakeBedrock({**QUOTED_REPLY, key: value}), streamed=streamed)
+        _invoke(FakeModel({**QUOTED_REPLY, key: value}))
 
     assert failure.value.category == "malformed_response"
 
 
-@pytest.mark.parametrize("streamed", [False, True])
-def test_a_reply_that_calls_no_tool_is_malformed(streamed: bool) -> None:
-    prose = model_reply.Prose(json.dumps(QUOTED_REPLY, ensure_ascii=False))
+def test_a_reply_that_calls_no_tool_is_malformed() -> None:
+    prose = Prose(json.dumps(QUOTED_REPLY, ensure_ascii=False))
 
     with pytest.raises(ai_service.AIInvocationFailure) as failure:
-        _invoke(FakeBedrock(prose), streamed=streamed)
+        _invoke(FakeModel(prose))
 
     assert failure.value.category == "malformed_response"
     assert failure.value.usage is not None
@@ -200,7 +198,7 @@ def test_an_unusable_reply_is_logged_as_a_parse_failure(caplog: pytest.LogCaptur
     caplog.set_level(logging.WARNING, logger="stoa.private_telemetry")
 
     with pytest.raises(ai_service.AIInvocationFailure):
-        _invoke(FakeBedrock(_cut_after_two_steps()), streamed=True)
+        _invoke(FakeModel(_cut_after_two_steps()))
 
     assert "event_category=model_output_parse_failed" in caplog.text
 

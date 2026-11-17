@@ -8,8 +8,7 @@ what the answer counts as knowledge-base gaps and records as asked knowledge
 points is decided once, here.
 
 `answer` is the one way in. It reads the star map itself (a follow-up is shown
-none), calls the model it is handed through `ai_service.invoke_answer`, and
-returns an `AskAnswer`. It writes nothing: the caller stores the answer, the
+none), asks the model through `model_call` (#436), and returns an `AskAnswer`. It writes nothing: the caller stores the answer, the
 gap counts and the asked knowledge points in one transaction with the rest of
 the message.
 """
@@ -19,17 +18,22 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 import base64
 import json
+import logging
 import secrets
+import time
 from typing import Any, Callable, Literal, Mapping, Sequence
 
 from pydantic import BaseModel, Field
 
+from stoa import config
+from stoa.security.private_telemetry import emit_private_event
 from stoa.services import (
     ai_service,
     curriculum_service,
     knowledge_map_service,
     learning_profile_service,
     locale_service,
+    model_call,
     star_map_candidates,
 )
 from stoa.services.ai_service import AIInvocationFailure, AIProviderResult, PromptImage
@@ -137,9 +141,14 @@ wish such as "something harder", and when the wish fits several stars, in which 
 # Asked to write its answer as a JSON string, the model now and then left a
 # `"` unescaped inside a step, and the whole reply failed (#389). The answer
 # is the input of this one tool instead, forced by the request: `strict` holds
-# the input to the schema, so the JSON is the API's to write, and
-# `eager_input_streaming` streams it as written, so each step can be shown the
-# moment it closes. The prompt names the tool; the two must stay the same.
+# the input to the schema, so the JSON is the API's to write, and the model
+# call streams it as written, so each step can be shown the moment it closes.
+# The prompt names the tool; the two must stay the same.
+
+logger = logging.getLogger(__name__)
+
+# How freely the model writes an answer.
+ANSWER_TEMPERATURE = 0.4
 
 ANSWER_TOOL_NAME = "give_answer"
 
@@ -181,23 +190,22 @@ _TARGET_UNIT_PROPERTY: dict[str, object] = {
 }
 
 
-def answer_tool(*, star_map: bool) -> dict[str, object]:
+def answer_tool(*, star_map: bool) -> model_call.Tool:
     """The tool an Ask answer is given through; with the star to go to when a map is shown."""
     properties = dict(_ANSWER_PROPERTIES)
     if star_map:
         properties["target_unit_id"] = _TARGET_UNIT_PROPERTY
-    return {
-        "name": ANSWER_TOOL_NAME,
-        "description": "Give the student your whole answer.",
-        "strict": True,
-        "eager_input_streaming": True,
-        "input_schema": {
+    return model_call.Tool(
+        name=ANSWER_TOOL_NAME,
+        description="Give the student your whole answer.",
+        strict=True,
+        input_schema={
             "type": "object",
             "properties": properties,
             "required": list(_ANSWER_PROPERTIES),
             "additionalProperties": False,
         },
-    }
+    )
 
 
 # ── Answer style presets (#314) ───────────────────────────────────────────────
@@ -595,13 +603,15 @@ class Asker:
 class ModelCall:
     """How the model is called for this answer."""
 
-    # The Bedrock runtime, or what stands in for it: production hands in the
-    # allowance client, which reserves before it calls. None makes one.
-    model: Any | None = None
-    deadline_monotonic: float | None = None
+    # When the answer must be done by, on `clock` (`time.monotonic` unless given).
+    deadline_monotonic: float
+    # Reserves the answer against the allowance and records the call before
+    # it is made; production hands in the allowance's (`_admission`). None
+    # sends without counting or reserving.
+    admission: model_call.AdmissionHook | None = None
     correlation_id: str | None = None
     effect_id: str | None = None
-    # Told each step as it completes; the answer is then streamed.
+    # Told each step as it completes.
     on_step: Callable[[int, str], None] | None = None
     clock: Callable[[], float] | None = None
 
@@ -703,6 +713,7 @@ def answer(
             else AIInvocationFailure("provider_error")
         )
         failure.usage = provider.usage
+        failure.retryable = False
         raise failure from None if failure is exc else exc
 
 
@@ -756,19 +767,47 @@ def _reply(
         star_map=star_map,
         images=asked.images,
     )
-    return ai_service.invoke_answer(
-        system_prompt,
-        messages,
+    emit_private_event(
+        "ai_request_started",
         input_size=len(safe_content),
         attachment_count=(1 if asked.attachment_context else 0) + len(asked.images),
         correlation_id=call.correlation_id,
-        deadline_monotonic=call.deadline_monotonic,
-        clock=call.clock,
-        client=call.model,
-        effect_id=call.effect_id,
-        on_step=call.on_step,
-        tool=answer_tool(star_map=bool(star_map)),
     )
+    result = model_call.call(
+        system=system_prompt,
+        messages=messages,
+        tool=answer_tool(star_map=bool(star_map)),
+        max_tokens=config.settings().bedrock_max_tokens,
+        temperature=ANSWER_TEMPERATURE,
+        deadline=call.deadline_monotonic,
+        admission=call.admission,
+        on_partial=None if call.on_step is None else _step_reporter(call.on_step),
+        correlation_id=call.correlation_id,
+        clock=call.clock or time.monotonic,
+    )
+    return ai_service.provider_result(
+        result,
+        effect_id=call.effect_id or call.correlation_id or "unbound-user-allowance-effect",
+    )
+
+
+def _step_reporter(on_step: Callable[[int, str], None]) -> Callable[[str], None]:
+    """Tell `on_step` each step of the partly received answer the moment it closes."""
+    reported = 0
+
+    def report(partial_input: str) -> None:
+        nonlocal reported
+        steps = ai_service.completed_steps(partial_input)
+        while reported < len(steps):
+            # A step that cannot be delivered is not worth losing the answer
+            # over; the full result still arrives at the end.
+            try:
+                on_step(reported, steps[reported])
+            except Exception:
+                logger.warning("streamed step was not delivered", exc_info=True)
+            reported += 1
+
+    return report
 
 
 def _answer_from(

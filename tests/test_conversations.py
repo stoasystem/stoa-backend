@@ -1508,8 +1508,7 @@ def test_a_step_out_of_order_is_ignored(table, model, monkeypatch):
 
 def test_streaming_reports_steps_and_still_returns_the_whole_answer(monkeypatch):
     """Streaming must not change what the caller finally receives."""
-    import json as _json
-
+    from fakes.model import FakeModel, asking
     from stoa.services import ask_answer
 
     answer = {
@@ -1517,28 +1516,14 @@ def test_streaming_reports_steps_and_still_returns_the_whole_answer(monkeypatch)
         "answer": "x = 4",
         "hints": [],
     }
-    text = _json.dumps(answer, ensure_ascii=False)
-
-    def _events(tool_name):
-        yield {"chunk": {"bytes": _json.dumps({"type": "message_start", "message": {"id": "msg-1", "model": "anthropic.claude-sonnet-4-6", "usage": {"input_tokens": 11}}}).encode()}}
-        # The answer is the input of the forced tool call, streamed (#412).
-        yield {"chunk": {"bytes": _json.dumps({"type": "content_block_start", "index": 0, "content_block": {"type": "tool_use", "id": "toolu-1", "name": tool_name, "input": {}}}).encode()}}
-        for piece in (text[i : i + 7] for i in range(0, len(text), 7)):
-            yield {"chunk": {"bytes": _json.dumps({"type": "content_block_delta", "index": 0, "delta": {"type": "input_json_delta", "partial_json": piece}}).encode()}}
-        yield {"chunk": {"bytes": _json.dumps({"type": "message_delta", "usage": {"output_tokens": 22}, "delta": {"stop_reason": "tool_use"}}).encode()}}
-
-    class _Client:
-        def invoke_model_with_response_stream(self, **kwargs):
-            tool_name = _json.loads(kwargs["body"])["tool_choice"]["name"]
-            return {"body": _events(tool_name), "ResponseMetadata": {"RequestId": "req-1"}}
+    model = FakeModel(answer=answer)
+    model.pieces = 7
 
     seen = []
     result = ask_answer.answer(
         ask_answer.Asked(content="Wie loese ich 2x = 8?"),
         ask_answer.Asker(student_id="student-1", subject="math", grade="9", locale="de"),
-        ask_answer.ModelCall(
-            model=_Client(), on_step=lambda index, step: seen.append((index, step))
-        ),
+        asking(model, on_step=lambda index, step: seen.append((index, step))),
         read_star_map=lambda *_a, **_k: None,
     )
 

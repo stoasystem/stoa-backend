@@ -15,6 +15,8 @@ _EVENTS = frozenset(
         "model_output_parse_failed",
         "ai_request_started",
         "ai_response_received",
+        # The provider refused a model call or failed to answer it (#435).
+        "model_call_provider_failed",
         "title_generation_failed",
         "conversation_ai_failed",
         "conversation_ai_needs_reconciliation",
@@ -47,9 +49,19 @@ def emit_private_event(
     correlation_id: str | None = None,
     issue_count: int | None = None,
     wait_minutes: int | None = None,
+    stage: str | None = None,
+    provider_error_code: str | None = None,
+    http_status: int | None = None,
+    provider_request_id: str | None = None,
+    provider_message: str | None = None,
     level: int = logging.INFO,
 ) -> None:
-    """Emit only closed categories, class names, numeric sizes, and opaque IDs."""
+    """Emit only closed categories, class names, numeric sizes, and opaque IDs.
+
+    The one exception is `provider_message`, the provider's own error text of a
+    failed model call (#435): cut to 300 characters and reduced to the same
+    safe characters as every other value, so it cannot forge a field.
+    """
     if event_category not in _EVENTS:
         raise ValueError("unsupported private telemetry category")
     fields = [f"event_category={event_category}"]
@@ -67,6 +79,19 @@ def emit_private_event(
     ):
         if value is not None:
             fields.append(f"{name}={max(0, int(value))}")
+    for name, token, limit in (
+        ("stage", stage, 32),
+        ("provider_error_code", provider_error_code, 96),
+        ("provider_request_id", provider_request_id, 96),
+    ):
+        if token:
+            fields.append(f"{name}={_safe_token(token, fallback='-', limit=limit)}")
+    if http_status is not None:
+        fields.append(f"http_status={max(0, int(http_status))}")
+    if provider_message:
+        fields.append(
+            f"provider_message={_safe_token(provider_message, fallback='-', limit=300)}"
+        )
     if correlation_id:
         fields.append(
             f"correlation_id={_safe_token(correlation_id, fallback='server', limit=96)}"
