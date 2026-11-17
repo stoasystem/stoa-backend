@@ -151,6 +151,16 @@ def test_api_region_kinds(kind: Kind, service: str) -> None:
     assert (request.service, request.region) == (service, config.settings().aws_region)
 
 
+def test_voice_transcription_is_asked_in_its_own_region() -> None:
+    """Voxtral is called in Ireland only (#477, ADR-010), bounded inside the request."""
+    aws.install({Kind.VOICE_TRANSCRIPTION: object()})
+    aws.client(Kind.VOICE_TRANSCRIPTION)
+    [request] = aws.requests()
+    assert (request.service, request.region) == ("bedrock-runtime", "eu-west-1")
+    assert (request.config.connect_timeout, request.config.read_timeout) == (2, 10)
+    assert request.config.retries == {"mode": "standard", "total_max_attempts": 2}
+
+
 def test_bounded_configs_are_kept() -> None:
     reminder = aws.KINDS[Kind.SES_DISPATCH_REMINDER].config
     generation = aws.KINDS[Kind.LAMBDA_GENERATION].config
