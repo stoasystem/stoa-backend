@@ -149,6 +149,39 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "Matière : {subject}. La demande vous attend toujours. Merci de l'accepter dès que possible.",
         "it": "Materia: {subject}. La richiesta La attende ancora. La accetti appena possibile.",
     },
+    # An offer that closed (#455): it no longer asks the teacher to accept.
+    # The summary is the subject line, when the notification names its
+    # subject, followed by what became of the offer.
+    "teacher_help.dispatched.title_closed": {
+        "de": "Hilfeanfrage nicht mehr offen",
+        "en": "Help request no longer open",
+        "fr": "Demande d'aide plus disponible",
+        "it": "Richiesta di aiuto non più aperta",
+    },
+    "teacher_help.dispatched.subject_line": {
+        "de": "Fach: {subject}.",
+        "en": "Subject: {subject}.",
+        "fr": "Matière : {subject}.",
+        "it": "Materia: {subject}.",
+    },
+    "teacher_help.dispatched.closed.expired": {
+        "de": "Diese Anfrage ist abgelaufen.",
+        "en": "This request has expired.",
+        "fr": "Cette demande a expiré.",
+        "it": "Questa richiesta è scaduta.",
+    },
+    "teacher_help.dispatched.closed.reassigned": {
+        "de": "Diese Anfrage wurde an eine andere Lehrperson weitergegeben.",
+        "en": "This request was passed on to another teacher.",
+        "fr": "Cette demande a été transmise à un autre enseignant.",
+        "it": "Questa richiesta è stata affidata a un altro insegnante.",
+    },
+    "teacher_help.dispatched.closed.withdrawn": {
+        "de": "Diese Anfrage wurde von der lernenden Person zurückgezogen.",
+        "en": "This request was withdrawn by the student.",
+        "fr": "Cette demande a été retirée par l'élève.",
+        "it": "Questa richiesta è stata ritirata dallo studente.",
+    },
     # ── the dispatch reminder email (#141) ───────────────────────────────
     #
     # It leaves STOA, so it says that there is a request, its subject and where

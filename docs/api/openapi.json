@@ -9103,6 +9103,61 @@
         "title": "ParentUsagePeriodResponse",
         "type": "object"
       },
+      "ParentVoiceQuestionsCommand": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "allowed"
+        ],
+        "title": "ParentVoiceQuestionsCommand",
+        "type": "object"
+      },
+      "ParentVoiceQuestionsResponse": {
+        "description": "The switch, and who changed it last: this parent (`changedByMe`) or another.",
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "changedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changedat"
+          },
+          "changedByMe": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changedbyme"
+          },
+          "studentId": {
+            "title": "Studentid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "studentId",
+          "allowed"
+        ],
+        "title": "ParentVoiceQuestionsResponse",
+        "type": "object"
+      },
       "PasswordChangeConfirmRequest": {
         "additionalProperties": false,
         "properties": {
@@ -12782,6 +12837,19 @@
         "title": "StudentUsagePeriod",
         "type": "object"
       },
+      "StudentVoiceQuestionsResponse": {
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "allowed"
+        ],
+        "title": "StudentVoiceQuestionsResponse",
+        "type": "object"
+      },
       "SubscriptionAccountingExportResponse": {
         "properties": {
           "count": {
@@ -13699,6 +13767,35 @@
         "title": "TeacherActivationResponse",
         "type": "object"
       },
+      "TeacherAiHelpedStar": {
+        "description": "A lit star whose right answers came mostly after asking AI (#451).",
+        "properties": {
+          "askedAi": {
+            "title": "Askedai",
+            "type": "integer"
+          },
+          "independent": {
+            "title": "Independent",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unitId": {
+            "title": "Unitid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unitId",
+          "title",
+          "independent",
+          "askedAi"
+        ],
+        "title": "TeacherAiHelpedStar",
+        "type": "object"
+      },
       "TeacherApplicationRequest": {
         "additionalProperties": false,
         "properties": {
@@ -13975,6 +14072,13 @@
       },
       "TeacherHelpRequestDetail": {
         "properties": {
+          "aiHelpedStars": {
+            "items": {
+              "$ref": "#/components/schemas/TeacherAiHelpedStar"
+            },
+            "title": "Aihelpedstars",
+            "type": "array"
+          },
           "commonErrorCause": {
             "anyOf": [
               {
@@ -30377,6 +30481,178 @@
         }
       }
     },
+    "/parents/me/children/{child_id}/voice-questions": {
+      "get": {
+        "description": "Whether this child may ask by voice; off until a linked parent turns it on.",
+        "operationId": "get_child_voice_questions_parents_me_children__child_id__voice_questions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "child_id",
+            "required": true,
+            "schema": {
+              "title": "Child Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParentVoiceQuestionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Child Voice Questions",
+        "tags": [
+          "parents"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "parent_oversight",
+              "resource_type": "student"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": [
+            "child_id"
+          ]
+        }
+      },
+      "put": {
+        "description": "Turn voice questions on or off for this child. Any linked parent may; the last change wins.\n\nEach change is recorded with who made it and when, as the consent record.",
+        "operationId": "set_child_voice_questions_parents_me_children__child_id__voice_questions_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "child_id",
+            "required": true,
+            "schema": {
+              "title": "Child Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParentVoiceQuestionsCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParentVoiceQuestionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Child Voice Questions",
+        "tags": [
+          "parents"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "update",
+              "capability": null,
+              "purpose": "parent_oversight",
+              "resource_type": "student"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": [
+            "child_id"
+          ]
+        }
+      }
+    },
     "/parents/me/subscription": {
       "get": {
         "description": "Return the authenticated parent's current plan and MVP plan options.\n\nFrozen by card 007: plan and price options are not offered any more.",
@@ -33776,6 +34052,65 @@
           "authorization": [
             {
               "action": "update",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "student"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
+    "/students/me/voice-questions": {
+      "get": {
+        "description": "Whether this student may ask by voice. Off with no linked parent, or until one allows it.",
+        "operationId": "get_my_voice_questions_students_me_voice_questions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentVoiceQuestionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get My Voice Questions",
+        "tags": [
+          "students"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
               "capability": null,
               "purpose": "self_service",
               "resource_type": "student"

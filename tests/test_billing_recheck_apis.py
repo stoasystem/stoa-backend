@@ -17,6 +17,7 @@ from stoa.db.repositories import checkout_command_repo
 from stoa.main import app as main_app
 from stoa.models.billing import CheckoutCommandState
 from stoa.routers import admin, billing as billing_router, parents
+from stoa.routers.admin import subscriptions as admin_subscriptions
 from stoa.services import billing_reconciliation_service, subscription_service
 
 
@@ -157,7 +158,7 @@ def _admin_app(*, capability: str) -> tuple[TestClient, RetrievalOnlyProvider]:
     )
     provider = RetrievalOnlyProvider()
     config.install(_settings())
-    app.dependency_overrides[admin.get_billing_reconciliation_provider] = lambda: provider
+    app.dependency_overrides[admin_subscriptions.get_billing_reconciliation_provider] = lambda: provider
     return TestClient(app), provider
 
 
@@ -423,6 +424,6 @@ def test_no_admin_manual_success_route_or_recheck_create_capability() -> None:
         parents.get_billing_reconciliation_provider
     )
     assert "create_checkout_session" not in inspect.getsource(
-        admin.get_billing_reconciliation_provider
+        admin_subscriptions.get_billing_reconciliation_provider
     )
     assert "manual_paid" not in (parent_source + admin_source).lower()

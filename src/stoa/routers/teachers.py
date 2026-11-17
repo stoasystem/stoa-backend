@@ -55,6 +55,7 @@ from stoa.services import (
     attachment_service,
     classroom,
     help_requests,
+    knowledge_mastery_service,
     learning_session,
     locale_service,
     student_evidence,
@@ -290,6 +291,16 @@ class TeacherErrorCause(BaseModel):
     recentMistakes: int
 
 
+class TeacherAiHelpedStar(BaseModel):
+    """A lit star whose right answers came mostly after asking AI (#451)."""
+
+    unitId: str
+    title: str
+    # Its exercises answered right independently, and only after asking AI.
+    independent: int
+    askedAi: int
+
+
 class TeacherHelpRequestDetail(BaseModel):
     requestId: str
     conversationId: str
@@ -310,6 +321,10 @@ class TeacherHelpRequestDetail(BaseModel):
     # (#452), with its misconception in the teacher's language; `null` when
     # none of them is tagged with a cause.
     commonErrorCause: TeacherErrorCause | None = None
+    # The student's lit stars where more than half of the exercises answered
+    # right were answered after asking AI (#451), in the catalog's order, titled
+    # in the teacher's language. Empty when there are none.
+    aiHelpedStars: list[TeacherAiHelpedStar] = Field(default_factory=list)
 
 
 def _help_request_summary(
@@ -963,6 +978,9 @@ async def get_help_request(
         )
         for reply in help_requests.replies(conv_id, table=table)
     ]
+    # One evidence for the prep's items, read lazily: each reads what it needs once.
+    locale = locale_service.reader_locale(actor.user_id)
+    evidence = student_evidence.for_student(student_id, locale=locale)
 
     return TeacherHelpRequestDetail(
         requestId=view.request_id,
@@ -981,9 +999,8 @@ async def get_help_request(
         firstTeacherActionAt=view.first_teacher_action_at,
         sla=view.sla,
         weakTopics=_asked_topics(conv_id),
-        commonErrorCause=_common_error_cause(
-            student_id, locale_service.reader_locale(actor.user_id)
-        ),
+        commonErrorCause=_common_error_cause(evidence, locale),
+        aiHelpedStars=_ai_helped_stars(evidence),
     )
 
 
@@ -1012,13 +1029,14 @@ def _asked_topics(conversation_id: str) -> list[str]:
     return list(topics.values())[:_PREP_TOPIC_LIMIT]
 
 
-def _common_error_cause(student_id: str, locale: str) -> TeacherErrorCause | None:
+def _common_error_cause(
+    evidence: student_evidence.StudentEvidence, locale: str
+) -> TeacherErrorCause | None:
     """The student's commonest recent error cause, from their answer receipts (#452).
 
     As the asked topics, the request opens without it rather than not at all.
     """
     try:
-        evidence = student_evidence.for_student(student_id, locale=locale)
         common = evidence.most_common_error_cause
         recent = sum(item.count for item in evidence.recent_error_causes)
     except Exception as exc:
@@ -1034,6 +1052,32 @@ def _common_error_cause(student_id: str, locale: str) -> TeacherErrorCause | Non
         count=common.count,
         recentMistakes=recent,
     )
+
+
+def _ai_helped_stars(evidence: student_evidence.StudentEvidence) -> list[TeacherAiHelpedStar]:
+    """The lit stars the student answered right mostly after asking AI (#451).
+
+    The rule is `knowledge_mastery_service.lit_mostly_with_ai`. As the asked
+    topics, the request opens without them rather than not at all.
+    """
+    try:
+        unit_ids = knowledge_mastery_service.lit_mostly_with_ai(evidence)
+        counts = evidence.right_answers_by_unit
+        titles = {str(unit.get("id") or ""): unit.get("title") for unit in evidence.content.units}
+    except Exception as exc:
+        logger.warning(
+            "help_request_ai_helped_stars_unavailable error_class=%s", type(exc).__name__
+        )
+        return []
+    return [
+        TeacherAiHelpedStar(
+            unitId=unit_id,
+            title=_text(titles.get(unit_id)) or unit_id,
+            independent=counts[unit_id].independent,
+            askedAi=counts[unit_id].asked_ai,
+        )
+        for unit_id in unit_ids
+    ]
 
 
 @router.get("/me/help-requests/{request_id}/attachments/{attachment_id}/content")

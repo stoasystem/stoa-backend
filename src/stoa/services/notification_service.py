@@ -18,6 +18,7 @@ from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
 from stoa.services import (
+    curriculum_service,
     email_layout,
     email_unsubscribe,
     learning_profile_service,
@@ -996,6 +997,10 @@ def emit_teacher_help_dispatched(
         "dispatch_id": dispatch_id,
         "deadline_at": deadline_at,
     }
+    # Kept so a closed offer's summary can still name it (#455).
+    subject_id = curriculum_service.subject_id(conversation.get("subject"))
+    if subject_id:
+        metadata["subject"] = subject_id
     if standing:
         metadata["standing"] = True
     create_event_safe(
@@ -1049,11 +1054,15 @@ OFFER_STATES = frozenset({"expired", "reassigned", "withdrawn"})
 def close_teacher_help_offer(*, dispatch_id: str, state: str, now: str | None = None) -> None:
     """Mark an offer's notification as no longer open, saying what became of it (#391).
 
-    The notification keeps its text; its metadata gains `offer_state` (one of
-    `OFFER_STATES`) and `offer_closed_at`, so the teacher's bell shows
-    "expired" or "passed on" instead of a request that opens onto nothing,
-    and an unread one is marked read, so a lapsed offer does not stay in the
-    unread count. A notification already closed is left as it was. Written
+    Its metadata gains `offer_state` (one of `OFFER_STATES`) and
+    `offer_closed_at`, so the teacher's bell shows "expired" or "passed on"
+    instead of a request that opens onto nothing, and an unread one is marked
+    read, so a lapsed offer does not stay in the unread count. Its title and
+    summary are rewritten in the teacher's language to say what became of the
+    offer, so it no longer asks them to accept within minutes (#455); the
+    subject is named when the notification kept it. Only the closed offer's
+    own notification changes: an open one, a standing offer among them, keeps
+    its text. A notification already closed is left as it was. Written
     through the notification repository, behind the student's account fence
     (#397); best effort: a failure is logged with its exception type only.
     """
@@ -1072,6 +1081,7 @@ def close_teacher_help_offer(*, dispatch_id: str, state: str, now: str | None = 
         timestamp = now or now_iso()
         updates: dict[str, Any] = {
             "metadata": {**metadata, "offer_state": state, "offer_closed_at": timestamp},
+            **_closed_offer_text(item, metadata, state),
         }
         if item.get("status") == "created":
             updates["status"] = "read"
@@ -1079,6 +1089,26 @@ def close_teacher_help_offer(*, dispatch_id: str, state: str, now: str | None = 
         notification_repo.update_event(event_id, updates)
     except Exception as exc:  # noqa: BLE001 - best effort by contract
         logger.warning("teacher_help_offer_close_failed error=%s", type(exc).__name__)
+
+
+def _closed_offer_text(
+    item: Mapping[str, Any], metadata: Mapping[str, Any], state: str
+) -> dict[str, str]:
+    """A closed offer's title and summary in its teacher's language (#455)."""
+    locale = _recipient_locale(str(item.get("recipient_id") or "") or None)
+    closed = message_catalog.text(f"teacher_help.dispatched.closed.{state}", locale)
+    summary = closed
+    if curriculum_service.subject_id(metadata.get("subject")):
+        subject_line = message_catalog.text(
+            "teacher_help.dispatched.subject_line",
+            locale,
+            subject=learning_profile_service.subject_name(metadata.get("subject"), locale),
+        )
+        summary = f"{subject_line} {closed}"
+    return {
+        "title": message_catalog.text("teacher_help.dispatched.title_closed", locale),
+        "summary": summary,
+    }
 
 
 def emit_moderation_update(

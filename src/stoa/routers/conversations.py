@@ -12,10 +12,8 @@ import json
 import logging
 from collections.abc import Mapping
 from datetime import datetime, timezone
-from itertools import islice
-from typing import Any, Literal, NamedTuple, cast
+from typing import Any, Literal, cast
 
-from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -86,7 +84,6 @@ from stoa.services.ask_question.models import (
 from stoa.services.learning_session import (
     active_conversation_generation,
     conversation_grade,
-    conversation_response_items,
     required_conversation_text,
 )
 
@@ -126,15 +123,9 @@ def _now() -> str:
 # List budget: at most 25 index pages and 200 conversations per request.
 _CONVERSATION_LIST_LIMIT = 200
 _CONVERSATION_LIST_PAGE_BUDGET = 25
-# A read on GSI-StudentId continues from the index's key as well as the table's.
-_STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
 
-
-class ConversationListPage(NamedTuple):
-    """Conversations in hand, plus whether older ones were left unread."""
-
-    items: list[dict]
-    truncated: bool
+# Conversations in hand, plus whether older ones were left unread.
+ConversationListPage = learning_session.StudentSessions
 
 
 def _list_conversations(
@@ -143,38 +134,19 @@ def _list_conversations(
     limit: int = _CONVERSATION_LIST_LIMIT,
     page_budget: int = _CONVERSATION_LIST_PAGE_BUDGET,
 ) -> ConversationListPage:
-    """List this student's conversations, newest first.
+    """This student's conversations, newest first; the student is told when cut short.
 
-    GSI-StudentId carries every row holding the student id - messages, usage
-    events, reports - so a page can be consumed entirely by rows the filter drops
-    and still leave conversations behind the continuation key. Follow the key
-    instead of trusting one page, but stop at an explicit budget so a heavy
-    history cannot turn the list into an unbounded table walk; descending order
-    means a truncated answer is the most recent conversations, and the caller is
-    told it was truncated.
+    The listing is `learning_session.list_for_student`. A page the table hands
+    back malformed is this route's `upload_service_unavailable`.
     """
-    reads = db_table.pages(
-        "query",
-        key=_STUDENT_INDEX_KEY,
-        table=db_table.table(),
-        IndexName="GSI-StudentId",
-        KeyConditionExpression=Key("student_id").eq(student_id),
-        FilterExpression=Attr("entity_type").eq("conversation"),
-        ScanIndexForward=False,
-    )
-    items: list[dict] = []
     try:
-        for page in islice(reads, page_budget):
-            items.extend(conversation_response_items({"Items": page.items}))
-            if page.last_key is None:
-                return ConversationListPage(items[:limit], len(items) > limit)
-            if len(items) >= limit:
-                return ConversationListPage(items[:limit], True)
+        return learning_session.list_for_student(
+            student_id, limit=limit, page_budget=page_budget
+        )
     except db_table.TableUnavailable as exc:
         if exc.code.startswith("malformed"):
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
         raise
-    return ConversationListPage(items[:limit], True)
 
 
 # ── Request / Response models ──────────────────────────────────────────────────

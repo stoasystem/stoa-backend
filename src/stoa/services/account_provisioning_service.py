@@ -14,6 +14,7 @@ that was not delivered cannot be recovered - it has to be reissued.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 import secrets
@@ -525,6 +526,37 @@ def generate_initial_password() -> str:
             and any(char in PASSWORD_DIGITS for char in password)
         ):
             return password
+
+
+def require_password_change_at_next_sign_in(
+    account_id: str, profile: Mapping[str, object]
+) -> None:
+    """Raise the local flag that forces this account through a password change.
+
+    The administrator's password reset calls this before it replaces the provider
+    password, and the order is deliberate. A raised flag over a still-valid old
+    password only forces a change the account can complete by itself; a new
+    temporary password with no flag would hand out an unforced credential, which
+    is the failure this exists to prevent.
+    """
+    operation = user_repo.profile_update_operation(
+        account_id,
+        update_expression="SET #must_change_password = :required, updated_at = :now",
+        expression_attribute_names={"#must_change_password": MUST_CHANGE_PASSWORD_FIELD},
+        expression_attribute_values={
+            ":required": True,
+            ":now": datetime.now(UTC).replace(microsecond=0).isoformat(),
+        },
+        expected_version=profile.get("version"),
+    )
+    try:
+        db_table.fenced(account_id, [operation])
+    except (
+        account_deletion_repo.AccountDeletionConflict,
+        db_table.WriteRefused,
+        db_table.TableUnavailable,
+    ) as exc:
+        raise AccountViolation(AccountErrorCode.ACCOUNT_PASSWORD_RESET_CONFLICT) from exc
 
 
 def _issue_invitation(
