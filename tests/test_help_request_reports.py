@@ -35,7 +35,6 @@ from test_chat_help_request_lifecycle import (
     _accept_and_reply,
     _dispatch_to,
     _help,
-    _reply,
     _set_status,
 )
 from test_chat_help_request_lifecycle import table as table  # noqa: F401 - the fixture
