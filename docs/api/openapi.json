@@ -14053,6 +14053,15 @@
               }
             ],
             "title": "Message"
+          },
+          "mode": {
+            "default": "text",
+            "enum": [
+              "text",
+              "classroom"
+            ],
+            "title": "Mode",
+            "type": "string"
           }
         },
         "required": [
@@ -14101,6 +14110,15 @@
             },
             "title": "Messages",
             "type": "array"
+          },
+          "mode": {
+            "default": "text",
+            "enum": [
+              "text",
+              "classroom"
+            ],
+            "title": "Mode",
+            "type": "string"
           },
           "notes": {
             "items": {
@@ -14194,6 +14212,15 @@
             "title": "Grade",
             "type": "string"
           },
+          "mode": {
+            "default": "text",
+            "enum": [
+              "text",
+              "classroom"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "priority": {
             "default": "medium",
             "title": "Priority",
@@ -14259,6 +14286,15 @@
           },
           "createdAt": {
             "title": "Createdat",
+            "type": "string"
+          },
+          "mode": {
+            "default": "text",
+            "enum": [
+              "text",
+              "classroom"
+            ],
+            "title": "Mode",
             "type": "string"
           },
           "requestId": {
