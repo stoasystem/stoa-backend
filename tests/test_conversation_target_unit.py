@@ -29,7 +29,6 @@ from fakes.ask_question import (
     CONV,
     STUDENT,
     _assistant,
-    _CapturingBedrockClient,
     _client,
     _done,
     _messages,
@@ -42,8 +41,7 @@ from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fi
 from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from stoa import aws
-from stoa.aws import Kind
+from fakes.model import FakeModel, install
 from stoa.jobs import conversation_generation
 from stoa.services import (
     curriculum_service,
@@ -338,9 +336,8 @@ def test_the_target_comes_through_the_real_model_path(
     table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The model is told the rule, and a Chinese wish reaches it beside the map."""
-    provider = _CapturingBedrockClient(_answer(_ref("funktionen-ableitung")))
+    provider = install(FakeModel(answer=_answer(_ref("funktionen-ableitung"))))
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    aws.install({Kind.BEDROCK_RUNTIME: provider})
     client = _client()
 
     response = _send(client, "key-1", language="de", content=WANT_TO_PRACTISE)
@@ -348,13 +345,13 @@ def test_the_target_comes_through_the_real_model_path(
     assert response.status_code == 200, response.text
     assert _target(response) == {"unitId": "funktionen-ableitung"}
     assert _assistant(_read_back(client))["targetUnit"] == {"unitId": "funktionen-ableitung"}
-    assert provider.request_body is not None
-    system = provider.request_body["system"]
+    assert provider.requests
+    system = provider.system()
     assert "Set it only when the student clearly wants" in system
     assert "for a question about a concept" in system
     assert "when the wish fits several" in system
     assert '"target_unit_id"' in system
-    turn = _student_turn(provider.request_body)
+    turn = _student_turn(provider.requests[-1])
     assert WANT_TO_PRACTISE in turn
     # The topic the model may name whole is shown under the ref it is checked by.
     assert f"## {_topic_ref('funktionen')} | Funktionen" in turn

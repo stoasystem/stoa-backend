@@ -2,8 +2,8 @@
 
 Every test of the question path that runs the real route, entry points and
 repository builds on this: the conversation table (the shared `FakeTable`,
-reached everywhere the question reads it), the model (`FakeBedrock` behind the
-real allowance client), and who answers a committed question (`invokes`
+reached everywhere the question reads it), the model (`FakeModel`, the
+in-memory model-call adapter, behind the real allowance admission), and who answers a committed question (`invokes`
 records what would reach the generation worker; without it the answer is
 generated in the request). Only the model call and the entitlement read are
 replaced.
@@ -18,11 +18,11 @@ they are collected here so no question-path test imports another test file.
 
 from __future__ import annotations
 
-import copy
 import hashlib
 import io
 import json
 import re
+import time
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Callable
@@ -33,8 +33,8 @@ from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from fakes.admission import seed_plan
-from fakes import model_reply
-from fakes.bedrock import FakeBedrock
+from fakes.model import FakeModel, Reply
+from fakes.model import install as install_model
 from fakes.dynamodb import FakeTable
 from fakes.learning_session import patch_session_table, seed_conversation
 from stoa import aws
@@ -45,12 +45,15 @@ from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import (
+    ai_service,
     allowance_service,
+    ask_answer,
     ask_question,
     attachment_service,
     curriculum_service,
     knowledge_mastery_service,
     locale_service,
+    model_call,
     star_map_candidates,
     student_evidence,
 )
@@ -205,15 +208,15 @@ def charge_failures_as_paid(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_admission.Meter, "restore", lambda _self, _evidence: None)
 
 @pytest.fixture
-def model(monkeypatch: pytest.MonkeyPatch) -> FakeBedrock:
-    """The Bedrock runtime the answer is asked of, behind the real allowance client."""
-    model = FakeBedrock(answer=ANSWER)
+def model(monkeypatch: pytest.MonkeyPatch) -> FakeModel:
+    """The model the answer is asked of, behind the real allowance admission."""
+    model = FakeModel(answer=ANSWER)
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    aws.install({Kind.BEDROCK_RUNTIME: model})
+    install_model(model)
     return model
 
 
-def default_language(model: FakeBedrock, index: int = -1) -> str:
+def default_language(model: FakeModel, index: int = -1) -> str:
     """The language the model was told to fall back on, as its code."""
     match = re.search(r"DEFAULT LANGUAGE: \w+ \((\w+)\)", model.system(index))
     assert match is not None
@@ -497,18 +500,6 @@ def _private_message(sk: str = "MSG#student", **overrides: Any) -> dict[str, Any
 # ── A provider answering with fixed text, for the allowance tests ───────────
 
 
-class _ResponseBody:
-    def __init__(self, payload: dict[str, object]) -> None:
-        self._payload = payload
-        self.closed = False
-
-    def read(self) -> bytes:
-        return json.dumps(self._payload).encode()
-
-    def close(self) -> None:
-        self.closed = True
-
-
 def _command() -> dict[str, object]:
     """One message command in the shape the table hands it back."""
     command: dict[str, object] = {
@@ -548,61 +539,35 @@ _COMPLETE = json.dumps(
 )
 
 
-class _Provider:
-    """CountTokens plus both InvokeModel shapes, replying with fixed text."""
+def _provider(*, text: str, stop_reason: str) -> FakeModel:
+    """A model replying with fixed tool input `text`, cut short when `stop_reason` says so."""
+    model = FakeModel(
+        Reply(
+            input=text,
+            stop_reason=stop_reason,
+            usage={"input_tokens": 70, "output_tokens": 2048},
+        )
+    )
+    model.pieces = max(1, -(-len(text) // 16))
+    return model
 
-    def __init__(self, *, text: str, stop_reason: str) -> None:
-        self.text = text
-        self.stop_reason = stop_reason
-        self.invoke_calls: list[dict[str, object]] = []
 
-    def count_tokens(self, **_kwargs: object) -> dict[str, object]:
-        return {
-            "inputTokens": 90,
-            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "count-request-1"},
-        }
+def _ask_admitted(admission: Any) -> Any:
+    """Ask the installed model for an answer under `admission`, as `ask_answer` does.
 
-    def invoke_model(self, **kwargs: object) -> dict[str, object]:
-        self.invoke_calls.append(copy.deepcopy(kwargs))
-        request = json.loads(str(kwargs["body"]))
-        return {
-            "body": _ResponseBody(
-                {
-                    "id": "provider-message-1",
-                    "model": "anthropic.claude-sonnet-4-6",
-                    "stop_reason": self.stop_reason,
-                    "usage": {"input_tokens": 70, "output_tokens": 2048},
-                    "content": model_reply.content(self.text, request),
-                }
-            ),
-            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "invoke-request-1"},
-        }
-
-    def invoke_model_with_response_stream(self, **kwargs: object) -> dict[str, object]:
-        self.invoke_calls.append(copy.deepcopy(kwargs))
-        request = json.loads(str(kwargs["body"]))
-        events: list[dict[str, Any]] = [
-            {
-                "type": "message_start",
-                "message": {
-                    "id": "provider-message-1",
-                    "model": "anthropic.claude-sonnet-4-6",
-                    "usage": {"input_tokens": 70},
-                },
-            },
-            *model_reply.stream_events(
-                self.text, request, pieces=max(1, -(-len(self.text) // 16))
-            ),
-            {
-                "type": "message_delta",
-                "delta": {"stop_reason": self.stop_reason},
-                "usage": {"output_tokens": 2048},
-            },
-        ]
-        return {
-            "body": [{"chunk": {"bytes": json.dumps(event).encode()}} for event in events],
-            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "invoke-request-1"},
-        }
+    Returns the answer as `ai_service` reads it; raises its `AIInvocationFailure`.
+    """
+    result = model_call.call(
+        system="Answer the question.",
+        messages=[{"role": "user", "content": "Wie kürze ich Brüche?"}],
+        tool=ask_answer.answer_tool(star_map=False),
+        max_tokens=2048,
+        temperature=ask_answer.ANSWER_TEMPERATURE,
+        deadline=time.monotonic() + 90,
+        admission=admission,
+        on_partial=lambda _partial: None,
+    )
+    return ai_service.provider_result(result, effect_id=admission.effect_id)
 
 
 def _run_message_command(
@@ -615,9 +580,8 @@ def _run_message_command(
     Returns that table and what `submit` returned or raised.
     """
     allowance = AtomicAllowanceTable()
-    provider = _Provider(text=text, stop_reason=stop_reason)
     _patch_allowance_table(monkeypatch, allowance)
-    aws.install({Kind.BEDROCK_RUNTIME: provider})
+    install_model(_provider(text=text, stop_reason=stop_reason))
     monkeypatch.setattr(dispatch, "override", dispatch.in_process)
     try:
         outcome: Any = _submit(key)
@@ -698,55 +662,6 @@ ANSWERS: dict[str, tuple[dict[str, Any], str]] = {
         "Indizio",
     ),
 }
-
-
-
-class _CapturingBedrockClient:
-    """The Bedrock runtime as boto3 hands it out: counts, answers, streams.
-
-    Records the body it was sent and answers with `answer` as the model's
-    JSON. Nothing else of the provider is stood in for.
-    """
-
-    def __init__(self, answer: dict[str, Any] | None = None) -> None:
-        self.request_body: dict | None = None
-        self.answer = answer or ANSWERS["de"][0]
-
-    def count_tokens(self, **_kwargs: object) -> dict[str, object]:
-        return {
-            "inputTokens": 90,
-            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "count-1"},
-        }
-
-    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
-        self.request_body = json.loads(body)
-        payload = {
-            "id": "msg_test_1",
-            "model": modelId,
-            "stop_reason": "tool_use",
-            "content": model_reply.content(self.answer, self.request_body),
-            "usage": {"input_tokens": 10, "output_tokens": 5},
-        }
-        return {
-            "ResponseMetadata": {"RequestId": "req-test-1"},
-            "body": io.BytesIO(json.dumps(payload).encode()),
-        }
-
-    def invoke_model_with_response_stream(self, *, modelId: str, body: str):  # noqa: N803
-        self.request_body = json.loads(body)
-        events = [
-            {"type": "message_start", "message": {
-                "id": "msg_test_1", "model": modelId, "usage": {"input_tokens": 70},
-            }},
-            # Cut in two, so the steps are found in a partly received answer.
-            *model_reply.stream_events(self.answer, self.request_body),
-            {"type": "message_delta", "delta": {"stop_reason": "tool_use"},
-             "usage": {"output_tokens": 25}},
-        ]
-        return {
-            "ResponseMetadata": {"RequestId": "req-test-1"},
-            "body": [{"chunk": {"bytes": json.dumps(event).encode()}} for event in events],
-        }
 
 
 
@@ -900,52 +815,24 @@ def _shown_stars(body: dict[str, Any]) -> dict[str, str]:
 Answer = Callable[[dict[str, Any]], dict[str, Any]]
 
 
-class _Bedrock:
-    """The Bedrock runtime as boto3 hands it out; each answer is written from the request."""
+class _Bedrock(FakeModel):
+    """The model, each answer written from the request it is sent by the next of `answers`."""
 
     def __init__(self) -> None:
-        self.bodies: list[dict[str, Any]] = []
+        super().__init__(respond=lambda request: self.answers.pop(0)(request))
         self.answers: list[Answer] = []
+        self.pieces = 1
 
-    def count_tokens(self, **_kwargs: object) -> dict[str, object]:
-        return {"inputTokens": 90, "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "c"}}
-
-    def _answer(self, body: str) -> tuple[dict[str, Any], dict[str, Any]]:
-        request = json.loads(body)
-        self.bodies.append(request)
-        return self.answers.pop(0)(request), request
-
-    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
-        payload = {
-            "id": "msg_test_1",
-            "model": modelId,
-            "stop_reason": "tool_use",
-            "content": model_reply.content(*self._answer(body)),
-            "usage": {"input_tokens": 10, "output_tokens": 5},
-        }
-        return {"ResponseMetadata": {"RequestId": "r"}, "body": io.BytesIO(json.dumps(payload).encode())}
-
-    def invoke_model_with_response_stream(self, *, modelId: str, body: str):  # noqa: N803
-        answer, request = self._answer(body)
-        events = [
-            {"type": "message_start", "message": {
-                "id": "msg_test_1", "model": modelId, "usage": {"input_tokens": 70},
-            }},
-            *model_reply.stream_events(answer, request, pieces=1),
-            {"type": "message_delta", "delta": {"stop_reason": "tool_use"},
-             "usage": {"output_tokens": 25}},
-        ]
-        return {
-            "ResponseMetadata": {"RequestId": "r"},
-            "body": [{"chunk": {"bytes": json.dumps(event).encode()}} for event in events],
-        }
+    @property
+    def bodies(self) -> list[dict[str, Any]]:
+        return self.requests
 
 
 @pytest.fixture
 def bedrock(table, monkeypatch: pytest.MonkeyPatch) -> _Bedrock:
     provider = _Bedrock()
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    aws.install({Kind.BEDROCK_RUNTIME: provider})
+    install_model(provider)
     return provider
 
 
@@ -1009,10 +896,11 @@ class _Bucket:
 
 
 @pytest.fixture
-def bucket(model: FakeBedrock, monkeypatch: pytest.MonkeyPatch) -> _Bucket:
+def bucket(model: FakeModel, monkeypatch: pytest.MonkeyPatch) -> _Bucket:
     """The private bucket uploads are read from; the model is still `model`."""
     bucket = _Bucket()
-    aws.install({Kind.S3: bucket, Kind.BEDROCK_RUNTIME: model})
+    aws.install({Kind.S3: bucket})
+    install_model(model)
     return bucket
 
 

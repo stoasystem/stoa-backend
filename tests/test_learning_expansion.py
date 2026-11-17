@@ -1,11 +1,8 @@
-import json
 from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa import aws
-from stoa.aws import Kind
 from stoa.config import Settings
 from stoa.db.repositories import user_repo
 from stoa.deps import get_actor, get_current_user
@@ -14,6 +11,7 @@ from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import ask_answer, learning_profile_service
 from actor_helpers import install_actor_overrides
 from fakes import student_evidence as fake_evidence
+from fakes.model import FakeModel, Reply, asking
 
 
 def _settings() -> Settings:
@@ -45,57 +43,28 @@ def _parents_client(user: dict) -> TestClient:
 
 
 def test_ai_prompt_context_differs_for_language_subject(monkeypatch):
-    captured = {}
-
-    class FakeBody:
-        def read(self):
-            return json.dumps(
-                {
-                    "id": "msg-learning-expansion",
-                    "model": "anthropic.claude-sonnet-4-6",
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "id": "toolu-1",
-                            "name": ask_answer.ANSWER_TOOL_NAME,
-                            "input": {
-                                "steps": ["Review the grammar."],
-                                "answer": "Corrected sentence.",
-                                "hints": [],
-                                "similar_exercises": [],
-                                "knowledge_points": ["word order"],
-                            },
-                        }
-                    ],
-                    "stop_reason": "end_turn",
-                    "usage": {"input_tokens": 31, "output_tokens": 12},
-                }
-            ).encode()
-
-        def close(self):
-            return None
-
-    class FakeBedrock:
-        def invoke_model(self, **kwargs):
-            captured.update(kwargs)
-            return {
-                "body": FakeBody(),
-                "ResponseMetadata": {
-                    "HTTPStatusCode": 200,
-                    "RequestId": "request-learning-expansion",
-                },
-            }
-
-    aws.install({Kind.BEDROCK_RUNTIME: FakeBedrock()})
+    model = FakeModel(
+        Reply(
+            input={
+                "steps": ["Review the grammar."],
+                "answer": "Corrected sentence.",
+                "hints": [],
+                "similar_exercises": [],
+                "knowledge_points": ["word order"],
+            },
+            stop_reason="end_turn",
+            usage={"input_tokens": 31, "output_tokens": 12},
+        )
+    )
 
     answer = ask_answer.answer(
         ask_answer.Asked(content="Correct this sentence"),
         ask_answer.Asker(student_id="student-1", subject="german", grade="Grade 8", locale="de"),
-        ask_answer.ModelCall(),
+        asking(model),
         read_star_map=lambda *_a, **_k: None,
     )
 
-    payload = json.loads(captured["body"])
+    payload = model.requests[-1]
     assert "language learning" in payload["system"]
     assert "Subject label: German" in payload["system"]
     assert [point.name for point in answer.structured.knowledgePoints] == ["word order"]

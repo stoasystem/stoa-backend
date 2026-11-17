@@ -172,6 +172,21 @@ def _no_aws_clients():
 
 
 @pytest.fixture(autouse=True)
+def _no_model_call_adapter():
+    """Every test starts with no model-call adapter installed (#436).
+
+    A test that asks the model installs its own with
+    `stoa.services.model_call.install`, usually the in-memory `FakeAdapter`;
+    one that does not raises `NotInstalled` rather than reaching Bedrock.
+    """
+    from stoa.services import model_call
+
+    model_call.reset_for_test()
+    yield
+    model_call.reset_for_test()
+
+
+@pytest.fixture(autouse=True)
 def _configuration_from_the_environment():
     """Every test starts from settings built from the environment (#359).
 

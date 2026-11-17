@@ -18,7 +18,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from fakes.bedrock import FakeBedrock
+from fakes.model import FakeModel, asking
 from fakes.dynamodb import FakeTable, as_stored
 
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -529,11 +529,11 @@ def test_a_grade_choice_names_the_same_school_year_as_the_assistant_is_told():
 # ── What the model is told ───────────────────────────────────────────────────
 
 def _system_prompt(*, grade: str, language: str = "de") -> str:
-    model = FakeBedrock()
+    model = FakeModel()
     ask_answer.answer(
         ask_answer.Asked(content="how do I add fractions?"),
         ask_answer.Asker(student_id="student-1", subject="math", grade=grade, locale=language),
-        ask_answer.ModelCall(model=model, effect_id="effect-grade-1"),
+        asking(model, effect_id="effect-grade-1"),
         read_star_map=lambda *_a, **_k: None,
     )
     return model.system()

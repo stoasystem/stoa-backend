@@ -8,10 +8,10 @@ import json
 import logging
 import time
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, cast
+from typing import Any, NoReturn, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from stoa import aws
@@ -1194,6 +1194,49 @@ def commit_message_command(
     )
 
 
+def _fail_generation(
+    exc: Exception,
+    *,
+    allowance: _admission.Meter,
+    effect_id: str,
+    record_failure: Callable[..., None],
+    content: str,
+    attachment_count: int,
+    command_id: str,
+) -> NoReturn:
+    """End an attempt whose answer failed, settling a reply that was paid for."""
+    # A reply that was cut off or garbled was still paid for; its usage rides
+    # on the failure so the reservation can be released here.
+    evidence = UsageEvidence.from_failure(exc, effect_id=effect_id)
+    if evidence is not None:
+        try:
+            allowance.observe(evidence)
+            allowance.restore(evidence)
+        except AdmissionError as failure:
+            raise failure from None
+    # Whether the same command may be generated again is the model call's to
+    # say: never once a reply was paid for, since generating it again would
+    # call the model for an effect already settled.
+    if isinstance(exc, ai_service.AIInvocationFailure):
+        record_failure(exc.category, retryable=exc.retryable)
+    else:
+        record_failure("provider_error", retryable=evidence is None)
+    emit_private_event(
+        "conversation_ai_failed",
+        exception=exc,
+        input_size=len(content),
+        attachment_count=attachment_count,
+        correlation_id=command_id,
+        level=logging.ERROR,
+    )
+    if evidence is not None:
+        # A reply that came back and cannot be used (`malformed_response`,
+        # `incomplete_output`) failed the message for good, as the command now
+        # says; it has nothing to do with an upload (#412).
+        raise AttachmentDecisionError(AskQuestionErrorCode.MESSAGE_FAILED) from None
+    raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+
+
 def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     """Generate, store and settle the answer to one committed command.
 
@@ -1382,7 +1425,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             reserve_seconds=_AI_PERSIST_RESERVE_SECONDS,
         )
         active_conversation_generation(student_id, table)
-        metered = allowance.model(
+        admission = allowance.admission(
             on_invocation=lambda: _conversation_repository_call(
                 lambda: ask_question_store.record_provider_invocation(
                     conversation_id=conv_id,
@@ -1417,10 +1460,10 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                     answer_style=answer_style,
                 ),
                 ask_answer.ModelCall(
-                    model=metered,
+                    admission=admission,
                     deadline_monotonic=ai_deadline,
                     correlation_id=command_id,
-                    effect_id=metered.effect_id,
+                    effect_id=admission.effect_id,
                     on_step=_publish_generation_step(
                         conv_id, student_id, command_id=command_id, attempt=lease_result.attempt
                     ),
@@ -1429,49 +1472,40 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             provider_answered = True
             assert answer.provider is not None
             evidence = UsageEvidence.from_provider(
-                answer.provider, effect_id=metered.effect_id
+                answer.provider, effect_id=admission.effect_id
             )
         except AdmissionError as failure:
-            # Refused at counting, admission or the allowance itself, before the
-            # model was paid for, the same message may be sent again. Refused over
-            # the evidence of an answer that did come back, it may not.
+            # Refused over the evidence of an answer that did come back: the
+            # same message may not be sent again.
             record_failure(failure.code.value, retryable=not provider_answered)
             raise
-        except Exception as exc:
-            if evidence is None:
-                # A reply that was cut off or garbled was still paid for; its usage
-                # rides on the failure so the reservation can be released here.
-                evidence = UsageEvidence.from_failure(exc, effect_id=metered.effect_id)
-            if evidence is not None:
-                try:
-                    allowance.observe(evidence)
-                    allowance.restore(evidence)
-                except AdmissionError as failure:
-                    raise failure from None
-            # A reply that was paid for is a known result: generating the same
-            # command again would call the model for an effect already settled.
-            record_failure(
-                exc.category
-                if isinstance(exc, ai_service.AIInvocationFailure)
-                else "provider_error",
-                retryable=evidence is None,
-            )
-            emit_private_event(
-                "conversation_ai_failed",
-                exception=exc,
-                input_size=len(committed.content),
+        except ai_service.AIInvocationFailure as exc:
+            if exc.usage is None and exc.category in _admission.REFUSAL_CODES:
+                # Refused at counting or by the allowance, before the model was
+                # paid for; the model call says whether it may be sent again.
+                record_failure(exc.category, retryable=exc.retryable)
+                raise AdmissionError(
+                    AskQuestionErrorCode(exc.category), internal_detail=exc.detail
+                ) from None
+            _fail_generation(
+                exc,
+                allowance=allowance,
+                effect_id=admission.effect_id,
+                record_failure=record_failure,
+                content=committed.content,
                 attachment_count=len(prepared),
-                correlation_id=command_id,
-                level=logging.ERROR,
+                command_id=command_id,
             )
-            if evidence is not None:
-                # A reply that came back and cannot be used (`malformed_response`,
-                # `incomplete_output`) failed the message for good, as the command
-                # now says; it has nothing to do with an upload (#412).
-                raise AttachmentDecisionError(AskQuestionErrorCode.MESSAGE_FAILED) from None
-            raise AttachmentDecisionError(
-                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-            ) from None
+        except Exception as exc:
+            _fail_generation(
+                exc,
+                allowance=allowance,
+                effect_id=admission.effect_id,
+                record_failure=record_failure,
+                content=committed.content,
+                attachment_count=len(prepared),
+                command_id=command_id,
+            )
         # Kept until the answer is stored for good, so an attempt that dies on
         # the way is finished by the next one without a second model call.
         try:

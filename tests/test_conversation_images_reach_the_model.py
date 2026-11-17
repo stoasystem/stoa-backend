@@ -32,7 +32,7 @@ from fakes.ask_question import _parser_in_process  # noqa: F401 - the fixture
 from fakes.ask_question import bucket as bucket  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from fakes.bedrock import FakeBedrock
+from fakes.model import FakeModel, install
 from stoa import aws
 from stoa.aws import Kind
 from stoa.jobs import conversation_generation
@@ -61,7 +61,7 @@ def _no_memory_personalisation(stub_memory_summary) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _answers(model: FakeBedrock) -> None:
+def _answers(model: FakeModel) -> None:
     model.answer = MODEL_ANSWER
 
 
@@ -386,25 +386,13 @@ def test_images_committed_before_the_total_limit_fail_the_worker_without_a_call(
 
 # ── Through the allowance client: counted as it is sent ──────────────────────
 
-class _Bedrock(FakeBedrock):
-    """The runtime client the allowance wrapper builds: counts, then answers."""
-
-    def __init__(self) -> None:
-        super().__init__(answer=MODEL_ANSWER)
-        self.counted_bodies: list[dict[str, Any]] = []
-
-    def count_tokens(self, *, modelId: str, input: dict[str, Any]):  # noqa: N803, A002
-        self.counted_bodies.append(json.loads(input["invokeModel"]["body"]))
-        return super().count_tokens()
-
-
 def test_the_image_is_in_the_body_that_is_counted_and_the_body_that_is_sent(
     table, bucket, monkeypatch
 ) -> None:
-    """No stand-in for the answer: the real allowance client admits the request
-    by counting it with the provider, then sends that same body."""
-    bedrock = _Bedrock()
-    aws.install({Kind.S3: bucket, Kind.BEDROCK_RUNTIME: bedrock})
+    """No stand-in for the answer: the model call counts the request with the
+    provider for the real allowance admission, then sends that same body."""
+    bedrock = install(FakeModel(answer=MODEL_ANSWER))
+    aws.install({Kind.S3: bucket})
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
     data = _image("JPEG")
     _upload(table, bucket, "upload-image", data, filename="a.jpg", media_type="image/jpeg")

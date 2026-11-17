@@ -22,7 +22,7 @@ from fakes.ask_question import CONV, _command_row
 from fakes.ask_question import _client as _question_client
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from fakes.bedrock import FakeBedrock
+from fakes.model import FakeModel, asking
 from fakes import student_evidence as fake_evidence
 from fakes.dynamodb import as_stored
 from stoa.db.repositories import practice_repo
@@ -515,7 +515,7 @@ def test_an_answer_the_backend_never_judged_is_not_shown_as_a_mistake(monkeypatc
 
 def _sent(**kwargs) -> dict:
     """The request body the model is sent for one Ask answer."""
-    model = FakeBedrock(
+    model = FakeModel(
         answer={
             "steps": ["step one"],
             "answer": "42",
@@ -536,7 +536,7 @@ def _sent(**kwargs) -> dict:
             grade=kwargs.pop("grade", "Sek1"),
             locale=kwargs.pop("language", "de"),
         ),
-        ask_answer.ModelCall(model=model, effect_id="effect-test-1"),
+        asking(model, effect_id="effect-test-1"),
         read_star_map=lambda *_a, **_k: None,
     )
     assert not kwargs, kwargs

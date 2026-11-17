@@ -45,7 +45,7 @@ from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import attachment_service, upload_code_service
 from fakes.admission import seed_plan
 from fakes.ask_question import AtomicAllowanceTable, _patch_allowance_table
-from fakes.bedrock import FakeBedrock
+from fakes.model import FakeModel, install
 from fakes.dynamodb import FakeTable
 from fakes.learning_session import patch_session_table, seed_conversation
 from fakes.rekognition import FakeRekognition
@@ -119,9 +119,10 @@ class _Api:
         self.moderation = moderation or FakeRekognition()
         self.settings = settings or Settings(s3_images_bucket=BUCKET)
         # The answer is asked of the model behind the real allowance, on its own table.
-        self.model = FakeBedrock(answer=ANSWER)
+        self.model = FakeModel(answer=ANSWER)
         _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-        aws.install({Kind.BEDROCK_RUNTIME: self.model, Kind.S3: self.s3})
+        aws.install({Kind.S3: self.s3})
+        install(self.model)
         seed_plan(monkeypatch)
         self.profiles = {
             student: {"user_id": student, "role": "student", "account_status": "active"}

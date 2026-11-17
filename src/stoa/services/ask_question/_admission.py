@@ -9,10 +9,11 @@ worker read only what the command stored, so an answer already being generated
 when the period ends is finished (#239 decision 8).
 
 A question is charged through its **meter** (`meter(command)`), built from the
-message command alone. The meter's `model` is what the answer is asked of in
-production (`ask_answer.ModelCall.model`): it counts the request's tokens,
-reserves them against the week, records that the model is about to be called,
-then calls it. What the reply cost is the **usage evidence** (`UsageEvidence`),
+message command alone. The meter's `admission` is the admission hook the answer
+is asked with in production (`ask_answer.ModelCall.admission`): once the model
+call has counted the request's tokens, it reserves them against the week and
+records that the model is about to be called, in one call; the model call then
+sends it (#436). What the reply cost is the **usage evidence** (`UsageEvidence`),
 which the caller keeps with the answer; with it the meter `observe`s the cost,
 then `finalize`s the charge once the answer is stored for good, or `restore`s
 the reservation when the answer cannot be used. A command whose cost is not
@@ -29,13 +30,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
-from stoa import aws
-from stoa.aws import Kind
 from stoa import config
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import allowance_repo
@@ -44,8 +42,8 @@ from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.services import (
     ai_service,
     allowance_service,
-    bedrock_token_count_service,
     entitlement_service,
+    model_call,
 )
 from stoa.services.ask_question_errors import AskQuestionErrorCode
 
@@ -370,14 +368,14 @@ class Meter:
     def __init__(self, command: Mapping[str, object]) -> None:
         self._command = dict(command)
 
-    def model(self, on_invocation: Callable[[], bool] | None = None) -> MeteredModel:
-        """What the answer is asked of: the Bedrock runtime behind the allowance.
+    def admission(self, on_invocation: Callable[[], bool] | None = None) -> Admission:
+        """The admission hook the answer's model call is made with.
 
         `on_invocation` records that the model is about to be called; when it
         returns False the call is not made. Raises `AdmissionError` when the
         command's allowance identity does not hold together.
         """
-        return MeteredModel(self._command, on_invocation=on_invocation)
+        return Admission(self._command, on_invocation=on_invocation)
 
     def observe(self, evidence: UsageEvidence) -> None:
         """Record what the reply cost, before the answer is stored."""
@@ -517,8 +515,24 @@ def _coordinates(command: Mapping[str, object]) -> tuple[str, str, int, int]:
     return str(effect_id), plan_id, allowance_version, generation
 
 
-class MeteredModel:
-    """Count and reserve the command's effect before InvokeModel."""
+# The failure categories an admission refusal is stored under. The first two
+# are the codes the student is sent (`AdmissionError`); the last two mean the
+# call could not be recorded, and the message is retried as any unsent call is.
+REFUSAL_CODES = frozenset(
+    {
+        AskQuestionErrorCode.ALLOWANCE_EXHAUSTED.value,
+        AskQuestionErrorCode.ALLOWANCE_UNAVAILABLE.value,
+        AskQuestionErrorCode.PROVIDER_TOKEN_COUNT_UNAVAILABLE.value,
+    }
+)
+
+
+class Admission:
+    """Reserve the command's effect and record the call, once the model call has counted it.
+
+    The admission hook of `model_call.call`: nothing has been paid for when it
+    runs, so every refusal leaves the command free to be generated again.
+    """
 
     def __init__(
         self,
@@ -526,8 +540,6 @@ class MeteredModel:
         *,
         on_invocation: Callable[[], bool] | None = None,
     ) -> None:
-        self._deadline_monotonic: float | None = None
-        self._clock: Callable[[], float] = time.monotonic
         (
             self.effect_id,
             self.plan_id,
@@ -536,76 +548,13 @@ class MeteredModel:
         ) = _coordinates(command)
         self._command = dict(command)
         self._observed_at = _observed_at(command)
-        self._runtime_client: object | None = None
-        self._invocation_method = "invoke_model"
         # Records that the model is about to be called; False means the call
         # may not be made.
         self._on_invocation = on_invocation
 
-    def mark_invocation(self) -> None:
-        """Record the call before it is made; refuse one that was not recorded.
-
-        Nothing has been paid for at this point, so the failures raised here
-        leave the command free to be generated again.
-        """
-        if self._on_invocation is None:
-            return
-        try:
-            recorded = self._on_invocation()
-        except Exception:
-            raise ai_service.AIInvocationFailure("invocation_not_recorded") from None
-        if not recorded:
-            raise ai_service.AIInvocationFailure("lease_lost")
-
-    def bind_deadline(self, deadline_monotonic: float, clock: Callable[[], float]) -> None:
-        """Take the answer's deadline from `ai_service.invoke_answer`, its one source."""
-        self._deadline_monotonic = deadline_monotonic
-        self._clock = clock
-
-    def invoke_model(self, **kwargs: object) -> object:
-        model_id = kwargs.get("modelId")
-        request_body = kwargs.get("body")
-        if not isinstance(model_id, str) or not isinstance(request_body, str):
-            raise AdmissionError(AskQuestionErrorCode.PROVIDER_TOKEN_COUNT_UNAVAILABLE)
-        remaining = (
-            None
-            if self._deadline_monotonic is None
-            else self._deadline_monotonic - self._clock()
-        )
-        runtime_client = self._runtime_client or aws.client(
-            Kind.BEDROCK_RUNTIME, config=ai_service.bedrock_runtime_config(remaining)
-        )
-        self._runtime_client = runtime_client
-        try:
-            foundation_model_id = (
-                bedrock_token_count_service.foundation_model_id_for_profile(
-                    model_id
-                )
-            )
-            inference_profile_id: str | None = model_id
-        except bedrock_token_count_service.ProviderTokenCountUnavailable:
-            foundation_model_id = model_id
-            inference_profile_id = None
-        try:
-            input_tokens = bedrock_token_count_service.count_input_tokens(
-                request_body,
-                model_id=foundation_model_id,
-                inference_profile_id=inference_profile_id,
-                region=config.settings().aws_region,
-                runtime_client=runtime_client,
-            )
-            parsed_body = json.loads(request_body)
-            max_output_tokens = parsed_body.get("max_tokens")
-            if type(max_output_tokens) is not int or max_output_tokens < 1:
-                raise bedrock_token_count_service.ProviderTokenCountUnavailable()
-        except (
-            bedrock_token_count_service.ProviderTokenCountUnavailable,
-            json.JSONDecodeError,
-        ):
-            raise AdmissionError(
-                AskQuestionErrorCode.PROVIDER_TOKEN_COUNT_UNAVAILABLE
-            ) from None
-
+    def __call__(
+        self, input_tokens: int, max_output_tokens: int
+    ) -> model_call.Admit | model_call.Refuse:
         reservation = allowance_service.reserve_token_allowance(
             beneficiary_id=str(self._command["student_id"]),
             effect_id=self.effect_id,
@@ -617,34 +566,24 @@ class MeteredModel:
             account_fence_generation=self.account_fence_generation,
         )
         if reservation.disposition is allowance_repo.ReservationDisposition.LIMIT_EXCEEDED:
-            raise AdmissionError(AskQuestionErrorCode.ALLOWANCE_EXHAUSTED)
+            return model_call.Refuse(AskQuestionErrorCode.ALLOWANCE_EXHAUSTED.value)
         if reservation.disposition not in {
             allowance_repo.ReservationDisposition.ADMITTED,
             allowance_repo.ReservationDisposition.REPLAYED,
         }:
-            raise _unavailable(f"reserve:{reservation.disposition.value}")
-
-        # Counting and reserving can take the time up. Starting a generation
-        # now would only be cut off by the Lambda; fail recoverably instead.
-        # The reservation is kept on purpose: the ledger restores only after
-        # provider usage, and the student's retry of this message reuses it.
-        if (
-            self._deadline_monotonic is not None
-            and self._clock() >= self._deadline_monotonic
-        ):
-            raise ai_service.AIInvocationFailure("deadline_exceeded")
-
-        invoke = getattr(runtime_client, self._invocation_method, None)
-        if not callable(invoke):
-            raise RuntimeError("Bedrock invocation dependency unavailable")
-        self.mark_invocation()
-        return invoke(**kwargs)
-
-    def invoke_model_with_response_stream(self, **kwargs: object) -> object:
-        """Admit the same way, then stream. Admission does not depend on how
-        the answer is delivered."""
-        self._invocation_method = "invoke_model_with_response_stream"
+            return model_call.Refuse(
+                AskQuestionErrorCode.ALLOWANCE_UNAVAILABLE.value,
+                detail=f"reserve:{reservation.disposition.value}",
+            )
+        # The reservation is kept whatever happens next on purpose: the ledger
+        # restores only after provider usage, and the student's retry of this
+        # message reuses it.
+        if self._on_invocation is None:
+            return model_call.Admit()
         try:
-            return self.invoke_model(**kwargs)
-        finally:
-            self._invocation_method = "invoke_model"
+            recorded = self._on_invocation()
+        except Exception:
+            return model_call.Refuse("invocation_not_recorded")
+        if not recorded:
+            return model_call.Refuse("lease_lost")
+        return model_call.Admit()

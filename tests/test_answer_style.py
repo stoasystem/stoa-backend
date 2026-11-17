@@ -30,7 +30,7 @@ from fakes.ask_question import (
 from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from fakes.bedrock import FakeBedrock
+from fakes.model import FakeModel, asking
 
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.main import RequestLocaleMiddleware
@@ -301,7 +301,7 @@ def test_no_other_part_of_the_api_takes_or_returns_a_style():
 def _system_prompt(
     *, memory: str | None = None, language: str = "de", **asker: Any
 ) -> str:
-    model = FakeBedrock()
+    model = FakeModel()
     ask_answer.answer(
         ask_answer.Asked(content="how do I add fractions?"),
         ask_answer.Asker(
@@ -312,7 +312,7 @@ def _system_prompt(
             memory_context=memory,
             **asker,
         ),
-        ask_answer.ModelCall(model=model, effect_id="effect-style-1"),
+        asking(model, effect_id="effect-style-1"),
         read_star_map=lambda *_a, **_k: None,
     )
     return model.system()

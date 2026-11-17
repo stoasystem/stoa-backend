@@ -1,33 +1,26 @@
-"""Amazon Bedrock — controlled AI teaching service.
+"""Controlled AI teaching service: what is checked on the way to the model and back.
 
-Implements a lightweight AI harness:
 - Prompt injection defence (input sanitisation)
-- Sending a built prompt to the model, buffered or streamed, under a deadline
-- Reading the answer from the one tool call the request forces (#412)
-- Output validation (structure check + forbidden-term scan)
-- Exact usage evidence for every reply that was paid for
+- Reading a model call's result as an answer (`provider_result`): the tool
+  input parsed and checked (structure check + forbidden-term scan), with the
+  exact usage evidence of every reply that was paid for
 
-The Ask prompt itself, and what an Ask answer is made of, is `ask_answer`'s
-(#176).
+The model is called through `model_call` (#436). The Ask prompt itself, and
+what an Ask answer is made of, is `ask_answer`'s (#176); the answer checks here
+move there with #437.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from enum import StrEnum
-import hashlib
 import json
 import logging
 import re
-import time
-from typing import Any, Callable, Generic, Mapping, TypeVar
-from botocore.config import Config
+from typing import Generic, TypeVar
 
-from stoa import aws
-from stoa.aws import Kind
-from stoa import config
-from stoa.models.allowance import MAX_EXACT_COUNT, ProviderUsageEvidence
+from stoa.models.allowance import ProviderUsageEvidence
 from stoa.security.private_telemetry import emit_private_event
+from stoa.services import model_call
 
 logger = logging.getLogger(__name__)
 
@@ -79,12 +72,23 @@ class AIInvocationFailure(Exception):
 
     `usage` is set when the provider did answer and was paid for, but the
     answer cannot be used, so the caller can still account for the cost and
-    release the student's reservation.
+    release the student's reservation. `retryable` says whether the same
+    answer may be asked for again, as the model call decided it: never once a
+    reply was paid for. `detail` is for diagnostics only.
     """
 
-    def __init__(self, category: str, *, usage: ProviderUsageEvidence | None = None):
+    def __init__(
+        self,
+        category: str,
+        *,
+        usage: ProviderUsageEvidence | None = None,
+        retryable: bool | None = None,
+        detail: str | None = None,
+    ):
         self.category = category
         self.usage = usage
+        self.retryable = (usage is None) if retryable is None else retryable
+        self.detail = detail
         super().__init__(category)
 
 
@@ -122,144 +126,14 @@ class AIProviderResult(Generic[AIContent]):
 def inventory_ai_invocation_classes() -> dict[str, AIInvocationClass]:
     """Return the exhaustive direct InvokeModel caller inventory."""
     return {
-        # Streaming delivers the same answer under the same admission, so it
-        # is charged to the student's allowance exactly as the buffered call is.
-        "src/stoa/services/ask_question/_admission.py:invoke_model_with_response_stream": (
-            AIInvocationClass.USER_ALLOWANCE
-        ),
-        "src/stoa/services/ai_service.py:invoke_answer": (
+        # The Ask answer, through 模型调用 under the allowance's admission (#436).
+        "src/stoa/services/model_call/bedrock.py:invoke_model_with_response_stream": (
             AIInvocationClass.USER_ALLOWANCE
         ),
         "src/stoa/services/report_service.py:generate_weekly_report_content": (
             AIInvocationClass.PROVIDER_COST_ONLY
         ),
     }
-
-
-def _digest(value: str, *, domain: str) -> str:
-    return hashlib.sha256(f"stoa:{domain}:v1:{value}".encode()).hexdigest()
-
-
-def _exact_provider_count(value: object) -> int:
-    if type(value) is not int or value < 0 or value > MAX_EXACT_COUNT:
-        raise AIInvocationFailure("malformed_provider_usage")
-    return value
-
-
-def parse_provider_usage(
-    payload: Mapping[str, object],
-    *,
-    provider_request_id: str,
-    inference_profile_id: str,
-    effect_id: str,
-    observed_at: datetime | None = None,
-) -> ProviderUsageEvidence:
-    """Parse exact Anthropic usage into the canonical content-free evidence model."""
-    usage = payload.get("usage")
-    message_id = payload.get("id")
-    provider_model_id = payload.get("model")
-    if (
-        not isinstance(usage, Mapping)
-        or not isinstance(message_id, str)
-        or not message_id.strip()
-        or not isinstance(provider_model_id, str)
-        or not provider_model_id.strip()
-        or not provider_request_id.strip()
-        or not inference_profile_id.strip()
-        or not effect_id.strip()
-    ):
-        raise AIInvocationFailure("malformed_provider_usage")
-    input_tokens = _exact_provider_count(usage.get("input_tokens"))
-    output_tokens = _exact_provider_count(usage.get("output_tokens"))
-    observed = observed_at or datetime.now(timezone.utc)
-    if observed.tzinfo is None:
-        raise AIInvocationFailure("malformed_provider_usage")
-    provider_request_id_digest = _digest(
-        provider_request_id.strip(),
-        domain="bedrock-provider-request",
-    )
-    model_id_digest = _digest(
-        f"{inference_profile_id.strip()}:{provider_model_id.strip()}",
-        domain="bedrock-model",
-    )
-    evidence_id = _digest(
-        ":".join(
-            (
-                effect_id.strip(),
-                message_id.strip(),
-                provider_request_id_digest,
-                model_id_digest,
-                str(input_tokens),
-                str(output_tokens),
-            )
-        ),
-        domain="bedrock-provider-evidence",
-    )
-    try:
-        return ProviderUsageEvidence(
-            evidenceId=evidence_id,
-            effectId=effect_id.strip(),
-            providerRequestIdDigest=provider_request_id_digest,
-            modelIdDigest=model_id_digest,
-            inputTokens=input_tokens,
-            outputTokens=output_tokens,
-            providerCostRetained=True,
-            observedAt=observed,
-        )
-    except ValueError:
-        raise AIInvocationFailure("malformed_provider_usage") from None
-
-
-def _provider_request_id(response: Mapping[str, object]) -> str:
-    metadata = response.get("ResponseMetadata")
-    if isinstance(metadata, Mapping):
-        raw_request_id = metadata.get("RequestId")
-        if isinstance(raw_request_id, str):
-            return raw_request_id.strip()
-    return ""
-
-
-def _provider_result(
-    content: AIContent,
-    payload: Mapping[str, object],
-    *,
-    response: Mapping[str, object],
-    inference_profile_id: str,
-    effect_id: str,
-    observed_at: datetime | None,
-    invocation_class: AIInvocationClass,
-) -> AIProviderResult[AIContent]:
-    request_id = _provider_request_id(response)
-    message_id = payload.get("id")
-    model_id = payload.get("model")
-    stop_reason = payload.get("stop_reason")
-    if (
-        not isinstance(message_id, str)
-        or not isinstance(model_id, str)
-        or not model_id.strip()
-        or not isinstance(stop_reason, str)
-        or not stop_reason.strip()
-    ):
-        raise AIInvocationFailure("malformed_provider_usage")
-    usage = parse_provider_usage(
-        payload,
-        provider_request_id=request_id,
-        inference_profile_id=inference_profile_id,
-        effect_id=effect_id,
-        observed_at=observed_at,
-    )
-    return AIProviderResult(
-        content=content,
-        usage=usage,
-        model_id=model_id.strip(),
-        inference_profile_id=inference_profile_id,
-        provider_message_id_digest=_digest(
-            message_id.strip(),
-            domain="bedrock-provider-message",
-        ),
-        stop_reason=stop_reason.strip(),
-        invocation_class=invocation_class,
-    )
 
 
 # ── Input sanitisation ─────────────────────────────────────────────────────────
@@ -376,192 +250,6 @@ def completed_steps(partial_json: str) -> list[str]:
     return steps
 
 
-def answer_tool_request(tool: Mapping[str, Any]) -> dict[str, Any]:
-    """The request fields that make the model answer through `tool` alone."""
-    return {
-        "tools": [dict(tool)],
-        "tool_choice": {"type": "tool", "name": tool["name"]},
-    }
-
-
-def _tool_input_text(payload: Mapping[str, object], tool_name: str) -> str | None:
-    """The input of the buffered reply's call of `tool_name`, as JSON text.
-
-    None when the reply holds no such call: text the model wrote beside it,
-    or instead of it, is never read as the answer.
-    """
-    content = payload.get("content")
-    if not isinstance(content, list):
-        return None
-    for block in content:
-        if (
-            isinstance(block, Mapping)
-            and block.get("type") == "tool_use"
-            and block.get("name") == tool_name
-        ):
-            return json.dumps(block.get("input"), ensure_ascii=False)
-    return None
-
-
-def _stream_ai_answer(
-    *,
-    client: Any,
-    body: str,
-    tool_name: str,
-    on_step: Callable[[int, str], None],
-    correlation_id: str | None,
-    deadline_monotonic: float | None,
-    clock: Callable[[], float],
-    effect_id: str | None,
-    observed_at: datetime | None,
-    invocation_class: AIInvocationClass,
-) -> AIProviderResult[dict]:
-    """Invoke the model as a stream, reporting each step as it completes.
-
-    The answer is the input of the call of `tool_name`, streamed as
-    `input_json_delta` pieces; any other content block is not read.
-    """
-    response = client.invoke_model_with_response_stream(
-        modelId=config.settings().bedrock_model_id, body=body
-    )
-    stream = response.get("body") if isinstance(response, dict) else None
-    if stream is None:
-        raise AIInvocationFailure("malformed_response")
-    # Opening the stream can itself take the time up; do not wait for the first
-    # event to find that out.
-    if deadline_monotonic is not None and clock() >= deadline_monotonic:
-        raise AIInvocationFailure("deadline_exceeded")
-
-    tool_input: str | None = None
-    tool_index: object = None
-    reported = 0
-    usage: dict[str, Any] = {}
-    stop_reason = None
-    # The streaming protocol splits across events what one buffered response
-    # carries together, and accounting needs all of it.
-    message_id = None
-    model_id = None
-    for event in stream:
-        if deadline_monotonic is not None and clock() >= deadline_monotonic:
-            raise AIInvocationFailure("deadline_exceeded")
-        chunk = event.get("chunk") if isinstance(event, dict) else None
-        if not chunk:
-            continue
-        try:
-            payload = json.loads(chunk["bytes"])
-        except (KeyError, TypeError, json.JSONDecodeError):
-            raise AIInvocationFailure("malformed_response") from None
-        kind = payload.get("type")
-        if kind == "content_block_start":
-            block = payload.get("content_block") or {}
-            if (
-                tool_input is None
-                and block.get("type") == "tool_use"
-                and block.get("name") == tool_name
-            ):
-                tool_index = payload.get("index")
-                tool_input = ""
-        elif kind == "content_block_delta":
-            delta = payload.get("delta") or {}
-            if (
-                tool_input is None
-                or payload.get("index") != tool_index
-                or delta.get("type") != "input_json_delta"
-            ):
-                continue
-            tool_input += delta.get("partial_json", "")
-            steps = completed_steps(tool_input)
-            while reported < len(steps):
-                # A step that cannot be delivered is not worth losing the
-                # answer over; the full result still arrives at the end.
-                try:
-                    on_step(reported, steps[reported])
-                except Exception:
-                    logger.warning("streamed step was not delivered", exc_info=True)
-                reported += 1
-        elif kind == "message_delta":
-            usage.update(payload.get("usage") or {})
-            stop_reason = (payload.get("delta") or {}).get("stop_reason", stop_reason)
-        elif kind == "message_start":
-            message = payload.get("message") or {}
-            usage.update(message.get("usage") or {})
-            message_id = message.get("id", message_id)
-            model_id = message.get("model", model_id)
-
-    if message_id is None and tool_input is None:
-        # Nothing came back at all: no reply, and no usage, to read.
-        raise AIInvocationFailure("malformed_response")
-    emit_private_event(
-        "ai_response_received",
-        output_size=len(tool_input or ""),
-        correlation_id=correlation_id,
-    )
-    result = {
-        "id": message_id,
-        "model": model_id,
-        "usage": usage,
-        "stop_reason": stop_reason,
-    }
-    return _answer_result(
-        tool_input,
-        result,
-        response=response,
-        effect_id=effect_id or correlation_id or "unbound-user-allowance-effect",
-        observed_at=observed_at,
-        invocation_class=invocation_class,
-    )
-
-
-def _answer_result(
-    raw_text: str | None,
-    payload: Mapping[str, object],
-    *,
-    response: Mapping[str, object],
-    effect_id: str,
-    observed_at: datetime | None,
-    invocation_class: AIInvocationClass,
-) -> AIProviderResult[dict]:
-    """Turn the tool input into a result, or a failure that keeps its usage.
-
-    `raw_text` is the input of the forced tool call as JSON text, None when
-    the reply made no such call. A reply cut off at `max_tokens` is refused
-    before it is parsed: a cut can land where the JSON happens to close, and
-    the answer is still unfinished.
-    """
-    if payload.get("stop_reason") == "max_tokens":
-        failure = AIInvocationFailure("incomplete_output")
-    elif raw_text is None:
-        emit_private_event(
-            "model_output_parse_failed", output_size=0, level=logging.WARNING
-        )
-        failure = AIInvocationFailure("malformed_response")
-    else:
-        try:
-            validated = _validate_output(_parse_ai_response(raw_text), raw_text)
-        except AIInvocationFailure as exc:
-            failure = exc
-        else:
-            return _provider_result(
-                validated,
-                payload,
-                response=response,
-                inference_profile_id=config.settings().bedrock_model_id,
-                effect_id=effect_id,
-                observed_at=observed_at,
-                invocation_class=invocation_class,
-            )
-    # The provider was paid for this reply, so the failure carries the usage
-    # evidence; the caller needs it to release the student's reservation.
-    failure.usage = parse_provider_usage(
-        payload,
-        provider_request_id=_provider_request_id(response),
-        inference_profile_id=config.settings().bedrock_model_id,
-        effect_id=effect_id,
-        observed_at=observed_at,
-    )
-    raise failure
-
-
 def _parse_ai_response(text: str) -> dict:
     """Read the tool input as the answer it must be, or refuse it.
 
@@ -596,136 +284,46 @@ def _is_answer(parsed: object) -> bool:
     return isinstance(parsed.get("answer"), str)
 
 
-
-# ── Public API ─────────────────────────────────────────────────────────────────
-
-def bedrock_runtime_config(remaining: float | None) -> Config:
-    """Transport limits for one answer: one attempt, reads bounded by the time left.
-
-    Every client that carries an answer uses this, the allowance wrapper
-    included, so no path waits on a socket past its deadline or retries behind
-    the caller's back.
-    """
-    read_timeout = max(1, min(90, int((remaining or 90) - 5)))
-    return Config(
-        connect_timeout=5,
-        read_timeout=read_timeout,
-        retries={"total_max_attempts": 1, "mode": "standard"},
-    )
+# ── Reading a model call's result ──────────────────────────────────────────────
 
 
-def invoke_answer(
-    system_prompt: str,
-    messages: list[dict],
+def provider_result(
+    result: model_call.Result,
     *,
-    input_size: int,
-    attachment_count: int = 0,
-    correlation_id: str | None = None,
-    deadline_monotonic: float | None = None,
-    clock: Callable[[], float] | None = None,
-    client: Any | None = None,
-    effect_id: str | None = None,
-    observed_at: datetime | None = None,
+    effect_id: str,
     invocation_class: AIInvocationClass = AIInvocationClass.USER_ALLOWANCE,
-    on_step: Callable[[int, str], None] | None = None,
-    tool: Mapping[str, Any],
 ) -> AIProviderResult[dict]:
-    """Ask the model for one structured answer to a prompt already built.
+    """The answer a model call gave, parsed and checked, with its usage.
 
-    The prompt and the `tool` the answer is handed over through are the
-    caller's (`ask_answer` builds the Ask ones, #176, #412); this sends them,
-    the tool forced, streamed when `on_step` is given, under the deadline, and
-    turns the tool's input into a parsed answer with its usage, or a failure
-    that keeps the usage of a reply that was paid for. `input_size` and
-    `attachment_count` describe the student's turn for telemetry only.
+    Raises `AIInvocationFailure` when there is none: one that carries the
+    usage when the reply was paid for (never retryable), one that says
+    whether the call may be made again when it was not.
     """
-    clock = clock or time.monotonic
-    remaining = None
-    if deadline_monotonic is not None:
-        remaining = deadline_monotonic - clock()
-        if remaining <= 0:
-            raise AIInvocationFailure("deadline_exceeded")
-        # A wrapping client (the allowance wrapper) does work of its own before
-        # the model is called; it is held to this deadline, not one of its own.
-        bind_deadline = getattr(client, "bind_deadline", None)
-        if callable(bind_deadline):
-            bind_deadline(deadline_monotonic, clock)
-    if client is None:
-        client = aws.client(
-            Kind.BEDROCK_RUNTIME, config=bedrock_runtime_config(remaining)
+    if isinstance(result, model_call.NotSent):
+        raise AIInvocationFailure(
+            result.category, retryable=result.retryable, detail=result.detail
         )
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": config.settings().bedrock_max_tokens,
-        "temperature": 0.4,
-        "system": system_prompt,
-        "messages": messages,
-        **answer_tool_request(tool),
-    })
-
-    emit_private_event(
-        "ai_request_started",
-        input_size=input_size,
-        attachment_count=attachment_count,
-        correlation_id=correlation_id,
-    )
-    if deadline_monotonic is not None and clock() >= deadline_monotonic:
-        raise AIInvocationFailure("deadline_exceeded")
-    if on_step is not None:
-        return _stream_ai_answer(
-            client=client,
-            body=body,
-            tool_name=tool["name"],
-            on_step=on_step,
-            correlation_id=correlation_id,
-            deadline_monotonic=deadline_monotonic,
-            clock=clock,
-            effect_id=effect_id,
-            observed_at=observed_at,
-            invocation_class=invocation_class,
-        )
-    response = client.invoke_model(modelId=config.settings().bedrock_model_id, body=body)
-    if deadline_monotonic is not None and clock() >= deadline_monotonic:
-        raise AIInvocationFailure("deadline_exceeded")
-    response_body = None
-    close_ok = True
     try:
-        if not isinstance(response, dict):
-            raise AIInvocationFailure("malformed_response")
-        response_body = response.get("body")
-        read = getattr(response_body, "read", None)
-        if not callable(read):
-            raise AIInvocationFailure("malformed_response")
-        result = json.loads(read())
-        if not isinstance(result, dict):
-            raise AIInvocationFailure("malformed_response")
-    except AIInvocationFailure:
+        usage = result.usage.evidence(effect_id=effect_id)
+    except ValueError:
+        raise AIInvocationFailure("malformed_provider_usage", retryable=True) from None
+    if isinstance(result, model_call.PaidUnusable):
+        raise AIInvocationFailure(result.category, usage=usage, retryable=False)
+    raw_text = result.tool_input
+    try:
+        validated = _validate_output(_parse_ai_response(raw_text), raw_text)
+    except AIInvocationFailure as failure:
+        # The provider was paid for this reply, so the failure carries the
+        # usage evidence; the caller needs it to release the reservation.
+        failure.usage = usage
+        failure.retryable = False
         raise
-    except Exception:
-        raise AIInvocationFailure("malformed_response") from None
-    finally:
-        try:
-            close = getattr(response_body, "close", None)
-            if not callable(close):
-                close_ok = False
-            else:
-                close()
-        except Exception:
-            close_ok = False
-    if not close_ok:
-        raise AIInvocationFailure("response_cleanup_failed")
-    raw_text = _tool_input_text(result, tool["name"])
-    emit_private_event(
-        "ai_response_received",
-        output_size=len(raw_text or ""),
-        correlation_id=correlation_id,
-    )
-
-    return _answer_result(
-        raw_text,
-        result,
-        response=response,
-        effect_id=effect_id or correlation_id or "unbound-user-allowance-effect",
-        observed_at=observed_at,
+    return AIProviderResult(
+        content=validated,
+        usage=usage,
+        model_id=result.usage.model,
+        inference_profile_id=result.usage.inference_profile_id,
+        provider_message_id_digest=result.usage.message_id_digest,
+        stop_reason=result.stop_reason,
         invocation_class=invocation_class,
     )

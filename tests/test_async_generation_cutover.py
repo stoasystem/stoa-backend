@@ -38,6 +38,7 @@ from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fi
 from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from fakes.model import ANSWER, Reply
 from stoa import aws
 from stoa import config
 from stoa.aws import Kind
@@ -200,7 +201,7 @@ def test_a_failure_that_may_not_be_retried_is_not_reopened(
 ) -> None:
     charge_failures_as_paid(monkeypatch)
     client = _client()
-    model.outcomes = [ai_service.AIInvocationFailure("incomplete_output")]
+    model.outcomes = [Reply(input=ANSWER, stop_reason="max_tokens")]
     _send(client, "key-1")
     _deliver(invokes.events[0])
 

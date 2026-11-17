@@ -8,8 +8,9 @@ words. Moved here from `test_attachment_security.py` (#254).
 """
 
 import hashlib
-import json
+import time
 from io import BytesIO
+from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
@@ -17,7 +18,9 @@ import pytest
 from stoa.config import Settings
 from stoa import config
 from stoa.security.attachment_errors import AttachmentErrorCode
-from stoa.services import ai_service, ask_answer, attachment_service
+from stoa.services import ai_service, ask_answer, attachment_service, model_call
+from stoa.services.model_call.adapter import Stream
+from stoa.services.model_call.fake import FakeAdapter, Reply
 from stoa.services.attachment_service import extract_message_attachment_context
 from stoa.services.document_extraction_service import (
     MAX_EXTRACTED_CHARACTERS,
@@ -303,62 +306,49 @@ def test_ai_private_telemetry_excludes_input_output_and_provider_canaries(
     with pytest.raises(ai_service.AIInvocationFailure):
         ai_service._parse_ai_response(malformed)
 
-    class Body:
-        def read(self):
-            return json.dumps(
-                {
-                    "id": "PROVIDER-MESSAGE-ID-PRIVATE-CANARY",
-                    "model": "bedrock-model-private",
-                    "content": [{"type": "tool_use", "id": "toolu-1",
-                                 "name": ask_answer.ANSWER_TOOL_NAME,
-                                 "input": json.loads(answer)}],
-                    "stop_reason": "end_turn",
-                    "usage": {"input_tokens": 17, "output_tokens": 5},
-                }
-            ).encode()
+    class PrivateIds(FakeAdapter):
+        """Answers under the provider's own ids and model name, all private."""
 
-        def close(self):
-            return None
+        def stream(self, model_id: str, body: Any) -> Stream:
+            sent = super().stream(model_id, body)
+            events = []
+            for event in sent.events:
+                if event.get("type") == "message_start":
+                    event = {**event, "message": {
+                        **event["message"],
+                        "id": "PROVIDER-MESSAGE-ID-PRIVATE-CANARY",
+                        "model": "bedrock-model-private",
+                    }}
+                events.append(event)
+            return Stream(request_id="PROVIDER-REQUEST-ID-PRIVATE-CANARY", events=events)
 
-    class SuccessfulClient:
-        def invoke_model(self, **_kwargs):
-            return {
-                "body": Body(),
-                "ResponseMetadata": {
-                    "HTTPStatusCode": 200,
-                    "RequestId": "PROVIDER-REQUEST-ID-PRIVATE-CANARY",
-                },
-            }
+    def ask(model: FakeAdapter, correlation_id: str) -> ai_service.AIProviderResult[dict]:
+        model_call.install(model)
+        result = model_call.call(
+            system="Answer the question.",
+            messages=[{"role": "user", "content": cleaned}],
+            tool=ask_answer.answer_tool(star_map=False),
+            max_tokens=1024,
+            temperature=ask_answer.ANSWER_TEMPERATURE,
+            deadline=time.monotonic() + 90,
+            correlation_id=correlation_id,
+        )
+        return ai_service.provider_result(result, effect_id="effect-1")
 
-    answer = json.dumps({"steps": [], "answer": "ANSWER-OUTPUT-PRIVATE-CANARY"})
-    messages = [{"role": "user", "content": cleaned}]
-    result = ai_service.invoke_answer(
-        "Answer the question.",
-        messages,
-        input_size=len(student),
-        tool=ask_answer.answer_tool(star_map=False),
-        correlation_id="server-correlation-2",
-        client=SuccessfulClient(),
+    answer = {"steps": [], "answer": "ANSWER-OUTPUT-PRIVATE-CANARY"}
+    result = ask(
+        PrivateIds(Reply(input=answer, usage={"input_tokens": 17, "output_tokens": 5})),
+        "server-correlation-2",
     )
     assert result.content["answer"] == "ANSWER-OUTPUT-PRIVATE-CANARY"
     assert result.usage.input_tokens == 17
     assert result.usage.output_tokens == 5
 
-    class FailingClient:
-        def invoke_model(self, **_kwargs):
-            raise RuntimeError(provider)
-
-    # The provider's error reaches the caller, which logs it by class only
-    # (test_a_provider_failure_is_logged_by_its_class_only).
-    with pytest.raises(RuntimeError):
-        ai_service.invoke_answer(
-            "Answer the question.",
-            messages,
-            input_size=len(student),
-            tool=ask_answer.answer_tool(star_map=False),
-            correlation_id="server-correlation-3",
-            client=FailingClient(),
-        )
+    # A failure that is not the provider's own answer is logged by its class
+    # only (test_a_provider_failure_is_logged_by_its_class_only).
+    with pytest.raises(ai_service.AIInvocationFailure) as failure:
+        ask(FakeAdapter(RuntimeError(provider)), "server-correlation-3")
+    assert failure.value.category == "provider_error"
     rendered = caplog.text
     for canary in (
         "STUDENT-PRIVATE-CANARY",

@@ -24,7 +24,6 @@ import pytest
 from fakes.ask_question import (
     ANSWER,
     CONV,
-    NOW,
     _COMPLETE,
     _client,
     _command,
@@ -38,8 +37,9 @@ from fakes.ask_question import (
     _last_attempt_kept_its_answer,
     _messages,
     _minutes_ago,
+    _ask_admitted,
     _patch_allowance_table,
-    _Provider,
+    _provider,
     _running,
     default_language,
     patch_store,
@@ -47,9 +47,7 @@ from fakes.ask_question import (
 )
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from fakes.bedrock import Unsent
-from stoa import aws
-from stoa.aws import Kind
+from fakes.model import Unsent, install
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.security.attachment_errors import AttachmentDecisionError
@@ -365,49 +363,35 @@ def test_the_worker_handler_ships_in_the_lambda_package() -> None:
 
 
 def _metered(monkeypatch: pytest.MonkeyPatch, on_invocation):
-    provider = _Provider(text=_COMPLETE, stop_reason="end_turn")
+    provider = install(_provider(text=_COMPLETE, stop_reason="end_turn"))
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    aws.install({Kind.BEDROCK_RUNTIME: provider})
-    return _admission.meter(_command()).model(on_invocation), provider
-
-
-def _ask(client) -> Any:
-    return ai_service.invoke_answer(
-        "Answer the question.",
-        [{"role": "user", "content": "Wie kürze ich Brüche?"}],
-        input_size=21,
-        tool=ask_answer.answer_tool(star_map=False),
-        effect_id=client.effect_id,
-        client=client,
-        observed_at=NOW,
-        on_step=lambda _i, _s: None,
-    )
+    return _admission.meter(_command()).admission(on_invocation), provider
 
 
 def test_the_call_is_recorded_after_admission_and_before_the_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen: list[int] = []
-    client, provider = _metered(
-        monkeypatch, lambda: seen.append(len(provider.invoke_calls)) or True
+    admission, provider = _metered(
+        monkeypatch, lambda: seen.append(len(provider.requests)) or True
     )
 
-    _ask(client)
+    _ask_admitted(admission)
 
     assert seen == [0]
-    assert len(provider.invoke_calls) == 1
+    assert len(provider.requests) == 1
 
 
 def test_no_call_is_made_when_the_record_of_it_cannot_be_written(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client, provider = _metered(monkeypatch, lambda: False)
+    admission, provider = _metered(monkeypatch, lambda: False)
 
     with pytest.raises(ai_service.AIInvocationFailure) as failure:
-        _ask(client)
+        _ask_admitted(admission)
 
     assert failure.value.category == "lease_lost"
-    assert provider.invoke_calls == []
+    assert provider.requests == []
 
 
 def test_an_invocation_leaves_no_answer_budget_behind(table, model) -> None:

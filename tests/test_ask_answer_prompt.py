@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from fakes.bedrock import FakeBedrock
+from fakes.model import FakeModel, asking
 from stoa.services import ask_answer, learning_profile_service
 
 _REPLY = {
@@ -25,7 +25,7 @@ _REPLY = {
 
 def _answer(reply: dict | None = None, **kwargs) -> tuple[ask_answer.AskAnswer, dict]:
     """Ask once with the Bedrock double; return the answer and the sent request body."""
-    model = FakeBedrock(answer=reply or _REPLY)
+    model = FakeModel(answer=reply or _REPLY)
     answer = ask_answer.answer(
         ask_answer.Asked(content=kwargs.pop("content", "how do I add fractions?")),
         ask_answer.Asker(
@@ -35,7 +35,7 @@ def _answer(reply: dict | None = None, **kwargs) -> tuple[ask_answer.AskAnswer, 
             locale=kwargs.pop("language", "de"),
             memory_context=kwargs.pop("memory_context", None),
         ),
-        ask_answer.ModelCall(model=model, effect_id="effect-test-1"),
+        asking(model, effect_id="effect-test-1"),
         read_star_map=lambda *_a, **_k: None,
     )
     assert not kwargs, kwargs

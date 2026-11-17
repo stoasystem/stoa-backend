@@ -27,7 +27,7 @@ from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from fakes import recordings
-from fakes.bedrock import FakeConverse, client_error
+from fakes.converse import FakeConverse, client_error
 from fakes.dynamodb import FakeTable
 from stoa import aws, config
 from stoa.db import table as db_table
