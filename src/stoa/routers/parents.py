@@ -6,11 +6,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from itertools import islice
 from typing import Annotated, Any, Literal, cast
 from uuid import uuid4
 
-from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -49,6 +47,7 @@ from stoa.services import (
     billing_reconciliation_service,
     current_relationship,
     learning_profile_service,
+    learning_session,
     locale_service,
     message_catalog,
     parent_link_service,
@@ -846,40 +845,24 @@ def _is_current_week(value: Any) -> bool:
     return _utc_week_start(parsed) == _utc_week_start()
 
 
-# Index pages one child's conversation list may read before giving up.
-_CHILD_CONVERSATION_PAGE_BUDGET = 25
-# A read on GSI-StudentId continues from the index's key as well as the table's.
-_STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
+# One child's conversation list keeps at most this many conversations.
+_CHILD_CONVERSATION_LIMIT = 50
 
 
-def _list_conversations_for_child(child_id: str, limit: int = 50) -> list[dict[str, Any]]:
-    """This child's conversations, newest first, following the index.
+def _list_conversations_for_child(
+    child_id: str, limit: int = _CHILD_CONVERSATION_LIMIT
+) -> list[dict[str, Any]]:
+    """This child's conversations, newest first, with their help requests.
 
-    `GSI-StudentId` holds every row carrying the student id, so `Limit` counts
-    rows read rather than conversations found and a page can be spent entirely
-    on messages and usage events. A parent then sees a child who has asked
-    nothing. Same shape as the two lists already fixed elsewhere.
+    The listing is `learning_session.list_for_student`, reading `limit` index
+    rows a page as this list always has. A list cut short is not shown to the
+    parent as such.
     """
-    table = db_table.table()
-    conversations: list[dict[str, Any]] = []
-    reads = db_table.pages(
-        "query",
-        key=_STUDENT_INDEX_KEY,
-        table=table,
-        IndexName="GSI-StudentId",
-        KeyConditionExpression=Key("student_id").eq(child_id),
-        FilterExpression=Attr("entity_type").eq("conversation"),
-        Limit=limit,
-        ScanIndexForward=False,
-    )
-    for page in islice(reads, _CHILD_CONVERSATION_PAGE_BUDGET):
-        conversations.extend(page.items)
-        if len(conversations) >= limit:
-            break
+    listed = learning_session.list_for_student(child_id, limit=limit, page_size=limit)
     from stoa.services import help_requests
 
     # Whether a teacher was asked is the request's, not the conversation's (#189).
-    return help_requests.with_requests(conversations[:limit], child_id, table=table)
+    return help_requests.with_requests(listed.items, child_id, table=db_table.table())
 
 
 def _latest_report_for_child(parent_user_id: str, child_id: str) -> dict[str, Any] | None:

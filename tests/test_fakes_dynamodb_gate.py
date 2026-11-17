@@ -51,6 +51,10 @@ HAND_WRITTEN_DOUBLES: dict[str, str] = {
     ),
     "test_billing_fact_repo.py::AtomicBillingTable": "repo",
     "test_conversations.py::_PagedIndexTable": "script",
+    "test_learning_session_list_for_student.py::_StudentIndex": (
+        "script: cuts each GSI-StudentId page by `Limit` before the filter, as "
+        "DynamoDB does, to show the listing's page budget and truncation"
+    ),
     "test_table_pages.py::_Broken": (
         "script: a malformed page, to show the pager refuses it instead of following it"
     ),
