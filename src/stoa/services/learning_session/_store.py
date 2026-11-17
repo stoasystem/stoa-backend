@@ -5,15 +5,17 @@ The only module that reaches the table for `CONV#{id}`/`CONV` and
 moved here from `attachment_repo` with their bodies unchanged; the reads moved
 from the question package's transcript module, `routers/teachers.py`, `moderation_service`,
 `teacher_assistance_service` and `upload_code_repo`, each of which queried the
-partition itself.
+partition itself. The records of one student, read on `GSI-StudentId`, are
+listed here too (#431); the conversations router, the parent pages and the
+weekly report each queried the index themselves.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any, cast
 
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.db import table as db_table
 from stoa.db.repositories import attachment_repo
@@ -22,6 +24,8 @@ from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentE
 
 RECORD_SORT_KEY = "CONV"
 MESSAGE_PREFIX = "MSG#"
+# A read on GSI-StudentId continues from the index's key as well as the table's.
+STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
 
 
 def conv_pk(conv_id: str) -> str:
@@ -87,6 +91,27 @@ def message_page(conversation_id: str, cursor: object | None) -> object:
     if page.last_key is not None:
         response["LastEvaluatedKey"] = page.last_key
     return response
+
+
+def student_record_pages(student_id: str, *, page_size: int | None) -> Iterator[db_table.Page]:
+    """The student's records on `GSI-StudentId`, newest first, page by page.
+
+    The index carries every row holding the student id - messages, usage
+    events, reports - so the filter keeps only the records. `page_size` is the
+    query's `Limit`: rows looked at per page, not records found. `None` leaves
+    it to the table (1 MB a page).
+    """
+    request: dict[str, object] = {
+        "IndexName": "GSI-StudentId",
+        "KeyConditionExpression": Key("student_id").eq(student_id),
+        "FilterExpression": Attr("entity_type").eq("conversation"),
+        "ScanIndexForward": False,
+    }
+    if page_size is not None:
+        request["Limit"] = page_size
+    return db_table.pages(
+        "query", key=STUDENT_INDEX_KEY, table=db_table.table(), **request
+    )
 
 
 # ── Fenced writes of the record (moved from attachment_repo) ──────────────────

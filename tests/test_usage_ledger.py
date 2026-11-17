@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.routers import admin, parents
+from stoa.routers.admin import usage as admin_usage
 from fakes.dynamodb import FakeTable
 from stoa.services import usage_ledger_service
 from actor_helpers import install_actor_overrides
@@ -427,7 +428,7 @@ def test_admin_usage_reconciliation_endpoint_previews_without_repair(monkeypatch
     install_actor_overrides(app, {"sub": "admin-1", "role": "admin"})
     calls = []
     monkeypatch.setattr(
-        admin.usage_ledger_service,
+        admin_usage.usage_ledger_service,
         "reconcile_usage_action",
         lambda **kwargs: calls.append(kwargs)
         or {

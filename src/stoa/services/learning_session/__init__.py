@@ -14,6 +14,8 @@ made by `append`. The entry points:
   its stored record.
 - `read` is the record, or `None`; `owned_by` says whether it is the student's.
 - `retitle` replaces a placeholder title.
+- `list_for_student` is one student's records, newest first, within a page
+  budget, saying whether any were left unread (#431).
 - `history` is every message, oldest first, as `Message` values, a question
   sent again read once; the student's `ChatMessage` and the teacher's
   `MessageOut` are built from them.
@@ -31,7 +33,8 @@ A record or message the session cannot be read back from raises
 
 import uuid
 from collections.abc import Mapping
-from typing import Any, Protocol, cast
+from itertools import islice
+from typing import Any, NamedTuple, Protocol, cast
 
 from stoa.db.repositories import account_deletion_repo
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
@@ -43,6 +46,8 @@ from stoa.services.learning_session._store import build_conversation_write_trans
 __all__ = [
     "DynamoConversationTable",
     "Message",
+    "STUDENT_LIST_PAGE_BUDGET",
+    "StudentSessions",
     "Role",
     "active_conversation_generation",
     "anchored_history",
@@ -56,6 +61,7 @@ __all__ = [
     "history",
     "history_fingerprint",
     "history_rows",
+    "list_for_student",
     "open",
     "owned_by",
     "read",
@@ -145,6 +151,50 @@ def retitle(conversation_id: str, *, title: str, expected_title: str, now_iso: s
     return _store.retitle_conversation(
         conversation_id, title=title, expected_title=expected_title, now_iso=now_iso
     )
+
+
+# Index pages one listing reads before it stops and says it was cut short.
+STUDENT_LIST_PAGE_BUDGET = 25
+
+
+class StudentSessions(NamedTuple):
+    """Records in hand, newest first, plus whether older ones were left unread."""
+
+    items: list[dict]
+    truncated: bool
+
+
+def list_for_student(
+    student_id: str,
+    *,
+    limit: int,
+    page_budget: int = STUDENT_LIST_PAGE_BUDGET,
+    page_size: int | None = None,
+) -> StudentSessions:
+    """The student's session records, newest first, at most `limit` of them.
+
+    `GSI-StudentId` holds every row carrying the student id, so a page can be
+    spent entirely on rows the filter drops and still leave records behind the
+    continuation key. The key is followed, but only for `page_budget` pages, so
+    a heavy history cannot turn a list into an unbounded walk. `truncated` is
+    true when the list stopped before the index ended: at `limit` with more
+    behind it, or with the budget spent. Descending order means a truncated
+    list is the most recent records.
+
+    `page_size` is the query's `Limit` - rows looked at per page, before the
+    filter. It changes how far a budget reaches, so a caller that has always
+    passed one keeps passing it. A page the table hands back malformed raises
+    `db_table.TableUnavailable`.
+    """
+    items: list[dict] = []
+    reads = _store.student_record_pages(student_id, page_size=page_size)
+    for page in islice(reads, page_budget):
+        items.extend(page.items)
+        if page.last_key is None:
+            return StudentSessions(items[:limit], len(items) > limit)
+        if len(items) >= limit:
+            return StudentSessions(items[:limit], True)
+    return StudentSessions(items[:limit], True)
 
 
 def conversation_response_items(

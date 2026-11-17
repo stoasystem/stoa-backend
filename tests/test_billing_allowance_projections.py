@@ -16,6 +16,7 @@ from stoa import config
 from stoa.deps import get_actor
 from stoa.models.billing import BillingFact, BillingFactKind
 from stoa.routers import admin, billing as billing_router, parents
+from stoa.routers.admin import subscriptions as admin_subscriptions
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import subscription_service
 
@@ -381,7 +382,7 @@ def test_admin_capability_denial_happens_before_billing_reads(
     config.install(SimpleNamespace())
     reads: list[str] = []
     monkeypatch.setattr(
-        admin,
+        admin_subscriptions,
         "_load_admin_checkout_command",
         lambda *_args, **_kwargs: reads.append("command"),
     )
@@ -491,7 +492,9 @@ def test_openapi_has_closed_projection_models_and_no_manual_payment_success() ->
 
 def test_source_binds_parent_projection_and_contains_no_manual_success_action() -> None:
     parent_source = Path("src/stoa/routers/parents.py").read_text()
-    admin_source = Path("src/stoa/routers/admin.py").read_text()
+    admin_source = "".join(
+        path.read_text() for path in sorted(Path("src/stoa/routers/admin").glob("*.py"))
+    )
 
     assert "allowance_service.get_allowance_projection" in parent_source
     assert "manual_payment_success" not in admin_source

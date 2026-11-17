@@ -46,7 +46,7 @@ from typing import TYPE_CHECKING, Any
 from stoa.services import curriculum_service
 
 if TYPE_CHECKING:
-    from stoa.services.student_evidence import StudentEvidence
+    from stoa.services.student_evidence import RightAnswers, StudentEvidence
 
 
 class LearningState(StrEnum):
@@ -494,3 +494,31 @@ def skill_states(evidence: StudentEvidence) -> dict[str, SkillMastery]:
 
 def lit_unit_ids(states: Iterable[UnitMastery]) -> frozenset[str]:
     return frozenset(item.unit_id for item in states if item.state is LearningState.LIT)
+
+
+def mostly_with_ai(right: RightAnswers) -> bool:
+    """Whether more than half of a star's right answers came after asking AI (#451). Pure.
+
+    Exactly half is not "mostly"; a star with nothing answered right is not
+    either. The one place this threshold is decided.
+    """
+    return right.asked_ai * 2 > right.independent + right.asked_ai
+
+
+def lit_mostly_with_ai(evidence: StudentEvidence) -> tuple[str, ...]:
+    """The lit stars whose right answers came mostly after asking AI (#451).
+
+    In the catalog's order. Lit is the star map's judgement (`unit_states`), so
+    a star lit by its quiz counts too, judged on whatever it was answered right
+    by. For showing a teacher only: it never changes whether a star is lit.
+    """
+    states = unit_states(evidence)
+    counts = evidence.right_answers_by_unit
+    return tuple(
+        unit_id
+        for unit in evidence.content.units
+        if (unit_id := str(unit.get("id") or "")) in counts
+        and (state := states.get(unit_id)) is not None
+        and state.state is LearningState.LIT
+        and mostly_with_ai(counts[unit_id])
+    )

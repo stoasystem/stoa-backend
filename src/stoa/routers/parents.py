@@ -6,11 +6,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from itertools import islice
 from typing import Annotated, Any, Literal, cast
 from uuid import uuid4
 
-from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -49,6 +47,7 @@ from stoa.services import (
     billing_reconciliation_service,
     current_relationship,
     learning_profile_service,
+    learning_session,
     locale_service,
     message_catalog,
     parent_link_service,
@@ -56,6 +55,7 @@ from stoa.services import (
     subscription_service,
     teacher_support_allowance_service,
     usage_period,
+    voice_questions,
 )
 from stoa.services.billing_errors import BillingErrorCode
 
@@ -846,40 +846,24 @@ def _is_current_week(value: Any) -> bool:
     return _utc_week_start(parsed) == _utc_week_start()
 
 
-# Index pages one child's conversation list may read before giving up.
-_CHILD_CONVERSATION_PAGE_BUDGET = 25
-# A read on GSI-StudentId continues from the index's key as well as the table's.
-_STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
+# One child's conversation list keeps at most this many conversations.
+_CHILD_CONVERSATION_LIMIT = 50
 
 
-def _list_conversations_for_child(child_id: str, limit: int = 50) -> list[dict[str, Any]]:
-    """This child's conversations, newest first, following the index.
+def _list_conversations_for_child(
+    child_id: str, limit: int = _CHILD_CONVERSATION_LIMIT
+) -> list[dict[str, Any]]:
+    """This child's conversations, newest first, with their help requests.
 
-    `GSI-StudentId` holds every row carrying the student id, so `Limit` counts
-    rows read rather than conversations found and a page can be spent entirely
-    on messages and usage events. A parent then sees a child who has asked
-    nothing. Same shape as the two lists already fixed elsewhere.
+    The listing is `learning_session.list_for_student`, reading `limit` index
+    rows a page as this list always has. A list cut short is not shown to the
+    parent as such.
     """
-    table = db_table.table()
-    conversations: list[dict[str, Any]] = []
-    reads = db_table.pages(
-        "query",
-        key=_STUDENT_INDEX_KEY,
-        table=table,
-        IndexName="GSI-StudentId",
-        KeyConditionExpression=Key("student_id").eq(child_id),
-        FilterExpression=Attr("entity_type").eq("conversation"),
-        Limit=limit,
-        ScanIndexForward=False,
-    )
-    for page in islice(reads, _CHILD_CONVERSATION_PAGE_BUDGET):
-        conversations.extend(page.items)
-        if len(conversations) >= limit:
-            break
+    listed = learning_session.list_for_student(child_id, limit=limit, page_size=limit)
     from stoa.services import help_requests
 
     # Whether a teacher was asked is the request's, not the conversation's (#189).
-    return help_requests.with_requests(conversations[:limit], child_id, table=table)
+    return help_requests.with_requests(listed.items, child_id, table=db_table.table())
 
 
 def _latest_report_for_child(parent_user_id: str, child_id: str) -> dict[str, Any] | None:
@@ -1875,3 +1859,83 @@ async def request_child_link(
     except parent_link_repo.ParentLinkConflict as exc:
         raise parent_link_request_conflict() from exc
     return parent_link_request_item(link)
+
+
+# --- Voice questions: the parent's consent switch (#476) -------------------------
+
+_parent_child_update = authorized(
+    ResourceType.STUDENT,
+    AuthorizationAction.UPDATE,
+    path("child_id"),
+    {CanonicalRole.PARENT: AuthorizationPurpose.PARENT_OVERSIGHT},
+)
+
+
+class ParentVoiceQuestionsResponse(BaseModel):
+    """The switch, and who changed it last: this parent (`changedByMe`) or another."""
+
+    studentId: str
+    allowed: bool
+    changedAt: str | None = None
+    changedByMe: bool | None = None
+
+
+class ParentVoiceQuestionsCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    allowed: bool = Field(strict=True)
+
+
+def _voice_questions_response(
+    child_id: str, parent_id: str, switch: voice_questions.VoiceQuestionSwitch
+) -> ParentVoiceQuestionsResponse:
+    return ParentVoiceQuestionsResponse(
+        studentId=child_id,
+        allowed=switch.allowed,
+        changedAt=switch.changed_at,
+        changedByMe=(switch.changed_by == parent_id) if switch.changed_by else None,
+    )
+
+
+@router.get(
+    "/me/children/{child_id}/voice-questions",
+    response_model=ParentVoiceQuestionsResponse,
+)
+async def get_child_voice_questions(
+    child_id: str,
+    actor: Actor = Depends(get_actor),
+    authorized_child: AuthorizedResource = Depends(_parent_child_read),
+) -> ParentVoiceQuestionsResponse:
+    """Whether this child may ask by voice; off until a linked parent turns it on."""
+    child_id = authorized_child.ref.student_id
+    return _voice_questions_response(
+        child_id, actor.user_id, voice_questions.for_parent(child_id)
+    )
+
+
+@router.put(
+    "/me/children/{child_id}/voice-questions",
+    response_model=ParentVoiceQuestionsResponse,
+)
+async def set_child_voice_questions(
+    child_id: str,
+    body: ParentVoiceQuestionsCommand,
+    actor: Actor = Depends(get_actor),
+    authorized_child: AuthorizedResource = Depends(_parent_child_update),
+) -> ParentVoiceQuestionsResponse:
+    """Turn voice questions on or off for this child. Any linked parent may; the last change wins.
+
+    Each change is recorded with who made it and when, as the consent record.
+    """
+    child_id = authorized_child.ref.student_id
+    parent_facts = authorized_child.facts.parent
+    verdict = parent_facts.verdict if parent_facts else None
+    if verdict is None or not verdict.about(actor.user_id, child_id):
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
+    try:
+        switch = voice_questions.set_by_parent(verdict, body.allowed)
+    except voice_questions.RelationshipNotCurrent as exc:
+        raise SecurityDecisionError(
+            SecurityErrorCode.ACTION_NOT_ALLOWED, internal_detail=str(exc)
+        ) from exc
+    return _voice_questions_response(child_id, actor.user_id, switch)

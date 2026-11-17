@@ -9,6 +9,7 @@ from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.main import app as main_app
 from stoa.routers import admin, notifications
+from stoa.routers.admin import privileged_identities as admin_privileged_identities, recovery_jobs as admin_recovery_jobs, users as admin_users
 from stoa.db.repositories import parent_link_repo, report_repo
 from stoa.security.admin_authorization import admin_operation, classify_admin_route
 from stoa.security.authorization import ResourceRef, operator_capability_permits, project_support_lookup
@@ -151,9 +152,9 @@ def _stub_revoke(monkeypatch, effects: list, *, conflict: bool = False) -> None:
             raise parent_link_repo.ParentLinkConflict("parent link close refused")
         return _closed_verdict(parent_id, student_id)
 
-    monkeypatch.setattr(admin.current_relationship, "revoke", revoke)
+    monkeypatch.setattr(admin_users.current_relationship, "revoke", revoke)
     monkeypatch.setattr(
-        admin, "_record_account_admin_event", lambda **values: effects.append(("audit", values))
+        admin_users, "_record_account_admin_event", lambda **values: effects.append(("audit", values))
     )
 
 
@@ -276,8 +277,8 @@ def test_parent_link_revoke_persists_target_audit_before_effect(monkeypatch):
         effects.append(("revoke", len(sink.events)))
         return _closed_verdict(parent_id, student_id)
 
-    monkeypatch.setattr(admin.current_relationship, "revoke", revoke)
-    monkeypatch.setattr(admin, "_record_account_admin_event", lambda **values: None)
+    monkeypatch.setattr(admin_users.current_relationship, "revoke", revoke)
+    monkeypatch.setattr(admin_users, "_record_account_admin_event", lambda **values: None)
     app = _revoke_app(_actor("parent_binding_repairer", scope="student:student-1"), sink)
 
     assert TestClient(app).post(REVOKE, json=REVOKE_BODY).status_code == 200
@@ -376,12 +377,12 @@ def test_recovery_resolver_later_denial_prevents_preview_effect(monkeypatch):
         {"parent_id": "parent-2", "student_id": "student-2", "week_start": "2026-06-08", "report_id": "report-2"},
     ]
     monkeypatch.setattr(
-        admin.report_recovery_job_service,
+        admin_recovery_jobs.report_recovery_job_service,
         "_collect_targets",
         lambda **_kwargs: (targets, 1),
     )
     monkeypatch.setattr(
-        admin.report_recovery_job_service,
+        admin_recovery_jobs.report_recovery_job_service,
         "preview_resend_job",
         lambda **kwargs: effects.append(kwargs),
     )
@@ -402,7 +403,7 @@ def test_recovery_resolver_later_denial_prevents_preview_effect(monkeypatch):
 def test_recovery_job_identifier_is_resolved_and_outage_fails_before_cancel(monkeypatch):
     mutations = []
     monkeypatch.setattr(
-        admin.report_recovery_job_service,
+        admin_recovery_jobs.report_recovery_job_service,
         "cancel_recovery_job",
         lambda *args, **kwargs: mutations.append((args, kwargs)),
     )
@@ -425,7 +426,7 @@ def test_recovery_job_identifier_is_resolved_and_outage_fails_before_cancel(monk
 
 def test_admin_role_and_break_glass_cannot_provision_privilege(monkeypatch):
     calls = []
-    monkeypatch.setattr(admin.privileged_identity_service, "provision_admin", lambda **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(admin_privileged_identities.privileged_identity_service, "provision_admin", lambda **kwargs: calls.append(kwargs))
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
     app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink

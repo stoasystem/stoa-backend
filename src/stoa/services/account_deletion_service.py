@@ -32,6 +32,7 @@ from stoa.db.repositories import (
     practice_repo,
     report_repo,
     upload_code_repo,
+    voice_question_consent_repo,
     websocket_repo,
 )
 from stoa.security.tokens import VerifiedAccessToken
@@ -785,9 +786,17 @@ def _account_profile_branch(
         # two clean epochs cannot be reached with the relationship still stored.
         # The account's usage-period records (#239) go the same way: the money
         # is accounted for offline, so nothing of them outlives the account.
+        # So do a child's voice questions switch and its consent record (#476):
+        # they are the child's, found by `student_id`; a parent's deletion
+        # leaves them, since they name the parent only as `changed_by`.
         predicate=lambda item: item.get("SK") == "PROFILE"
         or item.get("entity_type")
-        in {parent_link_repo.ENTITY_TYPE, usage_period.RECORD_ENTITY_TYPE},
+        in {
+            parent_link_repo.ENTITY_TYPE,
+            usage_period.RECORD_ENTITY_TYPE,
+            voice_question_consent_repo.ENTITY_TYPE,
+            voice_question_consent_repo.CHANGE_ENTITY_TYPE,
+        },
         mutate=mutate,
     )
 

@@ -10,6 +10,7 @@ from stoa.aws import Kind
 from stoa.config import Settings
 from stoa import config
 from stoa.routers import admin, auth
+from stoa.routers.admin import account_support as admin_account_support
 from actor_helpers import install_actor_overrides
 
 
@@ -801,7 +802,7 @@ def test_admin_can_inspect_account_verification_status(monkeypatch, link_rows):
     # The profile pointer is not a relationship (#287): with no link stored,
     # the summary reports none however the profile describes itself.
     monkeypatch.setattr(
-        admin.user_repo,
+        admin_account_support.user_repo,
         "get_user",
         lambda user_id, **_kwargs: _verification_profile(
             user_id,
@@ -826,7 +827,7 @@ def test_admin_can_inspect_account_verification_status(monkeypatch, link_rows):
 def test_admin_verification_status_reports_a_current_link_as_active(monkeypatch, link_rows):
     link_rows.link("parent-1", "student-1")
     monkeypatch.setattr(
-        admin.user_repo,
+        admin_account_support.user_repo,
         "get_user",
         lambda user_id, **_kwargs: _verification_profile(user_id),
     )
