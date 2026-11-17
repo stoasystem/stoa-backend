@@ -15,7 +15,8 @@ from stoa import config
 from stoa.config import Settings
 from stoa.db.repositories import report_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
-from stoa.routers import admin as admin_router, parents
+from stoa.routers import parents
+from stoa.routers.admin import _common as admin_router
 from stoa.security.authorization import AuthorizationFacts, ParentAuthorizationFacts
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.declared_authorization import get_authorization_fact_repository

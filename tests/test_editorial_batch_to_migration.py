@@ -19,7 +19,7 @@ import pytest
 from fakes.dynamodb import FakeTable
 from scripts import editorial_batch_to_migration as converter
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
-from stoa.routers import admin
+from stoa.routers.admin import curriculum as admin_curriculum
 from stoa.services import (
     answer_judging,
     curriculum_migration_service,
@@ -126,19 +126,19 @@ def test_the_limits_are_the_authoring_request_limits() -> None:
         metadata = model.model_fields[field].metadata
         return next(getattr(item, kind) for item in metadata if hasattr(item, kind))
 
-    assert converter.MAX_TITLE == limit(admin.CurriculumLessonDraftRequest, "title", "max_length")
+    assert converter.MAX_TITLE == limit(admin_curriculum.CurriculumLessonDraftRequest, "title", "max_length")
     assert converter.MAX_OBJECTIVE == limit(
-        admin.CurriculumLessonDraftRequest, "objective", "max_length"
+        admin_curriculum.CurriculumLessonDraftRequest, "objective", "max_length"
     )
-    assert converter.MAX_TEXT == limit(admin.CurriculumExerciseDraftRequest, "prompt", "max_length")
+    assert converter.MAX_TEXT == limit(admin_curriculum.CurriculumExerciseDraftRequest, "prompt", "max_length")
     assert converter.MAX_TEXT == limit(
-        admin.CurriculumExerciseDraftRequest, "answer_key", "max_length"
+        admin_curriculum.CurriculumExerciseDraftRequest, "answer_key", "max_length"
     )
     assert converter.MAX_TEXT == limit(
-        admin.CurriculumExerciseDraftRequest, "explanation", "max_length"
+        admin_curriculum.CurriculumExerciseDraftRequest, "explanation", "max_length"
     )
     assert converter.MAX_ID == limit(
-        admin.CurriculumExerciseDraftRequest, "exercise_id", "max_length"
+        admin_curriculum.CurriculumExerciseDraftRequest, "exercise_id", "max_length"
     )
     assert converter.MAX_FEEDBACK == curriculum_ops_service.MAX_FEEDBACK_LENGTH
 

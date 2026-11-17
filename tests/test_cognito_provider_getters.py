@@ -23,6 +23,7 @@ from stoa.aws import Kind
 from stoa import config
 from stoa.deps import get_actor, get_authorization_audit_sink, get_verified_token
 from stoa.routers import admin, teacher_applications
+from stoa.routers.admin import privileged_identities as admin_privileged_identities
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 from stoa.security.tokens import VerifiedAccessToken
 
@@ -112,7 +113,7 @@ def test_provisioning_an_admin_resolves_its_identity_provider(monkeypatch, cogni
         seen.update(kwargs)
         return {"status": "provisioned"}
 
-    monkeypatch.setattr(admin.privileged_identity_service, "provision_admin", provision_admin)
+    monkeypatch.setattr(admin_privileged_identities.privileged_identity_service, "provision_admin", provision_admin)
 
     response = TestClient(_admin_app()).post(
         "/admin/privileged-identities/admins",
@@ -140,7 +141,7 @@ def test_changing_an_admins_status_resolves_its_identity_provider(monkeypatch, c
         seen.update(kwargs)
         return {"status": "suspended"}
 
-    monkeypatch.setattr(admin.privileged_identity_service, "change_admin_status", change_admin_status)
+    monkeypatch.setattr(admin_privileged_identities.privileged_identity_service, "change_admin_status", change_admin_status)
 
     response = TestClient(_admin_app()).post(
         "/admin/privileged-identities/admins/target-1/status",

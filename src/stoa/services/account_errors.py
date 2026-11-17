@@ -70,7 +70,7 @@ class AccountErrorCode(StrEnum):
     CAPABILITY_REGRANT_REQUIRED = "capability_regrant_required"
     CAPABILITY_SELF_GRANT_FORBIDDEN = "capability_self_grant_forbidden"
 
-    # The administrator's account console (`routers/admin.py`).
+    # The administrator's account console (`routers/admin/users.py`).
     ACCOUNT_NOT_FOUND = "account_not_found"
     ACCOUNT_NOT_A_STUDENT = "account_not_a_student"
     ACCOUNT_EMAIL_MISSING = "account_email_missing"
