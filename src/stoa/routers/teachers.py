@@ -228,6 +228,8 @@ class TeacherHelpRequestSummary(BaseModel):
     subject: str
     grade: str
     status: str
+    # How the student asked to be helped (#480); the teacher cannot change it.
+    mode: help_requests.HelpMode = help_requests.TEXT
     requestMessage: str | None = None
     priority: str = "medium"
     createdAt: str
@@ -294,6 +296,7 @@ class TeacherHelpRequestDetail(BaseModel):
     student: dict
     subject: str
     status: str
+    mode: help_requests.HelpMode = help_requests.TEXT
     requestMessage: str | None = None
     messages: list[MessageOut]
     notes: list[TeacherNoteOut]
@@ -319,6 +322,7 @@ def _help_request_summary(
         subject=view.subject,
         grade=view.grade,
         status=view.status,
+        mode=view.mode,
         requestMessage=view.request_message,
         createdAt=view.created_at,
         firstTeacherActionAt=view.first_teacher_action_at,
@@ -970,6 +974,7 @@ async def get_help_request(
         },
         subject=view.subject,
         status=view.status,
+        mode=view.mode,
         requestMessage=view.request_message,
         messages=messages,
         notes=notes,

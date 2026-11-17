@@ -78,6 +78,13 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "Un enseignant a commencé à traiter ta demande.",
         "it": "Un insegnante ha iniziato a lavorare sulla tua richiesta.",
     },
+    # A classroom request (#480): the teacher waits for the student there.
+    "teacher_help.takeover.summary_classroom": {
+        "de": "Eine Lehrperson hat deine Anfrage angenommen. Komm jetzt ins Klassenzimmer.",
+        "en": "A teacher accepted your request. Enter the classroom now.",
+        "fr": "Un enseignant a accepté ta demande. Entre maintenant dans la classe.",
+        "it": "Un insegnante ha accettato la tua richiesta. Entra ora in classe.",
+    },
     "teacher_help.reply.title": {
         "de": "Deine Lehrperson hat geantwortet",
         "en": "Your teacher replied",

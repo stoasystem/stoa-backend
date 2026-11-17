@@ -473,6 +473,37 @@ def test_a_reply_to_a_request_another_teacher_accepted_is_refused(world) -> None
     assert world.record == before
 
 
+@pytest.mark.parametrize("mode", ["text", "classroom"])
+def test_the_request_records_the_mode_the_student_chose(world, mode) -> None:
+    outcome = help_requests.ask(
+        conversation=dict(world.table.rows[(f"CONV#{CONV}", "CONV")]),
+        student_id=STUDENT,
+        message=None,
+        system_message="Teacher help requested.",
+        mode=mode,
+        now=at(),
+        table=world.table,
+    )
+
+    assert outcome.record["mode"] == mode
+    assert world.record["mode"] == mode
+    assert help_requests.teacher_view(world.record).mode == mode
+
+
+def test_a_mode_outside_the_two_is_not_asked(world) -> None:
+    with pytest.raises(ValueError):
+        help_requests.ask(
+            conversation=dict(world.table.rows[(f"CONV#{CONV}", "CONV")]),
+            student_id=STUDENT,
+            message=None,
+            system_message="Teacher help requested.",
+            mode="video",  # type: ignore[arg-type]
+            now=at(),
+            table=world.table,
+        )
+    assert (f"CONV#{CONV}", "HELP") not in world.table.rows
+
+
 def test_a_teacher_without_the_offer_cannot_take_it(world) -> None:
     world.ask()
 
@@ -846,7 +877,7 @@ def test_taking_tells_the_student_once_and_finishing_tells_nobody(world) -> None
     help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="resolved", now=at(3), table=world.table)
 
     assert [name for name, _ in world.events] == ["emit_teacher_help_takeover"]
-    assert world.events[0][1] == {"conversation": taken, "teacher_id": TEACHER}
+    assert world.events[0][1] == {"conversation": taken, "teacher_id": TEACHER, "mode": "text"}
 
 
 def test_a_refused_take_tells_nobody(world) -> None:

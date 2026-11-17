@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from itertools import islice
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from boto3.dynamodb.conditions import Attr, Key
 
@@ -73,6 +73,17 @@ EXPIRED = "expired"
 OPEN = frozenset({PENDING, IN_PROGRESS})
 #: What a teacher moves a request to.
 TEACHER_TARGETS = (IN_PROGRESS, RESOLVED)
+
+# How the student wants the teacher's help (#480): a written answer, or the
+# virtual classroom. The student chooses when asking; nothing changes it after.
+TEXT = "text"
+CLASSROOM = "classroom"
+HelpMode = Literal["text", "classroom"]
+MODES: tuple[HelpMode, ...] = (TEXT, CLASSROOM)
+#: What a request asked before #480, stored without a mode, counts as: every
+#: request then was answered in writing, and a written answer is what every
+#: plan with teacher support includes (#474).
+LEGACY_MODE: HelpMode = TEXT
 
 # Logged for each request nobody could be offered that has waited past the
 # alert limit (#88). stoa-infra's metric filter matches this exact string.
@@ -372,6 +383,12 @@ def _overlay(record: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def mode(record: Mapping[str, Any]) -> HelpMode:
+    """How the student asked to be helped; a request stored without one is `text` (#480)."""
+    stored = record.get("mode")
+    return cast(HelpMode, stored) if stored in MODES else LEGACY_MODE
+
+
 def stored_status(record: Mapping[str, Any]) -> str:
     """The request's own state word, as stored: `pending` until a teacher takes it."""
     return str(record.get("escalation_status") or PENDING)
@@ -413,6 +430,7 @@ class TeacherView:
     subject: str
     grade: str
     status: str
+    mode: HelpMode
     request_message: str | None
     created_at: str
     first_teacher_action_at: str | None
@@ -434,6 +452,7 @@ def teacher_view(record: Mapping[str, Any], *, now: str | None = None) -> Teache
         subject=_text(record.get("subject"), default="General"),
         grade=_text(record.get("grade")),
         status=stored_status(record),
+        mode=mode(record),
         request_message=_optional_text(record.get("escalation_message")),
         created_at=_text(
             record.get("escalated_at"),
@@ -600,13 +619,16 @@ def ask(
     student_id: str,
     message: str | None,
     system_message: str,
+    mode: HelpMode = TEXT,
     now: str | None = None,
     table: Any | None = None,
 ) -> AskOutcome:
     """Open the conversation's request, spending a case of the week, and offer it.
 
-    A conversation that already has a request answers with it, whatever its
-    state: one conversation asks a teacher once (#189 decision 3). A new
+    ``mode`` is how the student wants the help, stored on the request and
+    never changed after (#480). A conversation that already has a request
+    answers with it, whatever its state and mode: one conversation asks a
+    teacher once (#189 decision 3). A new
     request is refused `usage_period_ended` while the student's usage period is
     not active (#344), judged from one read before the allowance is asked, so no
     case of the week is spent. The case is
@@ -615,6 +637,8 @@ def ask(
     transaction behind the student's account fence. The first offer is made
     right after; it is best effort, and the sweep makes it if this one fails.
     """
+    if mode not in MODES:
+        raise ValueError(f"unsupported help request mode: {mode}")
     store: Any = table or db_table.table()
     timestamp = now or _now()
     conversation_id = str(conversation.get("conversation_id") or "")
@@ -643,6 +667,7 @@ def ask(
         "version": 1,
         "escalated": True,
         "escalation_status": PENDING,
+        "mode": mode,
         "escalated_at": timestamp,
         # With `student_id`, this puts the record in GSI-StudentId (`for_student`).
         "created_at": timestamp,
@@ -1145,7 +1170,9 @@ def take_or_finish(
     )
     if not record.get("teacher_id"):
         try:
-            notification_service.emit_teacher_help_takeover(conversation=written, teacher_id=teacher_id)
+            notification_service.emit_teacher_help_takeover(
+                conversation=written, teacher_id=teacher_id, mode=mode(written)
+            )
         except Exception as exc:  # noqa: BLE001 - best effort by contract
             logger.warning("teacher_help_takeover_alert_failed error=%s", type(exc).__name__)
     return written

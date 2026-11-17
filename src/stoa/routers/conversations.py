@@ -336,6 +336,8 @@ class TeacherHelpRequest(BaseModel):
 
     conversationId: str
     message: str | None = None
+    # How the student wants the help (#480); without it, a written answer.
+    mode: help_requests.HelpMode = help_requests.TEXT
 
 
 # What a student's request for a teacher can be, as the status card reads it
@@ -357,6 +359,8 @@ class TeacherHelpResponse(BaseModel):
     requestId: str
     conversationId: str
     status: StudentHelpStatus = "pending"
+    # As the student asked; a request asked before #480 is `text`.
+    mode: help_requests.HelpMode = help_requests.TEXT
     teacherName: str | None = None
     createdAt: str
     updatedAt: str | None = None
@@ -901,6 +905,7 @@ async def request_teacher_help(
             student_id=student_id,
             message=body.message,
             system_message=_teacher_help_system_message(body.message, student_locale),
+            mode=body.mode,
             now=now,
             table=db_table.table(),
         )
@@ -947,6 +952,7 @@ def _teacher_help_response(
         requestId=str(record.get("escalation_request_id") or conversation_id),
         conversationId=conversation_id,
         status=cast(StudentHelpStatus, help_status),
+        mode=help_requests.mode(record),
         teacherName=_teacher_name(teacher_id),
         createdAt=str(record.get("escalated_at") or fallback_created_at),
         updatedAt=str(record.get("updated_at") or fallback_created_at),

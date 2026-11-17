@@ -860,11 +860,15 @@ def create_event_safe(**kwargs: Any) -> dict[str, Any] | None:
         return None
 
 
-def emit_teacher_help_takeover(*, conversation: Mapping[str, Any], teacher_id: str) -> None:
+def emit_teacher_help_takeover(
+    *, conversation: Mapping[str, Any], teacher_id: str, mode: str = "text"
+) -> None:
     """Tell the student a teacher took their chat help request (#65), once.
 
     The event's id names the request and the teacher, so taking it again, or a
-    retried write, is refused by the store rather than announced twice.
+    retried write, is refused by the store rather than announced twice. It
+    carries the request's ``mode`` (#480); for the classroom it tells the
+    student to enter it.
     """
     student_id = str(conversation.get("student_id") or "")
     request_id = str(conversation.get("escalation_request_id") or "")
@@ -876,8 +880,13 @@ def emit_teacher_help_takeover(*, conversation: Mapping[str, Any], teacher_id: s
         target_type="conversation",
         target_id=str(conversation.get("conversation_id") or ""),
         title=message_catalog.text("teacher_help.takeover.title", locale),
-        summary=message_catalog.text("teacher_help.takeover.summary", locale),
-        metadata={"request_id": request_id, "teacher_id": teacher_id},
+        summary=message_catalog.text(
+            "teacher_help.takeover.summary_classroom"
+            if mode == "classroom"
+            else "teacher_help.takeover.summary",
+            locale,
+        ),
+        metadata={"request_id": request_id, "teacher_id": teacher_id, "mode": mode},
         actor_id=teacher_id,
         actor_role="teacher",
         owner_id=student_id,
