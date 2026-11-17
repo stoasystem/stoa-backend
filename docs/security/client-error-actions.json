@@ -3735,6 +3735,110 @@
         "retryable": false
       }
     },
+    "voice_questions_not_allowed": {
+      "action": null,
+      "domain": "voice_question",
+      "http_status": 403,
+      "message_key": "error.voice_questions_not_allowed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "voice_recording_silent": {
+      "action": null,
+      "domain": "voice_question",
+      "http_status": 422,
+      "message_key": "error.voice_recording_silent",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "voice_recording_too_large": {
+      "action": null,
+      "domain": "voice_question",
+      "http_status": 413,
+      "message_key": "error.voice_recording_too_large",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "voice_recording_too_long": {
+      "action": null,
+      "domain": "voice_question",
+      "http_status": 422,
+      "message_key": "error.voice_recording_too_long",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "voice_recording_unreadable": {
+      "action": null,
+      "domain": "voice_question",
+      "http_status": 422,
+      "message_key": "error.voice_recording_unreadable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "voice_recording_unsupported": {
+      "action": null,
+      "domain": "voice_question",
+      "http_status": 415,
+      "message_key": "error.voice_recording_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "voice_transcription_daily_limit": {
+      "action": "retry_later",
+      "domain": "voice_question",
+      "http_status": 429,
+      "message_key": "error.voice_transcription_daily_limit",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "voice_transcription_unavailable": {
+      "action": "retry_later",
+      "domain": "voice_question",
+      "http_status": 503,
+      "message_key": "error.voice_transcription_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 1,
+        "retry_after_seconds": 5,
+        "retryable": true
+      }
+    },
     "websocket_channel_required": {
       "action": "correct_input",
       "domain": "notification",

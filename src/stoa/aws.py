@@ -54,6 +54,8 @@ class Kind(StrEnum):
     SES_DISPATCH_REMINDER = "ses-dispatch-reminder"
     COGNITO = "cognito-idp"
     BEDROCK_RUNTIME = "bedrock-runtime"
+    # Voxtral, in the one region it is called in (#477, ADR-010).
+    VOICE_TRANSCRIPTION = "bedrock-runtime-voice-transcription"
     LAMBDA = "lambda"
     LAMBDA_GENERATION = "lambda-generation"
     REKOGNITION_MODERATION = "rekognition-moderation"
@@ -75,6 +77,10 @@ def _api_region(settings: Settings) -> str:
 
 def _moderation_region(settings: Settings) -> str:
     return settings.image_moderation_region
+
+
+def _voice_transcription_region(settings: Settings) -> str:
+    return settings.voice_transcription_region
 
 
 # Left to its defaults botocore signs for the global `s3.amazonaws.com` host, which
@@ -111,6 +117,15 @@ IMAGE_MODERATION_CONFIG = Config(
     retries={"mode": "standard", "total_max_attempts": 2},
 )
 
+# Voxtral took about a second for each 30-second recording (#469, measured
+# 2026-11-16). Two attempts of at most 2 s connect and 10 s read stay inside
+# the request's 29 seconds, so a stuck call ends as our 503, not the gateway's.
+VOICE_TRANSCRIPTION_CONFIG = Config(
+    connect_timeout=2,
+    read_timeout=10,
+    retries={"mode": "standard", "total_max_attempts": 2},
+)
+
 KINDS: Mapping[Kind, Spec] = {
     Kind.S3: Spec("s3", _api_region),
     Kind.S3_PRESIGN: Spec("s3", _api_region, PRESIGN_CONFIG),
@@ -120,6 +135,9 @@ KINDS: Mapping[Kind, Spec] = {
     Kind.SES_DISPATCH_REMINDER: Spec("sesv2", _api_region, DISPATCH_REMINDER_SES_CONFIG),
     Kind.COGNITO: Spec("cognito-idp", _api_region),
     Kind.BEDROCK_RUNTIME: Spec("bedrock-runtime", _api_region),
+    Kind.VOICE_TRANSCRIPTION: Spec(
+        "bedrock-runtime", _voice_transcription_region, VOICE_TRANSCRIPTION_CONFIG
+    ),
     Kind.LAMBDA: Spec("lambda", _api_region),
     Kind.LAMBDA_GENERATION: Spec("lambda", _api_region, GENERATION_INVOKE_CONFIG),
     Kind.REKOGNITION_MODERATION: Spec(

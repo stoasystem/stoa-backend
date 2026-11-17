@@ -33,6 +33,7 @@ from stoa.db.repositories import (
     report_repo,
     upload_code_repo,
     voice_question_consent_repo,
+    voice_transcription_usage_repo,
     websocket_repo,
 )
 from stoa.security.tokens import VerifiedAccessToken
@@ -789,6 +790,9 @@ def _account_profile_branch(
         # So do a child's voice questions switch and its consent record (#476):
         # they are the child's, found by `student_id`; a parent's deletion
         # leaves them, since they name the parent only as `changed_by`.
+        # And the child's daily voice transcription counters (#477): found by
+        # `student_id` too, and removed here rather than left to their TTL,
+        # which can lag by days.
         predicate=lambda item: item.get("SK") == "PROFILE"
         or item.get("entity_type")
         in {
@@ -796,6 +800,7 @@ def _account_profile_branch(
             usage_period.RECORD_ENTITY_TYPE,
             voice_question_consent_repo.ENTITY_TYPE,
             voice_question_consent_repo.CHANGE_ENTITY_TYPE,
+            voice_transcription_usage_repo.ENTITY_TYPE,
         },
         mutate=mutate,
     )
