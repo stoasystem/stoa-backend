@@ -15789,6 +15789,19 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "VoiceTranscriptionResponse": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "VoiceTranscriptionResponse",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -34111,6 +34124,119 @@
           "authorization": [
             {
               "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "student"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
+    "/students/me/voice-questions/transcriptions": {
+      "post": {
+        "description": "What the student said in the recording, in the language they said it in.\n\nRefused, without the model being asked, while no linked parent has allowed\nvoice questions, and for a recording that is not one the transcription\ntakes. The recording is kept nowhere: not stored, not logged.",
+        "operationId": "transcribe_my_voice_question_students_me_voice_questions_transcriptions_post",
+        "requestBody": {
+          "content": {
+            "application/ogg": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "audio/m4a": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "audio/mp4": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "audio/ogg": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "audio/webm": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "audio/x-m4a": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "video/mp4": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "video/webm": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "description": "The recording itself, as the browser's MediaRecorder made it: WebM or Ogg (Opus), or MP4 (AAC). At most 2097152 bytes and 60 seconds.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceTranscriptionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Transcribe My Voice Question",
+        "tags": [
+          "students"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "create",
               "capability": null,
               "purpose": "self_service",
               "resource_type": "student"

@@ -25,6 +25,7 @@ from stoa.services.message_catalog.errors import (
     security,
     teacher_reply,
     validation,
+    voice_question,
 )
 
 _DOMAINS = (
@@ -46,6 +47,7 @@ _DOMAINS = (
     curriculum,
     report_recovery,
     classroom,
+    voice_question,
 )
 
 

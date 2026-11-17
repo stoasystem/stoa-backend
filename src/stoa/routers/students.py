@@ -6,8 +6,9 @@ from datetime import datetime, timezone
 import logging
 from typing import Literal, NoReturn, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.concurrency import run_in_threadpool
 
 from stoa.db import table as db_table
 from stoa.db.repositories import (
@@ -39,7 +40,9 @@ from stoa.services import (
     message_catalog,
     parent_link_service,
     student_evidence,
+    voice_audio,
     voice_questions,
+    voice_transcription,
 )
 from stoa.routers import conversations as conversation_routes
 from stoa.routers.parents import (
@@ -416,6 +419,9 @@ _own_account_read = authorized(
 )
 _own_account_update = authorized(
     ResourceType.STUDENT, AuthorizationAction.UPDATE, SELF, STUDENT_SELF
+)
+_own_transcription_create = authorized(
+    ResourceType.STUDENT, AuthorizationAction.CREATE, SELF, STUDENT_SELF
 )
 _student_content_read = authorized(
     ResourceType.STUDENT, AuthorizationAction.READ, path("student_id"), STUDENT_CONTENT_READ
@@ -884,4 +890,62 @@ async def get_my_voice_questions(
     """Whether this student may ask by voice. Off with no linked parent, or until one allows it."""
     return StudentVoiceQuestionsResponse(
         allowed=voice_questions.allowed_for_student(actor.user_id)
+    )
+
+
+# --- Voice questions: a recording turned into text (#477) ------------------------
+
+
+class VoiceTranscriptionResponse(BaseModel):
+    text: str
+
+
+_RECORDING_TYPES = sorted(
+    {name for names in voice_audio.DECLARED_TYPES.values() for name in names}
+)
+
+
+@router.post(
+    "/me/voice-questions/transcriptions",
+    response_model=VoiceTranscriptionResponse,
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "description": (
+                "The recording itself, as the browser's MediaRecorder made it: WebM or Ogg "
+                f"(Opus), or MP4 (AAC). At most {voice_transcription.MAX_BYTES} bytes and "
+                f"{voice_transcription.MAX_SECONDS} seconds."
+            ),
+            "content": {
+                name: {"schema": {"type": "string", "format": "binary"}}
+                for name in _RECORDING_TYPES
+            },
+        }
+    },
+)
+async def transcribe_my_voice_question(
+    request: Request,
+    actor: Actor = Depends(_own_transcription_create),
+) -> VoiceTranscriptionResponse:
+    """What the student said in the recording, in the language they said it in.
+
+    Refused, without the model being asked, while no linked parent has allowed
+    voice questions, and for a recording that is not one the transcription
+    takes. The recording is kept nowhere: not stored, not logged.
+    """
+    declared_length: int | None
+    try:
+        declared_length = int(request.headers.get("content-length", ""))
+    except ValueError:
+        declared_length = None
+    audio = await request.body()
+    # The model call blocks; it is made off the event loop.
+    return VoiceTranscriptionResponse(
+        text=await run_in_threadpool(
+            voice_transcription.transcribe,
+            actor.user_id,
+            audio,
+            request.headers.get("content-type"),
+            declared_length=declared_length,
+        )
     )

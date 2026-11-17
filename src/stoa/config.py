@@ -380,6 +380,16 @@ class Settings(BaseSettings):
     bedrock_model_id: str = "eu.anthropic.claude-sonnet-4-6"
     bedrock_max_tokens: int = 2048
 
+    # Voice questions (#469, #477). A recording is transcribed by Voxtral Small
+    # on Bedrock in Ireland: Zurich has no model that listens, and ADR-010 lets
+    # only the recording and the transcription prompt leave. The model card
+    # lists it as Legacy, end of life 2027-03-30.
+    voice_transcription_region: str = "eu-west-1"
+    voice_transcription_model_id: str = "mistral.voxtral-small-24b-2507"
+    # How many recordings a student may have transcribed per UTC day. A call
+    # the model failed is given back.
+    voice_transcription_daily_limit: int = 30
+
     # Image moderation (#138). Rekognition is not offered in Zurich, so every
     # uploaded image -- the image alone -- is shown to DetectModerationLabels in
     # Frankfurt (ADR-010). A label at or above the confidence below, whose own

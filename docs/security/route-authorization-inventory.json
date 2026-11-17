@@ -4165,6 +4165,22 @@
     "sensitive": true
   },
   {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "students",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/students/me/voice-questions/transcriptions",
+    "sensitive": true
+  },
+  {
     "authorization": [],
     "classification": "public",
     "family": "teacher-applications",
