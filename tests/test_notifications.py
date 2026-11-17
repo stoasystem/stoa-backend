@@ -1450,13 +1450,13 @@ def test_a_role_event_cannot_be_marked_by_one_reader(monkeypatch):
 # ── an offer that no longer stands (#391) ────────────────────────────────────
 
 
-def _offer(monkeypatch, *, standing: bool) -> tuple[dict, list]:
+def _offer(monkeypatch, *, standing: bool, locale: str = "de") -> tuple[dict, list]:
     events, _ = _install_notification_repo(monkeypatch)
-    _profiles(monkeypatch, {"teacher-391": "de"})
+    _profiles(monkeypatch, {"teacher-391": locale})
     monkeypatch.setattr(
         user_repo,
         "get_user",
-        lambda user_id, **_kwargs: {"user_id": user_id, "preferred_locale": "de", "email": "t@example.test"},
+        lambda user_id, **_kwargs: {"user_id": user_id, "preferred_locale": locale, "email": "t@example.test"},
     )
     emails: list = []
     monkeypatch.setattr(notification_service, "dispatch_email_enabled", lambda _teacher: True)
@@ -1537,3 +1537,100 @@ def test_closing_an_offer_with_no_notification_does_nothing(monkeypatch):
 def test_an_offer_is_closed_only_as_one_of_its_states():
     with pytest.raises(ValueError):
         notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="gone")
+
+
+# ── a closed offer says what became of it (#455) ─────────────────────────────
+
+
+def _closed_text(locale: str, state: str) -> tuple[str, str]:
+    subject_line = message_catalog.text(
+        "teacher_help.dispatched.subject_line",
+        locale,
+        subject=message_catalog.text("subject.math", locale),
+    )
+    return (
+        message_catalog.text("teacher_help.dispatched.title_closed", locale),
+        f"{subject_line} {message_catalog.text(f'teacher_help.dispatched.closed.{state}', locale)}",
+    )
+
+
+@pytest.mark.parametrize("state", sorted(notification_service.OFFER_STATES))
+@pytest.mark.parametrize("locale", ROLE_READER_LOCALES)
+def test_a_closed_offer_no_longer_asks_the_teacher_to_accept(monkeypatch, locale, state):
+    events, _ = _offer(monkeypatch, standing=False, locale=locale)
+    stored = events["teacher-help-dispatched-offer-391"]
+    assert stored["metadata"]["subject"] == "math"
+    asking = stored["summary"]
+
+    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state=state)
+
+    assert (stored["title"], stored["summary"]) == _closed_text(locale, state)
+    assert stored["summary"] != asking
+    assert "10" not in stored["summary"]
+
+
+def test_a_closed_offer_reads_as_the_ticket_says_in_german(monkeypatch):
+    events, _ = _offer(monkeypatch, standing=False)
+
+    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="reassigned")
+
+    stored = events["teacher-help-dispatched-offer-391"]
+    assert stored["title"] == "Hilfeanfrage nicht mehr offen"
+    assert stored["summary"] == (
+        "Fach: Mathematik. Diese Anfrage wurde an eine andere Lehrperson weitergegeben."
+    )
+
+
+def test_a_lapsed_offer_closes_while_its_standing_successor_keeps_its_text(monkeypatch):
+    """The lapsed offer is rewritten; the standing one made in its place is open."""
+    events, _ = _offer(monkeypatch, standing=False)
+    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="expired")
+    notification_service.emit_teacher_help_dispatched(
+        conversation={
+            "student_id": "student-391",
+            "escalation_request_id": "req-391",
+            "subject": "math",
+            "account_fence_generation": 1,
+        },
+        teacher_id="teacher-391",
+        dispatch_id="offer-392",
+        deadline_at="2026-11-12T11:00:00+00:00",
+        accept_minutes=10,
+        standing=True,
+    )
+
+    lapsed = events["teacher-help-dispatched-offer-391"]
+    standing = events["teacher-help-dispatched-offer-392"]
+    assert (lapsed["title"], lapsed["summary"]) == _closed_text("de", "expired")
+    assert standing["title"] == message_catalog.text("teacher_help.dispatched.title", "de")
+    assert standing["summary"] == message_catalog.text(
+        "teacher_help.dispatched.summary_standing", "de", subject="Mathematik"
+    )
+    assert "offer_state" not in standing["metadata"]
+    assert standing["status"] == "created"
+
+
+def test_an_offer_sent_before_the_subject_was_kept_closes_without_naming_it(monkeypatch):
+    """Offers dispatched before #455 kept no subject; their close still drops the ask."""
+    events, _ = _offer(monkeypatch, standing=False)
+    del events["teacher-help-dispatched-offer-391"]["metadata"]["subject"]
+
+    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="withdrawn")
+
+    assert events["teacher-help-dispatched-offer-391"]["summary"] == (
+        "Diese Anfrage wurde von der lernenden Person zurückgezogen."
+    )
+
+
+def test_the_bell_shows_a_closed_offer_s_new_summary(monkeypatch):
+    _offer(monkeypatch, standing=False, locale="fr")
+    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="expired")
+
+    [item] = _bell(monkeypatch, "teacher-391", "teacher", "fr")
+
+    assert (item["title"], item["summary"]) == (
+        "Demande d'aide plus disponible",
+        "Matière : Mathématiques. Cette demande a expiré.",
+    )
+    assert item["metadata"]["offer_state"] == "expired"
+    assert item["status"] == "read"
