@@ -44,6 +44,7 @@ from stoa.deps import (
     get_verified_token,
 )
 from stoa.routers import admin, auth, parents, students
+from stoa.routers.admin import users as admin_users
 from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD, Actor
 from stoa.services.account_deletion_service import DeletionReceipt
 from stoa.security.route_inventory import (
@@ -241,7 +242,7 @@ def _admin_app(table: FakeAccountTable, password_provider: Any) -> FastAPI:
     app.include_router(admin.router, prefix="/admin")
     install_actor_overrides(app, {"sub": "admin-1", "role": "admin", "accountStatus": "active"})
     config.install(_settings())
-    app.dependency_overrides[admin.get_account_password_administrator] = (
+    app.dependency_overrides[admin_users.get_account_password_administrator] = (
         lambda: password_provider
     )
     return app

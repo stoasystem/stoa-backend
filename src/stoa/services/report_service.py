@@ -2,14 +2,12 @@
 
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
-from itertools import islice
 import json
 import logging
 import re
 from collections.abc import Mapping
 from typing import Any, Protocol, runtime_checkable
 
-from boto3.dynamodb.conditions import Attr, Key
 
 from stoa import aws
 from stoa.aws import Kind
@@ -25,6 +23,7 @@ from stoa.db.repositories import (
 from stoa.services import (
     current_relationship,
     email_layout,
+    learning_session,
     locale_service,
     message_catalog,
     notification_service,
@@ -778,46 +777,28 @@ def _list_all_questions(student_id: str) -> list[dict[str, Any]]:
         last_key = dict(raw_last_key)
 
 
-# One conversation list reads at most this many index pages and keeps at most
-# this many conversations.
-_CONVERSATION_PAGE_BUDGET = 25
+# One conversation list keeps at most this many conversations, and reads this
+# many index rows a page.
 _CONVERSATION_LIMIT = 100
-# A read on GSI-StudentId continues from the index's key as well as the table's.
-_STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
 
 
 def _list_conversations_for_student(student_id: str) -> list[dict[str, Any]]:
-    """The student's conversations, newest first, following the index.
+    """The student's conversations, newest first, with their help requests.
 
-    `GSI-StudentId` carries every row holding the student id - messages, usage
-    events, reports - so `Limit` is rows read and not conversations found, and a
-    page can be spent entirely on rows the filter drops. One query then reports
-    a week with no conversations in it, which is what a parent's report said.
-    The questions above already follow the continuation key; this did not.
+    The listing is `learning_session.list_for_student`. A list cut short is
+    not shown in the report as such.
     """
     table = db_table.table()
     if not isinstance(table, _QueryTable):
         raise RuntimeError("report table query dependency is unavailable")
 
-    conversations: list[dict[str, Any]] = []
-    reads = db_table.pages(
-        "query",
-        key=_STUDENT_INDEX_KEY,
-        table=table,
-        IndexName="GSI-StudentId",
-        KeyConditionExpression=Key("student_id").eq(student_id),
-        FilterExpression=Attr("entity_type").eq("conversation"),
-        Limit=_CONVERSATION_LIMIT,
-        ScanIndexForward=False,
+    listed = learning_session.list_for_student(
+        student_id, limit=_CONVERSATION_LIMIT, page_size=_CONVERSATION_LIMIT
     )
-    for page in islice(reads, _CONVERSATION_PAGE_BUDGET):
-        conversations.extend(page.items)
-        if len(conversations) >= _CONVERSATION_LIMIT:
-            break
     from stoa.services import help_requests
 
     # Whether a teacher was asked is the request's, not the conversation's (#189).
-    return help_requests.with_requests(conversations[:_CONVERSATION_LIMIT], student_id, table=table)
+    return help_requests.with_requests(listed.items, student_id, table=table)
 
 
 def _question_requested_teacher_help(question: dict[str, Any]) -> bool:

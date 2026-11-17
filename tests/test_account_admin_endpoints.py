@@ -24,6 +24,7 @@ from stoa.db.repositories import (
     parent_link_repo,
 )
 from stoa.routers import admin, auth, parents, students
+from stoa.routers.admin import users as admin_users
 from stoa.services import locale_service, message_catalog, notify_service
 from stoa.security.route_inventory import explicit_route_classification, inventory_application
 from stoa.services import (
@@ -213,13 +214,13 @@ def _app(
     app.include_router(students.router, prefix="/students")
     install_actor_overrides(app, user)
     config.install(_settings())
-    app.dependency_overrides[admin.get_account_identity_provider] = lambda: (
+    app.dependency_overrides[admin_users.get_account_identity_provider] = lambda: (
         provider or RecordingProvider()
     )
     app.dependency_overrides[auth.get_account_identity_provider] = lambda: (
         provider or RecordingProvider()
     )
-    app.dependency_overrides[admin.get_account_password_administrator] = lambda: (
+    app.dependency_overrides[admin_users.get_account_password_administrator] = lambda: (
         password_provider or RecordingPasswordAdministrator()
     )
     return app
@@ -1527,9 +1528,9 @@ def test_管理员界面是英语时_邀请信仍不按管理员的语言(table:
     locale_service.set_request_locale("en")
     try:
         # The administrator's screen speaks English; the delivery still names no language.
-        assert admin._invitation_delivery(None).keywords["locale"] is None
-        assert admin._invitation_delivery("es").keywords["locale"] is None
-        assert admin._invitation_delivery("fr").keywords["locale"] == "fr"
+        assert admin_users._invitation_delivery(None).keywords["locale"] is None
+        assert admin_users._invitation_delivery("es").keywords["locale"] is None
+        assert admin_users._invitation_delivery("fr").keywords["locale"] == "fr"
         response = client.post(
             "/admin/users/invitations", json={"role": "student", "email": "neu@stoa.test"}
         )
