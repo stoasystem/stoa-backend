@@ -1,5 +1,9 @@
 """#467: entering a help request's classroom - whiteboard and voice credentials.
 
+#481: only a request asked in the classroom mode has a classroom, and the
+student enters it once a teacher has accepted the request. The shared row is
+made a classroom request here; the text and legacy cases undo that.
+
 The routes, the help request and the teacher policy are the real ones, over
 the shared table double of test_chat_help_request_lifecycle.py. Daily is a
 recording double: no test reaches the network.
@@ -85,6 +89,7 @@ def table(monkeypatch) -> FakeTable:
     lifecycle.keep_waiting(monkeypatch)
     built.rows[(f"USER#{STUDENT}", "PROFILE")]["name"] = "Mia"
     built.rows[(f"USER#{TEACHER}", "PROFILE")]["name"] = "Herr Keller"
+    built.rows[HELP_KEY]["mode"] = help_requests.CLASSROOM
     return built
 
 
@@ -128,10 +133,8 @@ def _board_token(entry: dict) -> str:
 # --- The student ---
 
 
-@pytest.mark.parametrize("taken", [False, True], ids=["pending", "in_progress"])
-def test_the_student_enters_while_the_request_is_open(table, daily, taken):
-    if taken:
-        _taken(table)
+def test_the_student_enters_once_a_teacher_has_accepted(table, daily):
+    _taken(table)
     response = _student_enters()
     assert response.status_code == 200, response.text
     entry = response.json()
@@ -143,6 +146,21 @@ def test_the_student_enters_while_the_request_is_open(table, daily, taken):
     assert claims["roles"] == [f"editor:help-{CONV}"]
     assert claims["exp"] == int(datetime.fromisoformat(entry["expiresAt"]).timestamp())
     assert daily.tokens()[-1]["user_name"] == "Mia"
+
+
+@pytest.mark.parametrize("offered", [False, True], ids=["waiting", "offered"])
+def test_the_student_is_refused_until_a_teacher_accepts(table, daily, offered):
+    if offered:
+        _dispatch_to(table, TEACHER)
+    assert_violation(_student_enters(), HelpCode.TEACHER_HELP_NOT_YET_ACCEPTED)
+    assert daily.calls == []
+
+
+def test_an_in_progress_request_nobody_holds_does_not_let_the_student_in(table, daily):
+    # Not a state a write leaves; a damaged row is still not a taken request.
+    _help(table)["escalation_status"] = "in_progress"
+    assert_violation(_student_enters(), HelpCode.TEACHER_HELP_NOT_YET_ACCEPTED)
+    assert daily.calls == []
 
 
 @pytest.mark.parametrize("ended", ["resolved", "withdrawn", "expired"])
@@ -200,22 +218,54 @@ def test_the_holding_teacher_is_refused_once_the_request_is_resolved(table, dail
     assert daily.calls == []
 
 
+# --- A request for a written answer (#481) ---
+
+
+def _written(table: FakeTable, stored: str | None) -> None:
+    if stored is None:
+        # Stored before #480: no mode, which reads as a written answer.
+        del _help(table)["mode"]
+    else:
+        _help(table)["mode"] = stored
+
+
+@pytest.mark.parametrize("stored", ["text", None], ids=["text", "legacy"])
+@pytest.mark.parametrize("taken", [False, True], ids=["pending", "in_progress"])
+def test_the_student_never_enters_for_a_written_answer(table, daily, stored, taken):
+    _written(table, stored)
+    if taken:
+        _taken(table)
+    assert_violation(_student_enters(), HelpCode.HELP_REQUEST_NOT_CLASSROOM)
+    assert daily.calls == []
+
+
+@pytest.mark.parametrize("stored", ["text", None], ids=["text", "legacy"])
+def test_the_holding_teacher_never_enters_for_a_written_answer(table, daily, stored):
+    _written(table, stored)
+    _taken(table)
+    assert_violation(_teacher_enters(), HelpCode.HELP_REQUEST_NOT_CLASSROOM)
+    assert daily.calls == []
+
+
 # --- Configuration and Daily ---
 
 
 @pytest.mark.parametrize("missing", ["wbo_base_url", "wbo_auth_secret", "daily_api_key"])
 def test_a_missing_setting_makes_the_classroom_unavailable(table, daily, missing):
+    _taken(table)
     _configure(**{missing: ""})
     assert_violation(_student_enters(), ClassroomErrorCode.CLASSROOM_UNAVAILABLE)
     assert daily.calls == []
 
 
 def test_daily_failing_makes_the_classroom_unavailable(table, daily):
+    _taken(table)
     daily.fail_with = 500
     assert_violation(_student_enters(), ClassroomErrorCode.CLASSROOM_UNAVAILABLE)
 
 
 def test_daily_unreachable_makes_the_classroom_unavailable(table, daily):
+    _taken(table)
     daily.raise_error = httpx.ConnectTimeout("timed out")
     assert_violation(_student_enters(), ClassroomErrorCode.CLASSROOM_UNAVAILABLE)
 

@@ -761,7 +761,8 @@ async def enter_classroom(
 ):
     """The student's credentials for this conversation's classroom (#467).
 
-    Open while the conversation's help request is pending or in progress.
+    Open once a teacher has accepted the conversation's help request, and only
+    one asked in the classroom mode (#481).
     """
     request_id = authorized.ref.resource_id
     help_requests.admit_student_to_classroom(

@@ -3,7 +3,8 @@
 The first four are read by the teacher working on a request, addressed as the
 teacher notifications are: `Sie`, `vous`, `Lei`. The rest are read by the
 student who asked, addressed as the web client addresses them: `du`, `tu`,
-`tu`.
+`tu` - except `help_request_not_classroom`, which both read and so addresses
+neither.
 """
 
 TEXT: dict[str, dict[str, str]] = {
@@ -108,5 +109,19 @@ TEXT: dict[str, dict[str, str]] = {
         "en": "Withdrawing is briefly unavailable. Please try again.",
         "fr": "Le retrait est momentanément impossible. Réessaie dans un instant.",
         "it": "Il ritiro non è possibile per un momento. Riprova tra poco.",
+    },
+    # ── entering the classroom (#481) ────────────────────────────────────
+    # Read by the student and the teacher alike, so it addresses neither.
+    "error.help_request_not_classroom": {
+        "de": "Bei dieser Anfrage wurde eine schriftliche Antwort gewählt, nicht das Klassenzimmer.",
+        "en": "This request asked for a written answer, not the classroom.",
+        "fr": "Cette demande porte sur une réponse écrite, pas sur la classe.",
+        "it": "Questa richiesta è per una risposta scritta, non per la classe.",
+    },
+    "error.teacher_help_not_yet_accepted": {
+        "de": "Noch hat keine Lehrperson deine Anfrage angenommen. Du bekommst Bescheid, sobald du ins Klassenzimmer kannst.",
+        "en": "No teacher has accepted your request yet. You will be told as soon as you can enter the classroom.",
+        "fr": "Aucun enseignant n'a encore accepté ta demande. Tu seras prévenu dès que tu pourras entrer dans la classe.",
+        "it": "Nessun insegnante ha ancora accettato la tua richiesta. Ti avviseremo appena potrai entrare in classe.",
     },
 }

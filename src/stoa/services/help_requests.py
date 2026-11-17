@@ -143,6 +143,11 @@ class HelpRequestErrorCode(StrEnum):
     TEACHER_HELP_REQUEST_NOT_DUE = "teacher_help_request_not_due"
     TEACHER_HELP_REQUEST_NOT_WITHDRAWABLE = "teacher_help_request_not_withdrawable"
     TEACHER_HELP_WITHDRAWAL_UNAVAILABLE = "teacher_help_withdrawal_unavailable"
+    # Entering the classroom (#481). A request asked as a written answer has
+    # no classroom, for the student or the teacher; a classroom request opens
+    # to the student once its teacher has accepted it.
+    HELP_REQUEST_NOT_CLASSROOM = "help_request_not_classroom"
+    TEACHER_HELP_NOT_YET_ACCEPTED = "teacher_help_not_yet_accepted"
 
     @property
     def contract(self) -> RuleContract:
@@ -192,6 +197,8 @@ HELP_REQUEST_ERROR_REGISTRY: dict[HelpRequestErrorCode, RuleContract] = {
     _Code.TEACHER_HELP_WITHDRAWAL_UNAVAILABLE: _sent_with_action(
         _Action.RETRY_SAME_CASE, 503, retryable=True, idempotent_only=True, max_attempts=1
     ),
+    _Code.HELP_REQUEST_NOT_CLASSROOM: RuleContract(409),
+    _Code.TEACHER_HELP_NOT_YET_ACCEPTED: RuleContract(409),
 }
 
 register_codes("help_request", HelpRequestErrorCode, HELP_REQUEST_ERROR_REGISTRY)
@@ -540,25 +547,34 @@ def teacher_may(
 
 
 def admit_student_to_classroom(record: Mapping[str, Any] | None) -> None:
-    """Refuse the student entry to the request's classroom unless it is open (#467).
+    """Refuse the student entry unless a teacher has accepted their classroom request (#481).
 
-    The student may wait in the classroom while the request is pending and
-    stay while a teacher has it in progress. A conversation that never asked
-    is `teacher_help_not_requested`; one that ended, however it ended, is
-    `teacher_help_request_closed`.
+    The classroom opens to the student only for a request asked in the
+    `classroom` mode, and only once a teacher holds it in progress: they are
+    told by the acceptance notification, not left waiting in an empty room.
+    In order: a conversation that never asked is `teacher_help_not_requested`;
+    one that ended, however it ended, `teacher_help_request_closed`; a
+    request for a written answer (a stored one without a mode among them),
+    `help_request_not_classroom`; one no teacher has accepted yet,
+    `teacher_help_not_yet_accepted`.
     """
     if record is None:
         raise HelpRequestViolation(HelpRequestErrorCode.TEACHER_HELP_NOT_REQUESTED)
-    if stored_status(record) not in OPEN:
+    status = stored_status(record)
+    if status not in OPEN:
         raise HelpRequestViolation(HelpRequestErrorCode.TEACHER_HELP_REQUEST_CLOSED)
+    _refuse_classroom_unless_asked(record)
+    if status != IN_PROGRESS or not str(record.get("teacher_id") or ""):
+        raise HelpRequestViolation(HelpRequestErrorCode.TEACHER_HELP_NOT_YET_ACCEPTED)
 
 
 def admit_teacher_to_classroom(record: Mapping[str, Any], teacher_id: str) -> None:
-    """Refuse the teacher entry to the request's classroom unless they hold it in progress (#467).
+    """Refuse the teacher entry unless they hold a classroom request in progress (#467, #481).
 
     Being offered the request is not enough: the teacher takes it first. A
     request this teacher does not hold is `help_request_not_held`; one they
-    held that has ended is `teacher_help_request_closed`.
+    held that has ended is `teacher_help_request_closed`; one asked for a
+    written answer is `help_request_not_classroom`.
     """
     if str(record.get("teacher_id") or "") != teacher_id:
         raise HelpRequestConflict(
@@ -566,6 +582,13 @@ def admit_teacher_to_classroom(record: Mapping[str, Any], teacher_id: str) -> No
         )
     if stored_status(record) != IN_PROGRESS:
         raise HelpRequestViolation(HelpRequestErrorCode.TEACHER_HELP_REQUEST_CLOSED)
+    _refuse_classroom_unless_asked(record)
+
+
+def _refuse_classroom_unless_asked(record: Mapping[str, Any]) -> None:
+    """Only a request asked in the `classroom` mode has a classroom (#481)."""
+    if mode(record) != CLASSROOM:
+        raise HelpRequestViolation(HelpRequestErrorCode.HELP_REQUEST_NOT_CLASSROOM)
 
 
 def sla(record: Mapping[str, Any]) -> dict[str, Any]:

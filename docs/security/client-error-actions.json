@@ -1167,6 +1167,19 @@
         "retryable": false
       }
     },
+    "help_request_not_classroom": {
+      "action": null,
+      "domain": "help_request",
+      "http_status": 409,
+      "message_key": "error.help_request_not_classroom",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "help_request_not_held": {
       "action": "refresh_help_request",
       "domain": "help_request",
@@ -3190,6 +3203,19 @@
       "domain": "help_request",
       "http_status": 404,
       "message_key": "error.teacher_help_not_requested",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_help_not_yet_accepted": {
+      "action": null,
+      "domain": "help_request",
+      "http_status": 409,
+      "message_key": "error.teacher_help_not_yet_accepted",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
