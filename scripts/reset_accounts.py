@@ -261,7 +261,7 @@ def main() -> int:
     )
     print(f"  linked parent@{DOMAIN} to student@{DOMAIN}")
 
-    print("\ndone. Run enable_teacher_support_testing.py to open the human-teacher path.")
+    print("\ndone. Run grant_test_account_paid_access.py to give the test student paid access.")
     return 0
 
 
