@@ -9,6 +9,8 @@ of the reply's checks are tested here, together, and nowhere else.
 
 from __future__ import annotations
 
+import json
+import logging
 from typing import Any
 
 import pytest
@@ -272,6 +274,117 @@ def test_a_failure_before_the_reply_carries_no_usage() -> None:
     assert failure.value.category == "provider_error"
     assert failure.value.usage is None
     assert failure.value.retryable is True
+
+
+# ── The reply's checks ───────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "tool_input",
+    [
+        # Never closes: the reply was cut off.
+        '{"steps": ["Zähler und Nenner durch den ggT teilen"], "answer": "So kü',
+        # A whole object with text after it: nothing around the input is cut away.
+        json.dumps({"steps": ["Erst kürzen."], "answer": "Fertig."}) + "\n\nViel Erfolg!",
+        # Prose, not an object.
+        "Kürze Zähler und Nenner durch denselben Teiler.",
+        # An object without the two sections every answer is shown by.
+        json.dumps({"hints": ["x"]}),
+    ],
+    ids=["unclosed", "stray-text", "prose", "no-sections"],
+)
+def test_a_tool_input_that_is_not_an_answer_is_refused_and_logged(
+    tool_input: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.WARNING, logger="stoa.private_telemetry")
+
+    with pytest.raises(AIInvocationFailure) as failure:
+        _ask(FakeModel(tool_input))
+
+    assert failure.value.category == "malformed_response"
+    # It was paid for: the usage rides on the failure, and it is not asked again.
+    assert failure.value.usage is not None
+    assert failure.value.retryable is False
+    assert "event_category=model_output_parse_failed" in caplog.text
+
+
+def test_a_reply_with_neither_steps_nor_an_answer_is_refused(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING, logger="stoa.private_telemetry")
+
+    with pytest.raises(AIInvocationFailure) as failure:
+        _ask(FakeModel(_reply(steps=[], answer="", hints=["x"])))
+
+    assert failure.value.category == "malformed_response"
+    assert failure.value.usage is not None
+    assert failure.value.retryable is False
+    # Refused before the policy issue is logged.
+    assert "model_output_policy_issue" not in caplog.text
+
+
+def test_a_very_short_reply_is_kept_and_logged_as_a_policy_issue(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING, logger="stoa.private_telemetry")
+
+    answer = _ask(FakeModel(_reply(steps=[], answer="12", hints=[])))
+
+    assert answer.structured.answer == "12"
+    assert answer.content == "12"
+    assert "event_category=model_output_policy_issue" in caplog.text
+    assert "issue_count=1" in caplog.text
+
+
+def test_internal_terms_in_the_reply_are_redacted_and_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING, logger="stoa.private_telemetry")
+
+    answer = _ask(
+        FakeModel(
+            _reply(
+                steps=["Claude teilt durch den ggT", "Das Ergebnis prüfen"],
+                answer="So kürzt man einen Bruch, sagt das System Prompt von Bedrock.",
+            )
+        )
+    )
+
+    assert answer.structured.steps == ["[AI] teilt durch den ggT", "Das Ergebnis prüfen"]
+    assert answer.structured.answer == "So kürzt man einen Bruch, sagt das [AI] von [AI]."
+    for term in ("Claude", "Bedrock", "System Prompt"):
+        assert term not in answer.content
+    assert "event_category=model_output_policy_issue" in caplog.text
+    assert "issue_count=1" in caplog.text
+
+
+def test_each_step_is_told_once_and_whole_as_it_closes() -> None:
+    model = FakeModel(_reply())
+    model.pieces = 40
+    told: list[tuple[int, str]] = []
+
+    answer = ask_answer.answer(
+        ask_answer.Asked(content="Wie kürze ich 6/8?"),
+        ask_answer.Asker(student_id=STUDENT, subject="Mathematik", grade="grade_6_primary", locale="de"),
+        asking(model, on_step=lambda index, step: told.append((index, step))),
+        read_star_map=_Map(),
+    )
+
+    assert told == list(enumerate(_reply()["steps"]))
+    assert answer.structured.steps == _reply()["steps"]
+
+
+def test_a_long_question_is_cut_and_logged(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.WARNING, logger="stoa.private_telemetry")
+    model = FakeModel(_reply())
+
+    _ask(model, content="Bruch " + "a" * 2500)
+
+    sent = model.student_turn()
+    assert "a" * 1994 in sent
+    assert "a" * 1995 not in sent
+    assert "event_category=prompt_input_truncated" in caplog.text
+    assert "input_size=2506" in caplog.text
 
 
 # ── What else reaches the prompt ─────────────────────────────────────────────
