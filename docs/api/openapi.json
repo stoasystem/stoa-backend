@@ -2633,6 +2633,37 @@
         "title": "ClassroomVoice",
         "type": "object"
       },
+      "CommonMistake": {
+        "description": "One mistake students often make on a question like the one asked (#444).",
+        "properties": {
+          "errorCause": {
+            "anyOf": [
+              {
+                "enum": [
+                  "structural",
+                  "deviation",
+                  "application",
+                  "metacognitive"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcause"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "CommonMistake",
+        "type": "object"
+      },
       "CompleteUploadRequest": {
         "additionalProperties": false,
         "properties": {
@@ -12588,6 +12619,13 @@
             "default": "",
             "title": "Answer",
             "type": "string"
+          },
+          "commonMistakes": {
+            "items": {
+              "$ref": "#/components/schemas/CommonMistake"
+            },
+            "title": "Commonmistakes",
+            "type": "array"
           },
           "hints": {
             "items": {

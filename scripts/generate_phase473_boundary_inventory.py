@@ -274,6 +274,9 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             # The quick replies (#443): read by `_quick_replies` in ask_answer;
             # the row stays with the flow's registered parser like the rest.
             ("quick_replies", "list[str]", "_parse_ai_response", "closed_ai_projection"),
+            # The common mistakes (#444): read by `_common_mistakes` in
+            # ask_answer, each entry an object of a text and a category.
+            ("common_mistakes", "list[object]", "_parse_ai_response", "closed_ai_projection"),
         ),
         fake="src/stoa/services/ai_service.py:bedrock.invoke_model.Body",
         selector="tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",

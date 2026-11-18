@@ -61,6 +61,10 @@ def _expected(answer: dict[str, Any]) -> dict[str, Any]:
         ],
         "suggestTeacher": answer["suggest_teacher"],
         "quickReplies": answer["quick_replies"],
+        "commonMistakes": [
+            {"text": mistake["text"], "errorCause": mistake["error_cause"]}
+            for mistake in answer["common_mistakes"]
+        ],
     }
 
 
@@ -157,6 +161,34 @@ def test_an_answer_stored_before_quick_replies_reads_back_with_none(table, model
 
     assert assistant["structured"]["quickReplies"] == []
     assert assistant["structured"] == {**sections, "quickReplies": []}
+
+
+def test_an_answer_stored_before_common_mistakes_reads_back_with_none(table, model) -> None:
+    client = _client()
+    _send(client, "key-1", language="de")
+    # The sections as they were stored before #444: the same, without them.
+    [stored] = _messages(table, "assistant")
+    sections = {key: value for key, value in stored["structured"].items() if key != "commonMistakes"}
+    table.seed({**stored, "structured": sections})
+
+    assistant = _assistant(_read_back(client))
+
+    assert assistant["structured"]["commonMistakes"] == []
+    assert assistant["structured"] == {**sections, "commonMistakes": []}
+
+
+def test_a_common_mistake_without_a_category_carries_a_null_one(table, model) -> None:
+    # The contract the client is handed (#444): every entry has both keys,
+    # `errorCause` null when there is none.
+    answer, _label = ANSWERS["de"]
+    model.outcomes = [answer]
+
+    structured = _done(_send(_client(), "key-1", language="de"))["structured"]
+
+    assert structured["commonMistakes"] == [
+        {"text": "Nur den Zähler kürzen: $6/8 \\neq 3/8$.", "errorCause": "structural"},
+        {"text": "Durch eine Zahl teilen, die nicht beide teilt.", "errorCause": None},
+    ]
 
 
 # ── What the sections say ────────────────────────────────────────────────────

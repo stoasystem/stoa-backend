@@ -625,6 +625,10 @@ ANSWERS: dict[str, tuple[dict[str, Any], str]] = {
             "knowledge_points": ["Brüche kürzen", "Grösster gemeinsamer Teiler"],
             "suggest_teacher": True,
             "quick_replies": ["Den ersten Schritt verstehe ich nicht", "Noch eine Aufgabe wie diese"],
+            "common_mistakes": [
+                {"text": "Nur den Zähler kürzen: $6/8 \\neq 3/8$.", "error_cause": "structural"},
+                {"text": "Durch eine Zahl teilen, die nicht beide teilt.", "error_cause": None},
+            ],
         },
         "Hinweis",
     ),
@@ -637,6 +641,10 @@ ANSWERS: dict[str, tuple[dict[str, Any], str]] = {
             "knowledge_points": ["Simplifying fractions", "Greatest common divisor"],
             "suggest_teacher": True,
             "quick_replies": ["I don't get the first step", "Another one like this, please"],
+            "common_mistakes": [
+                {"text": "Dividing only the top: $6/8 \\neq 3/8$.", "error_cause": "structural"},
+                {"text": "Dividing by a number that does not divide both.", "error_cause": None},
+            ],
         },
         "Hint",
     ),
@@ -649,6 +657,10 @@ ANSWERS: dict[str, tuple[dict[str, Any], str]] = {
             "knowledge_points": ["Simplifier des fractions", "Plus grand commun diviseur"],
             "suggest_teacher": True,
             "quick_replies": ["Je ne comprends pas la première étape", "Encore un exercice comme celui-ci"],
+            "common_mistakes": [
+                {"text": "Ne diviser que le numérateur : $6/8 \\neq 3/8$.", "error_cause": "structural"},
+                {"text": "Diviser par un nombre qui ne divise pas les deux.", "error_cause": None},
+            ],
         },
         "Indice",
     ),
@@ -661,6 +673,10 @@ ANSWERS: dict[str, tuple[dict[str, Any], str]] = {
             "knowledge_points": ["Semplificare le frazioni", "Massimo comun divisore"],
             "suggest_teacher": True,
             "quick_replies": ["Non capisco il primo passo", "Un altro esercizio così"],
+            "common_mistakes": [
+                {"text": "Dividere solo il numeratore: $6/8 \\neq 3/8$.", "error_cause": "structural"},
+                {"text": "Dividere per un numero che non li divide entrambi.", "error_cause": None},
+            ],
         },
         "Indizio",
     ),
