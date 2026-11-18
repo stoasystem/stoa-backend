@@ -618,6 +618,91 @@ def test_a_week_with_room_left_admits_the_question(
     assert len(model.calls) == 1
 
 
+# ── A plan that changes inside a week (#512) ─────────────────────────────────
+
+
+def _resolved_as(monkeypatch: pytest.MonkeyPatch, plan: str):
+    """The student's eligibility as `entitlement_service` resolves it: no allowance version."""
+    eligibility = seed_plan(monkeypatch, plan=plan)
+    del eligibility.entitlement["allowanceVersion"]
+    return eligibility
+
+
+def _week_counter(allowance: AtomicAllowanceTable) -> dict[str, Any]:
+    counter = allowance_repo.get_allowance_counter(
+        beneficiary_id=STUDENT,
+        week=allowance_service.zurich_week(datetime.now(UTC)),
+        table=allowance,
+    )
+    assert counter is not None
+    return counter
+
+
+def test_a_plan_that_starts_mid_week_is_asked_under_at_once(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    allowance = AtomicAllowanceTable()
+    _patch_allowance_table(monkeypatch, allowance)
+    eligibility = _resolved_as(monkeypatch, "free_trial")
+    client = _client()
+    assert _send(client, "before-the-grant").status_code == 200
+    used_before = _week_counter(allowance)["finalized_input_tokens"]
+
+    eligibility.entitlement["effectivePlan"] = "teacher_supported"
+    after = _send(client, "after-the-grant")
+
+    assert after.status_code == 200, after.text
+    assert len(model.calls) == 2
+    counter = _week_counter(allowance)
+    paid = allowance_service.plan_allowance_budget("teacher_supported", allowance_version=1)
+    assert (counter["plan_id"], counter["budget_input_tokens"]) == (
+        "teacher_supported",
+        paid.input_tokens,
+    )
+    # The tokens asked before the change still count, now against the new budget.
+    assert counter["finalized_input_tokens"] > used_before > 0
+
+
+def test_a_plan_that_ends_mid_week_is_asked_under_the_free_budget(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    allowance = AtomicAllowanceTable()
+    _patch_allowance_table(monkeypatch, allowance)
+    eligibility = _resolved_as(monkeypatch, "teacher_supported")
+    client = _client()
+    assert _send(client, "while-granted").status_code == 200
+
+    eligibility.entitlement["effectivePlan"] = "free_trial"
+    after = _send(client, "after-the-grant-ended")
+
+    assert after.status_code == 200, after.text
+    assert len(model.calls) == 2
+    assert _week_counter(allowance)["plan_id"] == "free_trial"
+
+
+def test_a_plan_that_ends_after_more_than_the_free_week_was_used_leaves_none(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    allowance = AtomicAllowanceTable()
+    _patch_allowance_table(monkeypatch, allowance)
+    eligibility = _resolved_as(monkeypatch, "teacher_supported")
+    free = allowance_service.plan_allowance_budget("free_trial", allowance_version=1)
+    seed_week_used(
+        allowance,
+        STUDENT,
+        at=datetime.now(UTC),
+        plan="teacher_supported",
+        input_tokens=free.input_tokens,
+    )
+
+    eligibility.entitlement["effectivePlan"] = "free_trial"
+    refused = _send(_client(), "free-week-already-spent")
+
+    assert refused.status_code == 429, refused.text
+    assert refused.json()["detail"]["code"] == "allowance_exhausted"
+    assert model.calls == []
+
+
 def test_the_admitted_limit_is_the_one_the_claim_enforces(
     table, model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
