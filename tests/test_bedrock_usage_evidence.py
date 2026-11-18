@@ -556,9 +556,6 @@ def test_inventory_classifies_every_source_invoke_model_call() -> None:
         "src/stoa/services/model_call/bedrock.py:invoke_model_with_response_stream": (
             ai_service.AIInvocationClass.USER_ALLOWANCE
         ),
-        "src/stoa/services/report_service.py:generate_weekly_report_content": (
-            ai_service.AIInvocationClass.PROVIDER_COST_ONLY
-        ),
     }
 
     discovered: set[str] = set()

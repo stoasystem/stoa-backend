@@ -11,7 +11,9 @@ from stoa import config
 from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.config import Settings
-from stoa.services import email_layout, message_catalog, report_service
+from stoa.services import email_layout, message_catalog, model_call, report_service
+from stoa.services.model_call.fake import FakeAdapter, Prose, Reply, check_body
+from stoa.services.model_call.adapter import ProviderError
 
 
 @pytest.fixture(autouse=True)
@@ -76,27 +78,6 @@ class FakeTable:
 
     def transact_write_items(self, **kwargs):
         return self.links.transact_write_items(**kwargs)
-
-
-class FakeBody:
-    def __init__(self, payload):
-        self.payload = payload
-
-    def read(self):
-        return json.dumps(self.payload).encode()
-
-
-class FakeBedrockClient:
-    def __init__(self, text=None, error=None):
-        self.text = text
-        self.error = error
-        self.calls = []
-
-    def invoke_model(self, **kwargs):
-        self.calls.append(kwargs)
-        if self.error:
-            raise self.error
-        return {"body": FakeBody({"content": [{"text": self.text}]})}
 
 
 class FakeS3Client:
@@ -487,44 +468,156 @@ def test_parse_generated_report_json_rejects_invalid_list_items():
         )
 
 
-def test_generate_weekly_report_content_invokes_bedrock_with_structured_input():
-    client = FakeBedrockClient(
-        text=json.dumps(
-            {
-                "summary": "Student made steady progress.",
-                "strengths": ["Completed practice."],
-                "weakTopics": [{"topic": "topic-1", "note": "Review this next."}],
-                "recommendations": ["Do one review session."],
-                "teacherNote": "Teacher help was requested.",
-            }
-        )
-    )
+MODEL_REPORT = {
+    "summary": "Student made steady progress.",
+    "strengths": ["Completed practice."],
+    "weakTopics": [{"topic": "topic-1", "note": "Review this next."}],
+    "recommendations": ["Do one review session."],
+    "teacherNote": "Teacher help was requested.",
+}
 
-    aws.install({Kind.BEDROCK_RUNTIME: client})
+
+def _model(*outcomes):
+    model = FakeAdapter(*outcomes)
+    model_call.install(model)
+    return model
+
+
+def _assert_fallback(content):
+    assert content == report_service.build_deterministic_report_fallback(sample_report_payload())
+    assert content["summary"].startswith("During 2026-06-01 to 2026-06-07")
+
+
+def test_generate_weekly_report_content_asks_for_the_report_through_the_forced_tool():
+    model = _model(MODEL_REPORT)
+
     content = report_service.generate_weekly_report_content(sample_report_payload())
 
-    assert content["summary"] == "Student made steady progress."
-    assert len(client.calls) == 1
-    request_body = json.loads(client.calls[0]["body"])
-    user_input = json.loads(request_body["messages"][0]["content"])
-    assert client.calls[0]["modelId"] == config.settings().bedrock_model_id
+    assert content == MODEL_REPORT
+    assert len(model.calls) == 1
+    request = model.calls[0]
+    assert request["tool_choice"] == {"type": "tool", "name": "give_weekly_report"}
+    [tool] = request["tools"]
+    assert tool["name"] == "give_weekly_report"
+    assert tool["strict"] is True
+    assert tool["input_schema"] == report_service.REPORT_TOOL.input_schema
+    assert request["temperature"] == 0.2
+    assert request["max_tokens"] == min(config.settings().bedrock_max_tokens, 1200)
+    assert "give_weekly_report" in request["system"]
+    user_input = json.loads(request["messages"][0]["content"])
     assert user_input["metrics"]["questionsAsked"] == 3
     assert len(user_input["activities"]) == 6
+    # No admission hook: provider cost only, nothing counted, nothing reserved.
+    assert model.counted == 0
+    # One call gets at most 60 seconds.
+    [remaining] = model.connections
+    assert 59 < remaining <= 60
 
 
-def test_generate_weekly_report_content_falls_back_on_malformed_output():
-    client = FakeBedrockClient(text="not json")
+def test_the_report_request_is_one_count_tokens_takes_as_well():
+    """The body CountTokens would be asked to count passes the measured rules (#430)."""
+    model = _model(MODEL_REPORT)
 
-    aws.install({Kind.BEDROCK_RUNTIME: client})
-    content = report_service.generate_weekly_report_content(sample_report_payload())
+    report_service.generate_weekly_report_content(sample_report_payload())
 
-    assert content["summary"].startswith("During 2026-06-01 to 2026-06-07")
-    assert content["weakTopics"][0] == {"topic": "topic-0", "note": "Seen in 0 weekly signal(s)."}
-    assert content["teacherNote"] is not None
+    check_body(model_call._count_body(model.calls[0]), counted=True)
 
 
-def test_generate_weekly_report_content_falls_back_on_bedrock_error():
-    client = FakeBedrockClient(error=RuntimeError("boom"))
+def test_the_report_output_limit_is_the_smaller_of_the_setting_and_1200(monkeypatch):
+    monkeypatch.setattr(
+        report_service.config,
+        "settings",
+        lambda: Settings(environment="development", bedrock_max_tokens=800),
+    )
+    model = _model(MODEL_REPORT)
+
+    report_service.generate_weekly_report_content(sample_report_payload())
+
+    assert model.calls[0]["max_tokens"] == 800
+
+
+def test_the_tool_schema_takes_what_the_parser_takes():
+    """Every key the schema requires is one the parser reads, and none it leaves out."""
+    schema = report_service.REPORT_TOOL.input_schema
+    assert set(schema["required"]) == set(schema["properties"]) == set(MODEL_REPORT)
+    assert report_service.parse_generated_report_json(json.dumps(MODEL_REPORT)) == MODEL_REPORT
+    assert report_service.parse_generated_report_json(
+        json.dumps({**MODEL_REPORT, "teacherNote": None, "weakTopics": []})
+    )["teacherNote"] is None
+
+
+def test_a_report_call_not_sent_falls_back(caplog):
+    model = _model(ProviderError("ThrottlingException", http_status=429, request_id="r-1"))
+
+    with caplog.at_level("WARNING", logger=report_service.logger.name):
+        content = report_service.generate_weekly_report_content(sample_report_payload())
+
+    _assert_fallback(content)
+    assert len(model.calls) == 1
+    assert "fallback used after provider_error" in caplog.text
+
+
+def test_a_report_call_out_of_time_falls_back_without_sending():
+    model = _model(MODEL_REPORT)
+    ticks = iter([0.0, 61.0])
+
+    content = report_service.generate_weekly_report_content(
+        sample_report_payload(), clock=lambda: next(ticks, 61.0)
+    )
+
+    _assert_fallback(content)
+    assert model.calls == []
+
+
+@pytest.mark.parametrize(
+    ("outcome", "category"),
+    [
+        (Prose("Here is the report."), "malformed_response"),
+        (Reply(input='{"summary": "Student made', stop_reason="max_tokens"), "incomplete_output"),
+    ],
+)
+def test_a_report_paid_for_but_unusable_falls_back(outcome, category, caplog):
+    model = _model(outcome)
+
+    with caplog.at_level("INFO", logger=report_service.logger.name):
+        content = report_service.generate_weekly_report_content(sample_report_payload())
+
+    _assert_fallback(content)
+    assert len(model.calls) == 1
+    assert f"fallback used after {category}" in caplog.text
+    assert "paid input_tokens=90 output_tokens=30" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "tool_input",
+    [
+        "not json",
+        {**MODEL_REPORT, "strengths": []},
+        {**MODEL_REPORT, "summary": "This was generated by Bedrock."},
+    ],
+)
+def test_a_report_the_parser_refuses_falls_back(tool_input, caplog):
+    _model(tool_input)
+
+    with caplog.at_level("INFO", logger=report_service.logger.name):
+        content = report_service.generate_weekly_report_content(sample_report_payload())
+
+    _assert_fallback(content)
+    assert "fallback used after ValueError" in caplog.text
+    assert "paid input_tokens=90 output_tokens=30" in caplog.text
+
+
+def test_a_report_call_that_raises_falls_back(monkeypatch):
+    def broken(**_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(report_service.model_call, "call", broken)
+
+    _assert_fallback(report_service.generate_weekly_report_content(sample_report_payload()))
+
+
+def test_an_empty_week_falls_back_to_the_no_activity_report():
+    _model(ProviderError("ServiceUnavailableException", http_status=503))
     payload = sample_report_payload()
     payload["metrics"] = {
         "questionsAsked": 0,
@@ -535,7 +628,6 @@ def test_generate_weekly_report_content_falls_back_on_bedrock_error():
     }
     payload["weakTopics"] = []
 
-    aws.install({Kind.BEDROCK_RUNTIME: client})
     content = report_service.generate_weekly_report_content(payload)
 
     assert content == {

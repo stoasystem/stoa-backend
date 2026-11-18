@@ -127,11 +127,10 @@ def inventory_ai_invocation_classes() -> dict[str, AIInvocationClass]:
     """Return the exhaustive direct InvokeModel caller inventory."""
     return {
         # The Ask answer, through 模型调用 under the allowance's admission (#436).
+        # The weekly report goes through it too, without an admission hook, so
+        # at provider cost only (#438); the hook decides the class per call.
         "src/stoa/services/model_call/bedrock.py:invoke_model_with_response_stream": (
             AIInvocationClass.USER_ALLOWANCE
-        ),
-        "src/stoa/services/report_service.py:generate_weekly_report_content": (
-            AIInvocationClass.PROVIDER_COST_ONLY
         ),
     }
 
