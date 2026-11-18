@@ -60,7 +60,8 @@ class ReviewedFlow:
     # Where the read lives now, as (file, symbol), when refactoring moved it
     # after the candidate was sealed. The candidate is still read at the
     # registered location; a tree without it must hold the read here, in a
-    # symbol that makes the registered client call.
+    # symbol that makes the registered client call, or in the flow's named
+    # parser when the flow is registered at that parser.
     successor: tuple[str, str] | None = None
 
 
@@ -274,6 +275,8 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         fake="src/stoa/services/ai_service.py:bedrock.invoke_model.Body",
         selector="tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
         decisions=("D-03", "D-05", "D-10", "D-17"),
+        # The Ask reply's checks moved beside the prompt (#437).
+        successor=("src/stoa/services/ask_answer.py", "_parse_ai_response"),
     )
     + _flows(
         file="src/stoa/routers/conversations.py",
@@ -570,7 +573,13 @@ def discover_dataflows(root: Path | str) -> list[dict[str, Any]]:
             successor_file, successor_symbol = flow.successor
             if (root / successor_file).is_file():
                 symbol = symbol_at(successor_file, successor_symbol)
-                if symbol is not None and not _makes_call(symbol, flow.client_call):
+                # A flow registered at its named parser moves with the parser,
+                # which reads the response it is handed and makes no call.
+                if (
+                    symbol is not None
+                    and successor_symbol != flow.parser
+                    and not _makes_call(symbol, flow.client_call)
+                ):
                     raise BoundaryViolation(
                         f"successor does not make the registered call: "
                         f"{successor_file}:{successor_symbol}:{flow.client_call}"
