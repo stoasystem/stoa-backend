@@ -13857,6 +13857,25 @@
         "title": "TeacherApplicationRequest",
         "type": "object"
       },
+      "TeacherAskedStar": {
+        "description": "A star the conversation's Ask answers named (#517).",
+        "properties": {
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unitId": {
+            "title": "Unitid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unitId",
+          "title"
+        ],
+        "title": "TeacherAskedStar",
+        "type": "object"
+      },
       "TeacherAvailability": {
         "properties": {
           "status": {
@@ -14086,6 +14105,13 @@
             "title": "Aihelpedstars",
             "type": "array"
           },
+          "askedStars": {
+            "items": {
+              "$ref": "#/components/schemas/TeacherAskedStar"
+            },
+            "title": "Askedstars",
+            "type": "array"
+          },
           "commonErrorCause": {
             "anyOf": [
               {
@@ -14100,6 +14126,16 @@
             "title": "Conversationid",
             "type": "string"
           },
+          "firstQuestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeacherPrepQuestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "firstTeacherActionAt": {
             "anyOf": [
               {
@@ -14110,6 +14146,16 @@
               }
             ],
             "title": "Firstteacheractionat"
+          },
+          "lastQuestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeacherPrepQuestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "messages": {
             "items": {
@@ -14173,6 +14219,13 @@
           "subject": {
             "title": "Subject",
             "type": "string"
+          },
+          "uploads": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentSummary"
+            },
+            "title": "Uploads",
+            "type": "array"
           },
           "weakTopics": {
             "items": {
@@ -14410,6 +14463,37 @@
           "teacher"
         ],
         "title": "TeacherNoteOut",
+        "type": "object"
+      },
+      "TeacherPrepQuestion": {
+        "description": "One of the student's questions as the prep table shows it (#517).",
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentSummary"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "messageId": {
+            "title": "Messageid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "messageId",
+          "content",
+          "createdAt"
+        ],
+        "title": "TeacherPrepQuestion",
         "type": "object"
       },
       "TeacherProfile": {
