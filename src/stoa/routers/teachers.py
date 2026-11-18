@@ -727,6 +727,9 @@ async def update_my_availability(
         updated_at=_now(),
         status=body.status,
     )
+    # Saving is also a heartbeat (#472): a teacher who just set themselves
+    # available is online at once, not only from their next poll.
+    teacher_dispatch_service.record_seen_if_teacher(actor)
     return _availability_response(updated)
 
 
@@ -922,6 +925,9 @@ async def list_help_requests(
     portal: tuple[Actor, AuthorizationContext] = Depends(_help_list_actor),
 ):
     """Return only help requests currently assigned to this Actor."""
+    # The queue polls this while the teacher's tab is shown, so each read is
+    # also their heartbeat (#472).
+    teacher_dispatch_service.record_seen_if_teacher(portal[0])
     escalated = await _current_help_requests(*portal)
     items = []
     for conv in sorted(

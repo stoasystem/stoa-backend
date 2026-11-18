@@ -23,7 +23,7 @@ from stoa import aws
 from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.routers import teachers
-from stoa.services import help_requests
+from stoa.services import help_requests, teacher_dispatch_service
 from rule_violation_helpers import assert_violation
 
 TEACHER = "teacher-66"
@@ -107,6 +107,9 @@ def build_table(monkeypatch) -> FakeTable:
             monkeypatch.setattr(module, "get_table", lambda table=table: table)
     # The modules already on the table gateway read it there.
     db_table.install(table)
+    # Both teachers have STOA open: only an online teacher is offered (#472).
+    for teacher in (TEACHER, OTHER_TEACHER):
+        teacher_dispatch_service.record_teacher_seen(teacher)
     return table
 
 
@@ -387,10 +390,18 @@ def test_a_failed_request_read_writes_nothing(table, monkeypatch, first_accept):
 
 
 def test_a_teacher_who_timed_out_is_offered_it_again_when_nobody_else_is_free(table):
-    # Nobody else is on dispatch: the request goes back to the teacher who let
-    # it lapse, who finds it in their list and takes it (#391).
+    # The teacher who let it lapse is paused (#472). Once they set themselves
+    # available again and nobody else is on dispatch, the request goes back to
+    # them, and they find it in their list and take it (#391).
     _dispatch_to(table, TEACHER)
     _help(table)["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+
+    help_requests.sweep()
+
+    assert table.rows[(f"USER#{TEACHER}", "PROFILE")]["dispatch_availability"] == "paused"
+    assert _help(table)["dispatch_status"] == "no_candidate"
+    back = _client().patch("/teachers/me/availability", json={"status": "available"})
+    assert back.status_code == 200, back.text
 
     help_requests.sweep()
 

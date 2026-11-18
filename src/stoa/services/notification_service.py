@@ -40,6 +40,7 @@ EVENT_TYPES = {
     "teacher_reply",
     "teacher_help_expired",
     "teacher_help_dispatched",
+    "teacher_dispatch_paused",
     "moderation_case_update",
     "subscription_request_update",
     "learning_profile_update",
@@ -61,7 +62,10 @@ PUSH_TOKEN_PLATFORMS = {"ios", "android", "web"}
 # lapses in minutes, so a teacher who switched the bell off for the category
 # would let every one of them lapse unseen (#141); the email is what they can
 # switch off instead.
-ALWAYS_IN_APP_EVENT_TYPES = frozenset({"teacher_help_dispatched"})
+#
+# A teacher paused for an offer they let lapse (#472) is told the same way: a
+# bell they switched off would leave them paused without knowing why.
+ALWAYS_IN_APP_EVENT_TYPES = frozenset({"teacher_help_dispatched", "teacher_dispatch_paused"})
 # The switch for the dispatch reminder email (#141), on until the teacher turns
 # it off. It is not a category x channel cell: the bell for the same offer
 # cannot be turned off, and the email is sent at once, not in a digest.
@@ -74,6 +78,7 @@ EVENT_CATEGORY_BY_TYPE = {
     "teacher_reply": "teacher_responses",
     "teacher_help_expired": "teacher_responses",
     "teacher_help_dispatched": "teacher_responses",
+    "teacher_dispatch_paused": "teacher_responses",
     "moderation_case_update": "admin_operations",
     "subscription_request_update": "admin_operations",
     "learning_profile_update": "learning_updates",
@@ -1043,6 +1048,30 @@ def emit_teacher_help_dispatched(
 
 def _dispatched_event_id(dispatch_id: str) -> str:
     return f"teacher-help-dispatched-{dispatch_id}"
+
+
+def emit_teacher_dispatch_paused(*, teacher_id: str, dispatch_id: str, accept_minutes: int) -> None:
+    """Tell a teacher they were paused for an offer they let lapse (#472).
+
+    One bell notification in the teacher's own language, which they cannot
+    switch off; it names nothing of the request or the student, only why and
+    how to come back. One per lapsed offer: its id is the offer's. Never fails
+    the sweep that paused them.
+    """
+    locale = _recipient_locale(teacher_id)
+    create_event_safe(
+        recipient_id=teacher_id,
+        recipient_role="teacher",
+        event_type="teacher_dispatch_paused",
+        target_type="teacher_availability",
+        target_id=teacher_id,
+        title=message_catalog.text("teacher_dispatch.paused.title", locale),
+        summary=message_catalog.text("teacher_dispatch.paused.summary", locale, minutes=accept_minutes),
+        metadata={"dispatch_id": dispatch_id},
+        actor_role="system",
+        owner_id=teacher_id,
+        event_id=f"teacher-dispatch-paused-{dispatch_id}",
+    )
 
 
 #: What became of an offer whose notification no longer offers anything (#391):

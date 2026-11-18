@@ -15,7 +15,7 @@ from stoa.security.authorization import (
 from stoa.security.declared_authorization import SELF, TOKEN, authorized, path
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.security.route_inventory import explicit_route_classification
-from stoa.services import locale_service, notification_service
+from stoa.services import locale_service, notification_service, teacher_dispatch_service
 
 
 # Every role reads and changes its own notifications, and only its own.
@@ -174,6 +174,9 @@ async def list_notifications(
     limit: int = Query(default=50, ge=1, le=100),
     actor: Actor = Depends(_own(ResourceType.NOTIFICATION_COLLECTION, AuthorizationAction.READ)),
 ):
+    # The bell polls this on every page while the tab is shown: for a teacher
+    # it is also the heartbeat that keeps them online for dispatch (#472).
+    teacher_dispatch_service.record_seen_if_teacher(actor)
     items = notification_service.list_user_events(actor, status=status_filter, limit=limit)
     return NotificationListResponse(
         items=[NotificationEventResponse.model_validate(item) for item in items],

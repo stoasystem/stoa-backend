@@ -2015,6 +2015,15 @@ def _with_a_teacher_on_duty(table) -> None:
     table.rows[("USER#teacher-1", "ACCOUNT_FENCE")] = _as_stored(
         {"PK": "USER#teacher-1", "SK": "ACCOUNT_FENCE", "status": "active", "generation": 2}
     )
+    # On duty means online too: the teacher's bell polled just now (#472).
+    table.rows[("USER#teacher-1", user_repo.TEACHER_SEEN_SK)] = _as_stored(
+        {
+            "PK": "USER#teacher-1",
+            "SK": user_repo.TEACHER_SEEN_SK,
+            "user_id": "teacher-1",
+            "seen_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
 
 
 def test_escalating_with_a_teacher_on_duty_offers_the_request_to_them(monkeypatch):

@@ -69,6 +69,7 @@ def test_teacher_availability_summary_counts_dispatchable_profiles_only():
                 "role": "teacher",
                 "account_status": "active",
                 "version": 1,
+                "dispatch_seen_at": "2026-11-19T08:59:00+00:00",
                 "account_fence_generation": 1,
                 "subjects": ["math"],
                 "dispatch_availability": "online",
@@ -80,6 +81,7 @@ def test_teacher_availability_summary_counts_dispatchable_profiles_only():
                 "role": "teacher",
                 "account_status": "active",
                 "version": 1,
+                "dispatch_seen_at": "2026-11-19T08:59:00+00:00",
                 "account_fence_generation": 1,
                 "subjects": ["math"],
                 "dispatch_availability": "available",
@@ -91,10 +93,12 @@ def test_teacher_availability_summary_counts_dispatchable_profiles_only():
                 "role": "teacher",
                 "account_status": "active",
                 "version": 1,
+                "dispatch_seen_at": "2026-11-19T08:59:00+00:00",
                 "account_fence_generation": 1,
                 "dispatch_availability": "available",
             },
-        ]
+        ],
+        now="2026-11-19T09:00:00+00:00",
     )
 
     assert summary["online"] is True
@@ -366,6 +370,8 @@ def _availability_table(monkeypatch, **profile_fields) -> FakeTable:
         },
     )
     db_table.install(table)
+    # The teacher has STOA open: only an online teacher is offered (#472).
+    teacher_dispatch_service.record_teacher_seen(_TEACHER)
     return table
 
 
