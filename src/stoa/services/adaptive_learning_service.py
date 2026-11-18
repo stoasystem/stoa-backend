@@ -1558,7 +1558,7 @@ def _next_practice_recommendations(
     signal_index = _sequencing_signal_index(profile, snapshots, subject)
     drafts = _safe_reviewed_ai_drafts(student_id, user) if _can_manage_assignments(user) else []
     candidates: list[dict[str, Any]] = []
-    # Every exercise is read once for all the weak topics, not once per topic (#496).
+    # Each weak topic reads its first exercises through its shelf, not every exercise (#496, #513).
     exercises = _curriculum_exercise_reader()
 
     for signal in signal_index.values():
@@ -1687,7 +1687,8 @@ def _curriculum_exercise_candidates(
     exercises: Callable[[str, str], list[dict[str, Any]]],
 ) -> list[dict[str, Any]]:
     candidates = []
-    for exercise in exercises(signal["subject"], signal["topicId"])[:2]:
+    first = exercises(signal["subject"], signal["topicId"])[:_CURRICULUM_EXERCISES_PER_TOPIC]
+    for exercise in first:
         exercise_id = str(exercise.get("id") or "")
         if not exercise_id:
             continue
@@ -1773,13 +1774,19 @@ def _continuation_candidates(
     return candidates
 
 
+#: The published exercises a weak topic recommends, its first in lesson order.
+_CURRICULUM_EXERCISES_PER_TOPIC = 2
+
+
 def _curriculum_exercise_reader() -> Callable[[str, str], list[dict[str, Any]]]:
-    """The published exercises of a subject's topic, every exercise read at most once.
+    """The first published exercises of a subject's topic, read from its shelf.
 
     A read that fails gives no exercises, as each topic's read did before; it
     is not tried again for the next topic.
     """
-    read = curriculum_service.topic_exercise_reader(include_preview=False)
+    read = curriculum_service.topic_exercise_reader(
+        include_preview=False, first=_CURRICULUM_EXERCISES_PER_TOPIC
+    )
     failed = False
 
     def exercises(subject: str, topic_id: str) -> list[dict[str, Any]]:
