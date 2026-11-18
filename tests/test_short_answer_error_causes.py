@@ -48,8 +48,28 @@ CLOSE = error_causes.rule_cause(error_causes.RULE_CLOSE)
         ("1'200", ("#", "1200")),
         ("12cm", ("# cm", "12")),
         ("34.–", ("#", "34")),
+        ("10 000", ("#", "10000")),
+        ("10 000", ("#", "10000")),
+        ("10 000", ("#", "10000")),
+        ("10’000", ("#", "10000")),
+        ("x = -1 234 567", ("x=#", "-1234567")),
+        ("12 500 m", ("# m", "12500")),
     ],
-    ids=["minus", "unicode minus", "equation", "decimal comma", "thousands", "unit", "price"],
+    ids=[
+        "minus",
+        "unicode minus",
+        "equation",
+        "decimal comma",
+        "thousands",
+        "unit",
+        "price",
+        "space thousands",
+        "no-break space thousands",
+        "narrow no-break space thousands",
+        "typographic apostrophe thousands",
+        "grouped equation",
+        "grouped with unit",
+    ],
 )
 def test_an_answer_with_one_number_is_read_as_judging_reads_it(
     answer: str, expected: tuple[str, str]
@@ -61,7 +81,21 @@ def test_an_answer_with_one_number_is_read_as_judging_reads_it(
 
 
 @pytest.mark.parametrize(
-    "answer", ["2/5", "7; -7", "P(2 | 3)", "3-5", "fünf", "", "1.2.3"]
+    "answer",
+    [
+        "2/5",
+        "7; -7",
+        "P(2 | 3)",
+        "3-5",
+        "fünf",
+        "",
+        "1.2.3",
+        "1 2",
+        "10 00",
+        "10 000; 20 000",
+        "P(1 000 | 2 000)",
+        "4 125/1000",
+    ],
 )
 def test_an_answer_that_is_not_one_number_has_none(answer: str) -> None:
     assert answer_judging.single_number(answer) is None
@@ -72,7 +106,15 @@ def test_an_answer_that_is_not_one_number_has_none(answer: str) -> None:
 
 @pytest.mark.parametrize(
     ("answer", "key"),
-    [("5", "-5"), ("-5", "5"), ("x = 5", "x = -5"), ("-0,25", "0.25"), ("-12 cm", "12 cm")],
+    [
+        ("5", "-5"),
+        ("-5", "5"),
+        ("x = 5", "x = -5"),
+        ("-0,25", "0.25"),
+        ("-12 cm", "12 cm"),
+        ("-10 000", "10000"),
+        ("-10 000 m", "10'000 m"),
+    ],
 )
 def test_only_the_sign_differs(answer: str, key: str) -> None:
     assert error_causes.infer(answer, [key]) == SIGN
@@ -91,6 +133,11 @@ def test_only_the_sign_differs(answer: str, key: str) -> None:
         ("57", "56"),
         ("11", "10"),
         ("-21", "-20"),
+        # Thousands grouped in the answer or the key are read as one number.
+        ("9 900", "10000"),
+        ("10 001", "10'000"),
+        ("x = 10 150", "x = 10 000"),
+        ("12 499 CHF", "12 500 CHF"),
     ],
 )
 def test_a_number_close_to_the_key(answer: str, key: str) -> None:
@@ -123,6 +170,10 @@ def test_a_number_close_to_the_key(answer: str, key: str) -> None:
         ("2/5", "3/5"),
         ("7; 7", "7; -7"),
         ("", "5"),
+        # Spaces that do not group thousands leave several numbers.
+        ("1 2", "12"),
+        ("100 01", "10000"),
+        ("10 000; 20 001", "10000; 20000"),
     ],
 )
 def test_anything_else_has_no_rule(answer: str, key: str) -> None:
