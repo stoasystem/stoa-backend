@@ -37,7 +37,7 @@ from stoa import config
 from stoa.db.repositories import security_audit_repo
 from stoa.operator_calls import accounts, caller_identity, catalog, deletions, invitations
 from stoa.operator_calls import curriculum, overview
-from stoa.operator_calls import usage_periods
+from stoa.operator_calls import teacher_help, usage_periods
 from stoa.operator_calls.outcome import OperatorCallRefused, Outcome
 from stoa.rule_violation import RuleViolation
 
@@ -57,6 +57,7 @@ RUNNERS: Mapping[str, Runner] = {
     "count_review_queues": overview.count_review_queues,
     "report_email_stats": overview.report_email_stats,
     "get_usage_period": usage_periods.get_usage_period,
+    "get_teacher_help_allowance": teacher_help.get_teacher_help_allowance,
     "extend_usage_period": usage_periods.extend_usage_period,
     "set_usage_period": usage_periods.set_usage_period,
     "get_lesson_state": curriculum.get_lesson_state,

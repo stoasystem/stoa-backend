@@ -69,6 +69,11 @@ period reaches its current children), and writes nothing but its audit row. The 
 `expectedVersion` from the dry run; its period record and the account's audit event name
 `operator:agent_mcp`, and the operator audit row names the record.
 
+Teacher help: `get_teacher_help_allowance` is read-only. For one student it shows this Zurich
+week's teacher-help requests used and left, the weekly figure and where it comes from, when the
+week starts over, and whether a request made now would be taken (with the reasons if not: the
+account status, the usage period or the allowance).
+
 ## Project Structure
 
 ```
