@@ -93,7 +93,7 @@ def _ask(admission: _admission.Admission) -> ai_service.AIProviderResult[dict[st
         admission=admission,
         correlation_id="transport-correlation-that-must-not-own-the-effect",
     )
-    return ai_service.provider_result(result, effect_id=admission.effect_id)
+    return ask_answer.provider_result(result, effect_id=admission.effect_id)
 
 
 def _answered(

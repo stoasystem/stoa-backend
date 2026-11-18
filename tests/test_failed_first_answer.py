@@ -24,7 +24,7 @@ from fakes.ask_question import (
 from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from stoa.services import ai_service, learning_session
+from stoa.services import ask_answer, learning_session
 
 # The shape of the reply that failed: an unescaped quote inside the first step.
 BROKEN_REPLY = (
@@ -38,7 +38,7 @@ BROKEN_REPLY = (
 
 
 def test_a_step_with_an_unescaped_quote_is_never_cut_mid_sentence() -> None:
-    steps = ai_service.completed_steps(BROKEN_REPLY)
+    steps = ask_answer.completed_steps(BROKEN_REPLY)
 
     assert all(not step.startswith(" ") for step in steps)
     assert not any("eine Multiplikation" in step for step in steps)
@@ -47,7 +47,7 @@ def test_a_step_with_an_unescaped_quote_is_never_cut_mid_sentence() -> None:
 def test_steps_stop_at_the_first_string_that_does_not_close_cleanly() -> None:
     reply = '{"steps": ["Erst kürzen.", "Das Wort "von" heisst mal.", "Dann teilen."]}'
 
-    assert ai_service.completed_steps(reply) == ["Erst kürzen."]
+    assert ask_answer.completed_steps(reply) == ["Erst kürzen."]
 
 
 @pytest.mark.parametrize(
@@ -63,7 +63,7 @@ def test_steps_stop_at_the_first_string_that_does_not_close_cleanly() -> None:
     ],
 )
 def test_steps_are_reported_only_once_whole(partial: str, expected: list[str]) -> None:
-    assert ai_service.completed_steps(partial) == expected
+    assert ask_answer.completed_steps(partial) == expected
 
 
 # ── What /generation reports for a failed answer ─────────────────────────────

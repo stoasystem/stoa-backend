@@ -3,7 +3,7 @@ the one entry point for subject ids (#354): the alias table, the supported
 subjects, and how a subject is read, compared and refused."""
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from decimal import Decimal
 from typing import Any
 
@@ -124,7 +124,15 @@ def list_catalog(
     rollout_state: str | None = None,
     include_preview: bool = False,
     locale: str = "de",
+    lesson_rows: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    """The catalog: subjects, topics, units and lessons, each kind read once.
+
+    `lesson_rows` are every lesson row (`practice_repo.get_lessons()`) when the
+    caller has already read them for something else (`student_evidence.Content`).
+    """
+    if lesson_rows is None:
+        lesson_rows = practice_repo.get_lessons()
     subjects = [
         _build_subject(subject, locale)
         for subject in sorted(practice_repo.get_subjects(), key=lambda item: _as_int(item.get("order", 0)))
@@ -144,7 +152,7 @@ def list_catalog(
     ]
     lessons = [
         _build_lesson(lesson, exercise_count=_exercise_count(lesson, include_preview), locale=locale)
-        for lesson in sorted(practice_repo.get_lessons(), key=lambda item: (item.get("topic_id", ""), item.get("unit_id", ""), _as_int(item.get("order", 0))))
+        for lesson in sorted(lesson_rows, key=lambda item: (item.get("topic_id", ""), item.get("unit_id", ""), _as_int(item.get("order", 0))))
         if _lesson_matches(lesson, subject_id, grade_level) and _matches_state(lesson, rollout_state, include_preview)
     ]
 
@@ -295,9 +303,16 @@ def can_preview(user: dict[str, Any]) -> bool:
 
 
 def _all_units(topics: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The units of these topics, topic by topic, from one read of the unit rows.
+
+    Read once per topic before, all 237 rows each time: 27 reads per catalog
+    with the knowledge base published (#496)."""
+    by_topic: dict[Any, list[dict[str, Any]]] = {}
+    for unit in practice_repo.get_all_units():
+        by_topic.setdefault(unit.get("topic_id"), []).append(unit)
     units: list[dict[str, Any]] = []
     for topic in topics:
-        units.extend(practice_repo.get_units(topic["id"]))
+        units.extend(by_topic.get(topic["id"], ()))
     return units
 
 

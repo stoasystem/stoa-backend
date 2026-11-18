@@ -310,5 +310,5 @@ def test_ai_invocation_crossing_injected_deadline_is_rejected_without_result() -
     assert len(model.requests) == 1
     assert result == model_call.NotSent("deadline_exceeded", retryable=True)
     with pytest.raises(ai_service.AIInvocationFailure) as captured:
-        ai_service.provider_result(result, effect_id="effect-deadline-boundary")
+        ask_answer.provider_result(result, effect_id="effect-deadline-boundary")
     assert captured.value.category == "deadline_exceeded"

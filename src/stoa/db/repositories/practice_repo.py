@@ -541,11 +541,15 @@ def get_challenge(challenge_id: str) -> dict | None:
 
 
 def get_units(topic_id: str) -> list[dict]:
+    return [i for i in get_all_units() if i.get("topic_id") == topic_id]
+
+
+def get_all_units() -> list[dict]:
+    """Every unit row, in key order; `get_units` is these, one topic's."""
     table = db_table.table()
-    items = _query_all_challenge_pages(
+    return _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("UNIT#"))
     )
-    return [i for i in items if i.get("topic_id") == topic_id]
 
 
 # ── Progress read / write ─────────────────────────────────────────────────

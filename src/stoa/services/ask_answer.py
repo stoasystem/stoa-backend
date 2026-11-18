@@ -19,6 +19,7 @@ from decimal import Decimal
 import base64
 import json
 import logging
+import re
 import secrets
 import time
 from typing import Any, Callable, Literal, Mapping, Sequence
@@ -28,7 +29,6 @@ from pydantic import BaseModel, Field
 from stoa import config
 from stoa.security.private_telemetry import emit_private_event
 from stoa.services import (
-    ai_service,
     curriculum_service,
     knowledge_map_service,
     learning_profile_service,
@@ -36,7 +36,12 @@ from stoa.services import (
     model_call,
     star_map_candidates,
 )
-from stoa.services.ai_service import AIInvocationFailure, AIProviderResult, PromptImage
+from stoa.services.ai_service import (
+    AIInvocationClass,
+    AIInvocationFailure,
+    AIProviderResult,
+    PromptImage,
+)
 
 # ── System prompt ──────────────────────────────────────────────────────────────
 
@@ -291,6 +296,76 @@ Student learning context (use this to tailor your explanation):
 """
 
 
+# ── Answer language ────────────────────────────────────────────────────────────
+
+# Naming the language beats passing a bare ISO code: the model followed "de"
+# unevenly and fell back to the language the prompt itself is written in.
+_LANGUAGE_NAMES = {
+    "de": "German",
+    "en": "English",
+    "fr": "French",
+    "it": "Italian",
+}
+DEFAULT_LANGUAGE_NAME = "German"
+
+
+def language_name(language: str) -> str:
+    """The plain name of the answer language, for the prompt to refer to."""
+    base = str(language or "").strip().replace("_", "-").split("-", 1)[0].lower()
+    return _LANGUAGE_NAMES.get(base, DEFAULT_LANGUAGE_NAME)
+
+
+# ── Prompt injection defence ───────────────────────────────────────────────────
+
+# Patterns that attempt to override the system prompt or leak internals
+_INJECTION_PATTERNS = [
+    r"ignore\s+(previous|above|all)\s+(instructions?|rules?|prompts?)",
+    r"(system|assistant)\s*:\s*",
+    r"<\|?(?:im_start|im_end|endoftext)\|?>",
+    r"you are now",
+    r"new\s+instructions?",
+    r"disregard\s+(your|all)",
+    r"forget\s+(your|all|previous)",
+    r"act\s+as\s+(?!a\s+student|a\s+teacher)",  # allow "act as a student/teacher" only
+    r"jailbreak",
+    r"DAN\b",
+]
+_INJECTION_RE = re.compile("|".join(_INJECTION_PATTERNS), re.IGNORECASE)
+
+# Max characters accepted from a single student message
+_MAX_INPUT_CHARS = 2000
+
+
+def sanitise_input(text: str, *, correlation_id: str | None = None) -> str:
+    """Strip injection attempts and enforce length cap."""
+    cleaned = text.strip()
+    if len(cleaned) > _MAX_INPUT_CHARS:
+        cleaned = cleaned[:_MAX_INPUT_CHARS]
+        emit_private_event(
+            "prompt_input_truncated",
+            input_size=len(text),
+            correlation_id=correlation_id,
+            level=logging.WARNING,
+        )
+
+    if _INJECTION_RE.search(cleaned):
+        emit_private_event(
+            "prompt_injection_neutralized",
+            input_size=len(cleaned),
+            correlation_id=correlation_id,
+            level=logging.WARNING,
+        )
+        # Replace the offending portion so the model only sees the innocent remainder
+        cleaned = _INJECTION_RE.sub("[removed]", cleaned).strip()
+
+    return cleaned
+
+
+def scrub_injections(text: str) -> str:
+    """Take out what reads as an attempt to override the prompt, without logging it."""
+    return _INJECTION_RE.sub("[removed]", text)
+
+
 # ── Fenced untrusted data (#61) ────────────────────────────────────────────────
 
 # The student picks the text they quote, and their own wrong answers come back
@@ -334,7 +409,7 @@ def _fence_nonce() -> str:
 
 def _escape_fenced(text: str) -> str:
     """Scrub injections, then take every angle bracket out of the fenced text."""
-    cleaned = ai_service.scrub_injections(text)
+    cleaned = scrub_injections(text)
     return cleaned.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
@@ -495,7 +570,7 @@ def _build_messages(
     if star_map:
         current += build_star_map_block(star_map)
     if attachment_context:
-        safe_attachment_context = ai_service.scrub_injections(attachment_context[:200_000]).strip()
+        safe_attachment_context = scrub_injections(attachment_context[:200_000]).strip()
         current += "\n\n<student_attachment_context>\n" + safe_attachment_context
         current += "\n</student_attachment_context>"
     messages.append({"role": "user", "content": current})
@@ -692,7 +767,7 @@ def answer(
 
     The star map is read with `read_star_map`, the student's own by default.
 
-    Raises `ai_service.AIInvocationFailure` when there is no usable answer;
+    Raises `AIInvocationFailure` when there is no usable answer;
     one raised after the reply came back carries the reply's usage, since it
     was paid for.
     """
@@ -726,7 +801,7 @@ def _reply(
 ) -> AIProviderResult[dict]:
     """Build the prompt and ask the model."""
     language = asker.locale
-    safe_content = ai_service.sanitise_input(asked.content, correlation_id=call.correlation_id)
+    safe_content = sanitise_input(asked.content, correlation_id=call.correlation_id)
     subject = curriculum_service.subject_id(asker.subject)
     system_prompt = SYSTEM_PROMPT.format(
         subject=subject or NO_SUBJECT,
@@ -735,7 +810,7 @@ def _reply(
         ),
         grade=grade_for_prompt(asker.grade, language),
         language=language,
-        language_name=ai_service.language_name(language),
+        language_name=language_name(language),
     )
     system_prompt += answer_style_rule(asker.answer_style)
     # Memory text derives from topic labels the model extracted out of student
@@ -743,11 +818,11 @@ def _reply(
     # system prompt — otherwise a crafted question becomes stored injection.
     memory = asker.memory_context
     if memory and memory.strip():
-        safe_memory = ai_service.sanitise_input(memory, correlation_id=call.correlation_id)[:800]
+        safe_memory = sanitise_input(memory, correlation_id=call.correlation_id)[:800]
         if safe_memory:
             system_prompt += _MEMORY_CONTEXT_BLOCK.format(memory_context=safe_memory)
     if star_map:
-        system_prompt += _STAR_MAP_RULE.format(language_name=ai_service.language_name(language))
+        system_prompt += _STAR_MAP_RULE.format(language_name=language_name(language))
         system_prompt += _TARGET_UNIT_RULE
     history = [dict(message) for message in asked.history]
     if (
@@ -785,7 +860,7 @@ def _reply(
         correlation_id=call.correlation_id,
         clock=call.clock or time.monotonic,
     )
-    return ai_service.provider_result(
+    return provider_result(
         result,
         effect_id=call.effect_id or call.correlation_id or "unbound-user-allowance-effect",
     )
@@ -797,7 +872,7 @@ def _step_reporter(on_step: Callable[[int, str], None]) -> Callable[[str], None]
 
     def report(partial_input: str) -> None:
         nonlocal reported
-        steps = ai_service.completed_steps(partial_input)
+        steps = completed_steps(partial_input)
         while reported < len(steps):
             # A step that cannot be delivered is not worth losing the answer
             # over; the full result still arrives at the end.
@@ -808,6 +883,172 @@ def _step_reporter(on_step: Callable[[int, str], None]) -> Callable[[str], None]
             reported += 1
 
     return report
+
+
+# ── Reading the reply ──────────────────────────────────────────────────────────
+#
+# The model call hands back the tool input as the text it is, and while it
+# streams, the part of it received so far (#436). What makes that input an
+# answer is decided here, with the prompt that asked for it (#437).
+
+# Terms that should never appear in AI output (leaked internals)
+_FORBIDDEN_OUTPUT_TERMS = [
+    "anthropic", "claude", "bedrock", "openai", "gpt", "llm",
+    "system prompt", "ignore previous", "harness", "STOA internal",
+]
+
+_STEP_STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
+_WHITESPACE = re.compile(r"\s*")
+
+
+def completed_steps(partial_json: str) -> list[str]:
+    """Return the steps already closed in a partly received answer.
+
+    The answer arrives as the input of a tool call, streamed piece by piece
+    (#412), so a student cannot be shown raw tokens. Each step is whole the
+    moment its closing quote and the `,` or `]` after it arrive, which is the
+    smallest piece worth showing.
+
+    The array is read from its start, one string after the other. A string
+    that is not followed by `,` or `]` ends the reading: the input is broken
+    there. Searching on past it could take an inner quote for an opening one
+    and cut a step from the middle of a sentence (#389).
+    """
+    if '"steps"' not in partial_json:
+        return []
+    tail = partial_json.split('"steps"', 1)[1]
+    opening = tail.find("[")
+    if opening == -1 or tail[:opening].strip() != ":":
+        return []
+    rest = tail[opening + 1 :]
+    position = _WHITESPACE.match(rest).end()
+    steps: list[str] = []
+    while position < len(rest) and rest[position] == '"':
+        match = _STEP_STRING.match(rest, position)
+        if match is None:
+            break
+        after = _WHITESPACE.match(rest, match.end()).end()
+        if after >= len(rest) or rest[after] not in ",]":
+            break
+        try:
+            steps.append(json.loads(match.group(0)))
+        except json.JSONDecodeError:
+            break
+        if rest[after] == "]":
+            break
+        position = _WHITESPACE.match(rest, after + 1).end()
+    return steps
+
+
+def provider_result(
+    result: model_call.Result,
+    *,
+    effect_id: str,
+    invocation_class: AIInvocationClass = AIInvocationClass.USER_ALLOWANCE,
+) -> AIProviderResult[dict]:
+    """The answer a model call gave, parsed and checked, with its usage.
+
+    Raises `AIInvocationFailure` when there is none: one that carries the
+    usage when the reply was paid for (never retryable), one that says
+    whether the call may be made again when it was not.
+    """
+    if isinstance(result, model_call.NotSent):
+        raise AIInvocationFailure(
+            result.category, retryable=result.retryable, detail=result.detail
+        )
+    try:
+        usage = result.usage.evidence(effect_id=effect_id)
+    except ValueError:
+        raise AIInvocationFailure("malformed_provider_usage", retryable=True) from None
+    if isinstance(result, model_call.PaidUnusable):
+        raise AIInvocationFailure(result.category, usage=usage, retryable=False)
+    raw_text = result.tool_input
+    try:
+        validated = _validate_output(_parse_ai_response(raw_text), raw_text)
+    except AIInvocationFailure as failure:
+        # The provider was paid for this reply, so the failure carries the
+        # usage evidence; the caller needs it to release the reservation.
+        failure.usage = usage
+        failure.retryable = False
+        raise
+    return AIProviderResult(
+        content=validated,
+        usage=usage,
+        model_id=result.usage.model,
+        inference_profile_id=result.usage.inference_profile_id,
+        provider_message_id_digest=result.usage.message_id_digest,
+        stop_reason=result.stop_reason,
+        invocation_class=invocation_class,
+    )
+
+
+def _parse_ai_response(text: str) -> dict:
+    """Read the tool input as the answer it must be, or refuse it.
+
+    The API writes the input, constrained to the tool's schema (#412), so
+    nothing is repaired here: an input that does not read as one object (one
+    that never closed), or whose `steps` or `answer` is missing or of the
+    wrong shape, is `malformed_response`, and no part of it is shown.
+    """
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = None
+    if not _is_answer(parsed):
+        emit_private_event(
+            "model_output_parse_failed", output_size=len(text), level=logging.WARNING
+        )
+        raise AIInvocationFailure("malformed_response")
+    return parsed
+
+
+def _is_answer(parsed: object) -> bool:
+    """An object with the two sections every answer is shown by.
+
+    The other sections are checked as the answer is made of them
+    (`_structured_answer`): an entry of the wrong shape there is left out
+    rather than failing an answer already paid for.
+    """
+    if not isinstance(parsed, dict):
+        return False
+    steps = parsed.get("steps")
+    if not isinstance(steps, list) or any(not isinstance(step, str) for step in steps):
+        return False
+    return isinstance(parsed.get("answer"), str)
+
+
+def _validate_output(parsed: dict, raw_text: str) -> dict:
+    """Apply post-generation policy checks and repair obvious violations."""
+    issues = []
+
+    # 1. Empty / trivially short response
+    all_text = " ".join(parsed.get("steps", [])) + " " + parsed.get("answer", "")
+    if len(all_text.strip()) < 10:
+        issues.append("empty_response")
+
+    # 2. Leaked internal terms
+    lower_raw = raw_text.lower()
+    leaked = [t for t in _FORBIDDEN_OUTPUT_TERMS if t in lower_raw]
+    if leaked:
+        issues.append(f"leaked_terms:{','.join(leaked)}")
+        # Redact from output
+        for term in leaked:
+            raw_text = re.sub(re.escape(term), "[AI]", raw_text, flags=re.IGNORECASE)
+        parsed = _parse_ai_response(raw_text)
+
+    # 3. Neither steps nor an answer: nothing a student could be shown.
+    if not parsed.get("steps") and not parsed.get("answer"):
+        raise AIInvocationFailure("malformed_response")
+
+    if issues:
+        emit_private_event(
+            "model_output_policy_issue",
+            output_size=len(raw_text),
+            issue_count=len(issues),
+            level=logging.WARNING,
+        )
+
+    return parsed
 
 
 def _answer_from(

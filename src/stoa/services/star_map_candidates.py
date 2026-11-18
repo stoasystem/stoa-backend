@@ -29,7 +29,7 @@ import time
 from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict
 
-from stoa.services import curriculum_service, knowledge_mastery_service, student_evidence
+from stoa.services import knowledge_mastery_service, student_evidence
 
 logger = logging.getLogger(__name__)
 
@@ -107,11 +107,7 @@ def _shared_content(locale: str) -> student_evidence.Content:
     if cached is not None and now - cached[0] < CONTENT_TTL_SECONDS:
         return cached[1]
     # Built now rather than on first use, so it is kept from the time it was read.
-    content = student_evidence.Content(
-        locale=locale,
-        catalog=curriculum_service.list_catalog(locale=locale),
-        indexed=student_evidence.indexed_lessons(),
-    )
+    content = student_evidence.Content(locale=locale).built()
     _content[locale] = (now, content)
     return content
 

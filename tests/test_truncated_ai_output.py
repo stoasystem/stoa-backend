@@ -10,7 +10,6 @@ tool call (#412); the fakes stream it as `input_json_delta` pieces.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
@@ -115,33 +114,9 @@ def test_broken_json_on_a_normal_stop_is_a_malformed_response(
     assert outcome.usage.output_tokens == 2048
 
 
-def test_the_parser_no_longer_turns_broken_json_into_the_answer() -> None:
-    with pytest.raises(ai_service.AIInvocationFailure) as captured:
-        ai_service._parse_ai_response(_TRUNCATED)
-    assert captured.value.category == "malformed_response"
-
-
-def test_a_complete_object_followed_by_stray_text_is_refused() -> None:
-    """The tool input is the API's to write (#412): nothing around it is cut away."""
-    with pytest.raises(ai_service.AIInvocationFailure) as captured:
-        ai_service._parse_ai_response(_COMPLETE + "\n\nViel Erfolg!")
-    assert captured.value.category == "malformed_response"
-
-
-def test_the_raw_text_fallback_does_not_readmit_a_json_object() -> None:
-    """Valid JSON with neither steps nor answer is not shown to the student raw."""
-    raw = json.dumps({"steps": [], "answer": "", "hints": ["x"]})
-    with pytest.raises(ai_service.AIInvocationFailure) as captured:
-        ai_service._validate_output(ai_service._parse_ai_response(raw), raw)
-    assert captured.value.category == "malformed_response"
-
-
-def test_prose_is_no_longer_kept_as_the_answer() -> None:
-    """The answer is the tool's input (#412); text that is not one is refused."""
-    prose = "Kürze Zähler und Nenner durch denselben Teiler."
-    with pytest.raises(ai_service.AIInvocationFailure) as captured:
-        ai_service._parse_ai_response(prose)
-    assert captured.value.category == "malformed_response"
+# What the reply's checks refuse on a normal stop - an input that never
+# closes, text after the object, prose, an object with neither steps nor an
+# answer - is held through `ask_answer.answer` in test_ask_answer.py (#437).
 
 
 # ── Controls: a complete answer on a normal stop still succeeds ──────────────

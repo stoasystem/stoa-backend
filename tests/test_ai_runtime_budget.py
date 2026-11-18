@@ -92,7 +92,7 @@ def _answer(
         on_partial=lambda _partial: None,
         clock=clock,
     )
-    return ai_service.provider_result(
+    return ask_answer.provider_result(
         result, effect_id=admission.effect_id if admission is not None else "effect-1"
     )
 

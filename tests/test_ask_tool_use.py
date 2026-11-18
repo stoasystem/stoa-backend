@@ -54,7 +54,7 @@ def _invoke(model: FakeModel, *, reported: list[tuple[int, str]] | None = None):
         deadline=time.monotonic() + 90,
         on_partial=ask_answer._step_reporter(lambda index, step: steps.append((index, step))),
     )
-    return ai_service.provider_result(result, effect_id="effect-412")
+    return ask_answer.provider_result(result, effect_id="effect-412")
 
 
 # ── The request ──────────────────────────────────────────────────────────────

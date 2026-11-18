@@ -127,7 +127,7 @@ def sky(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     # The catalog is cached per language; a cache left by another test is not this map.
     monkeypatch.setattr(star_map_candidates, "_content", {})
     monkeypatch.setattr(curriculum_service, "list_catalog", _catalog)
-    monkeypatch.setattr(student_evidence, "indexed_lessons", lambda: {})
+    monkeypatch.setattr(student_evidence, "indexed_lessons", lambda *_rows: {})
     monkeypatch.setattr(knowledge_mastery_service, "unit_states", states)
     return asked
 
