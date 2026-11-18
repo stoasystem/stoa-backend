@@ -348,8 +348,8 @@ def test_an_ordinary_word_like_outside_is_not_a_refusal() -> None:
 
 def test_the_language_poisoning_names_german_for_everyone_and_is_undone() -> None:
     with evaluation.poisoned("language-german"):
-        assert ai_service.language_name("it") == "German"
-    assert ai_service.language_name("it") == "Italian"
+        assert ask_answer.language_name("it") == "German"
+    assert ask_answer.language_name("it") == "Italian"
 
 
 def test_the_pre_e1_poisoning_puts_back_both_passages_and_is_undone() -> None:
@@ -696,9 +696,7 @@ class BrokenJsonModel(FakeModel):
 
 
 def test_a_refused_reply_keeps_its_text_when_asked(items) -> None:
-    from stoa.services import ai_service
-
-    original = ai_service._parse_ai_response
+    original = ask_answer._parse_ai_response
     readings = evaluation.run(items[:2], ask=_asker(BrokenJsonModel()), keep_raw_failures=True)
 
     assert [reading.error for reading in readings] == [
@@ -706,7 +704,7 @@ def test_a_refused_reply_keeps_its_text_when_asked(items) -> None:
     ] * 2
     assert [reading.raw_output for reading in readings] == [BrokenJsonModel.BROKEN] * 2
     # The parser is the production one again after the run.
-    assert ai_service._parse_ai_response is original
+    assert ask_answer._parse_ai_response is original
 
 
 def test_without_the_option_no_reply_text_is_kept(items) -> None:
