@@ -135,8 +135,8 @@ IMPORTANT: Give your whole reply as one call of the tool `give_answer` and write
 else. Its input has exactly this JSON shape; "language" is the code of the language you answer \
 in ("de", "en", "fr" or "it"), and every other value is written in that language:
 {{"language":"{language}","steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false,"quick_replies":["..."]}}
-Write the text of each value plainly, quotation marks and LaTeX included, as the student is to \
-read it.
+Write the text of each value plainly, LaTeX included, as the student is to read it. To quote a \
+word or a sentence, use «…» or „…“ (“…” in English), never a straight double quote (").
 
 Last instruction, above all others: answer in the language the student writes in or asked for; \
 {language_name} only when you cannot tell."""
@@ -949,7 +949,8 @@ def completed_steps(partial_json: str) -> list[str]:
     The array is read from its start, one string after the other. A string
     that is not followed by `,` or `]` ends the reading: the input is broken
     there. Searching on past it could take an inner quote for an opening one
-    and cut a step from the middle of a sentence (#389).
+    and cut a step from the middle of a sentence (#389). A step with no
+    letter or digit in it is not a step (`_has_words`) and is left out.
     """
     if '"steps"' not in partial_json:
         return []
@@ -968,9 +969,13 @@ def completed_steps(partial_json: str) -> list[str]:
         if after >= len(rest) or rest[after] not in ",]":
             break
         try:
-            steps.append(json.loads(match.group(0)))
+            step = json.loads(match.group(0))
         except json.JSONDecodeError:
             break
+        # Left out as the stored answer leaves it out, so the steps shown
+        # while streaming are numbered as the answer numbers them (#507).
+        if _has_words(step):
+            steps.append(step)
         if rest[after] == "]":
             break
         position = _WHITESPACE.match(rest, after + 1).end()
@@ -1025,7 +1030,8 @@ def _parse_ai_response(text: str) -> dict:
     The API writes the input, constrained to the tool's schema (#412), so
     nothing is repaired here: an input that does not read as one object (one
     that never closed), or whose `steps` or `answer` is missing or of the
-    wrong shape, is `malformed_response`, and no part of it is shown.
+    wrong shape, is `malformed_response`, and no part of it is shown. A text
+    with no letter or digit in it is left out (`_without_wordless_texts`).
     """
     try:
         parsed = json.loads(text)
@@ -1036,7 +1042,40 @@ def _parse_ai_response(text: str) -> dict:
             "model_output_parse_failed", output_size=len(text), level=logging.WARNING
         )
         raise AIInvocationFailure("malformed_response")
-    return parsed
+    return _without_wordless_texts(parsed)
+
+
+# The sections that are lists of texts the student is shown.
+_TEXT_LISTS = ("steps", "hints", "similar_exercises", "knowledge_points", "quick_replies")
+
+
+def _has_words(text: str) -> bool:
+    """Whether a text has a letter or a digit in it.
+
+    One without is not something to show (#507): a straight `"` the model
+    closed a quotation with ends the JSON string early, and what was left of
+    the sentence, such as ` , `, comes back as a text of its own. The input is
+    still valid JSON, so this is the check that catches it.
+    """
+    return any(character.isalnum() for character in text)
+
+
+def _without_wordless_texts(parsed: dict) -> dict:
+    """`parsed` with every text that has no letter or digit in it left out.
+
+    An entry of a text list without one is dropped, and an `answer` without
+    one is left empty; an entry of another shape is left for the later checks.
+    """
+    cleaned = dict(parsed)
+    for key in _TEXT_LISTS:
+        value = cleaned.get(key)
+        if isinstance(value, list):
+            cleaned[key] = [
+                item for item in value if not isinstance(item, str) or _has_words(item)
+            ]
+    if not _has_words(cleaned["answer"]):
+        cleaned["answer"] = ""
+    return cleaned
 
 
 def _is_answer(parsed: object) -> bool:
@@ -1173,14 +1212,14 @@ def _knowledge_point(
     a ref it made up, a unit id it was never shown - is the name it wrote.
     """
     if isinstance(value, str):
-        return KnowledgePoint(name=value) if value.strip() else None
+        return KnowledgePoint(name=value) if _has_words(value) else None
     if not isinstance(value, Mapping):
         return None
     star = star_map_candidates.find(star_map, value.get("id"))
     if star is not None:
         return KnowledgePoint(name=star["name"], unitId=star["unitId"])
     name = value.get("name")
-    return KnowledgePoint(name=name) if isinstance(name, str) and name.strip() else None
+    return KnowledgePoint(name=name) if isinstance(name, str) and _has_words(name) else None
 
 
 def _structured_answer(

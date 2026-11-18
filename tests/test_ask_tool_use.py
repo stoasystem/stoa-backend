@@ -242,3 +242,129 @@ def test_an_unfinished_tool_input_fails_without_steps_and_names_no_upload(table,
     assert generation["status"] == "failed"
     assert generation["failureCategory"] == "malformed_response"
     assert generation["steps"] == []
+
+
+# ── A text with no words in it (#507) ────────────────────────────────────────
+#
+# The model opened a German quotation with „ and closed it with a straight ",
+# which ends the JSON string: the step stopped before its closing quote, and
+# the leftover ` , ` became a step of its own. The input is valid JSON and
+# satisfies the schema, so it is read; a text with no letter or digit in it is
+# left out, while streaming and in the stored answer alike.
+
+CUT_STEPS = [
+    "Die Ableitung misst, wie schnell sich eine Funktion ändert.",
+    "Für eine Funktion $f(x)$ fragt die Ableitung $f'(x)$: „Wenn ich $x$ ein kleines "
+    "bisschen vergrößere, wie stark verändert sich dann $f(x)$?",
+    " , ",
+    "Ein einfaches Beispiel: $f(x) = x^2$ hat die Ableitung $f'(x) = 2x$.",
+    "Bei $x = 3$ wächst $f$ also etwa sechsmal so schnell wie $x$.",
+]
+WORDED_STEPS = [step for step in CUT_STEPS if step != " , "]
+CUT_REPLY: dict[str, Any] = {**QUOTED_REPLY, "steps": CUT_STEPS}
+
+
+def test_a_step_cut_short_by_a_straight_quote_leaves_no_stray_step_in_the_answer() -> None:
+    result = _invoke(FakeModel(CUT_REPLY))
+
+    assert result.content["steps"] == WORDED_STEPS
+
+
+@pytest.mark.parametrize("pieces", [1, 2, 7, 40, 400])
+def test_a_stray_step_of_punctuation_is_never_streamed(pieces: int) -> None:
+    model = FakeModel(CUT_REPLY)
+    model.pieces = pieces
+    reported: list[tuple[int, str]] = []
+
+    _invoke(model, reported=reported)
+
+    # Numbered as the stored answer numbers them, with no gap.
+    assert reported == list(enumerate(WORDED_STEPS))
+
+
+def test_the_partial_input_reads_no_step_of_punctuation() -> None:
+    text = json.dumps(CUT_REPLY, ensure_ascii=False)
+    after_stray = text[: text.index(CUT_STEPS[3]) - 1]
+
+    assert ask_answer.completed_steps(after_stray) == CUT_STEPS[:2]
+    assert ask_answer.completed_steps(text) == WORDED_STEPS
+
+
+@pytest.mark.parametrize("stray", ["", "   ", " , ", "?!", "„", "…", " – ", "$$", "\n"])
+def test_no_text_without_a_letter_or_digit_is_kept(stray: str) -> None:
+    reply = {
+        **QUOTED_REPLY,
+        "steps": [stray, *QUOTED_STEPS, stray],
+        "hints": [stray, *QUOTED_REPLY["hints"]],
+        "similar_exercises": [stray, *QUOTED_REPLY["similar_exercises"], stray],
+        "knowledge_points": [stray, *QUOTED_REPLY["knowledge_points"]],
+        "quick_replies": [stray, "Noch ein Beispiel?"],
+    }
+
+    content = _invoke(FakeModel(reply)).content
+
+    assert content["steps"] == QUOTED_STEPS
+    assert content["hints"] == QUOTED_REPLY["hints"]
+    assert content["similar_exercises"] == QUOTED_REPLY["similar_exercises"]
+    assert content["knowledge_points"] == QUOTED_REPLY["knowledge_points"]
+    assert content["quick_replies"] == ["Noch ein Beispiel?"]
+
+
+def test_an_answer_without_a_letter_or_digit_is_left_empty() -> None:
+    content = _invoke(FakeModel({**QUOTED_REPLY, "answer": " , "})).content
+
+    assert content["answer"] == ""
+    assert content["steps"] == QUOTED_STEPS
+
+
+def test_a_short_text_with_a_digit_or_a_letter_is_kept() -> None:
+    reply = {**QUOTED_REPLY, "steps": ["12", "x", "π", *QUOTED_STEPS], "answer": "7"}
+
+    content = _invoke(FakeModel(reply)).content
+
+    assert content["steps"] == ["12", "x", "π", *QUOTED_STEPS]
+    assert content["answer"] == "7"
+
+
+def test_a_reply_of_punctuation_only_is_malformed() -> None:
+    reply = {**QUOTED_REPLY, "steps": [" , ", "…"], "answer": " , "}
+
+    with pytest.raises(ai_service.AIInvocationFailure) as failure:
+        _invoke(FakeModel(reply))
+
+    assert failure.value.category == "malformed_response"
+
+
+def test_the_prompt_names_the_quotation_marks_to_use() -> None:
+    prompt = ask_answer.SYSTEM_PROMPT
+    assert "«…»" in prompt
+    assert "„…“" in prompt
+    assert "never a straight double quote" in prompt
+
+
+def test_a_cut_answer_is_stored_and_published_without_the_stray_step(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from stoa.services.ask_question import _store
+
+    published: list[list[str]] = []
+    record = _store.record_generation_progress
+
+    def recording(*args: Any, **kwargs: Any) -> Any:
+        published.append(list(kwargs["steps"]))
+        return record(*args, **kwargs)
+
+    monkeypatch.setattr(_store, "record_generation_progress", recording)
+    model.outcomes = [CUT_REPLY]
+    model.pieces = 7
+    client = _client()
+
+    response = _send(client, "key-1")
+
+    assert response.status_code == 200, response.text
+    assert published, "no step was published while streaming"
+    assert published[-1] == WORDED_STEPS
+    assert all(step.strip(" ,") for steps in published for step in steps)
+    generation = _generation(client, "key-1")
+    assert generation["steps"] == WORDED_STEPS
+    assert "3.  , " not in response.text
