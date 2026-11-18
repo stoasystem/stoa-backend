@@ -38,7 +38,6 @@ from stoa.services import (
     locale_service,
     runtime_budget_service,
 )
-from stoa.services.adaptive_learning_service import actor_projection
 from stoa.services.ask_question import _admission
 from stoa.services.ask_question import _store as ask_question_store
 from stoa.services.ask_question._admission import AdmissionError, UsageEvidence
@@ -211,21 +210,20 @@ _MAX_MEMORY_TOPICS = 8
 
 # The hint label is added around the model output, so it has to be translated here
 # or the answer comes back with one German word in it.
-def _memory_context_for_student(student_id: str, actor: Actor, subject: str) -> str | None:
+def _memory_context_for_student(student_id: str) -> str | None:
     """Summarise the student's weak topics for AI personalisation.
 
     Returns None when there is nothing to personalise on, or when the lookup
     fails — an answer without memory is far better than no answer at all.
+
+    Only the weak topics are read, from the student's own evidence: the whole
+    memory summary also lists exercises for practice recommendations, which
+    read the published curriculum once per weak topic and ran the question
+    past Lambda's 29 seconds once the knowledge base was published (#496).
     """
     try:
-        memory_summary = adaptive_learning_service.get_memory_summary(
-            student_id=student_id,
-            user=actor_projection(actor),
-            subject=_answer_subject(subject),
-            persist=False,
-        )
         labels: list[str] = []
-        for topic in memory_summary.get("weakTopics", []):
+        for topic in adaptive_learning_service.weak_topics(student_id):
             if not isinstance(topic, Mapping):
                 continue
             label = str(topic.get("label") or topic.get("topicId") or "").strip()
@@ -573,7 +571,6 @@ class CommittedMessage:
 
 def _resolve_generation_context(
     student_id: str,
-    actor: Actor,
     subject: str,
     grade: str,
     practice_context: dict[str, object] | None = None,
@@ -594,7 +591,7 @@ def _resolve_generation_context(
         "locale": _student_locale(student_id),
         "subject": _answer_subject(subject),
         "grade": grade,
-        "memory_context": _memory_context_for_student(student_id, actor, subject),
+        "memory_context": _memory_context_for_student(student_id),
         "practice_context": practice_context,
         "answer_style": _student_answer_style(student_id),
     }
@@ -893,7 +890,7 @@ def commit_message_command(
         None
         if existing
         else _resolve_generation_context(
-            student_id, actor, subject, grade, practice_context
+            student_id, subject, grade, practice_context
         )
     )
     command = existing or {
@@ -1172,7 +1169,7 @@ def commit_message_command(
         # A command claimed before its context was stored with it (E19) takes
         # the context of the request resuming it.
         resumed_context = _resolve_generation_context(
-            student_id, actor, subject, grade, practice_context
+            student_id, subject, grade, practice_context
         )
         command["generation_context"] = _conversation_repository_call(
             lambda: ask_question_store.record_message_generation_context(
