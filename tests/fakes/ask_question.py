@@ -788,7 +788,7 @@ def star_map(monkeypatch: pytest.MonkeyPatch) -> _Reads:
     monkeypatch.setattr(star_map_candidates, "for_student", _READ_THE_MAP)
     monkeypatch.setattr(star_map_candidates, "_content", {})
     monkeypatch.setattr(curriculum_service, "list_catalog", catalog)
-    monkeypatch.setattr(student_evidence, "indexed_lessons", lambda: {})
+    monkeypatch.setattr(student_evidence, "indexed_lessons", lambda *_rows: {})
     monkeypatch.setattr(knowledge_mastery_service, "unit_states", states)
     return reads
 

@@ -75,14 +75,17 @@ def _retry_times(rows: Sequence[Mapping[str, object]], now: datetime) -> dict[st
 # ── the half every student shares ──────────────────────────────────────────
 
 
-def indexed_lessons() -> dict[str, list[dict[str, Any]]]:
+def indexed_lessons(
+    lesson_rows: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
     """The exercise index of every lesson row that carries one, in one read.
 
     The lesson rows carry it (`practice_repo.exercise_index`); a row written
     before that is read through its challenges instead (`Content.exercises`).
+    `lesson_rows` are every lesson row, when they have been read already.
     """
     out: dict[str, list[dict[str, Any]]] = {}
-    for row in practice_repo.get_lessons():
+    for row in practice_repo.get_lessons() if lesson_rows is None else lesson_rows:
         index = practice_repo.indexed_exercises(row)
         if index is not None:
             out[str(row.get("lesson_id") or "")] = index
@@ -101,7 +104,8 @@ def _active_exercise_entries(lesson_id: str) -> list[dict[str, Any]]:
 class Content:
     """The student catalog and its lesson index, each built at most once.
 
-    Either may be handed in already built. A lesson the index does not carry
+    Either may be handed in already built. Both are built from the lesson rows,
+    which are read once for the two (#496). A lesson the index does not carry
     is read through its challenges, once.
     """
 
@@ -116,17 +120,31 @@ class Content:
         self._catalog = catalog
         self._indexed = indexed
         self._read_through: dict[str, list[dict[str, Any]]] = {}
+        self._lesson_rows: list[dict[str, Any]] | None = None
+
+    def _lessons_read(self) -> list[dict[str, Any]]:
+        if self._lesson_rows is None:
+            self._lesson_rows = practice_repo.get_lessons()
+        return self._lesson_rows
+
+    def built(self) -> Content:
+        """This content with the catalog and the lesson index both built now."""
+        self.catalog  # noqa: B018 - built on first use
+        self.indexed  # noqa: B018
+        return self
 
     @property
     def catalog(self) -> Mapping[str, Any]:
         if self._catalog is None:
-            self._catalog = curriculum_service.list_catalog(locale=self.locale)
+            self._catalog = curriculum_service.list_catalog(
+                locale=self.locale, lesson_rows=self._lessons_read()
+            )
         return self._catalog
 
     @property
     def indexed(self) -> Mapping[str, Sequence[Mapping[str, Any]]]:
         if self._indexed is None:
-            self._indexed = indexed_lessons()
+            self._indexed = indexed_lessons(self._lessons_read())
         return self._indexed
 
     def rows(self, key: str) -> list[Mapping[str, Any]]:
