@@ -523,12 +523,8 @@ def test_the_report_request_is_one_count_tokens_takes_as_well():
     check_body(model_call._count_body(model.calls[0]), counted=True)
 
 
-def test_the_report_output_limit_is_the_smaller_of_the_setting_and_1200(monkeypatch):
-    monkeypatch.setattr(
-        report_service.config,
-        "settings",
-        lambda: Settings(environment="development", bedrock_max_tokens=800),
-    )
+def test_the_report_output_limit_is_the_smaller_of_the_setting_and_1200():
+    config.install(Settings(environment="development", bedrock_max_tokens=800))
     model = _model(MODEL_REPORT)
 
     report_service.generate_weekly_report_content(sample_report_payload())
