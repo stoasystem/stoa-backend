@@ -16,6 +16,8 @@ live dispatch. What these hold:
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
 import sys
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -95,6 +97,10 @@ def _profile(user_id: str, role: str, number: str, email: str, **extra: Any) -> 
 
 @pytest.fixture
 def accounts(fake_table: FakeTable) -> LinkRows:
+    return seed_accounts(fake_table)
+
+
+def seed_accounts(fake_table: FakeTable) -> LinkRows:
     """The three shared test accounts, as the app stores them, and a current link."""
     fake_table.seed(
         _profile(PARENT, "parent", "P26-0001", "parent@test.stoaedu.ch"),
@@ -557,3 +563,126 @@ def test_a_sign_in_after_the_grant_stops_paid_teacher_help_until_it_is_restamped
     _run("--parent", "P26-0001", "--student", "S26-0001", "--replace", "--apply")
     _assert_paid(BillingPlanId.TEACHER_SUPPORTED)
 
+
+
+# -- the script as an operator starts it: a fresh interpreter -------------------------
+#
+# Everything above imports the script inside this pytest process, where other
+# modules have usually been imported first, in an order that works. That hid an
+# import cycle the script hit on its own (#509). These start it the way the PR
+# says to, in a new interpreter, so its own import order is the one tested.
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "scripts" / "grant_test_account_paid_access.py"
+# Anything that could reach AWS points at a port nothing listens on, with
+# credentials that are not anyone's.
+UNREACHABLE = "http://127.0.0.1:9"
+
+
+def _fresh_env() -> dict[str, str]:
+    env = {key: value for key, value in os.environ.items() if not key.startswith("AWS_")}
+    env.update(
+        {
+            "PYTHONPATH": os.pathsep.join([str(ROOT / "src"), str(ROOT), str(ROOT / "tests")]),
+            "PYTHONUTF8": "1",
+            "AWS_ACCESS_KEY_ID": "testing",
+            "AWS_SECRET_ACCESS_KEY": "testing",
+            "AWS_SHARED_CREDENTIALS_FILE": os.devnull,
+            "AWS_CONFIG_FILE": os.devnull,
+            "AWS_ENDPOINT_URL": UNREACHABLE,
+            "AWS_MAX_ATTEMPTS": "1",
+            "AWS_EC2_METADATA_DISABLED": "true",
+        }
+    )
+    return env
+
+
+def _start(*argv: str, code: str | None = None) -> subprocess.CompletedProcess[str]:
+    command = [sys.executable, "-c", code] if code else [sys.executable, str(SCRIPT), *argv]
+    return subprocess.run(
+        command,
+        cwd=ROOT,
+        env=_fresh_env(),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+
+def _no_import_failure(result: subprocess.CompletedProcess[str]) -> None:
+    for marker in ("ImportError", "ModuleNotFoundError", "circular import", "partially initialized"):
+        assert marker not in result.stderr, result.stderr
+
+
+def test_help_starts_in_a_fresh_interpreter() -> None:
+    result = _start("--help")
+
+    _no_import_failure(result)
+    assert result.returncode == 0, result.stderr
+    assert "--set-teacher-dispatch" in result.stdout
+
+
+@pytest.mark.parametrize("action", ["grant", "revoke"])
+def test_it_gets_past_every_import_to_argument_validation(action) -> None:
+    result = _start(
+        action, "--parent", "P26-0001", "--student", "S26-0001",
+        "--set-teacher-dispatch", "available",
+    )
+
+    _no_import_failure(result)
+    assert result.returncode == 2
+    assert "--set-teacher-dispatch needs --teacher" in result.stderr
+
+
+@pytest.mark.parametrize("action", ["grant", "revoke"])
+def test_it_gets_past_main_to_the_table_which_is_unreachable_by_design(action) -> None:
+    """Through `main`, its lazy `boto3` import and the settings, to the first read."""
+    result = _start(action, "--parent", "P26-0001", "--student", "S26-0001")
+
+    _no_import_failure(result)
+    assert result.returncode != 0
+    assert "table=stoa-main region=eu-central-2" in result.stdout
+    # The first read went to the unreachable endpoint, so nothing reached AWS.
+    assert "127.0.0.1" in result.stderr, result.stderr
+
+
+# Loads the script first, as `python scripts/...` would, and only then the fakes,
+# then drives every action and switch through to its writes on a fake table.
+_EVERY_PATH = f"""
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("grant_tool", {str(SCRIPT)!r})
+tool = importlib.util.module_from_spec(spec)
+sys.modules["grant_tool"] = tool
+spec.loader.exec_module(tool)
+
+from fakes.dynamodb import FakeTable
+from stoa.db import table as db_table
+import test_grant_test_account_paid_access as t
+
+table = FakeTable()
+db_table.install(table)
+t.seed_accounts(table)
+switches = ("--complete-student-profile", "--set-subscription-tier", "teacher_supported",
+            "--teacher", "T26-0001", "--set-teacher-dispatch", "available")
+undo = ("--set-subscription-tier", "free_trial",
+        "--teacher", "T26-0001", "--set-teacher-dispatch", "unavailable")
+
+def run(*argv):
+    return tool.run(tool.parse_args(list(argv)), directory=t.FakeDirectory(), now=lambda: t.NOW)
+
+run("grant", "--parent", "parent@test.stoaedu.ch", "--student", "S26-0001", *switches)
+run("grant", "--parent", "parent@test.stoaedu.ch", "--student", "S26-0001", *switches, "--apply")
+run("grant", "--parent", "P26-0001", "--student", t.STUDENT, "--plan", "family", "--replace", "--apply")
+run("revoke", "--parent", "P26-0001", "--student", "S26-0001", *undo)
+run("revoke", "--parent", "P26-0001", "--student", "S26-0001", *undo, "--apply")
+t._assert_unpaid("fresh-process")
+print("EVERY PATH RAN")
+"""
+
+
+def test_every_action_and_switch_runs_in_a_fresh_interpreter() -> None:
+    result = _start(code=_EVERY_PATH)
+
+    _no_import_failure(result)
+    assert result.returncode == 0, result.stderr
+    assert "EVERY PATH RAN" in result.stdout

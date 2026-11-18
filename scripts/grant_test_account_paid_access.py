@@ -55,6 +55,17 @@ from typing import Any, Protocol
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
+# Import order matters. `paid_entitlement_service` cannot be the first of the
+# billing services a process imports: through attachment_service -> uploads ->
+# moderation_service -> help_requests it reaches teacher_support_allowance_service,
+# whose class body reads `paid_entitlement_service.RELATIONSHIP_SOURCE_LINK` while
+# that module is still half-imported. The Lambda entry (`stoa.main`) reaches these
+# modules through `entitlement_service` first, so every cold start imports them in
+# that order; this does the same. Not `stoa.main` itself: it builds the settings at
+# import, before `main` can point them at --region/--table.
+# tests/test_grant_test_account_paid_access.py starts this file in fresh
+# interpreters to keep it importable.
+import stoa.services.entitlement_service  # noqa: E402, F401  (must come first; see above)
 from stoa.db import table as db_table  # noqa: E402
 from stoa.db.repositories import (  # noqa: E402
     account_deletion_repo,
