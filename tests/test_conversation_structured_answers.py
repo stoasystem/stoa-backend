@@ -159,6 +159,66 @@ def test_an_answer_stored_before_quick_replies_reads_back_with_none(table, model
     assert assistant["structured"] == {**sections, "quickReplies": []}
 
 
+def _stored_with_stray_texts(table) -> dict[str, Any]:
+    """The answer as it was stored before #507: a step of only ` , ` among the others.
+
+    A straight `"` that closed a quotation ended a step early, and the
+    leftover came back as a text of its own, in any of the text sections.
+    """
+    [stored] = _messages(table, "assistant")
+    sections = stored["structured"]
+    stray = {
+        **sections,
+        "steps": [sections["steps"][0], " , ", *sections["steps"][1:], "…"],
+        "hints": ["?!", *sections["hints"]],
+        "similarExercises": [*sections["similarExercises"], " "],
+        "knowledgePoints": [{"name": " , ", "unitId": None}, *sections["knowledgePoints"]],
+        "quickReplies": [" , ", *sections["quickReplies"]],
+    }
+    table.seed({**stored, "structured": stray})
+    return sections
+
+
+def test_an_answer_stored_with_a_stray_step_of_punctuation_reads_back_without_it(
+    table, model
+) -> None:
+    client = _client()
+    _send(client, "key-1", language="de")
+    sections = _stored_with_stray_texts(table)
+
+    assistant = _assistant(_read_back(client))
+
+    assert assistant["structured"] == sections
+
+
+def test_an_answer_stored_with_only_punctuation_as_its_answer_reads_back_empty(
+    table, model
+) -> None:
+    client = _client()
+    _send(client, "key-1", language="de")
+    [stored] = _messages(table, "assistant")
+    table.seed({**stored, "structured": {**stored["structured"], "answer": " , "}})
+
+    assistant = _assistant(_read_back(client))
+
+    assert assistant["structured"]["answer"] == ""
+
+
+def test_a_quoted_step_is_counted_as_the_answer_reads_back_without_the_stray_step(
+    table, model
+) -> None:
+    client = _client()
+    answer_id = _answered(client, model)
+    sections = _stored_with_stray_texts(table)
+    # Four steps are stored, three are shown: the last one shown is index 2.
+    shown = len(sections["steps"])
+
+    beyond = _quote_send(client, {"section": "steps", "index": shown}, answer_id)
+
+    assert beyond.status_code == 422, beyond.text
+    assert len(model.calls) == 1
+
+
 # ── What the sections say ────────────────────────────────────────────────────
 
 

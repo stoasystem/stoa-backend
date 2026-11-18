@@ -24,7 +24,7 @@ import secrets
 import time
 from typing import Any, Callable, Literal, Mapping, Sequence
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from stoa import config
 from stoa.security.private_telemetry import emit_private_event
@@ -672,6 +672,25 @@ class StructuredAnswer(BaseModel):
     # message. Empty when the model offered none, on every answer written
     # before they existed, and never a reason for `kind` to be `answer`.
     quickReplies: list[str] = Field(default_factory=list)
+
+    # A text with no letter or digit in it is not shown (#507). New answers
+    # never carry one (`_without_wordless_texts`); these drop it from an
+    # answer stored before, as it is read back. The quote check reads the
+    # answer the same way, so a step is counted as the student sees it.
+    @field_validator("steps", "hints", "similarExercises", "quickReplies")
+    @classmethod
+    def _worded_texts(cls, texts: list[str]) -> list[str]:
+        return [text for text in texts if _has_words(text)]
+
+    @field_validator("answer")
+    @classmethod
+    def _worded_answer(cls, text: str) -> str:
+        return text if _has_words(text) else ""
+
+    @field_validator("knowledgePoints")
+    @classmethod
+    def _worded_points(cls, points: list[KnowledgePoint]) -> list[KnowledgePoint]:
+        return [point for point in points if _has_words(point.name)]
 
 
 @dataclass(frozen=True, slots=True)
