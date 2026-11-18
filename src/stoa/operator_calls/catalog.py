@@ -247,6 +247,14 @@ class GetUsagePeriodArguments(_Arguments):
     )
 
 
+class GetTeacherHelpAllowanceArguments(_Arguments):
+    accountNumber: str = Field(
+        min_length=1,
+        max_length=32,
+        description="Account number of the student, e.g. S26-0001.",
+    )
+
+
 class ExtendUsagePeriodArguments(_Arguments):
     accountNumber: str = Field(
         min_length=1, max_length=32, description=_PERIOD_ACCOUNT_DESCRIPTION
@@ -616,6 +624,24 @@ OPERATIONS: tuple[OperationSpec, ...] = (
             "`cursor` for older ones). Every call is recorded in the audit trail."
         ),
         arguments=GetUsagePeriodArguments,
+    ),
+    OperationSpec(
+        name="get_teacher_help_allowance",
+        effect=Effect.READ,
+        title="Show a student's teacher-help requests this week",
+        description=(
+            "Read only. Shows, for one student named by accountNumber, how many "
+            "requests for a human teacher this Zurich week (Monday to Monday) has "
+            "used and how many are left, read the way the request route reads them: "
+            "weeklyCases, usedCases, remainingCases, resetsAt, the plan a parent's "
+            "purchase gives (planId, else null) and the figure assigned to the "
+            "student (by default or by an administrator). Beside it, the account "
+            "status and effective usage period, and canRequestNow with "
+            "blockedReasons (account_not_active, usage_period_ended, "
+            "teacher_support_allowance_exhausted, teacher_support_not_included). "
+            "Every call is recorded in the audit trail."
+        ),
+        arguments=GetTeacherHelpAllowanceArguments,
     ),
     OperationSpec(
         name="extend_usage_period",
