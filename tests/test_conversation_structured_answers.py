@@ -60,6 +60,7 @@ def _expected(answer: dict[str, Any]) -> dict[str, Any]:
             {"name": name, "unitId": None} for name in answer["knowledge_points"]
         ],
         "suggestTeacher": answer["suggest_teacher"],
+        "quickReplies": answer["quick_replies"],
     }
 
 
@@ -142,6 +143,20 @@ def test_an_answer_stored_before_sections_existed_reads_back_with_none(table, mo
 
     assert assistant["structured"] is None
     assert assistant["content"] == old["content"]
+
+
+def test_an_answer_stored_before_quick_replies_reads_back_with_none(table, model) -> None:
+    client = _client()
+    _send(client, "key-1", language="de")
+    # The sections as they were stored before #443: the same, without them.
+    [stored] = _messages(table, "assistant")
+    sections = {key: value for key, value in stored["structured"].items() if key != "quickReplies"}
+    table.seed({**stored, "structured": sections})
+
+    assistant = _assistant(_read_back(client))
+
+    assert assistant["structured"]["quickReplies"] == []
+    assert assistant["structured"] == {**sections, "quickReplies": []}
 
 
 # ── What the sections say ────────────────────────────────────────────────────

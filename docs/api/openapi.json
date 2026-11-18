@@ -12611,6 +12611,13 @@
             "title": "Knowledgepoints",
             "type": "array"
           },
+          "quickReplies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quickreplies",
+            "type": "array"
+          },
           "similarExercises": {
             "items": {
               "type": "string"

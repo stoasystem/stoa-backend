@@ -73,6 +73,28 @@ UNREADABLE_GRADE = (
 NO_SUBJECT = "the school subjects the student is learning"
 NO_SUBJECT_CONTEXT = "No particular subject was chosen for this conversation."
 
+# The quick replies (#443). At most this many are kept, the first ones the
+# model wrote. The prompt asks for at most `QUICK_REPLY_PROMPT_CHARS` each; one
+# up to `QUICK_REPLY_MAX_CHARS` is still kept, so one a little over is not
+# lost, and one longer is left out whole rather than cut: half a sentence is
+# no button to press. Both are checked in `_quick_replies`, not in the schema:
+# a strict tool's schema is not the place for a constraint Bedrock has not
+# been seen to accept (#430).
+QUICK_REPLY_COUNT = 3
+QUICK_REPLY_PROMPT_CHARS = 60
+QUICK_REPLY_MAX_CHARS = 80
+
+# Its line of the rules below; `{subject}` is left for the prompt to fill in.
+_QUICK_REPLY_RULE = f"""- In "quick_replies", offer what the student might want to send you next, as buttons they can \
+press instead of typing: each one a single short sentence of at most {QUICK_REPLY_PROMPT_CHARS} \
+characters, written as the student would say it, in the language you answer in, and about this \
+question rather than generic (asking about a step they did not follow, asking for another \
+exercise like this one, saying they understood it). Give 2 or 3 after a new question; after a \
+follow-up give at most 2, and none when there is no natural next thing to ask. Leave the list \
+empty when you reject a question outside {{subject}}. Never more than {QUICK_REPLY_COUNT}, never \
+two that say the same thing.
+"""
+
 SYSTEM_PROMPT = """You are a controlled educational AI assistant for STOA, a Swiss after-school \
 learning platform. You ONLY answer questions related to {subject}. The student is in {grade}: \
 use that to choose the depth of the explanation, the examples and the prerequisites you point to, \
@@ -107,12 +129,12 @@ Reject only questions outside {subject}.
 passage of it they did not understand), explain just that point in a few plain sentences in \
 "answer" and leave steps, hints, similar_exercises and knowledge_points as empty lists. When they \
 ask a new question, even in the same conversation, answer it with every part filled in.
-- Format mathematical expressions using LaTeX: inline equations with $...$ and block equations with $$...$$.
+""" + _QUICK_REPLY_RULE + """- Format mathematical expressions using LaTeX: inline equations with $...$ and block equations with $$...$$.
 
 IMPORTANT: Give your whole reply as one call of the tool `give_answer` and write nothing \
 else. Its input has exactly this JSON shape; "language" is the code of the language you answer \
 in ("de", "en", "fr" or "it"), and every other value is written in that language:
-{{"language":"{language}","steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false}}
+{{"language":"{language}","steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false,"quick_replies":["..."]}}
 Write the text of each value plainly, quotation marks and LaTeX included, as the student is to \
 read it.
 
@@ -187,6 +209,13 @@ _ANSWER_PROPERTIES: dict[str, object] = {
         },
     },
     "suggest_teacher": {"type": "boolean"},
+    "quick_replies": {
+        **_TEXTS,
+        "description": (
+            f"Up to {QUICK_REPLY_COUNT} short replies the student may send next; "
+            "empty when none fits."
+        ),
+    },
 }
 
 _TARGET_UNIT_PROPERTY: dict[str, object] = {
@@ -638,6 +667,11 @@ class StructuredAnswer(BaseModel):
     knowledgePoints: list[KnowledgePoint] = Field(default_factory=list)
     # The model thinks a human teacher should take over.
     suggestTeacher: bool = False
+    # Up to three short sentences the student may send next with one press
+    # (#443), in the language of the answer; sending one is an ordinary
+    # message. Empty when the model offered none, on every answer written
+    # before they existed, and never a reason for `kind` to be `answer`.
+    quickReplies: list[str] = Field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -897,6 +931,9 @@ _FORBIDDEN_OUTPUT_TERMS = [
     "system prompt", "ignore previous", "harness", "STOA internal",
 ]
 
+# What the leaked-term check writes in place of a term.
+_REDACTED = "[AI]"
+
 _STEP_STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
 _WHITESPACE = re.compile(r"\s*")
 
@@ -1033,7 +1070,7 @@ def _validate_output(parsed: dict, raw_text: str) -> dict:
         issues.append(f"leaked_terms:{','.join(leaked)}")
         # Redact from output
         for term in leaked:
-            raw_text = re.sub(re.escape(term), "[AI]", raw_text, flags=re.IGNORECASE)
+            raw_text = re.sub(re.escape(term), _REDACTED, raw_text, flags=re.IGNORECASE)
         parsed = _parse_ai_response(raw_text)
 
     # 3. Neither steps nor an answer: nothing a student could be shown.
@@ -1173,7 +1210,40 @@ def _structured_answer(
         similarExercises=similar,
         knowledgePoints=points,
         suggestTeacher=reply.get("suggest_teacher") is True,
+        quickReplies=_quick_replies(reply.get("quick_replies")),
     )
+
+
+# ── Quick replies (#443) ────────────────────────────────────────────────────
+
+def _quick_replies(value: object) -> list[str]:
+    """The quick replies worth showing as buttons, in the order the model wrote them.
+
+    Each one is taken onto one line. One left empty, one longer than
+    `QUICK_REPLY_MAX_CHARS`, one the leaked-term check redacted, one that reads
+    as an attempt to override the prompt, and one that repeats an earlier one
+    (ignoring case) is left out; of the rest, the first `QUICK_REPLY_COUNT` are
+    kept. None of this fails the answer.
+    """
+    kept: list[str] = []
+    seen: set[str] = set()
+    for text in _texts(value):
+        reply = " ".join(text.split())
+        if (
+            not reply
+            or len(reply) > QUICK_REPLY_MAX_CHARS
+            or _REDACTED in reply
+            or _INJECTION_RE.search(reply)
+        ):
+            continue
+        key = reply.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append(reply)
+        if len(kept) == QUICK_REPLY_COUNT:
+            break
+    return kept
 
 
 def _target_unit_id(
