@@ -27136,7 +27136,7 @@
     },
     "/conversations/{conv_id}/classroom": {
       "post": {
-        "description": "The student's credentials for this conversation's classroom (#467).\n\nOpen while the conversation's help request is pending or in progress.",
+        "description": "The student's credentials for this conversation's classroom (#467).\n\nOpen once a teacher has accepted the conversation's help request, and only\none asked in the classroom mode (#481).",
         "operationId": "enter_classroom_conversations__conv_id__classroom_post",
         "parameters": [
           {
@@ -36714,7 +36714,7 @@
     },
     "/teachers/me/help-requests/{request_id}/classroom": {
       "post": {
-        "description": "The teacher's credentials for this help request's classroom (#467).\n\nOnly the teacher holding the request, while it is in progress; an offer\nalone does not let a teacher in.",
+        "description": "The teacher's credentials for this help request's classroom (#467).\n\nOnly the teacher holding the request, while it is in progress, and only\none asked in the classroom mode (#481); an offer alone does not let a\nteacher in.",
         "operationId": "enter_classroom_teachers_me_help_requests__request_id__classroom_post",
         "parameters": [
           {

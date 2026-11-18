@@ -1134,8 +1134,9 @@ async def enter_classroom(
 ):
     """The teacher's credentials for this help request's classroom (#467).
 
-    Only the teacher holding the request, while it is in progress; an offer
-    alone does not let a teacher in.
+    Only the teacher holding the request, while it is in progress, and only
+    one asked in the classroom mode (#481); an offer alone does not let a
+    teacher in.
     """
     help_requests.admit_teacher_to_classroom(authorized.value, actor.user_id)
     credentials = classroom.enter(
