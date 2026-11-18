@@ -108,7 +108,9 @@ def admit(student_id: str, command_draft: Mapping[str, object]) -> Admitted:
     entitlement = _read_entitlement(student_id)
     if entitlement.get("newUsageAllowed") is not True:
         raise AdmissionError(AskQuestionErrorCode.USAGE_PERIOD_ENDED)
-    identity = allowance_identity(command_draft, entitlement)
+    identity = allowance_identity(
+        command_draft, _charged_this_week(student_id, command_draft, entitlement)
+    )
     if allowance_service.week_exhausted(
         beneficiary_id=student_id,
         plan_id=str(identity["allowance_plan_id"]),
@@ -141,7 +143,36 @@ def identity_of_unstamped(command: Mapping[str, object]) -> dict[str, object]:
     student_id = str(command.get("student_id") or command.get("owner_id") or "")
     if not student_id:
         raise _unavailable()
-    return allowance_identity(command, _read_entitlement(student_id))
+    return allowance_identity(
+        command, _charged_this_week(student_id, command, _read_entitlement(student_id))
+    )
+
+
+def _charged_this_week(
+    student_id: str,
+    command: Mapping[str, object],
+    entitlement: Mapping[str, object],
+) -> Mapping[str, object]:
+    """The eligibility with the allowance version this week's counter charges it under.
+
+    The eligibility carries no allowance version of its own, and a plan that
+    changes inside a week must still be charged at once (#512): the version
+    comes from the week's counter (`allowance_service.week_allowance_version`).
+    """
+    plan_id = str(
+        entitlement.get("effectivePlan")
+        or entitlement.get("effective_plan")
+        or "free_trial"
+    )
+    try:
+        version = allowance_service.week_allowance_version(
+            beneficiary_id=student_id,
+            plan_id=plan_id,
+            observed_at=_observed_at(command),
+        )
+    except Exception as exc:  # noqa: BLE001 - an unreadable week cannot admit
+        raise _unavailable(f"week allowance version: {type(exc).__name__}") from None
+    return {**entitlement, "allowanceVersion": version}
 
 
 def _read_entitlement(student_id: str) -> Mapping[str, object]:

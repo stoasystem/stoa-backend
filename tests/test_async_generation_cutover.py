@@ -44,7 +44,7 @@ from stoa import config
 from stoa.aws import Kind
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
-from stoa.services import ai_service
+from stoa.services import ai_service, allowance_service
 from stoa.services.ask_question import _answering
 
 
@@ -291,8 +291,14 @@ def test_a_new_conversation_whose_first_message_failed_names_itself_for_the_retr
     # #61: the conversation is stored before its first message is committed.
     # When that fails the error must say which conversation was made, so the
     # student's retry continues it instead of leaving it empty and making another.
-    # Token admission refuses an entitlement whose allowance version is damaged.
-    seed_plan(monkeypatch, allowance_version=-1)
+    # Token admission refuses a question whose week cannot be read.
+    seed_plan(monkeypatch)
+    week_version = allowance_service.week_allowance_version
+
+    def unreadable(**_kwargs: Any) -> int:
+        raise RuntimeError("the week's allowance counter is unreadable")
+
+    monkeypatch.setattr(allowance_service, "week_allowance_version", unreadable)
     response = _client().post(
         "/conversations",
         json={"subject": "Mathematik", "grade": "Grade 6", "initialMessage": QUESTION},
@@ -305,7 +311,7 @@ def test_a_new_conversation_whose_first_message_failed_names_itself_for_the_retr
     assert table.rows[(f"CONV#{conversation_id}", "CONV")]["student_id"]
     assert _messages(table, "student") == []
 
-    seed_plan(monkeypatch)
+    monkeypatch.setattr(allowance_service, "week_allowance_version", week_version)
     retry = _client().post(
         f"/conversations/{conversation_id}/messages/stream",
         json={"content": QUESTION, "idempotencyKey": f"initial-{conversation_id}"},

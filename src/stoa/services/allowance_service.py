@@ -280,6 +280,40 @@ def week_exhausted(
     return used_input >= budget.input_tokens or used_output >= budget.output_tokens
 
 
+def week_allowance_version(
+    *,
+    beneficiary_id: str,
+    plan_id: BillingPlanId | str,
+    observed_at: datetime,
+    table: object | None = None,
+) -> int:
+    """The allowance version a new question in this week is charged under (#512).
+
+    The week's counter keeps the plan and budget it was last charged under, at
+    a version, and refuses a reservation that brings a different plan at the
+    same version. A question under the counter's plan carries its version; one
+    under another plan (the student's plan changed inside the week) carries the
+    next, which moves the counter to the new plan's budget and keeps everything
+    already used this week. The first question of a week carries 1.
+    """
+    observed = _aware(observed_at, "observed_at")
+    counter = allowance_repo.get_allowance_counter(
+        beneficiary_id=_required_text(beneficiary_id, "beneficiary_id"),
+        week=zurich_week(observed),
+        table=table,
+    )
+    if counter is None:
+        return 1
+    version = _exact_count(counter["allowance_version"], "allowance_version", positive=True)
+    budget = plan_allowance_budget(plan_id, allowance_version=version)
+    same = (
+        counter["plan_id"] == str(budget.plan_id)
+        and counter["budget_input_tokens"] == budget.input_tokens
+        and counter["budget_output_tokens"] == budget.output_tokens
+    )
+    return version if same else version + 1
+
+
 def _used_percent(used: int, budget: int) -> float:
     return round((used / budget) * 100, 4)
 
