@@ -173,7 +173,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
     monkeypatch.setattr(
         student_evidence,
         "indexed_lessons",
-        lambda: {
+        lambda *_rows: {
             "l0": [{"id": "c-0"}],
             **{key: [{"id": item} for item in ids] for key, ids in STAR_LESSONS.items()},
         },
