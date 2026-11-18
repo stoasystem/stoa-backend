@@ -1,6 +1,6 @@
 """Student routes — profile, learning summary, and question history."""
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from decimal import Decimal
 from datetime import datetime, timezone
 import logging
@@ -367,10 +367,13 @@ def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
     return items
 
 
-def _lesson_titles() -> dict[str, str]:
-    """Progress rows record which lesson, not what it was called."""
+def _lesson_titles(lesson_ids: Iterable[str]) -> dict[str, str]:
+    """Progress rows record which lesson, not what it was called.
+
+    The titles of these lessons, each lesson read by its key: every lesson row
+    was read for them before, which grew with the published curriculum (#513)."""
     try:
-        lessons = practice_repo.get_lessons()
+        lessons = [practice_repo.get_lesson(lesson_id) for lesson_id in sorted(set(lesson_ids))]
     except Exception:
         return {}
     return {
@@ -383,11 +386,14 @@ def _lesson_titles() -> dict[str, str]:
 def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
     """The lessons this student finished, from their evidence (#214)."""
     items = []
-    titles = _lesson_titles()
+    finished = [
+        lesson
+        for lesson in student_evidence.for_student(student_id).completions
+        if lesson.completed_at
+    ]
+    titles = _lesson_titles(lesson.lesson_id for lesson in finished if not lesson.title)
     locale = locale_service.resolve_locale(None)
-    for lesson in student_evidence.for_student(student_id).completions:
-        if not lesson.completed_at:
-            continue
+    for lesson in finished:
         stored_title = lesson.title or titles.get(lesson.lesson_id, "") or lesson.topic_id
         items.append(
             LearningHistoryItem(

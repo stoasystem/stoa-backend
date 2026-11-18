@@ -210,3 +210,24 @@ def test_the_curriculum_is_read_at_most_once(monkeypatch: pytest.MonkeyPatch, na
     # And what it reads grows with the curriculum by no more than one read of it.
     (small_rows, small_catalog, _), (large_rows, large_catalog, _) = read[SMALL], read[LARGE]
     assert large_rows - small_rows <= large_catalog - small_catalog, reports
+
+
+def test_the_learning_history_reads_only_the_finished_lessons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Their titles, each by its key: not every lesson row (#513)."""
+    read: dict[float, ReadCountingTable] = {}
+    for scale in (SMALL, LARGE):
+        table, lesson = _table(monkeypatch, scale)
+        with time_machine.travel(READ_AT, tick=False):
+            _get("learning_history", lesson)
+        read[scale] = table
+
+    reports = "\n\n".join(f"scale {scale}:\n{table.report()}" for scale, table in read.items())
+    assert read[SMALL].total_rows_scanned == read[LARGE].total_rows_scanned, reports
+    lessons = [
+        rows
+        for (operation, _inner, _caller), rows in read[LARGE].items_read.items()
+        if operation == "get_item"
+    ]
+    assert sum(lessons) >= FINISHED, reports

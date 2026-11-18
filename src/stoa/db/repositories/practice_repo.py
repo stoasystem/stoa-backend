@@ -24,6 +24,9 @@ _CHALLENGE_METADATA_FIELDS = {
     "challenge_version",
     "entity_type",
     "hint_non_derivability_decision",
+    # Where the row sits in GSI-TopicShelf, derived from fields the hash covers.
+    "topic_shelf",
+    "topic_order",
 }
 _POINTER_FIELDS = {
     "PK",
@@ -425,6 +428,73 @@ def indexed_exercises(lesson: Mapping[str, Any]) -> list[dict[str, Any]] | None:
         return None
     return [dict(entry) for entry in value if isinstance(entry, Mapping) and entry.get("id")]
 
+
+
+# ── One topic's curriculum (#513) ─────────────────────────────────────────
+#
+# Unit, lesson and exercise rows are keyed by their own id, with no topic in the
+# key, so finding one topic's meant reading every row of the kind. Each of them
+# also carries `topic_shelf` - `UNIT#<topic>`, `LESSON#<topic>`, `CHALLENGE#<topic>`
+# - and `topic_order`, the partition and sort key of GSI-TopicShelf. Every writer
+# of these rows adds them with `topic_shelf_fields`: the seed, and the projection
+# a curriculum publish writes.
+
+TOPIC_SHELF_INDEX = "GSI-TopicShelf"
+TOPIC_SHELF_FIELDS = ("topic_shelf", "topic_order")
+TOPIC_SHELF_KINDS = ("UNIT", "LESSON", "CHALLENGE")
+#: `topic_order` holds an exercise's order as this many digits, shifted so that
+#: a negative order sorts before zero as it does as a number.
+_ORDER_DIGITS = 13
+_ORDER_SHIFT = 10**12
+
+
+def _ordered_text(text: str) -> str:
+    """`text` such that the stored strings sort as the texts do, then a terminator.
+
+    A topic's exercises are listed by lesson id, then by order. Joined as
+    `<lesson>#<order>`, lesson `a` would sort after `a!b` (`!` is below `#`), so
+    every character at or below `$` is written as `$` and a letter, and `#` ends
+    the text: below every character that can follow inside a longer id."""
+    return "".join(f"${chr(0x40 + ord(char))}" if char <= "$" else char for char in text) + "#"
+
+
+def _order_digits(value: object) -> str:
+    try:
+        number = int(value) if value is not None else 0  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        number = 0
+    shifted = min(max(number + _ORDER_SHIFT, 0), 10**_ORDER_DIGITS - 1)
+    return f"{shifted:0{_ORDER_DIGITS}d}"
+
+
+def topic_shelf(kind: str, topic_id: str) -> str:
+    """The GSI-TopicShelf partition holding one topic's rows of one kind."""
+    return f"{kind}#{topic_id}"
+
+
+def topic_shelf_fields(row: Mapping[str, Any]) -> dict[str, str]:
+    """`topic_shelf` and `topic_order` for a curriculum unit, lesson or exercise row.
+
+    Empty for any other row and for one without a topic: it is in no topic's
+    list, as it was in none when the lists were read whole and filtered. A unit's
+    or a lesson's order is its key, the order the whole read gave; an exercise's
+    is its lesson, its order and its id, the order `list_exercises` gives."""
+    if row.get("PK") != "PRACTICE":
+        return {}
+    kind = str(row.get("SK") or "").split("#", 1)[0]
+    topic_id = row.get("topic_id")
+    if kind not in TOPIC_SHELF_KINDS or not isinstance(topic_id, str) or not topic_id:
+        return {}
+    if kind == "CHALLENGE":
+        order = (
+            _ordered_text(str(row.get("lesson_id") or ""))
+            + _order_digits(row.get("order"))
+            + "#"
+            + str(row.get("challenge_id") or "")
+        )
+    else:
+        order = str(row["SK"])
+    return {"topic_shelf": topic_shelf(kind, topic_id), "topic_order": order}
 
 
 def get_subjects() -> list[dict]:
