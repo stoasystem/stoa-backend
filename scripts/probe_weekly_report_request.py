@@ -8,15 +8,19 @@ session, as #435 item 4 asks:
 1. CountTokens on the body that would be counted (free). Production does not
    count the report (no admission hook), but CountTokens must take it, as the
    module counts every body a hook is given (#430).
-2. With `--invoke` only: InvokeModelWithResponseStream on the body that is
-   sent, with the output limit cut to one token. It costs the input tokens and
-   one output token (well under a cent); no report is written.
+2. With `--invoke` only: InvokeModelWithResponseStream (the streamed call
+   production makes) on the body that is sent, with `max_tokens` cut to 1 and
+   nothing else changed. It costs the input tokens and one output token (well
+   under a cent); no report is written.
+3. With `--invoke --exact` instead: the body exactly as production sends it,
+   `max_tokens` included. The model writes one report about the synthetic
+   week, which is read and discarded (a few cents).
 
 Both bodies are built by the production code from a synthetic week with no
 real person's data in it. Only token counts, stop reasons and Bedrock's own
 error text are printed.
 
-    python scripts/probe_weekly_report_request.py --profile stoa [--invoke]
+    python scripts/probe_weekly_report_request.py --profile <SSO profile> [--invoke [--exact]]
 """
 
 from __future__ import annotations
@@ -85,7 +89,7 @@ def _refusal(error: Exception) -> str:
     return type(error).__name__
 
 
-def probe(adapter: Adapter, *, model_id: str, invoke: bool) -> list[str]:
+def probe(adapter: Adapter, *, model_id: str, invoke: bool, exact: bool = False) -> list[str]:
     """Run the checks; one line per check, each starting PASS or FAIL."""
     counted, sent = report_bodies()
     connection = adapter.connect(_PROBE_SECONDS)
@@ -100,12 +104,15 @@ def probe(adapter: Adapter, *, model_id: str, invoke: bool) -> list[str]:
         lines.append("SKIP invoke: pass --invoke to send the body (costs under a cent)")
         return lines
     try:
-        stream = connection.stream(model_id, {**sent, "max_tokens": 1})
+        stream = connection.stream(model_id, sent if exact else {**sent, "max_tokens": 1})
         stop_reason = _stop_reason(stream.events)
     except Exception as error:
         lines.append(f"FAIL invoke: {_refusal(error)}")
     else:
-        lines.append(f"PASS invoke: InvokeModel took the report body, stop_reason={stop_reason}")
+        what = "the exact report body" if exact else "the report body (max_tokens 1)"
+        lines.append(
+            f"PASS invoke: InvokeModelWithResponseStream took {what}, stop_reason={stop_reason}"
+        )
     return lines
 
 
@@ -132,6 +139,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         action="store_true",
         help="Also send the body, cut to one output token (costs under a cent).",
     )
+    parser.add_argument(
+        "--exact",
+        action="store_true",
+        help="With --invoke: send the body unchanged, max_tokens included (a few cents).",
+    )
     return parser.parse_args(argv)
 
 
@@ -149,7 +161,10 @@ def main(argv: Sequence[str] | None = None, *, adapter: Adapter | None = None) -
         )
         adapter = BedrockAdapter(session.client("bedrock-runtime", region_name=args.region))
     print(f"Probing the weekly report request on {model_id} in {args.region}")
-    lines = probe(adapter, model_id=model_id, invoke=args.invoke)
+    if args.exact and not args.invoke:
+        print("--exact only goes with --invoke")
+        return 2
+    lines = probe(adapter, model_id=model_id, invoke=args.invoke, exact=args.exact)
     for line in lines:
         print(line)
     return 1 if any(line.startswith("FAIL") for line in lines) else 0

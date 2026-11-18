@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from scripts import probe_weekly_report_request as probe
 from stoa import config
 from stoa.services import model_call, report_service
@@ -18,7 +20,49 @@ def test_the_probed_bodies_are_the_ones_the_report_sends_and_would_count() -> No
 
     assert sent == model.calls[0]
     assert counted == model_call._count_body(model.calls[0])
-    assert "eager_input_streaming" not in counted["tools"][0]
+    [tool] = sent["tools"]
+    assert tool["name"] == report_service.REPORT_TOOL.name
+    assert tool["input_schema"] == report_service.REPORT_TOOL.input_schema
+    assert tool["strict"] is True
+    assert tool["eager_input_streaming"] is True
+    assert sent["tool_choice"] == {"type": "tool", "name": "give_weekly_report"}
+    unstreamed = {key: value for key, value in tool.items() if key != "eager_input_streaming"}
+    assert counted == {**sent, "tools": [unstreamed]}
+
+
+def test_the_probe_streams_through_the_bedrock_adapter_production_uses() -> None:
+    """The invoke is the adapter's InvokeModelWithResponseStream, never a buffered InvokeModel."""
+    from stoa.services.model_call.bedrock import BedrockAdapter
+
+    class Client:
+        def __init__(self) -> None:
+            self.operations: list[str] = []
+
+        def count_tokens(self, **kwargs):
+            self.operations.append("count_tokens")
+            return {
+                "inputTokens": 12,
+                "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "c"},
+            }
+
+        def invoke_model_with_response_stream(self, **kwargs):
+            self.operations.append("invoke_model_with_response_stream")
+            self.body = kwargs["body"]
+            return {"body": [], "ResponseMetadata": {"RequestId": "r"}}
+
+        def invoke_model(self, **kwargs):
+            raise AssertionError("the report never calls the buffered InvokeModel")
+
+    client = Client()
+    lines = probe.probe(
+        BedrockAdapter(client), model_id="eu.anthropic.claude-sonnet-4-6", invoke=True, exact=True
+    )
+
+    assert client.operations == ["count_tokens", "invoke_model_with_response_stream"]
+    _, sent = probe.report_bodies()
+    assert json.loads(client.body) == sent
+    assert lines[0].startswith("PASS count")
+    assert lines[1].startswith("PASS invoke: InvokeModelWithResponseStream took the exact report body")
 
 
 def test_without_invoke_the_probe_only_counts(capsys) -> None:
@@ -43,9 +87,27 @@ def test_with_invoke_the_probe_sends_the_body_cut_to_one_token(capsys) -> None:
     assert status == 0
     _, sent = probe.report_bodies()
     assert model.calls == [{**sent, "max_tokens": 1}]
-    assert "PASS invoke: InvokeModel took the report body, stop_reason=tool_use" in (
-        capsys.readouterr().out
-    )
+    assert (
+        "PASS invoke: InvokeModelWithResponseStream took the report body (max_tokens 1), "
+        "stop_reason=tool_use"
+    ) in capsys.readouterr().out
+
+
+def test_with_exact_the_probe_sends_the_production_body_unchanged(capsys) -> None:
+    model = FakeAdapter({"summary": "x"})
+
+    assert probe.main(["--invoke", "--exact"], adapter=model) == 0
+
+    _, sent = probe.report_bodies()
+    assert model.calls == [sent]
+    assert sent["max_tokens"] == min(config.settings().bedrock_max_tokens, 1200)
+
+
+def test_exact_without_invoke_is_refused() -> None:
+    model = FakeAdapter()
+
+    assert probe.main(["--exact"], adapter=model) == 2
+    assert model.counted == 0
 
 
 def test_a_refused_body_fails_the_probe_with_what_bedrock_said(monkeypatch, capsys) -> None:
