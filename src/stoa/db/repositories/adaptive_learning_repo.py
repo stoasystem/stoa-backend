@@ -397,6 +397,10 @@ def update_assignment(
     return attributes or None
 
 
+# GSI-StudentId continues from its own key as well as the table's.
+_STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
+
+
 def list_assignments(
     *,
     student_id: str,
@@ -404,17 +408,33 @@ def list_assignments(
     include_archived: bool = False,
     limit: int | None = 100,
 ) -> list[dict[str, Any]]:
+    """The student's assignments, newest first, at most `limit` of them.
+
+    Read from `GSI-StudentId`: every assignment row carries the student and
+    `created_at`, so the index holds them all. This was a filtered scan of the
+    whole table, read twice for every learning memory - the Ask page's among
+    them - and it grew with every curriculum row published (#496).
+    """
     table = db_table.table()
-    filter_expr = Attr("entity_type").eq(ASSIGNMENT_ENTITY) & Attr("student_id").eq(student_id)
+    filter_expr = Attr("entity_type").eq(ASSIGNMENT_ENTITY)
     if status:
         filter_expr = filter_expr & Attr("status").eq(status)
     if not include_archived:
         filter_expr = filter_expr & Attr("status").ne("archived")
-    if not isinstance(table, _ScanTable):
+    if not isinstance(table, _QueryTable):
         raise account_deletion_repo.AccountDeletionConflict(
             "adaptive learning dependency unavailable"
         )
-    items = db_table.rows("scan", table=table, want=limit or None, FilterExpression=filter_expr)
+    items = db_table.rows(
+        "query",
+        table=table,
+        want=limit or None,
+        key=_STUDENT_INDEX_KEY,
+        IndexName="GSI-StudentId",
+        KeyConditionExpression=Key("student_id").eq(student_id),
+        FilterExpression=filter_expr,
+        ScanIndexForward=False,
+    )
     return sorted(items, key=lambda item: item.get("created_at", ""), reverse=True)
 
 

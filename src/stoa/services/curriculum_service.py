@@ -3,7 +3,7 @@ the one entry point for subject ids (#354): the alias table, the supported
 subjects, and how a subject is read, compared and refused."""
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from decimal import Decimal
 from typing import Any
 
@@ -187,6 +187,23 @@ def list_exercises(
     locale: str = "de",
 ) -> dict[str, Any]:
     raw_items = practice_repo.get_all_challenges(lesson_id=lesson_id, subject_id=subject_id, topic_id=topic_id)
+    return _exercise_list(
+        raw_items,
+        difficulty=difficulty,
+        rollout_state=rollout_state,
+        include_preview=include_preview,
+        locale=locale,
+    )
+
+
+def _exercise_list(
+    raw_items: list[dict[str, Any]],
+    *,
+    difficulty: str | None,
+    rollout_state: str | None,
+    include_preview: bool,
+    locale: str,
+) -> dict[str, Any]:
     items = [
         practice_projection_service.build_exercise_preview(item, locale)
         for item in sorted(raw_items, key=lambda challenge: (challenge.get("lesson_id", ""), _as_int(challenge.get("order", 0))))
@@ -194,6 +211,41 @@ def list_exercises(
         and (difficulty is None or str(item.get("difficulty", "")).lower() == difficulty.lower())
     ]
     return {"items": items, "count": len(items)}
+
+
+def topic_exercise_reader(
+    *, include_preview: bool = False, locale: str = "de"
+) -> Callable[[str, str], list[dict[str, Any]]]:
+    """`read(subject_id, topic_id)`: what `list_exercises` lists for that
+    subject and topic, with every exercise read once, on the first call.
+
+    `list_exercises` reads every exercise row whatever it is asked for; a
+    caller wanting the exercises of several topics read them all once per
+    topic, which is how a learning memory with a dozen weak topics read some
+    150,000 rows (#496). The rows are filtered here as `get_all_challenges`
+    filters them, so each topic's list is the one `list_exercises` gives.
+    """
+    loaded: list[dict[str, Any]] | None = None
+
+    def read(subject_id: str, topic_id: str) -> list[dict[str, Any]]:
+        nonlocal loaded
+        if loaded is None:
+            loaded = practice_repo.get_all_challenges()
+        raw_items = [
+            item
+            for item in loaded
+            if (not subject_id or same_subject(item.get("subject_id", ""), subject_id))
+            and (not topic_id or item.get("topic_id") == topic_id)
+        ]
+        return _exercise_list(
+            raw_items,
+            difficulty=None,
+            rollout_state=None,
+            include_preview=include_preview,
+            locale=locale,
+        )["items"]
+
+    return read
 
 
 def skill_unit_ids(*, subject_id: str | None = None) -> dict[str, str]:

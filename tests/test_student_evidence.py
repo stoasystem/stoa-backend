@@ -351,7 +351,7 @@ def test_one_adaptive_memory_summary_reads_progress_once(monkeypatch) -> None:
     monkeypatch.setattr(service.asked_knowledge_repo, "list_for_student", lambda *_a, **_k: [])
     monkeypatch.setattr(service.adaptive_learning_repo, "list_memory_snapshots", lambda *_a, **_k: [])
     monkeypatch.setattr(service.adaptive_learning_repo, "list_assignments", lambda *_a, **_k: [])
-    monkeypatch.setattr(service.curriculum_service, "list_exercises", lambda **_k: {"items": []})
+    monkeypatch.setattr(service.curriculum_service, "topic_exercise_reader", lambda **_k: lambda *_a: [])
 
     summary = service.get_memory_summary(
         student_id=STUDENT, user={"sub": STUDENT, "role": "student"}

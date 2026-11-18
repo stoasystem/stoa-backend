@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -1558,12 +1558,14 @@ def _next_practice_recommendations(
     signal_index = _sequencing_signal_index(profile, snapshots, subject)
     drafts = _safe_reviewed_ai_drafts(student_id, user) if _can_manage_assignments(user) else []
     candidates: list[dict[str, Any]] = []
+    # Every exercise is read once for all the weak topics, not once per topic (#496).
+    exercises = _curriculum_exercise_reader()
 
     for signal in signal_index.values():
         if _topic_has_active_assignment(signal, assignment_state):
             continue
         candidates.append(_remediation_candidate(signal, assignment_state))
-        candidates.extend(_curriculum_exercise_candidates(signal, assignment_state))
+        candidates.extend(_curriculum_exercise_candidates(signal, assignment_state, exercises))
         candidates.extend(_reviewed_draft_candidates(signal, drafts, assignment_state))
 
     if not candidates:
@@ -1679,10 +1681,13 @@ def _remediation_candidate(signal: dict[str, Any], assignment_state: dict[str, A
     )
 
 
-def _curriculum_exercise_candidates(signal: dict[str, Any], assignment_state: dict[str, Any]) -> list[dict[str, Any]]:
-    exercises = _safe_curriculum_exercises(signal["subject"], signal["topicId"])
+def _curriculum_exercise_candidates(
+    signal: dict[str, Any],
+    assignment_state: dict[str, Any],
+    exercises: Callable[[str, str], list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
     candidates = []
-    for exercise in exercises[:2]:
+    for exercise in exercises(signal["subject"], signal["topicId"])[:2]:
         exercise_id = str(exercise.get("id") or "")
         if not exercise_id:
             continue
@@ -1768,11 +1773,26 @@ def _continuation_candidates(
     return candidates
 
 
-def _safe_curriculum_exercises(subject: str, topic_id: str) -> list[dict[str, Any]]:
-    try:
-        return curriculum_service.list_exercises(subject_id=subject, topic_id=topic_id, include_preview=False).get("items", [])
-    except Exception:  # pragma: no cover - defensive around optional data sources in partial test doubles
-        return []
+def _curriculum_exercise_reader() -> Callable[[str, str], list[dict[str, Any]]]:
+    """The published exercises of a subject's topic, every exercise read at most once.
+
+    A read that fails gives no exercises, as each topic's read did before; it
+    is not tried again for the next topic.
+    """
+    read = curriculum_service.topic_exercise_reader(include_preview=False)
+    failed = False
+
+    def exercises(subject: str, topic_id: str) -> list[dict[str, Any]]:
+        nonlocal failed
+        if failed:
+            return []
+        try:
+            return read(subject, topic_id)
+        except Exception:  # pragma: no cover - defensive around optional data sources in partial test doubles
+            failed = True
+            return []
+
+    return exercises
 
 
 def _safe_reviewed_ai_drafts(student_id: str, user: dict[str, Any]) -> list[dict[str, Any]]:
