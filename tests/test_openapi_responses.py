@@ -159,6 +159,7 @@ def _item_schema(schema: dict, body: dict, field: str) -> dict:
                 "subject",
                 "topicId",
                 "label",
+                "rationaleCode",
                 "rationale",
                 "confidence",
                 "freshness",

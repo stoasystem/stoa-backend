@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
+from enum import StrEnum
 import hashlib
 import json
 from typing import TYPE_CHECKING, Any
@@ -23,6 +24,7 @@ from stoa.services import (
     curriculum_service,
     learning_profile_service,
     locale_service,
+    message_catalog,
     practice_projection_service,
     student_evidence,
     usage_ledger_service,
@@ -44,6 +46,86 @@ AUTOMATION_LEVELS = {"off", "suggest_only", "teacher_approved_batch", "auto_crea
 AUTOMATION_DELIVERY_MODES = {"draft", "recommended", "assigned"}
 AUTOMATION_SOURCE_TYPES = {"ai_draft", "curriculum_exercise", "memory_snapshot", "curriculum_topic"}
 CONFIDENCE_RANK = {"low": 1, "medium": 2, "high": 3}
+
+
+class RationaleCode(StrEnum):
+    """Why a candidate is proposed: its candidate type (#495)."""
+
+    REMEDIATION_TOPIC = "remediation_topic"
+    CURRICULUM_EXERCISE = "curriculum_exercise"
+    REVIEWED_AI_DRAFT = "reviewed_ai_draft"
+    CONTINUATION_LESSON = "continuation_lesson"
+
+
+class AutomationRefusalCode(StrEnum):
+    """Why the automation does not propose, or does not assign, a candidate (#495)."""
+
+    AUTOMATION_OFF = "automation_off"
+    POLICY_PAUSED = "policy_paused"
+    STUDENT_OUT_OF_SCOPE = "student_out_of_scope"
+    SOURCE_TYPE_NOT_ALLOWED = "source_type_not_allowed"
+    SUBJECT_OUT_OF_SCOPE = "subject_out_of_scope"
+    TOPIC_OUT_OF_SCOPE = "topic_out_of_scope"
+    LOW_CONFIDENCE = "low_confidence"
+    STALE_CANDIDATE = "stale_candidate"
+    DUPLICATE_OR_ACTIVE = "duplicate_or_active"
+    REVIEW_BOUNDARY_MISSING = "review_boundary_missing"
+    MAX_ASSIGNMENTS_REACHED = "max_assignments_reached"
+    UNSUPPORTED_ASSIGNMENT_SOURCE = "unsupported_assignment_source"
+    SOURCE_NOT_ASSIGNABLE = "source_not_assignable"
+
+
+class AutomationResultCode(StrEnum):
+    """What became of a candidate sent to execute (`reasonCode`, #495).
+
+    `refused` and `failed` name their refusal in `refusalCode`.
+    """
+
+    CREATED = "created"
+    NOT_APPROVED = "not_approved"
+    ALREADY_CREATED = "already_created"
+    SOURCE_HAS_HISTORY = "source_has_history"
+    REFUSED = "refused"
+    FAILED = "failed"
+
+
+#: The language of the sentence sent beside a code, for a client that does not
+#: translate it yet.
+AUTOMATION_FALLBACK_LOCALE = "en"
+
+
+def automation_catalog_key(kind: str, code: str) -> str:
+    """The message catalog key of an automation code (`assignment_automation.<kind>.<code>`)."""
+    return f"assignment_automation.{kind}.{code}"
+
+
+def _automation_english(kind: str, code: str) -> str:
+    return message_catalog.text(automation_catalog_key(kind, code), AUTOMATION_FALLBACK_LOCALE)
+
+
+def _rationale(code: RationaleCode) -> dict[str, str]:
+    return {"rationaleCode": code.value, "rationale": _automation_english("rationale", code)}
+
+
+def _refusal(code: AutomationRefusalCode, reason: str | None = None) -> dict[str, str]:
+    return {
+        "refusalCode": code.value,
+        "refusalReason": reason or _automation_english("refusal", code),
+    }
+
+
+def _result(code: AutomationResultCode) -> dict[str, str]:
+    return {"reasonCode": code.value, "reason": _automation_english("result", code)}
+
+
+def _refused_result(refusal: Mapping[str, Any], *, status: str = "refused") -> dict[str, str]:
+    """A refused (or failed) result: the refusal is the reason."""
+    code = AutomationResultCode.FAILED if status == "failed" else AutomationResultCode.REFUSED
+    return {
+        "reasonCode": code.value,
+        "reason": str(refusal["refusalReason"]),
+        "refusalCode": str(refusal["refusalCode"]),
+    }
 
 
 def actor_projection(actor: Actor) -> dict[str, Any]:
@@ -332,11 +414,7 @@ def preview_assignment_automation_batch(
             continue
         if len(selected) >= normalized_policy["maxAssignmentsPerStudent"]:
             refused.append(
-                {
-                    **candidate,
-                    "refusalCode": "max_assignments_reached",
-                    "refusalReason": "Policy maximum selected assignments for this student was reached.",
-                }
+                {**candidate, **_refusal(AutomationRefusalCode.MAX_ASSIGNMENTS_REACHED)}
             )
             continue
         selected.append(candidate)
@@ -675,27 +753,27 @@ def _automation_refusal(
     assignment_state: dict[str, Any],
 ) -> dict[str, str] | None:
     if policy["status"] == "off":
-        return {"refusalCode": "automation_off", "refusalReason": "Automation is disabled for this policy."}
+        return _refusal(AutomationRefusalCode.AUTOMATION_OFF)
     if policy["status"] == "paused":
-        return {"refusalCode": "policy_paused", "refusalReason": policy.get("pausedReason") or "Policy is paused."}
+        return _refusal(AutomationRefusalCode.POLICY_PAUSED, policy.get("pausedReason"))
     if str(policy["targetStudentId"]) not in set(policy["studentIds"]):
-        return {"refusalCode": "student_out_of_scope", "refusalReason": "Candidate student is outside policy scope."}
+        return _refusal(AutomationRefusalCode.STUDENT_OUT_OF_SCOPE)
     if str(recommendation.get("sourceType") or "") not in set(policy["sourceTypes"]):
-        return {"refusalCode": "source_type_not_allowed", "refusalReason": "Candidate source type is outside policy scope."}
+        return _refusal(AutomationRefusalCode.SOURCE_TYPE_NOT_ALLOWED)
     if policy["subjectIds"] and str(recommendation.get("subject") or "") not in set(policy["subjectIds"]):
-        return {"refusalCode": "subject_out_of_scope", "refusalReason": "Candidate subject is outside policy scope."}
+        return _refusal(AutomationRefusalCode.SUBJECT_OUT_OF_SCOPE)
     if policy["topicIds"] and str(recommendation.get("topicId") or "") not in set(policy["topicIds"]):
-        return {"refusalCode": "topic_out_of_scope", "refusalReason": "Candidate topic is outside policy scope."}
+        return _refusal(AutomationRefusalCode.TOPIC_OUT_OF_SCOPE)
     confidence = str(recommendation.get("confidence") or "low")
     if CONFIDENCE_RANK.get(confidence, 0) < CONFIDENCE_RANK[policy["confidenceThreshold"]]:
-        return {"refusalCode": "low_confidence", "refusalReason": "Candidate confidence is below policy threshold."}
+        return _refusal(AutomationRefusalCode.LOW_CONFIDENCE)
     if _automation_candidate_stale(recommendation, policy["freshnessDays"]):
-        return {"refusalCode": "stale_candidate", "refusalReason": "Candidate evidence is outside the policy freshness window."}
+        return _refusal(AutomationRefusalCode.STALE_CANDIDATE)
     source_key = (str(recommendation.get("sourceType") or ""), str(recommendation.get("sourceId") or ""))
     if source_key in assignment_state["suppressed_sources"] or str(recommendation.get("topicId") or "") in assignment_state["active_topics"]:
-        return {"refusalCode": "duplicate_or_active", "refusalReason": "Candidate duplicates active, completed, or archived assignment work."}
+        return _refusal(AutomationRefusalCode.DUPLICATE_OR_ACTIVE)
     if recommendation.get("reviewRequired") is not True or recommendation.get("autonomousDecision") is not False:
-        return {"refusalCode": "review_boundary_missing", "refusalReason": "Candidate does not preserve review-required automation boundaries."}
+        return _refusal(AutomationRefusalCode.REVIEW_BOUNDARY_MISSING)
     return None
 
 
@@ -727,6 +805,7 @@ def _automation_candidate(recommendation: dict[str, Any], policy: dict[str, Any]
         "topicIds": [topic_id] if topic_id else [],
         "confidence": recommendation.get("confidence"),
         "freshness": recommendation.get("freshness") or {},
+        "rationaleCode": recommendation.get("rationaleCode"),
         "rationale": recommendation.get("rationale"),
         "expectedImpact": _automation_expected_impact(recommendation),
         "reviewStatus": "reviewed_source" if recommendation.get("sourceType") in {"ai_draft", "curriculum_exercise"} else "recommendation_review_required",
@@ -812,6 +891,7 @@ def _automation_execution_candidate(candidate: dict[str, Any], policy: dict[str,
         "topicIds": topic_ids,
         "confidence": str(candidate.get("confidence") or "low"),
         "freshness": candidate.get("freshness") if isinstance(candidate.get("freshness"), dict) else {},
+        "rationaleCode": candidate.get("rationaleCode") or candidate.get("rationale_code"),
         "rationale": candidate.get("rationale"),
         "expectedImpact": candidate.get("expectedImpact") or candidate.get("expected_impact"),
         "reviewStatus": candidate.get("reviewStatus") or candidate.get("review_status"),
@@ -844,13 +924,13 @@ def _execute_assignment_automation_candidate(
     automation_key = _automation_key(student_id, batch_id, policy, candidate)
     base = _automation_result_base(candidate, automation_key)
     if candidate["approved"] is not True:
-        return {**base, "status": "skipped", "reason": "Candidate was not approved for execution."}
+        return {**base, "status": "skipped", **_result(AutomationResultCode.NOT_APPROVED)}
     existing_by_key = _find_assignment_by_automation_key(existing_assignments, automation_key)
     if existing_by_key:
         return {
             **base,
             "status": "duplicate",
-            "reason": "Automation key already created an assignment.",
+            **_result(AutomationResultCode.ALREADY_CREATED),
             "assignmentId": existing_by_key.get("assignment_id"),
             "assignment": assignment_response(existing_by_key, user=user),
         }
@@ -858,15 +938,14 @@ def _execute_assignment_automation_candidate(
         return {
             **base,
             "status": "refused",
-            "reason": "Candidate source cannot create a reviewed assignment.",
-            "refusalCode": "unsupported_assignment_source",
+            **_refused_result(_refusal(AutomationRefusalCode.UNSUPPORTED_ASSIGNMENT_SOURCE)),
         }
     existing_by_source = _find_assignment_by_source(existing_assignments, candidate["sourceType"], candidate["sourceId"])
     if existing_by_source:
         return {
             **base,
             "status": "duplicate",
-            "reason": "Source already has assignment history for this student.",
+            **_result(AutomationResultCode.SOURCE_HAS_HISTORY),
             "assignmentId": existing_by_source.get("assignment_id"),
             "assignment": assignment_response(existing_by_source, user=user),
         }
@@ -875,8 +954,7 @@ def _execute_assignment_automation_candidate(
         return {
             **base,
             "status": "refused",
-            "reason": refusal["refusalReason"],
-            "refusalCode": refusal["refusalCode"],
+            **_refused_result(refusal),
         }
 
     try:
@@ -901,18 +979,24 @@ def _execute_assignment_automation_candidate(
         )
         stored, created = _put_assignment_if_absent(item)
     except AdaptiveLearningViolation as exc:
-        # The batch's other reasons are English operator notes; this one is too.
+        # The sentence sent beside the code is the violation's own English.
+        status = "failed" if exc.status_code >= 500 else "refused"
         return {
             **base,
-            "status": "failed" if exc.status_code >= 500 else "refused",
-            "reason": exc.message("en"),
-            "refusalCode": "source_not_assignable",
+            "status": status,
+            **_refused_result(
+                _refusal(
+                    AutomationRefusalCode.SOURCE_NOT_ASSIGNABLE,
+                    exc.message(AUTOMATION_FALLBACK_LOCALE),
+                ),
+                status=status,
+            ),
         }
     if not created:
         return {
             **base,
             "status": "duplicate",
-            "reason": "Source already has assignment history for this student.",
+            **_result(AutomationResultCode.SOURCE_HAS_HISTORY),
             "assignmentId": stored.get("assignment_id"),
             "assignment": assignment_response(stored, user=user),
         }
@@ -922,7 +1006,7 @@ def _execute_assignment_automation_candidate(
     return {
         **base,
         "status": result_status,
-        "reason": "Reviewed assignment created from approved automation batch.",
+        **_result(AutomationResultCode.CREATED),
         "assignmentId": stored.get("assignment_id"),
         "assignment": assignment_response(stored, user=user),
         "assignmentItem": stored,
@@ -959,22 +1043,23 @@ def _automation_duplicate_replay(
                 {
                     **base,
                     "status": "duplicate",
-                    "reason": "Automation key already created an assignment.",
+                    **_result(AutomationResultCode.ALREADY_CREATED),
                     "assignmentId": existing.get("assignment_id"),
                     "assignment": assignment_response(existing, user=user),
                 }
             )
             continue
         if normalized_candidate["approved"] is not True:
-            results.append({**base, "status": "skipped", "reason": "Candidate was not approved for execution."})
+            results.append({**base, "status": "skipped", **_result(AutomationResultCode.NOT_APPROVED)})
             continue
         if normalized_candidate["sourceType"] not in {"ai_draft", "curriculum_exercise"}:
             results.append(
                 {
                     **base,
                     "status": "refused",
-                    "reason": "Candidate source cannot create a reviewed assignment.",
-                    "refusalCode": "unsupported_assignment_source",
+                    **_refused_result(
+                        _refusal(AutomationRefusalCode.UNSUPPORTED_ASSIGNMENT_SOURCE)
+                    ),
                 }
             )
             continue
@@ -989,7 +1074,7 @@ def _automation_duplicate_replay(
             {
                 **base,
                 "status": "duplicate",
-                "reason": "Source already has assignment history for this student.",
+                **_result(AutomationResultCode.SOURCE_HAS_HISTORY),
                 "assignmentId": source_duplicate.get("assignment_id"),
                 "assignment": assignment_response(source_duplicate, user=user),
             }
@@ -1674,7 +1759,7 @@ def _remediation_candidate(signal: dict[str, Any], assignment_state: dict[str, A
         source_id=f"{signal['subject']}:{signal['topicId']}",
         signal=signal,
         label=signal["label"],
-        rationale="Recent learning evidence points to this topic as the next reviewed remediation area.",
+        rationale=RationaleCode.REMEDIATION_TOPIC,
         score=score,
         review_flags=["teacher_review_required"],
         source_signals=_source_signals(signal, assignment_state, reviewed_draft=False, curriculum_available=False),
@@ -1701,7 +1786,7 @@ def _curriculum_exercise_candidates(
                 source_id=exercise_id,
                 signal=signal,
                 label=str(exercise.get("prompt") or exercise.get("title") or signal["label"]),
-                rationale="A reviewed curriculum exercise is available for this weak topic.",
+                rationale=RationaleCode.CURRICULUM_EXERCISE,
                 score=score,
                 review_flags=["teacher_review_required", "published_curriculum_only"],
                 source_signals=_source_signals(signal, assignment_state, reviewed_draft=False, curriculum_available=True),
@@ -1732,7 +1817,7 @@ def _reviewed_draft_candidates(
                 source_id=draft_id,
                 signal=signal,
                 label=str(draft.get("title") or "Reviewed practice exercise"),
-                rationale="A teacher-reviewed AI practice draft matches this learning need.",
+                rationale=RationaleCode.REVIEWED_AI_DRAFT,
                 score=score,
                 review_flags=["accepted_draft_only", "teacher_review_required"],
                 source_signals=_source_signals(signal, assignment_state, reviewed_draft=True, curriculum_available=False),
@@ -1762,7 +1847,7 @@ def _continuation_candidates(
                 source_id=f"{topic_subject}:{topic_id}",
                 signal=signal,
                 label=topic_id,
-                rationale="Continue with one short reviewed practice item to keep learning memory fresh.",
+                rationale=RationaleCode.CONTINUATION_LESSON,
                 score=30,
                 review_flags=["teacher_review_required"],
                 source_signals=_source_signals(signal, assignment_state, reviewed_draft=False, curriculum_available=False),
@@ -1819,7 +1904,7 @@ def _candidate(
     source_id: str,
     signal: dict[str, Any],
     label: str,
-    rationale: str,
+    rationale: RationaleCode,
     score: int,
     review_flags: list[str],
     source_signals: dict[str, Any],
@@ -1833,7 +1918,7 @@ def _candidate(
         "subject": signal["subject"],
         "topicId": signal["topicId"],
         "label": label,
-        "rationale": rationale,
+        **_rationale(rationale),
         "confidence": _confidence_bucket(score),
         "freshness": {
             "status": freshness.get("status", "unknown"),
