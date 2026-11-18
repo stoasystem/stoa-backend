@@ -118,7 +118,7 @@ $1/2 + 1/3 \\neq 2/5$"). Give "text" the sentence and \
 notice they do not know), written as these English codes whatever language you answer in; null \
 when none of the four clearly fits. Give 1 or 2 after a new \
 question; leave the list empty after a follow-up, when you reject a question outside {{subject}}, \
-and when the question has no typical mistake (a greeting, a wish to go somewhere on the star map). \
+and when the question has no typical mistake (a greeting, a wish to practise or review a topic). \
 Never more than {COMMON_MISTAKE_COUNT}, never two that say the same thing. When the student asks \
 beside an exercise and its practice context lists "recentMistakes", make the first one explain \
 what went wrong in the student's own wrong answer, preferring one to this very exercise (the same \
