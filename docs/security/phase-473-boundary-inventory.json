@@ -679,6 +679,43 @@
     {
       "alias_chain": [
         "raw_response",
+        "_parse_ai_response"
+      ],
+      "body_operation": null,
+      "boundary_id": "1c32e6fcaf6fe7f0c0bbeace",
+      "client_call": "bedrock.invoke_model.Body.read",
+      "consumed_field_path": "quick_replies",
+      "decision_ids": [
+        "D-03",
+        "D-05",
+        "D-10",
+        "D-17"
+      ],
+      "expected_type": "list[str]",
+      "lower_fake_target": "src/stoa/services/ai_service.py:bedrock.invoke_model.Body",
+      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
+      "named_parser": "_parse_ai_response",
+      "requirement_ids": [
+        "V9PRIV-01",
+        "V9PRIV-02",
+        "V9PRIV-03"
+      ],
+      "source": {
+        "file": "src/stoa/services/ai_service.py",
+        "normalized_ast_sha256": "8b49b1440f0b45356776e056cd33c2db3fa67dfc89e8320ac685abf0ec021c2c",
+        "span": [
+          151,
+          175
+        ],
+        "symbol": "_parse_ai_response"
+      },
+      "strict_validator": "closed_ai_projection",
+      "tainted_response_root": "raw_response",
+      "trust_direction": "untrusted_to_application"
+    },
+    {
+      "alias_chain": [
+        "raw_response",
         "load_private_store_seal"
       ],
       "body_operation": null,
@@ -2999,7 +3036,7 @@
       ]
     },
     {
-      "boundary_count": 3,
+      "boundary_count": 4,
       "file": "src/stoa/services/ai_service.py",
       "symbol_digests": [
         "8b49b1440f0b45356776e056cd33c2db3fa67dfc89e8320ac685abf0ec021c2c"

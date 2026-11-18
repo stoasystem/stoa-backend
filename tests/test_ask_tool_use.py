@@ -82,10 +82,22 @@ def test_the_tool_asks_for_every_section_of_an_answer() -> None:
 
     assert set(schema["required"]) == {
         "language", "steps", "answer", "hints", "similar_exercises",
-        "knowledge_points", "suggest_teacher",
+        "knowledge_points", "suggest_teacher", "quick_replies",
     }
     assert schema["additionalProperties"] is False
     assert "target_unit_id" not in schema["properties"]
+
+
+def test_the_quick_replies_are_texts_with_no_constraint_beyond_those_already_used() -> None:
+    # #430: the schema only uses what the rest of it already does; how many
+    # there may be and how long each is are the checks' to decide.
+    schema = ask_answer.answer_tool(star_map=False).input_schema
+    quick = schema["properties"]["quick_replies"]
+
+    assert {key: value for key, value in quick.items() if key != "description"} == {
+        "type": "array", "items": {"type": "string"},
+    }
+    assert quick == {**schema["properties"]["steps"], "description": quick["description"]}
 
 
 def test_with_a_star_map_the_tool_also_takes_the_star_to_go_to() -> None:
