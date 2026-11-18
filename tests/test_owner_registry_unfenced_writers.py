@@ -176,6 +176,8 @@ REVIEWED: dict[str, str] = {
     "src/stoa/services/ask_question/_store.py::record_message_generation_context": "existing_partition",
     "src/stoa/services/ask_question/_store.py::release_claim_lease": "existing_partition",
     "src/stoa/services/ask_question/_store.py::reopen_failed_message_command": "existing_partition",
+    # The generation sweep's place in the table: one control row naming no account.
+    "src/stoa/services/ask_question/_store.py::store_generation_sweep_place": "not_deletion_data",
     "src/stoa/services/learning_session/_store.py::retitle_conversation": "existing_partition",
     "src/stoa/services/uploads/_store.py::_apply": "existing_partition",
     "src/stoa/services/uploads/_store.py::_cleanup_update": "existing_partition",
