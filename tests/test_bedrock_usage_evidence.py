@@ -38,7 +38,7 @@ def _ask(model: FakeAdapter) -> ai_service.AIProviderResult[dict]:
         deadline=time.monotonic() + 90,
         correlation_id="server-correlation",
     )
-    return ai_service.provider_result(result, effect_id=EFFECT_ID)
+    return ask_answer.provider_result(result, effect_id=EFFECT_ID)
 
 
 _TOOL_INPUT = {

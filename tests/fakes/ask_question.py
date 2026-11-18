@@ -45,7 +45,6 @@ from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import (
-    ai_service,
     allowance_service,
     ask_answer,
     ask_question,
@@ -555,7 +554,7 @@ def _provider(*, text: str, stop_reason: str) -> FakeModel:
 def _ask_admitted(admission: Any) -> Any:
     """Ask the installed model for an answer under `admission`, as `ask_answer` does.
 
-    Returns the answer as `ai_service` reads it; raises its `AIInvocationFailure`.
+    Returns the answer as `ask_answer` reads it; raises `AIInvocationFailure`.
     """
     result = model_call.call(
         system="Answer the question.",
@@ -567,7 +566,7 @@ def _ask_admitted(admission: Any) -> Any:
         admission=admission,
         on_partial=lambda _partial: None,
     )
-    return ai_service.provider_result(result, effect_id=admission.effect_id)
+    return ask_answer.provider_result(result, effect_id=admission.effect_id)
 
 
 def _run_message_command(

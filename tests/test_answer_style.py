@@ -320,14 +320,12 @@ def _system_prompt(
 
 def _base_prompt(language: str = "de") -> str:
     """The system prompt as it is built without any style: the pre-#314 text."""
-    from stoa.services import ai_service
-
     return ask_answer.SYSTEM_PROMPT.format(
         subject="math",
         subject_context=learning_profile_service.subject_prompt_context("math"),
         grade=ask_answer.grade_for_prompt("grade_7_secondary", language),
         language=language,
-        language_name=ai_service.language_name(language),
+        language_name=ask_answer.language_name(language),
     )
 
 

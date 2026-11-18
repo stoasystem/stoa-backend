@@ -377,18 +377,18 @@ def read_reply(
 @contextmanager
 def poisoned(poison: str | None) -> Iterator[None]:
     """Apply one poisoning to the Ask prompt in this process, and undo it after."""
-    from stoa.services import ai_service, ask_answer
+    from stoa.services import ask_answer
 
     if poison is None:
         yield
         return
     if poison == "language-german":
-        original = ai_service.language_name
-        ai_service.language_name = lambda language: ai_service.DEFAULT_LANGUAGE_NAME
+        original = ask_answer.language_name
+        ask_answer.language_name = lambda language: ask_answer.DEFAULT_LANGUAGE_NAME
         try:
             yield
         finally:
-            ai_service.language_name = original
+            ask_answer.language_name = original
         return
     if poison == "pre-e1":
         original_prompt = ask_answer.SYSTEM_PROMPT
@@ -424,26 +424,27 @@ def capturing_raw_failures(enabled: bool) -> Iterator[RawFailures]:
     Production logs only the size of an unparseable reply; an evaluation of a
     prompt change needs the text to see why. Undone after the run.
     """
-    from stoa.services import ai_service
+    from stoa.services import ask_answer
+    from stoa.services.ai_service import AIInvocationFailure
 
     raw = RawFailures()
     if not enabled:
         yield raw
         return
-    original = ai_service._parse_ai_response
+    original = ask_answer._parse_ai_response
 
     def parse(text: str) -> dict:
         try:
             return original(text)
-        except ai_service.AIInvocationFailure:
+        except AIInvocationFailure:
             raw.last = text
             raise
 
-    ai_service._parse_ai_response = parse
+    ask_answer._parse_ai_response = parse
     try:
         yield raw
     finally:
-        ai_service._parse_ai_response = original
+        ask_answer._parse_ai_response = original
 
 
 def estimate_cost(calls: int) -> dict[str, float]:
