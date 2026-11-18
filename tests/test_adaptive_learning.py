@@ -395,8 +395,8 @@ def test_adaptive_sequencing_ranks_reviewed_drafts_and_exposes_safe_signals(monk
     _install_learning_sources(monkeypatch)
     monkeypatch.setattr(
         adaptive_learning_service.curriculum_service,
-        "list_exercises",
-        lambda **kwargs: {
+        "topic_exercise_reader",
+        lambda **kwargs: lambda _subject, _topic: {
             "items": [
                 {
                     "id": "challenge-1",
@@ -407,7 +407,7 @@ def test_adaptive_sequencing_ranks_reviewed_drafts_and_exposes_safe_signals(monk
                 }
             ],
             "count": 1,
-        },
+        }["items"],
     )
     monkeypatch.setattr(
         adaptive_learning_service.ai_teacher_tools_repo,
@@ -469,8 +469,8 @@ def test_adaptive_sequencing_suppresses_completed_exact_sources(monkeypatch):
     }
     monkeypatch.setattr(
         adaptive_learning_service.curriculum_service,
-        "list_exercises",
-        lambda **kwargs: {
+        "topic_exercise_reader",
+        lambda **kwargs: lambda _subject, _topic: {
             "items": [
                 {
                     "id": "challenge-1",
@@ -488,7 +488,7 @@ def test_adaptive_sequencing_suppresses_completed_exact_sources(monkeypatch):
                 },
             ],
             "count": 2,
-        },
+        }["items"],
     )
     monkeypatch.setattr(adaptive_learning_service.ai_teacher_tools_repo, "list_drafts", lambda **kwargs: [])
 
@@ -507,8 +507,8 @@ def test_assignment_automation_preview_selects_policy_bounded_candidates(monkeyp
     _install_learning_sources(monkeypatch)
     monkeypatch.setattr(
         adaptive_learning_service.curriculum_service,
-        "list_exercises",
-        lambda **kwargs: {
+        "topic_exercise_reader",
+        lambda **kwargs: lambda _subject, _topic: {
             "items": [
                 {
                     "id": "challenge-1",
@@ -519,7 +519,7 @@ def test_assignment_automation_preview_selects_policy_bounded_candidates(monkeyp
                 }
             ],
             "count": 1,
-        },
+        }["items"],
     )
     monkeypatch.setattr(
         adaptive_learning_service.ai_teacher_tools_repo,
@@ -570,7 +570,7 @@ def test_assignment_automation_preview_selects_policy_bounded_candidates(monkeyp
 def test_assignment_automation_preview_refuses_paused_policy(monkeypatch):
     _install_memory_repo(monkeypatch)
     _install_learning_sources(monkeypatch)
-    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
+    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "topic_exercise_reader", lambda **kwargs: lambda *_a: [])
     monkeypatch.setattr(adaptive_learning_service.ai_teacher_tools_repo, "list_drafts", lambda **kwargs: [])
 
     response = _app({"sub": "admin-1", "role": "admin"}).post(
@@ -596,7 +596,7 @@ def test_assignment_automation_preview_refuses_paused_policy(monkeypatch):
 def test_assignment_automation_preview_refuses_out_of_scope_student(monkeypatch):
     _install_memory_repo(monkeypatch)
     _install_learning_sources(monkeypatch)
-    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
+    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "topic_exercise_reader", lambda **kwargs: lambda *_a: [])
     monkeypatch.setattr(adaptive_learning_service.ai_teacher_tools_repo, "list_drafts", lambda **kwargs: [])
 
     response = _app({"sub": "admin-1", "role": "admin"}).post(
@@ -642,7 +642,7 @@ def test_assignment_automation_preview_rejects_unsupported_policy_values(monkeyp
 def test_assignment_automation_execute_creates_assignments_idempotently(monkeypatch):
     _, assignments = _install_memory_repo(monkeypatch)
     _install_learning_sources(monkeypatch)
-    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
+    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "topic_exercise_reader", lambda **kwargs: lambda *_a: [])
     monkeypatch.setattr(
         adaptive_learning_service.ai_teacher_tools_repo,
         "list_drafts",
@@ -765,7 +765,7 @@ def test_assignment_automation_execute_returns_partial_batch_results(monkeypatch
         },
     )
     fake_evidence.install(monkeypatch)
-    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
+    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "topic_exercise_reader", lambda **kwargs: lambda *_a: [])
     monkeypatch.setattr(
         adaptive_learning_service.ai_teacher_tools_repo,
         "list_drafts",
@@ -851,7 +851,7 @@ def test_assignment_automation_execute_returns_partial_batch_results(monkeypatch
 def test_assignment_automation_execute_rejects_stale_or_forged_candidates(monkeypatch):
     _install_memory_repo(monkeypatch)
     _install_learning_sources(monkeypatch)
-    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
+    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "topic_exercise_reader", lambda **kwargs: lambda *_a: [])
     monkeypatch.setattr(
         adaptive_learning_service.ai_teacher_tools_repo,
         "list_drafts",
@@ -938,7 +938,7 @@ def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibi
         },
     )
     fake_evidence.install(monkeypatch)
-    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
+    monkeypatch.setattr(adaptive_learning_service.curriculum_service, "topic_exercise_reader", lambda **kwargs: lambda *_a: [])
     monkeypatch.setattr(
         adaptive_learning_service.ai_teacher_tools_repo,
         "list_drafts",

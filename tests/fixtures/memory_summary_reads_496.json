@@ -1,0 +1,2987 @@
+{
+ "assignments_student": {
+  "count": 2,
+  "items": [
+   {
+    "archivedAt": null,
+    "assignedAt": null,
+    "assignmentId": "assignment-1",
+    "completedAt": null,
+    "completionResult": null,
+    "createdAt": "2026-11-15T09:00:00+00:00",
+    "createdBy": "teacher-1",
+    "createdByRole": "teacher",
+    "dueAt": null,
+    "exerciseId": "geometrie-l1-c1",
+    "items": [
+     {
+      "difficulty": "practice",
+      "estimatedMinutes": "5",
+      "id": "geometrie-l1-c1",
+      "lessonId": "geometrie-l1",
+      "prompt": "Ein Rechteck hat die Seiten a = 8 cm und b = 5 cm. Berechne den Umfang in cm.",
+      "rolloutState": "active",
+      "skills": [
+       "geometrie-umfang-rechteck"
+      ],
+      "source": "practice_backfill",
+      "subjectId": "math",
+      "topicId": "geometrie",
+      "type": "text_input"
+     }
+    ],
+    "lessonId": "geometrie-l1",
+    "locale": {
+     "canonicalValuesStable": true,
+     "contentLanguage": "de",
+     "effectiveLocale": "de",
+     "supportedLocales": [
+      "de",
+      "en",
+      "fr",
+      "it"
+     ]
+    },
+    "note": null,
+    "rationale": "Assigned from reviewed curriculum exercise.",
+    "reviewed": true,
+    "sequencingFeedback": null,
+    "skippedAt": null,
+    "sourceId": "geometrie-l1-c1",
+    "sourceType": "curriculum_exercise",
+    "startedAt": null,
+    "status": "recommended",
+    "studentAnswer": null,
+    "studentId": "student-1",
+    "subject": "math",
+    "title": "Ein Rechteck hat die Seiten a = 8 cm und b = 5 cm. Berechne den Umfang in cm.",
+    "topicIds": [
+     "geometrie"
+    ],
+    "updatedAt": "2026-11-15T09:00:00+00:00"
+   },
+   {
+    "archivedAt": null,
+    "assignedAt": "2026-11-14T09:00:00+00:00",
+    "assignmentId": "assignment-2",
+    "completedAt": null,
+    "completionResult": null,
+    "createdAt": "2026-11-14T09:00:00+00:00",
+    "createdBy": "teacher-1",
+    "createdByRole": "teacher",
+    "dueAt": null,
+    "exerciseId": "brueche-l1-c1",
+    "items": [
+     {
+      "choices": [
+       "1/2",
+       "3/4",
+       "2/3",
+       "4/6"
+      ],
+      "difficulty": "practice",
+      "estimatedMinutes": "5",
+      "id": "brueche-l1-c1",
+      "lessonId": "brueche-l1",
+      "prompt": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+      "rolloutState": "active",
+      "skills": [
+       "brueche-kuerzen"
+      ],
+      "source": "practice_backfill",
+      "subjectId": "math",
+      "topicId": "brueche",
+      "type": "multiple_choice"
+     }
+    ],
+    "lessonId": "brueche-l1",
+    "locale": {
+     "canonicalValuesStable": true,
+     "contentLanguage": "de",
+     "effectiveLocale": "de",
+     "supportedLocales": [
+      "de",
+      "en",
+      "fr",
+      "it"
+     ]
+    },
+    "note": null,
+    "rationale": "Assigned from reviewed curriculum exercise.",
+    "reviewed": true,
+    "sequencingFeedback": null,
+    "skippedAt": null,
+    "sourceId": "brueche-l1-c1",
+    "sourceType": "curriculum_exercise",
+    "startedAt": null,
+    "status": "assigned",
+    "studentAnswer": null,
+    "studentId": "student-1",
+    "subject": "math",
+    "title": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "topicIds": [
+     "brueche"
+    ],
+    "updatedAt": "2026-11-14T09:00:00+00:00"
+   }
+  ],
+  "locale": {
+   "canonicalValuesStable": true,
+   "contentLanguage": "de",
+   "effectiveLocale": "de",
+   "supportedLocales": [
+    "de",
+    "en",
+    "fr",
+    "it"
+   ]
+  }
+ },
+ "assignments_student_assigned": {
+  "count": 1,
+  "items": [
+   {
+    "archivedAt": null,
+    "assignedAt": "2026-11-14T09:00:00+00:00",
+    "assignmentId": "assignment-2",
+    "completedAt": null,
+    "completionResult": null,
+    "createdAt": "2026-11-14T09:00:00+00:00",
+    "createdBy": "teacher-1",
+    "createdByRole": "teacher",
+    "dueAt": null,
+    "exerciseId": "brueche-l1-c1",
+    "items": [
+     {
+      "choices": [
+       "1/2",
+       "3/4",
+       "2/3",
+       "4/6"
+      ],
+      "difficulty": "practice",
+      "estimatedMinutes": "5",
+      "id": "brueche-l1-c1",
+      "lessonId": "brueche-l1",
+      "prompt": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+      "rolloutState": "active",
+      "skills": [
+       "brueche-kuerzen"
+      ],
+      "source": "practice_backfill",
+      "subjectId": "math",
+      "topicId": "brueche",
+      "type": "multiple_choice"
+     }
+    ],
+    "lessonId": "brueche-l1",
+    "locale": {
+     "canonicalValuesStable": true,
+     "contentLanguage": "de",
+     "effectiveLocale": "de",
+     "supportedLocales": [
+      "de",
+      "en",
+      "fr",
+      "it"
+     ]
+    },
+    "note": null,
+    "rationale": "Assigned from reviewed curriculum exercise.",
+    "reviewed": true,
+    "sequencingFeedback": null,
+    "skippedAt": null,
+    "sourceId": "brueche-l1-c1",
+    "sourceType": "curriculum_exercise",
+    "startedAt": null,
+    "status": "assigned",
+    "studentAnswer": null,
+    "studentId": "student-1",
+    "subject": "math",
+    "title": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "topicIds": [
+     "brueche"
+    ],
+    "updatedAt": "2026-11-14T09:00:00+00:00"
+   }
+  ],
+  "locale": {
+   "canonicalValuesStable": true,
+   "contentLanguage": "de",
+   "effectiveLocale": "de",
+   "supportedLocales": [
+    "de",
+    "en",
+    "fr",
+    "it"
+   ]
+  }
+ },
+ "assignments_teacher": {
+  "count": 2,
+  "items": [
+   {
+    "answerKey": [
+     {
+      "answer": "26",
+      "exerciseId": "geometrie-l1-c1"
+     }
+    ],
+    "archivedAt": null,
+    "assignedAt": null,
+    "assignmentId": "assignment-1",
+    "completedAt": null,
+    "completionResult": null,
+    "createdAt": "2026-11-15T09:00:00+00:00",
+    "createdBy": "teacher-1",
+    "createdByRole": "teacher",
+    "dueAt": null,
+    "exerciseId": "geometrie-l1-c1",
+    "items": [
+     {
+      "difficulty": "practice",
+      "estimatedMinutes": "5",
+      "id": "geometrie-l1-c1",
+      "lessonId": "geometrie-l1",
+      "prompt": "Ein Rechteck hat die Seiten a = 8 cm und b = 5 cm. Berechne den Umfang in cm.",
+      "rolloutState": "active",
+      "skills": [
+       "geometrie-umfang-rechteck"
+      ],
+      "source": "practice_backfill",
+      "subjectId": "math",
+      "topicId": "geometrie",
+      "type": "text_input"
+     }
+    ],
+    "lessonId": "geometrie-l1",
+    "locale": {
+     "canonicalValuesStable": true,
+     "contentLanguage": "de",
+     "effectiveLocale": "de",
+     "supportedLocales": [
+      "de",
+      "en",
+      "fr",
+      "it"
+     ]
+    },
+    "note": null,
+    "rationale": "Assigned from reviewed curriculum exercise.",
+    "reviewed": true,
+    "sequencingFeedback": null,
+    "skippedAt": null,
+    "sourceId": "geometrie-l1-c1",
+    "sourceType": "curriculum_exercise",
+    "startedAt": null,
+    "status": "recommended",
+    "studentAnswer": null,
+    "studentId": "student-1",
+    "subject": "math",
+    "title": "Ein Rechteck hat die Seiten a = 8 cm und b = 5 cm. Berechne den Umfang in cm.",
+    "topicIds": [
+     "geometrie"
+    ],
+    "updatedAt": "2026-11-15T09:00:00+00:00"
+   },
+   {
+    "answerKey": [
+     {
+      "answer": "3/4",
+      "exerciseId": "brueche-l1-c1"
+     }
+    ],
+    "archivedAt": null,
+    "assignedAt": "2026-11-14T09:00:00+00:00",
+    "assignmentId": "assignment-2",
+    "completedAt": null,
+    "completionResult": null,
+    "createdAt": "2026-11-14T09:00:00+00:00",
+    "createdBy": "teacher-1",
+    "createdByRole": "teacher",
+    "dueAt": null,
+    "exerciseId": "brueche-l1-c1",
+    "items": [
+     {
+      "choices": [
+       "1/2",
+       "3/4",
+       "2/3",
+       "4/6"
+      ],
+      "difficulty": "practice",
+      "estimatedMinutes": "5",
+      "id": "brueche-l1-c1",
+      "lessonId": "brueche-l1",
+      "prompt": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+      "rolloutState": "active",
+      "skills": [
+       "brueche-kuerzen"
+      ],
+      "source": "practice_backfill",
+      "subjectId": "math",
+      "topicId": "brueche",
+      "type": "multiple_choice"
+     }
+    ],
+    "lessonId": "brueche-l1",
+    "locale": {
+     "canonicalValuesStable": true,
+     "contentLanguage": "de",
+     "effectiveLocale": "de",
+     "supportedLocales": [
+      "de",
+      "en",
+      "fr",
+      "it"
+     ]
+    },
+    "note": null,
+    "rationale": "Assigned from reviewed curriculum exercise.",
+    "reviewed": true,
+    "sequencingFeedback": null,
+    "skippedAt": null,
+    "sourceId": "brueche-l1-c1",
+    "sourceType": "curriculum_exercise",
+    "startedAt": null,
+    "status": "assigned",
+    "studentAnswer": null,
+    "studentId": "student-1",
+    "subject": "math",
+    "title": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "topicIds": [
+     "brueche"
+    ],
+    "updatedAt": "2026-11-14T09:00:00+00:00"
+   }
+  ],
+  "locale": {
+   "canonicalValuesStable": true,
+   "contentLanguage": "de",
+   "effectiveLocale": "de",
+   "supportedLocales": [
+    "de",
+    "en",
+    "fr",
+    "it"
+   ]
+  }
+ },
+ "automation_preview": {
+  "autonomousDecision": false,
+  "batchId": "batch-294b06c49d8f",
+  "createdAt": "2026-11-18T12:00:00+00:00",
+  "createdBy": "teacher-1",
+  "locale": {
+   "canonicalValuesStable": true,
+   "contentLanguage": "de",
+   "effectiveLocale": "de",
+   "supportedLocales": [
+    "de",
+    "en",
+    "fr",
+    "it"
+   ]
+  },
+  "policy": {
+   "autonomyLevel": "suggest_only",
+   "confidenceThreshold": "medium",
+   "createdAt": "2026-11-18T12:00:00+00:00",
+   "createdBy": "teacher-1",
+   "deliveryMode": "recommended",
+   "dueInDays": 7,
+   "freshnessDays": 14,
+   "maxAssignmentsPerStudent": 3,
+   "name": "Controlled assignment automation",
+   "pausedReason": null,
+   "policyId": "policy-student-1",
+   "sourceTypes": [
+    "ai_draft",
+    "curriculum_exercise"
+   ],
+   "status": "active",
+   "studentIds": [
+    "student-1"
+   ],
+   "subjectIds": [],
+   "targetStudentId": "student-1",
+   "topicIds": [],
+   "updatedAt": "2026-11-18T12:00:00+00:00"
+  },
+  "policyId": "policy-student-1",
+  "refused": [
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:gleichungen-l1-c2",
+    "confidence": "medium",
+    "dueAt": "2026-11-25T12:00:00+00:00",
+    "expectedImpact": "Use a published curriculum exercise to reinforce the recommended topic.",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "proposedStatus": "recommended",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "refusalCode": "duplicate_or_active",
+    "refusalReason": "Candidate duplicates active, completed, or archived assignment work.",
+    "reviewRequired": true,
+    "reviewStatus": "reviewed_source",
+    "sourceId": "gleichungen-l1-c2",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "title": "Löse: 4 · x = 56. Was ist x?",
+    "topicId": "gleichungen",
+    "topicIds": [
+     "gleichungen"
+    ],
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l0-c41",
+    "confidence": "medium",
+    "dueAt": "2026-11-25T12:00:00+00:00",
+    "expectedImpact": "Use a published curriculum exercise to reinforce the recommended topic.",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "proposedStatus": "recommended",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "refusalCode": "duplicate_or_active",
+    "refusalReason": "Candidate duplicates active, completed, or archived assignment work.",
+    "reviewRequired": true,
+    "reviewStatus": "reviewed_source",
+    "sourceId": "kb-mathematics-l0-c41",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "title": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "topicId": "zahlen",
+    "topicIds": [
+     "zahlen"
+    ],
+    "type": "curriculum_exercise"
+   }
+  ],
+  "reviewRequired": true,
+  "selected": [
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:gleichungen-l1-c1",
+    "confidence": "medium",
+    "dueAt": "2026-11-25T12:00:00+00:00",
+    "expectedImpact": "Use a published curriculum exercise to reinforce the recommended topic.",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "proposedStatus": "recommended",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewRequired": true,
+    "reviewStatus": "reviewed_source",
+    "sourceId": "gleichungen-l1-c1",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "title": "Löse: x + 15 = 42. Was ist x?",
+    "topicId": "gleichungen",
+    "topicIds": [
+     "gleichungen"
+    ],
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l0-c0",
+    "confidence": "medium",
+    "dueAt": "2026-11-25T12:00:00+00:00",
+    "expectedImpact": "Use a published curriculum exercise to reinforce the recommended topic.",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "proposedStatus": "recommended",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewRequired": true,
+    "reviewStatus": "reviewed_source",
+    "sourceId": "kb-mathematics-l0-c0",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "title": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "topicId": "zahlen",
+    "topicIds": [
+     "zahlen"
+    ],
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l12-c12",
+    "confidence": "medium",
+    "dueAt": "2026-11-25T12:00:00+00:00",
+    "expectedImpact": "Use a published curriculum exercise to reinforce the recommended topic.",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "proposedStatus": "recommended",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewRequired": true,
+    "reviewStatus": "reviewed_source",
+    "sourceId": "kb-mathematics-l12-c12",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "title": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "topicId": "prozentrechnung",
+    "topicIds": [
+     "prozentrechnung"
+    ],
+    "type": "curriculum_exercise"
+   }
+  ],
+  "status": "preview",
+  "studentId": "student-1",
+  "summary": {
+   "duplicateCount": 2,
+   "lowConfidenceCount": 0,
+   "refusalCounts": {
+    "duplicate_or_active": 2
+   },
+   "refusedCount": 2,
+   "reviewRequiredCount": 3,
+   "selectedCount": 3,
+   "staleCount": 0,
+   "topTopics": [
+    "gleichungen",
+    "zahlen",
+    "prozentrechnung"
+   ]
+  }
+ },
+ "memory_student_all": {
+  "freshness": {
+   "staleCount": 0,
+   "status": "fresh"
+  },
+  "locale": {
+   "canonicalValuesStable": true,
+   "contentLanguage": "de",
+   "effectiveLocale": "de",
+   "supportedLocales": [
+    "de",
+    "en",
+    "fr",
+    "it"
+   ]
+  },
+  "memorySnapshots": [
+   {
+    "freshness": {
+     "ageDays": 7,
+     "lastEvidenceAt": "2026-11-11T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review brueche with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "brueche"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "brueche",
+    "weak_topics": [
+     "brueche"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 3,
+     "lastEvidenceAt": "2026-11-15T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review kopfrechnen-im-alltag with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "kopfrechnen-im-alltag"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "kopfrechnen-im-alltag",
+    "weak_topics": [
+     "kopfrechnen-im-alltag"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 4,
+     "lastEvidenceAt": "2026-11-14T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review kr-fte with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "kr-fte"
+    ],
+    "student_id": "student-1",
+    "subject": "physics",
+    "teacher_notes": [],
+    "topic_id": "kr-fte",
+    "weak_topics": [
+     "kr-fte"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 4,
+     "lastEvidenceAt": "2026-11-14T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review energie with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "energie"
+    ],
+    "student_id": "student-1",
+    "subject": "physics",
+    "teacher_notes": [],
+    "topic_id": "energie",
+    "weak_topics": [
+     "energie"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 5,
+     "lastEvidenceAt": "2026-11-13T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review groessen with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "groessen"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "groessen",
+    "weak_topics": [
+     "groessen"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 5,
+     "lastEvidenceAt": "2026-11-13T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review daten with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "daten"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "daten",
+    "weak_topics": [
+     "daten"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 6,
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review prozentrechnung with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "prozentrechnung"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "prozentrechnung",
+    "weak_topics": [
+     "prozentrechnung"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 6,
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review zahlen with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "zahlen"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "zahlen",
+    "weak_topics": [
+     "zahlen"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 7,
+     "lastEvidenceAt": "2026-11-11T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review geometrie with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "geometrie"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "geometrie",
+    "weak_topics": [
+     "geometrie"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 8,
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review gleichungen with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "gleichungen"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "gleichungen",
+    "weak_topics": [
+     "gleichungen"
+    ]
+   }
+  ],
+  "recommendations": [
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:gleichungen-l1-c1",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Löse: x + 15 = 42. Was ist x?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "gleichungen-l1-c1",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "gleichungen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:gleichungen-l1-c2",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Löse: 4 · x = 56. Was ist x?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "gleichungen-l1-c2",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "gleichungen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l0-c0",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "kb-mathematics-l0-c0",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "zahlen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l0-c41",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "kb-mathematics-l0-c41",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "zahlen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l12-c12",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "kb-mathematics-l12-c12",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "prozentrechnung",
+    "type": "curriculum_exercise"
+   }
+  ],
+  "roleView": "student",
+  "sequencingSummary": {
+   "activeAssignments": 2,
+   "archivedAssignments": 0,
+   "completedAssignments": 0,
+   "explanation": "A reviewed curriculum exercise is available for this weak topic.",
+   "recommendedCount": 5,
+   "skippedAssignments": 0,
+   "topCandidateType": "curriculum_exercise",
+   "topConfidence": "medium",
+   "topTopicId": "gleichungen"
+  },
+  "strengthTopics": [],
+  "studentId": "student-1",
+  "subjectActivity": [
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "Mathematics",
+    "questionCount": 0,
+    "rolloutState": "active",
+    "subject": "math",
+    "teacherEscalationCount": 0
+   },
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "Physics",
+    "questionCount": 0,
+    "rolloutState": "foundation",
+    "subject": "physics",
+    "teacherEscalationCount": 0
+   },
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "German",
+    "questionCount": 0,
+    "rolloutState": "foundation",
+    "subject": "german",
+    "teacherEscalationCount": 0
+   },
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "English",
+    "questionCount": 0,
+    "rolloutState": "foundation",
+    "subject": "english",
+    "teacherEscalationCount": 0
+   }
+  ],
+  "subjects": [
+   {
+    "id": "math",
+    "label": "Mathematics",
+    "rolloutState": "active"
+   },
+   {
+    "id": "physics",
+    "label": "Physics",
+    "rolloutState": "foundation"
+   },
+   {
+    "id": "german",
+    "label": "German",
+    "rolloutState": "foundation"
+   },
+   {
+    "id": "english",
+    "label": "English",
+    "rolloutState": "foundation"
+   }
+  ],
+  "updatedAt": "2026-11-18T12:00:00+00:00",
+  "weakTopics": [
+   {
+    "count": 2,
+    "evidenceQuestionIds": [],
+    "label": "brueche",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "brueche"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Kopfrechnen im Alltag",
+    "latestEvidenceAt": "2026-11-15T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "kopfrechnen-im-alltag"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "daten",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "daten"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "geometrie",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "geometrie"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "gleichungen",
+    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "gleichungen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "groessen",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "groessen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "prozentrechnung",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "prozentrechnung"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "zahlen",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "zahlen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Energie",
+    "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "subject": "physics",
+    "topicId": "energie"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Kräfte",
+    "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "subject": "physics",
+    "topicId": "kr-fte"
+   }
+  ]
+ },
+ "memory_student_math": {
+  "freshness": {
+   "staleCount": 0,
+   "status": "fresh"
+  },
+  "locale": {
+   "canonicalValuesStable": true,
+   "contentLanguage": "de",
+   "effectiveLocale": "de",
+   "supportedLocales": [
+    "de",
+    "en",
+    "fr",
+    "it"
+   ]
+  },
+  "memorySnapshots": [
+   {
+    "freshness": {
+     "ageDays": 7,
+     "lastEvidenceAt": "2026-11-11T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review brueche with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "brueche"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "brueche",
+    "weak_topics": [
+     "brueche"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 3,
+     "lastEvidenceAt": "2026-11-15T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review kopfrechnen-im-alltag with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "kopfrechnen-im-alltag"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "kopfrechnen-im-alltag",
+    "weak_topics": [
+     "kopfrechnen-im-alltag"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 5,
+     "lastEvidenceAt": "2026-11-13T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review groessen with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "groessen"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "groessen",
+    "weak_topics": [
+     "groessen"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 5,
+     "lastEvidenceAt": "2026-11-13T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review daten with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "daten"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "daten",
+    "weak_topics": [
+     "daten"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 6,
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review prozentrechnung with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "prozentrechnung"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "prozentrechnung",
+    "weak_topics": [
+     "prozentrechnung"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 6,
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review zahlen with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "zahlen"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "zahlen",
+    "weak_topics": [
+     "zahlen"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 7,
+     "lastEvidenceAt": "2026-11-11T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review geometrie with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "geometrie"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "geometrie",
+    "weak_topics": [
+     "geometrie"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 8,
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review gleichungen with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "gleichungen"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "gleichungen",
+    "weak_topics": [
+     "gleichungen"
+    ]
+   }
+  ],
+  "recommendations": [
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:gleichungen-l1-c1",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Löse: x + 15 = 42. Was ist x?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "gleichungen-l1-c1",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "gleichungen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:gleichungen-l1-c2",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Löse: 4 · x = 56. Was ist x?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "gleichungen-l1-c2",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "gleichungen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l0-c0",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "kb-mathematics-l0-c0",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "zahlen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l0-c41",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "kb-mathematics-l0-c41",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "zahlen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l12-c12",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "kb-mathematics-l12-c12",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "prozentrechnung",
+    "type": "curriculum_exercise"
+   }
+  ],
+  "roleView": "student",
+  "sequencingSummary": {
+   "activeAssignments": 2,
+   "archivedAssignments": 0,
+   "completedAssignments": 0,
+   "explanation": "A reviewed curriculum exercise is available for this weak topic.",
+   "recommendedCount": 5,
+   "skippedAssignments": 0,
+   "topCandidateType": "curriculum_exercise",
+   "topConfidence": "medium",
+   "topTopicId": "gleichungen"
+  },
+  "strengthTopics": [],
+  "studentId": "student-1",
+  "subjectActivity": [
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "Mathematics",
+    "questionCount": 0,
+    "rolloutState": "active",
+    "subject": "math",
+    "teacherEscalationCount": 0
+   },
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "Physics",
+    "questionCount": 0,
+    "rolloutState": "foundation",
+    "subject": "physics",
+    "teacherEscalationCount": 0
+   },
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "German",
+    "questionCount": 0,
+    "rolloutState": "foundation",
+    "subject": "german",
+    "teacherEscalationCount": 0
+   },
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "English",
+    "questionCount": 0,
+    "rolloutState": "foundation",
+    "subject": "english",
+    "teacherEscalationCount": 0
+   }
+  ],
+  "subjects": [
+   {
+    "id": "math",
+    "label": "Mathematics",
+    "rolloutState": "active"
+   },
+   {
+    "id": "physics",
+    "label": "Physics",
+    "rolloutState": "foundation"
+   },
+   {
+    "id": "german",
+    "label": "German",
+    "rolloutState": "foundation"
+   },
+   {
+    "id": "english",
+    "label": "English",
+    "rolloutState": "foundation"
+   }
+  ],
+  "updatedAt": "2026-11-18T12:00:00+00:00",
+  "weakTopics": [
+   {
+    "count": 2,
+    "evidenceQuestionIds": [],
+    "label": "brueche",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "brueche"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Kopfrechnen im Alltag",
+    "latestEvidenceAt": "2026-11-15T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "kopfrechnen-im-alltag"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "daten",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "daten"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "geometrie",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "geometrie"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "gleichungen",
+    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "gleichungen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "groessen",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "groessen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "prozentrechnung",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "prozentrechnung"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "zahlen",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "zahlen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Energie",
+    "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "subject": "physics",
+    "topicId": "energie"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Kräfte",
+    "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "subject": "physics",
+    "topicId": "kr-fte"
+   }
+  ]
+ },
+ "memory_student_physics": {
+  "freshness": {
+   "staleCount": 0,
+   "status": "fresh"
+  },
+  "locale": {
+   "canonicalValuesStable": true,
+   "contentLanguage": "de",
+   "effectiveLocale": "de",
+   "supportedLocales": [
+    "de",
+    "en",
+    "fr",
+    "it"
+   ]
+  },
+  "memorySnapshots": [
+   {
+    "freshness": {
+     "ageDays": 4,
+     "lastEvidenceAt": "2026-11-14T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review kr-fte with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "kr-fte"
+    ],
+    "student_id": "student-1",
+    "subject": "physics",
+    "teacher_notes": [],
+    "topic_id": "kr-fte",
+    "weak_topics": [
+     "kr-fte"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 4,
+     "lastEvidenceAt": "2026-11-14T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review energie with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "energie"
+    ],
+    "student_id": "student-1",
+    "subject": "physics",
+    "teacher_notes": [],
+    "topic_id": "energie",
+    "weak_topics": [
+     "energie"
+    ]
+   }
+  ],
+  "recommendations": [
+   {
+    "autonomousDecision": false,
+    "candidateId": "remediation_topic:physics:energie",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-14T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Energie",
+    "rationale": "Recent learning evidence points to this topic as the next reviewed remediation area.",
+    "reviewFlags": [
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "physics:energie",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": false,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "memory_snapshot",
+    "subject": "physics",
+    "topicId": "energie",
+    "type": "remediation_topic"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "remediation_topic:physics:kr-fte",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-14T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Kräfte",
+    "rationale": "Recent learning evidence points to this topic as the next reviewed remediation area.",
+    "reviewFlags": [
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "physics:kr-fte",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": false,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "memory_snapshot",
+    "subject": "physics",
+    "topicId": "kr-fte",
+    "type": "remediation_topic"
+   }
+  ],
+  "roleView": "student",
+  "sequencingSummary": {
+   "activeAssignments": 2,
+   "archivedAssignments": 0,
+   "completedAssignments": 0,
+   "explanation": "Recent learning evidence points to this topic as the next reviewed remediation area.",
+   "recommendedCount": 2,
+   "skippedAssignments": 0,
+   "topCandidateType": "remediation_topic",
+   "topConfidence": "medium",
+   "topTopicId": "energie"
+  },
+  "strengthTopics": [],
+  "studentId": "student-1",
+  "subjectActivity": [
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "Mathematics",
+    "questionCount": 0,
+    "rolloutState": "active",
+    "subject": "math",
+    "teacherEscalationCount": 0
+   },
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "Physics",
+    "questionCount": 0,
+    "rolloutState": "foundation",
+    "subject": "physics",
+    "teacherEscalationCount": 0
+   },
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "German",
+    "questionCount": 0,
+    "rolloutState": "foundation",
+    "subject": "german",
+    "teacherEscalationCount": 0
+   },
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "English",
+    "questionCount": 0,
+    "rolloutState": "foundation",
+    "subject": "english",
+    "teacherEscalationCount": 0
+   }
+  ],
+  "subjects": [
+   {
+    "id": "math",
+    "label": "Mathematics",
+    "rolloutState": "active"
+   },
+   {
+    "id": "physics",
+    "label": "Physics",
+    "rolloutState": "foundation"
+   },
+   {
+    "id": "german",
+    "label": "German",
+    "rolloutState": "foundation"
+   },
+   {
+    "id": "english",
+    "label": "English",
+    "rolloutState": "foundation"
+   }
+  ],
+  "updatedAt": "2026-11-18T12:00:00+00:00",
+  "weakTopics": [
+   {
+    "count": 2,
+    "evidenceQuestionIds": [],
+    "label": "brueche",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "brueche"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Kopfrechnen im Alltag",
+    "latestEvidenceAt": "2026-11-15T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "kopfrechnen-im-alltag"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "daten",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "daten"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "geometrie",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "geometrie"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "gleichungen",
+    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "gleichungen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "groessen",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "groessen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "prozentrechnung",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "prozentrechnung"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "zahlen",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "zahlen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Energie",
+    "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "subject": "physics",
+    "topicId": "energie"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Kräfte",
+    "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "subject": "physics",
+    "topicId": "kr-fte"
+   }
+  ]
+ },
+ "memory_teacher_math": {
+  "freshness": {
+   "staleCount": 0,
+   "status": "fresh"
+  },
+  "locale": {
+   "canonicalValuesStable": true,
+   "contentLanguage": "de",
+   "effectiveLocale": "de",
+   "supportedLocales": [
+    "de",
+    "en",
+    "fr",
+    "it"
+   ]
+  },
+  "memorySnapshots": [
+   {
+    "freshness": {
+     "ageDays": 7,
+     "lastEvidenceAt": "2026-11-11T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review brueche with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "brueche"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "brueche",
+    "weak_topics": [
+     "brueche"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 3,
+     "lastEvidenceAt": "2026-11-15T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review kopfrechnen-im-alltag with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "kopfrechnen-im-alltag"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "kopfrechnen-im-alltag",
+    "weak_topics": [
+     "kopfrechnen-im-alltag"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 5,
+     "lastEvidenceAt": "2026-11-13T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review groessen with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "groessen"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "groessen",
+    "weak_topics": [
+     "groessen"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 5,
+     "lastEvidenceAt": "2026-11-13T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review daten with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "daten"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "daten",
+    "weak_topics": [
+     "daten"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 6,
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review prozentrechnung with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "prozentrechnung"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "prozentrechnung",
+    "weak_topics": [
+     "prozentrechnung"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 6,
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review zahlen with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "zahlen"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "zahlen",
+    "weak_topics": [
+     "zahlen"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 7,
+     "lastEvidenceAt": "2026-11-11T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review geometrie with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "geometrie"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "geometrie",
+    "weak_topics": [
+     "geometrie"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 8,
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review gleichungen with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "gleichungen"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "gleichungen",
+    "weak_topics": [
+     "gleichungen"
+    ]
+   }
+  ],
+  "recommendations": [
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:gleichungen-l1-c1",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Löse: x + 15 = 42. Was ist x?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "gleichungen-l1-c1",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "gleichungen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:gleichungen-l1-c2",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Löse: 4 · x = 56. Was ist x?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "gleichungen-l1-c2",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "gleichungen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l0-c0",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "kb-mathematics-l0-c0",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "zahlen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l0-c41",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "kb-mathematics-l0-c41",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "zahlen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l12-c12",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "kb-mathematics-l12-c12",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "prozentrechnung",
+    "type": "curriculum_exercise"
+   }
+  ],
+  "roleView": "teacher",
+  "sequencingSummary": {
+   "activeAssignments": 2,
+   "archivedAssignments": 0,
+   "completedAssignments": 0,
+   "explanation": "A reviewed curriculum exercise is available for this weak topic.",
+   "recommendedCount": 5,
+   "skippedAssignments": 0,
+   "topCandidateType": "curriculum_exercise",
+   "topConfidence": "medium",
+   "topTopicId": "gleichungen"
+  },
+  "strengthTopics": [],
+  "studentId": "student-1",
+  "subjectActivity": [
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "Mathematics",
+    "questionCount": 0,
+    "rolloutState": "active",
+    "subject": "math",
+    "teacherEscalationCount": 0
+   },
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "Physics",
+    "questionCount": 0,
+    "rolloutState": "foundation",
+    "subject": "physics",
+    "teacherEscalationCount": 0
+   },
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "German",
+    "questionCount": 0,
+    "rolloutState": "foundation",
+    "subject": "german",
+    "teacherEscalationCount": 0
+   },
+   {
+    "aiResolvedCount": 0,
+    "feedbackAverage": null,
+    "label": "English",
+    "questionCount": 0,
+    "rolloutState": "foundation",
+    "subject": "english",
+    "teacherEscalationCount": 0
+   }
+  ],
+  "subjects": [
+   {
+    "id": "math",
+    "label": "Mathematics",
+    "rolloutState": "active"
+   },
+   {
+    "id": "physics",
+    "label": "Physics",
+    "rolloutState": "foundation"
+   },
+   {
+    "id": "german",
+    "label": "German",
+    "rolloutState": "foundation"
+   },
+   {
+    "id": "english",
+    "label": "English",
+    "rolloutState": "foundation"
+   }
+  ],
+  "updatedAt": "2026-11-18T12:00:00+00:00",
+  "weakTopics": [
+   {
+    "count": 2,
+    "evidenceQuestionIds": [],
+    "label": "brueche",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "brueche"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Kopfrechnen im Alltag",
+    "latestEvidenceAt": "2026-11-15T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "kopfrechnen-im-alltag"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "daten",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "daten"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "geometrie",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "geometrie"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "gleichungen",
+    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "gleichungen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "groessen",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "groessen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "prozentrechnung",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "prozentrechnung"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "zahlen",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "zahlen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Energie",
+    "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "subject": "physics",
+    "topicId": "energie"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Kräfte",
+    "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "subject": "physics",
+    "topicId": "kr-fte"
+   }
+  ]
+ },
+ "parent_progress": {
+  "assignedPracticeCount": 2,
+  "assignments": [
+   {
+    "archivedAt": null,
+    "assignedAt": null,
+    "assignmentId": "assignment-1",
+    "completedAt": null,
+    "completionResult": null,
+    "createdAt": "2026-11-15T09:00:00+00:00",
+    "createdBy": "teacher-1",
+    "createdByRole": "teacher",
+    "dueAt": null,
+    "exerciseId": "geometrie-l1-c1",
+    "items": [
+     {
+      "difficulty": "practice",
+      "estimatedMinutes": "5",
+      "id": "geometrie-l1-c1",
+      "lessonId": "geometrie-l1",
+      "prompt": "Ein Rechteck hat die Seiten a = 8 cm und b = 5 cm. Berechne den Umfang in cm.",
+      "rolloutState": "active",
+      "skills": [
+       "geometrie-umfang-rechteck"
+      ],
+      "source": "practice_backfill",
+      "subjectId": "math",
+      "topicId": "geometrie",
+      "type": "text_input"
+     }
+    ],
+    "lessonId": "geometrie-l1",
+    "locale": {
+     "canonicalValuesStable": true,
+     "contentLanguage": "de",
+     "effectiveLocale": "de",
+     "supportedLocales": [
+      "de",
+      "en",
+      "fr",
+      "it"
+     ]
+    },
+    "note": null,
+    "rationale": "Assigned from reviewed curriculum exercise.",
+    "reviewed": true,
+    "sequencingFeedback": null,
+    "skippedAt": null,
+    "sourceId": "geometrie-l1-c1",
+    "sourceType": "curriculum_exercise",
+    "startedAt": null,
+    "status": "recommended",
+    "studentId": "student-1",
+    "subject": "math",
+    "title": "Ein Rechteck hat die Seiten a = 8 cm und b = 5 cm. Berechne den Umfang in cm.",
+    "topicIds": [
+     "geometrie"
+    ],
+    "updatedAt": "2026-11-15T09:00:00+00:00"
+   },
+   {
+    "archivedAt": null,
+    "assignedAt": "2026-11-14T09:00:00+00:00",
+    "assignmentId": "assignment-2",
+    "completedAt": null,
+    "completionResult": null,
+    "createdAt": "2026-11-14T09:00:00+00:00",
+    "createdBy": "teacher-1",
+    "createdByRole": "teacher",
+    "dueAt": null,
+    "exerciseId": "brueche-l1-c1",
+    "items": [
+     {
+      "choices": [
+       "1/2",
+       "3/4",
+       "2/3",
+       "4/6"
+      ],
+      "difficulty": "practice",
+      "estimatedMinutes": "5",
+      "id": "brueche-l1-c1",
+      "lessonId": "brueche-l1",
+      "prompt": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+      "rolloutState": "active",
+      "skills": [
+       "brueche-kuerzen"
+      ],
+      "source": "practice_backfill",
+      "subjectId": "math",
+      "topicId": "brueche",
+      "type": "multiple_choice"
+     }
+    ],
+    "lessonId": "brueche-l1",
+    "locale": {
+     "canonicalValuesStable": true,
+     "contentLanguage": "de",
+     "effectiveLocale": "de",
+     "supportedLocales": [
+      "de",
+      "en",
+      "fr",
+      "it"
+     ]
+    },
+    "note": null,
+    "rationale": "Assigned from reviewed curriculum exercise.",
+    "reviewed": true,
+    "sequencingFeedback": null,
+    "skippedAt": null,
+    "sourceId": "brueche-l1-c1",
+    "sourceType": "curriculum_exercise",
+    "startedAt": null,
+    "status": "assigned",
+    "studentId": "student-1",
+    "subject": "math",
+    "title": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "topicIds": [
+     "brueche"
+    ],
+    "updatedAt": "2026-11-14T09:00:00+00:00"
+   }
+  ],
+  "completedAssignments": [],
+  "completedPracticeCount": 0,
+  "freshness": {
+   "staleCount": 0,
+   "status": "fresh"
+  },
+  "locale": {
+   "canonicalValuesStable": true,
+   "contentLanguage": "de",
+   "effectiveLocale": "de",
+   "supportedLocales": [
+    "de",
+    "en",
+    "fr",
+    "it"
+   ]
+  },
+  "recommendations": [
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:gleichungen-l1-c1",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Löse: x + 15 = 42. Was ist x?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "gleichungen-l1-c1",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "gleichungen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:gleichungen-l1-c2",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-10T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Löse: 4 · x = 56. Was ist x?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "gleichungen-l1-c2",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "gleichungen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l0-c0",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "kb-mathematics-l0-c0",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "zahlen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l0-c41",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "kb-mathematics-l0-c41",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "zahlen",
+    "type": "curriculum_exercise"
+   },
+   {
+    "autonomousDecision": false,
+    "candidateId": "curriculum_exercise:kb-mathematics-l12-c12",
+    "confidence": "medium",
+    "freshness": {
+     "lastEvidenceAt": "2026-11-12T10:00:00+00:00",
+     "source": "adaptive_sequencing",
+     "status": "fresh"
+    },
+    "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
+    "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "reviewFlags": [
+     "published_curriculum_only",
+     "teacher_review_required"
+    ],
+    "reviewRequired": true,
+    "sourceId": "kb-mathematics-l12-c12",
+    "sourceSignals": {
+     "assignmentStatuses": [],
+     "curriculumExerciseAvailable": true,
+     "curriculumProgressCount": 0,
+     "mistakeAttempts": 0,
+     "reviewedDraftAvailable": false,
+     "weakTopicCount": 1
+    },
+    "sourceType": "curriculum_exercise",
+    "subject": "math",
+    "topicId": "prozentrechnung",
+    "type": "curriculum_exercise"
+   }
+  ],
+  "sequencingSummary": {
+   "activeAssignments": 2,
+   "archivedAssignments": 0,
+   "completedAssignments": 0,
+   "explanation": "A reviewed curriculum exercise is available for this weak topic.",
+   "recommendedCount": 5,
+   "skippedAssignments": 0,
+   "topCandidateType": "curriculum_exercise",
+   "topConfidence": "medium",
+   "topTopicId": "gleichungen"
+  },
+  "studentId": "student-1",
+  "weakAreas": [
+   {
+    "count": 2,
+    "label": "brueche",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "brueche"
+   },
+   {
+    "count": 1,
+    "label": "Kopfrechnen im Alltag",
+    "latestEvidenceAt": "2026-11-15T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "kopfrechnen-im-alltag"
+   },
+   {
+    "count": 1,
+    "label": "daten",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "daten"
+   },
+   {
+    "count": 1,
+    "label": "geometrie",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "geometrie"
+   },
+   {
+    "count": 1,
+    "label": "gleichungen",
+    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "gleichungen"
+   },
+   {
+    "count": 1,
+    "label": "groessen",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "groessen"
+   },
+   {
+    "count": 1,
+    "label": "prozentrechnung",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "prozentrechnung"
+   },
+   {
+    "count": 1,
+    "label": "zahlen",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "subject": "math",
+    "topicId": "zahlen"
+   },
+   {
+    "count": 1,
+    "label": "Energie",
+    "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "subject": "physics",
+    "topicId": "energie"
+   },
+   {
+    "count": 1,
+    "label": "Kräfte",
+    "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "subject": "physics",
+    "topicId": "kr-fte"
+   }
+  ]
+ }
+}
