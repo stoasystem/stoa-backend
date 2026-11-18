@@ -252,7 +252,7 @@ def _plan_includes_teacher_support(plan: str) -> bool:
         budget = allowance_service.plan_allowance_budget(plan, allowance_version=1)
     except ValueError:
         return False
-    return budget.teacher_support_cases > 0
+    return budget.teacher_support_text_cases + budget.teacher_support_classroom_cases > 0
 
 
 class StudentUsagePeriod(BaseModel):

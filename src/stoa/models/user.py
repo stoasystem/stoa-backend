@@ -27,7 +27,7 @@ class SubscriptionTier(str, Enum):
     FREE_TRIAL = "free_trial"
     STUDENT = "student"
     TEACHER_SUPPORTED = "teacher_supported"
-    FAMILY = "family"
+    ONLINE_CLASSROOM = "online_classroom"
 
 
 class Grade(str, Enum):

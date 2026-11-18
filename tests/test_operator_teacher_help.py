@@ -18,9 +18,11 @@ def _in(days: int) -> str:
     return (usage_period.zurich_today(None) + timedelta(days=days)).isoformat()
 
 
-def _spend(table, student_id: str, cases: int) -> None:
-    """Put this week's counter on the table as admission writes it, at `cases`."""
-    scope = allowance._resolve_scope(student_id, table=table)
+def _spend(table, student_id: str, cases: int, *, mode: str = allowance.TEXT) -> None:
+    """Put this week's counter of `mode` on the table as admission writes it, at `cases`."""
+    source = allowance._resolve_scope(student_id, table=table)
+    assert source is not None
+    scope = allowance._for_mode(source, mode)
     assert scope is not None
     week = weekly_counter.zurich_week(datetime.now(UTC))
     operation = weekly_counter.write(
@@ -70,7 +72,15 @@ def test_a_student_who_used_none_has_the_whole_week(student) -> None:
     assert result["resetsAt"]
     assert result["assignedWeeklyCases"] == {
         "weeklyCases": allowance.ASSIGNED_WEEKLY_TEACHER_SUPPORT_CASES,
+        "weeklyClassroomCases": allowance.ASSIGNED_WEEKLY_CLASSROOM_CASES,
         "source": "default",
+    }
+    assert result["classroom"] == {
+        "weeklyCases": allowance.ASSIGNED_WEEKLY_CLASSROOM_CASES,
+        "usedCases": 0,
+        "remainingCases": allowance.ASSIGNED_WEEKLY_CLASSROOM_CASES,
+        "canRequestNow": True,
+        "blockedReasons": [],
     }
     assert result["usagePeriod"]["state"] == "active"
     assert result["canRequestNow"] is True
@@ -95,6 +105,17 @@ def test_a_spent_week_says_why_a_request_would_be_refused(student) -> None:
     assert result["remainingCases"] == 0
     assert result["canRequestNow"] is False
     assert result["blockedReasons"] == ["teacher_support_allowance_exhausted"]
+
+
+def test_spent_classrooms_are_counted_apart_from_text_answers(student) -> None:
+    _spend(student, "student-1", allowance.ASSIGNED_WEEKLY_CLASSROOM_CASES, mode=allowance.CLASSROOM)
+    result = _call("get_teacher_help_allowance", {"accountNumber": "S26-0001"})["result"]
+    assert result["usedCases"] == 0
+    assert result["canRequestNow"] is True
+    assert result["classroom"]["usedCases"] == allowance.ASSIGNED_WEEKLY_CLASSROOM_CASES
+    assert result["classroom"]["remainingCases"] == 0
+    assert result["classroom"]["canRequestNow"] is False
+    assert result["classroom"]["blockedReasons"] == ["teacher_support_allowance_exhausted"]
 
 
 def test_an_ended_usage_period_is_named_beside_the_count(fake_table) -> None:

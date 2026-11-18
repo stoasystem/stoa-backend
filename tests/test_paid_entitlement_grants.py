@@ -30,7 +30,7 @@ class _ReadTable:
 
 def _activation_request(
     *,
-    plan: BillingPlanId = BillingPlanId.FAMILY,
+    plan: BillingPlanId = BillingPlanId.ONLINE_CLASSROOM,
     plan_version: int = 2,
     allowance_version: int = 2,
     activation_version: int = 7,
@@ -59,7 +59,7 @@ def _command(beneficiary_ids: tuple[str, ...]) -> dict[str, object]:
         "parent_id": "parent-1",
         "beneficiary_ids": list(beneficiary_ids),
         "provider_subscription_id_digest": _DIGEST,
-        "plan_id": BillingPlanId.FAMILY.value,
+        "plan_id": BillingPlanId.ONLINE_CLASSROOM.value,
         "plan_version": 2,
     }
 
@@ -112,8 +112,7 @@ def _install_active_relationships(
     [
         (BillingPlanId.STUDENT, ("student-1",)),
         (BillingPlanId.TEACHER_SUPPORTED, ("student-1",)),
-        (BillingPlanId.FAMILY, ("student-1",)),
-        (BillingPlanId.FAMILY, ("student-3", "student-1", "student-2")),
+        (BillingPlanId.ONLINE_CLASSROOM, ("student-1",)),
     ],
 )
 def test_validate_beneficiary_selection_accepts_only_sorted_bounded_unique_ids(
@@ -129,12 +128,13 @@ def test_validate_beneficiary_selection_accepts_only_sorted_bounded_unique_ids(
 @pytest.mark.parametrize(
     ("plan", "beneficiaries"),
     [
-        (BillingPlanId.FAMILY, ()),
-        (BillingPlanId.FAMILY, ("s1", "s2", "s3", "s4")),
+        (BillingPlanId.ONLINE_CLASSROOM, ()),
+        # Every plan is for one child (#482 removed the shared Family plan).
+        (BillingPlanId.ONLINE_CLASSROOM, ("s1", "s2")),
         (BillingPlanId.STUDENT, ("s1", "s2")),
         (BillingPlanId.TEACHER_SUPPORTED, ()),
-        (BillingPlanId.FAMILY, ("s1", "s1")),
-        (BillingPlanId.FAMILY, (" s1",)),
+        (BillingPlanId.ONLINE_CLASSROOM, ("s1", "s1")),
+        (BillingPlanId.ONLINE_CLASSROOM, (" s1",)),
     ],
 )
 def test_validate_beneficiary_selection_rejects_zero_four_duplicate_and_malformed(
@@ -145,11 +145,11 @@ def test_validate_beneficiary_selection_rejects_zero_four_duplicate_and_malforme
         paid_entitlement_service.validate_beneficiary_selection(plan, beneficiaries)
 
 
-def test_build_paid_activation_operations_binds_three_exact_current_relationships(
+def test_build_paid_activation_operations_binds_the_exact_current_relationship(
     monkeypatch: pytest.MonkeyPatch,
     link_rows: Any,
 ) -> None:
-    selected = ("student-3", "student-1", "student-2")
+    selected = ("student-1",)
     _install_active_relationships(monkeypatch, link_rows, selected)
 
     built = paid_entitlement_service.build_paid_activation_operations(
@@ -158,11 +158,7 @@ def test_build_paid_activation_operations_binds_three_exact_current_relationship
         table=_ReadTable(),
     )
 
-    assert [item["beneficiary_id"] for item in built.grant_items] == [
-        "student-1",
-        "student-2",
-        "student-3",
-    ]
+    assert [item["beneficiary_id"] for item in built.grant_items] == ["student-1"]
     assert all(item["schema_version"] == "paid_beneficiary_grant.v1" for item in built.grant_items)
     assert all(item["subscription_id_digest"] == _DIGEST for item in built.grant_items)
     assert all(item["grant_version"] == 7 for item in built.grant_items)
@@ -172,7 +168,7 @@ def test_build_paid_activation_operations_binds_three_exact_current_relationship
     assert {
         item["beneficiary_id"]: item["student_account_fence_generation"]
         for item in built.grant_items
-    } == {"student-1": 202, "student-2": 203, "student-3": 201}
+    } == {"student-1": 201}
 
     condition_targets = {
         (
@@ -381,7 +377,7 @@ def test_active_grant_lookup_is_exact_owner_scoped_and_future_child_is_not_grant
                 "beneficiary_id": "student-1",
                 "grant_status": "active",
                 "grant_version": 7,
-                "plan_id": BillingPlanId.FAMILY.value,
+                "plan_id": BillingPlanId.ONLINE_CLASSROOM.value,
                 "plan_version": 2,
                 "allowance_version": 2,
                 "subscription_id_digest": _DIGEST,
@@ -426,7 +422,7 @@ def test_entitlement_resolver_uses_exact_grant_not_parent_plan_inference(
         "user_id": "parent-1",
         "role": "parent",
         "account_status": "active",
-        "subscription_tier": BillingPlanId.FAMILY.value,
+        "subscription_tier": BillingPlanId.ONLINE_CLASSROOM.value,
     }
     student = {
         "user_id": "student-1",
@@ -445,7 +441,7 @@ def test_entitlement_resolver_uses_exact_grant_not_parent_plan_inference(
         "_get_billing_item",
         lambda *_args: {
             "billing_status": "active",
-            "subscription_tier": BillingPlanId.FAMILY.value,
+            "subscription_tier": BillingPlanId.ONLINE_CLASSROOM.value,
         },
     )
     monkeypatch.setattr(entitlement_service, "_get_payment_rollout_item", lambda: None)
@@ -468,7 +464,7 @@ def test_entitlement_resolver_uses_exact_grant_not_parent_plan_inference(
         "get_active_beneficiary_grant",
         lambda *_args, **_kwargs: {
             "grant_status": "active",
-            "plan_id": BillingPlanId.FAMILY.value,
+            "plan_id": BillingPlanId.ONLINE_CLASSROOM.value,
             "plan_version": 2,
             "allowance_version": 2,
         },
@@ -478,7 +474,7 @@ def test_entitlement_resolver_uses_exact_grant_not_parent_plan_inference(
         settings=settings,
         student_profile=student,
     )
-    assert resolved["effectivePlan"] == BillingPlanId.FAMILY.value
+    assert resolved["effectivePlan"] == BillingPlanId.ONLINE_CLASSROOM.value
     assert resolved["source"] == "paid_beneficiary_grant"
 
 

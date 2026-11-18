@@ -235,7 +235,7 @@ def _assert_paid(plan: BillingPlanId) -> None:
     assert admitted.disposition is support.TeacherSupportAdmissionDisposition.ADMITTED
     assert admitted.admission is not None
     assert admitted.admission.plan_id is plan
-    assert admitted.admission.limit == budget.teacher_support_cases
+    assert admitted.admission.limit == budget.teacher_support_text_cases
 
 
 def _assert_unpaid(effect: str) -> None:
@@ -274,9 +274,9 @@ def test_the_grant_it_writes_is_accepted_by_every_reader(fake_table, accounts) -
 
 
 def test_family_is_still_a_choice(fake_table, accounts) -> None:
-    _run("--parent", PARENT, "--student", STUDENT, "--plan", "family", "--apply")
+    _run("--parent", PARENT, "--student", STUDENT, "--plan", "online_classroom", "--apply")
 
-    _assert_paid(BillingPlanId.FAMILY)
+    _assert_paid(BillingPlanId.ONLINE_CLASSROOM)
 
 
 def test_accounts_are_found_by_email_through_the_identity_binding(fake_table, accounts) -> None:
@@ -411,16 +411,16 @@ def test_a_different_grant_is_not_overwritten_unless_asked(fake_table, accounts)
     before = _snapshot(fake_table)
 
     with pytest.raises(tool.ToolError) as refusal:
-        _run("--parent", "P26-0001", "--student", "S26-0001", "--plan", "family", "--apply")
+        _run("--parent", "P26-0001", "--student", "S26-0001", "--plan", "online_classroom", "--apply")
 
-    assert "plan_id: 'teacher_supported' -> 'family'" in refusal.value.message
+    assert "plan_id: 'teacher_supported' -> 'online_classroom'" in refusal.value.message
     assert "--replace" in refusal.value.message
     assert fake_table.rows == before
 
-    _run("--parent", "P26-0001", "--student", "S26-0001", "--plan", "family", "--replace", "--apply")
+    _run("--parent", "P26-0001", "--student", "S26-0001", "--plan", "online_classroom", "--replace", "--apply")
 
     grant = _grant_row(fake_table)
-    assert grant["plan_id"] == "family" and grant["grant_version"] == 2
+    assert grant["plan_id"] == "online_classroom" and grant["grant_version"] == 2
     kept = fake_table.rows[(f"PAID_GRANT_HISTORY#{PARENT}", f"BENEFICIARY#{STUDENT}#VERSION#1")]
     assert kept["plan_id"] == "teacher_supported"
 
@@ -672,7 +672,7 @@ def run(*argv):
 
 run("grant", "--parent", "parent@test.stoaedu.ch", "--student", "S26-0001", *switches)
 run("grant", "--parent", "parent@test.stoaedu.ch", "--student", "S26-0001", *switches, "--apply")
-run("grant", "--parent", "P26-0001", "--student", t.STUDENT, "--plan", "family", "--replace", "--apply")
+run("grant", "--parent", "P26-0001", "--student", t.STUDENT, "--plan", "online_classroom", "--replace", "--apply")
 run("revoke", "--parent", "P26-0001", "--student", "S26-0001", *undo)
 run("revoke", "--parent", "P26-0001", "--student", "S26-0001", *undo, "--apply")
 t._assert_unpaid("fresh-process")

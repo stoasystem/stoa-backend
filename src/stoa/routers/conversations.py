@@ -338,13 +338,13 @@ class TeacherHelpResponse(BaseModel):
     updatedAt: str | None = None
 
 
-class TeacherSupportStanding(BaseModel):
-    """Whether this student can still ask a teacher this Zurich week (#144).
+class TeacherSupportModeStanding(BaseModel):
+    """Whether this student can still ask for one way of help this Zurich week.
 
-    `blockedReason` is the code `POST /teacher-help/request` would refuse with:
-    `teacher_support_allowance_exhausted` comes back at `resetsAt`;
-    `teacher_support_not_included` does not come back with the week, so it has
-    no `resetsAt`.
+    `blockedReason` is the code `POST /teacher-help/request` would refuse a
+    request of this way with: `teacher_support_allowance_exhausted` comes back
+    at `resetsAt`; `teacher_support_not_included` (the plan has none of this
+    way) does not come back with the week, so it has no `resetsAt`.
     """
 
     canRequest: bool
@@ -355,6 +355,18 @@ class TeacherSupportStanding(BaseModel):
     remainingCases: int
     weeklyCases: int
     resetsAt: str | None = None
+
+
+class TeacherSupportStanding(TeacherSupportModeStanding):
+    """Whether this student can still ask a teacher this Zurich week (#144, #482).
+
+    A text answer and an online classroom are two weekly allowances: `text`
+    and `classroom` answer for each. The top-level fields are the text one,
+    as they were before there were two ways.
+    """
+
+    text: TeacherSupportModeStanding
+    classroom: TeacherSupportModeStanding
 
 
 class TeacherAvailabilityResponse(BaseModel):

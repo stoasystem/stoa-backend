@@ -104,7 +104,7 @@ def _prices() -> dict[str, str]:
     return {
         "price_student_test": "student",
         "price_teacher_test": "teacher_supported",
-        "price_family_test": "family",
+        "price_family_test": "online_classroom",
     }
 
 
@@ -134,7 +134,8 @@ def test_exact_sandbox_price_and_explicit_beneficiary_resolve_legacy_standard() 
                 plan="standard",
                 price_id="price_family_test",
                 subscription_id="sub_test_private",
-                beneficiaries=("s1", "s2"),
+                # Every plan is for one child (#482 removed the shared Family plan).
+                beneficiaries=("s1",),
             )
         }
     )
@@ -149,7 +150,7 @@ def test_exact_sandbox_price_and_explicit_beneficiary_resolve_legacy_standard() 
 
     candidate = preview.candidates[0]
     assert candidate.disposition is PlanMigrationDisposition.EXACT_PROVIDER_MATCH
-    assert candidate.target_plan == "family"
+    assert candidate.target_plan == "online_classroom"
     assert candidate.migration_review_required is False
 
 
@@ -406,7 +407,7 @@ def test_tampered_preview_candidate_is_rejected_before_write() -> None:
         repository=repository,
         source_sha="4" * 40,
     )
-    tampered = replace(preview, candidates=(replace(preview.candidates[0], target_plan="family"),))
+    tampered = replace(preview, candidates=(replace(preview.candidates[0], target_plan="online_classroom"),))
 
     with pytest.raises(MigrationBlockedError, match="integrity"):
         apply_plan_identity_migration(

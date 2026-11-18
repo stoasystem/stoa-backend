@@ -52,7 +52,7 @@ def _billing_unfrozen(monkeypatch: pytest.MonkeyPatch) -> None:
 def _grant(
     beneficiary_id: str,
     *,
-    plan: str = "family",
+    plan: str = "online_classroom",
     grant_version: int = 7,
     allowance_version: int = 4,
 ) -> dict[str, object]:
@@ -80,7 +80,7 @@ def _allowance(
     value: dict[str, Any] = {
         "schemaVersion": "allowance_projection.v1",
         "beneficiaryId": beneficiary_id,
-        "planId": "family",
+        "planId": "online_classroom",
         "allowanceVersion": 4,
         "weekIdentity": "2026-W30",
         "window": {
@@ -170,9 +170,9 @@ def test_parent_projection_keeps_exact_allowance_boundaries(
         ],
         teacher_support_projections=[
             {
-                "supportScope": "shared_family",
-                "remainingCases": 6,
-                "limit": 10,
+                "supportScope": "per_beneficiary",
+                "remainingCases": 1,
+                "limit": 2,
                 "weekIdentity": "2026-W30",
             }
         ],
@@ -187,10 +187,10 @@ def test_parent_projection_keeps_exact_allowance_boundaries(
     assert allowance_window["localEnd"] == "2026-07-27T00:00:00+02:00"
 
 
-def test_family_projection_is_per_selected_beneficiary_and_support_is_shared() -> None:
+def test_the_classroom_plan_projects_one_child_and_counts_support_for_that_child() -> None:
     result = subscription_service.project_parent_billing_overview(
         parent_id="parent-1",
-        grants=[_grant("student-a"), _grant("student-b")],
+        grants=[_grant("student-a")],
         allowance_projections=[
             _allowance(
                 "student-a",
@@ -199,25 +199,12 @@ def test_family_projection_is_per_selected_beneficiary_and_support_is_shared() -
                 input_percent=10.0,
                 output_percent=5.0,
             ),
-            _allowance(
-                "student-b",
-                input_remaining=400_000,
-                output_remaining=100_000,
-                input_percent=60.0,
-                output_percent=50.0,
-            ),
         ],
         teacher_support_projections=[
             {
-                "supportScope": "shared_family",
-                "remainingCases": 3,
-                "limit": 10,
-                "weekIdentity": "2026-W30",
-            },
-            {
-                "supportScope": "shared_family",
-                "remainingCases": 3,
-                "limit": 10,
+                "supportScope": "per_beneficiary",
+                "remainingCases": 1,
+                "limit": 2,
                 "weekIdentity": "2026-W30",
             },
         ],
@@ -225,19 +212,44 @@ def test_family_projection_is_per_selected_beneficiary_and_support_is_shared() -
     )
 
     assert result["beneficiaries"] == [
-        {"studentId": "student-a", "effectivePlan": "family"},
-        {"studentId": "student-b", "effectivePlan": "family"},
+        {"studentId": "student-a", "effectivePlan": "online_classroom"},
     ]
-    assert result["inputRemaining"] == {
-        "student-a": 900_000,
-        "student-b": 400_000,
-    }
+    assert result["inputRemaining"] == {"student-a": 900_000}
     assert result["teacherCasesRemaining"] == {
-        "scope": "shared_family",
-        "remaining": 3,
-        "limit": 10,
-        "byBeneficiary": {},
+        "scope": "per_beneficiary",
+        "remaining": None,
+        "limit": 2,
+        "byBeneficiary": {"student-a": 1},
     }
+
+
+def test_two_children_under_one_paid_plan_are_refused() -> None:
+    """Every plan is for one child since the shared Family plan went (#482)."""
+    with pytest.raises(ValueError):
+        subscription_service.project_parent_billing_overview(
+            parent_id="parent-1",
+            grants=[_grant("student-a"), _grant("student-b")],
+            allowance_projections=[
+                _allowance(
+                    child,
+                    input_remaining=900_000,
+                    output_remaining=190_000,
+                    input_percent=10.0,
+                    output_percent=5.0,
+                )
+                for child in ("student-a", "student-b")
+            ],
+            teacher_support_projections=[
+                {
+                    "supportScope": "per_beneficiary",
+                    "remainingCases": 1,
+                    "limit": 2,
+                    "weekIdentity": "2026-W30",
+                }
+            ]
+            * 2,
+            reminder=_reminder(),
+        )
 
 
 def test_parent_projection_is_closed_masked_and_omits_unselected_child() -> None:
@@ -255,9 +267,9 @@ def test_parent_projection_is_closed_masked_and_omits_unselected_child() -> None
         ],
         teacher_support_projections=[
             {
-                "supportScope": "shared_family",
+                "supportScope": "per_beneficiary",
                 "remainingCases": 1,
-                "limit": 10,
+                "limit": 2,
                 "weekIdentity": "2026-W30",
             }
         ],
@@ -279,7 +291,7 @@ def test_parent_projection_is_closed_masked_and_omits_unselected_child() -> None
 def test_non_active_checkout_cannot_infer_an_effective_plan() -> None:
     projection = subscription_service.project_parent_checkout_lifecycle(
         {
-            "plan_id": "family",
+            "plan_id": "online_classroom",
             "beneficiary_ids": ["student-selected"],
             "command_state": "provider_session_open",
         },
@@ -287,7 +299,7 @@ def test_non_active_checkout_cannot_infer_an_effective_plan() -> None:
     )
     active = subscription_service.project_parent_checkout_lifecycle(
         {
-            "plan_id": "family",
+            "plan_id": "online_classroom",
             "beneficiary_ids": ["student-selected"],
             "command_state": "activation_recorded",
         },
@@ -296,7 +308,7 @@ def test_non_active_checkout_cannot_infer_an_effective_plan() -> None:
 
     assert projection["effectivePlan"] is None
     assert projection["beneficiaries"] == []
-    assert active["effectivePlan"] == "family"
+    assert active["effectivePlan"] == "online_classroom"
     assert active["beneficiaries"] == ["student-selected"]
 
 
@@ -316,7 +328,7 @@ def test_admin_detail_exposes_exact_redacted_evidence_and_versions() -> None:
         checkout_ref="checkout-safe",
         command={
             "parent_id": "parent-1",
-            "plan_id": "family",
+            "plan_id": "online_classroom",
             "beneficiary_ids": ["student-selected"],
             "command_state": "activation_recorded",
             "provider_effect_status": "attached",
@@ -424,7 +436,7 @@ def test_parent_route_uses_current_grants_and_week_projection(
         "get_parent_safe_billing_lifecycle",
         lambda *_args, **_kwargs: {
             "status": "active",
-            "subscriptionTier": "family",
+            "subscriptionTier": "online_classroom",
             "paymentMethodType": "card",
             "dunning": {
                 "state": "active",
@@ -462,9 +474,9 @@ def test_parent_route_uses_current_grants_and_week_projection(
         parents.teacher_support_allowance_service,
         "get_teacher_support_projection",
         lambda **_kwargs: {
-            "supportScope": "shared_family",
-            "remainingCases": 8,
-            "limit": 10,
+            "supportScope": "per_beneficiary",
+            "remainingCases": 1,
+            "limit": 2,
             "weekIdentity": "2026-W30",
         },
     )

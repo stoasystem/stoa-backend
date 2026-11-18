@@ -749,6 +749,8 @@ def ask(
         support_case_id=conversation_id,
         case_kind="conversation",
         beneficiary_id=student_id,
+        # Counted against the weekly figure of the way the student chose (#482).
+        mode=mode,
         observed_at=_parse(timestamp) or datetime.now(timezone.utc),
         persist_case=persist_case,
         table=store,

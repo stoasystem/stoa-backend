@@ -632,13 +632,15 @@ OPERATIONS: tuple[OperationSpec, ...] = (
         description=(
             "Read only. Shows, for one student named by accountNumber, how many "
             "requests for a human teacher this Zurich week (Monday to Monday) has "
-            "used and how many are left, read the way the request route reads them: "
-            "weeklyCases, usedCases, remainingCases, resetsAt, the plan a parent's "
-            "purchase gives (planId, else null) and the figure assigned to the "
-            "student (by default or by an administrator). Beside it, the account "
-            "status and effective usage period, and canRequestNow with "
-            "blockedReasons (account_not_active, usage_period_ended, "
-            "teacher_support_allowance_exhausted, teacher_support_not_included). "
+            "used and how many are left, read the way the request route reads them. "
+            "Text answers and online classrooms are two weekly allowances: the "
+            "top-level weeklyCases, usedCases, remainingCases, canRequestNow and "
+            "blockedReasons are the text answers, and classroom carries the same for "
+            "online classrooms. Also resetsAt, the plan a parent's purchase gives "
+            "(planId, else null) and the figures assigned to the student (by default "
+            "or by an administrator), the account status and effective usage period. "
+            "blockedReasons name account_not_active, usage_period_ended, "
+            "teacher_support_allowance_exhausted or teacher_support_not_included. "
             "Every call is recorded in the audit trail."
         ),
         arguments=GetTeacherHelpAllowanceArguments,
