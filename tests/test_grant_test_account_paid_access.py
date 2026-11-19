@@ -543,26 +543,22 @@ def _help() -> str:
 # -- the app behaviour the PR reports ----------------------------------------------------
 
 
-def test_a_sign_in_after_the_grant_stops_paid_teacher_help_until_it_is_restamped(
+def test_a_sign_in_after_the_grant_does_not_stop_paid_teacher_help(
     fake_table, accounts
 ) -> None:
-    """Teacher-help admission fences the profile versions the grant recorded.
+    """The grant needs no re-stamping after the student or the parent signs in (#510).
 
-    Every password sign-in moves `version` (`user_repo.record_sign_in`), so after
-    the student signs in the paid scope is still resolved but its transaction is
-    refused, four times, and the admission answers `retryable_dependency`. Not the
-    tool's to fix; `--replace` re-stamps the grant with the current versions.
+    Every password sign-in moves `version` (`user_repo.record_sign_in`). Admission
+    used to hold both profiles to the versions the grant recorded, so after a
+    sign-in it was refused four times and answered `retryable_dependency`. The
+    real sign-in route is driven in `test_paid_teacher_help_after_sign_in.py`.
     """
     _run("--parent", "P26-0001", "--student", "S26-0001", "--apply")
-    profile = user_repo.get_user(STUDENT)
-    user_repo.record_sign_in(STUDENT, profile, signed_in_at=NOW.isoformat())
+    for user_id in (STUDENT, PARENT):
+        profile = user_repo.get_user(user_id)
+        user_repo.record_sign_in(user_id, profile, signed_in_at=NOW.isoformat())
 
-    stale = _admit("case-after-sign-in")
-    assert stale.disposition is support.TeacherSupportAdmissionDisposition.RETRYABLE
-
-    _run("--parent", "P26-0001", "--student", "S26-0001", "--replace", "--apply")
     _assert_paid(BillingPlanId.TEACHER_SUPPORTED)
-
 
 
 # -- the script as an operator starts it: a fresh interpreter -------------------------
