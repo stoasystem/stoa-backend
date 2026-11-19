@@ -867,6 +867,8 @@ def dispatch(record: Mapping[str, Any], *, now: str | None = None, table: Any | 
         return dict(record)
     previous = _previous(record, timestamp)
     declined = _declined(record)
+    # Before the plan reads the teachers, so it reads this one paused (#472).
+    _pause_lapsed_teacher(record, timestamp)
     profiles = teacher_dispatch_service.list_teacher_profiles()
 
     def plan(excluded: list[str]) -> dict[str, Any]:
@@ -898,6 +900,34 @@ def dispatch(record: Mapping[str, Any], *, now: str | None = None, table: Any | 
         )
     reason = str(first["summary"]["noCandidateReason"] or "no_eligible_teacher")
     return _record_no_candidate(record, reason=reason, previous=previous, now=timestamp, table=store)
+
+
+def _pause_lapsed_teacher(record: Mapping[str, Any], now: str) -> None:
+    """Pause the teacher an ordinary offer lapsed on, and tell them (#472).
+
+    A standing offer is not one: it stays open until the request expires.
+    Best effort: the request goes on to the next teacher whatever happens here.
+    """
+    teacher_id = str(record.get("dispatched_teacher_id") or "")
+    dispatch_id = str(record.get("dispatch_id") or "")
+    if (
+        not teacher_id
+        or not dispatch_id
+        or record.get("dispatch_status") != "dispatched"
+        or record.get("dispatch_fallback")
+        or not _expired(record.get("dispatch_deadline_at"), now)
+    ):
+        return
+    try:
+        if not teacher_dispatch_service.pause_after_lapse(teacher_id, dispatch_id=dispatch_id, now=now):
+            return
+        notification_service.emit_teacher_dispatch_paused(
+            teacher_id=teacher_id,
+            dispatch_id=dispatch_id,
+            accept_minutes=teacher_dispatch_service.DISPATCH_ACCEPT_TIMEOUT_SECONDS // 60,
+        )
+    except Exception as exc:  # noqa: BLE001 - best effort by contract
+        logger.warning("dispatch_lapse_pause_failed error=%s", type(exc).__name__)
 
 
 def _offer(

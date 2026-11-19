@@ -184,6 +184,36 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "Cette demande a été retirée par l'élève.",
         "it": "Questa richiesta è stata ritirata dallo studente.",
     },
+    # A teacher paused because an offer to them lapsed (#472). It names no
+    # request: only why no new ones come, and how to get them again.
+    "teacher_dispatch.paused.title": {
+        "de": "Sie erhalten keine neuen Anfragen mehr",
+        "en": "You are no longer receiving new requests",
+        "fr": "Vous ne recevez plus de nouvelles demandes",
+        "it": "Non riceve più nuove richieste",
+    },
+    "teacher_dispatch.paused.summary": {
+        "de": (
+            "Eine Hilfeanfrage für Sie wurde nicht innerhalb von {minutes} Minuten angenommen, "
+            "daher sind Sie jetzt pausiert. Stellen Sie sich wieder auf verfügbar, "
+            "sobald Sie Anfragen annehmen können."
+        ),
+        "en": (
+            "A help request offered to you was not accepted within {minutes} minutes, "
+            "so you are now paused. Set yourself to available again "
+            "when you can take requests."
+        ),
+        "fr": (
+            "Une demande d'aide qui vous était proposée n'a pas été acceptée dans les {minutes} minutes : "
+            "vous êtes donc en pause. Repassez en disponible "
+            "dès que vous pouvez accepter des demandes."
+        ),
+        "it": (
+            "Una richiesta di aiuto proposta a Lei non è stata accettata entro {minutes} minuti, "
+            "quindi ora è in pausa. Si imposti di nuovo come disponibile "
+            "quando può accettare richieste."
+        ),
+    },
     # ── the dispatch reminder email (#141) ───────────────────────────────
     #
     # It leaves STOA, so it says that there is a request, its subject and where
