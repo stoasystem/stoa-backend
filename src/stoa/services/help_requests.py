@@ -546,6 +546,41 @@ def teacher_may(
     return False
 
 
+#: How long after resolving a student's request its teacher may still assign
+#: them practice (#495).
+HELPED_STUDENT_DAYS = 14
+
+
+def teacher_helped_student(
+    records: Sequence[Mapping[str, Any]], teacher_id: str, student_id: str, *, now: datetime
+) -> bool:
+    """Whether this teacher took one of this student's requests (布置练习的权限, #495).
+
+    The teacher holds one of them in progress, or resolved it no more than
+    `HELPED_STUDENT_DAYS` ago. An offer never taken, a request reassigned to
+    another teacher, one withdrawn or expired, and one closed to the teacher
+    whose account was scrubbed do not count. A resolution time that cannot be
+    read counts as long past. The accounts are the policy's to judge.
+    """
+    if not teacher_id or not student_id:
+        return False
+    for record in records:
+        if record.get("student_id") != student_id or record.get("teacher_id") != teacher_id:
+            continue
+        if str(record.get("dispatch_status") or "") in _CLOSED_DISPATCH:
+            continue
+        status = stored_status(record)
+        if status == IN_PROGRESS:
+            return True
+        if status == RESOLVED:
+            resolved_at = _parse(record.get("escalation_resolved_at"))
+            if resolved_at is not None and now - resolved_at <= timedelta(
+                days=HELPED_STUDENT_DAYS
+            ):
+                return True
+    return False
+
+
 def admit_student_to_classroom(record: Mapping[str, Any] | None) -> None:
     """Refuse the student entry unless a teacher has accepted their classroom request (#481).
 

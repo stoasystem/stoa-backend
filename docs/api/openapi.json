@@ -5560,6 +5560,10 @@
             "title": "Rationale",
             "type": "string"
           },
+          "rationaleCode": {
+            "title": "Rationalecode",
+            "type": "string"
+          },
           "reviewFlags": {
             "items": {
               "type": "string"
@@ -5605,6 +5609,7 @@
           "subject",
           "topicId",
           "label",
+          "rationaleCode",
           "rationale",
           "confidence",
           "freshness",
@@ -14317,6 +14322,10 @@
             "title": "Status",
             "type": "string"
           },
+          "studentId": {
+            "title": "Studentid",
+            "type": "string"
+          },
           "studentName": {
             "title": "Studentname",
             "type": "string"
@@ -14329,6 +14338,7 @@
         "required": [
           "requestId",
           "conversationId",
+          "studentId",
           "studentName",
           "subject",
           "grade",

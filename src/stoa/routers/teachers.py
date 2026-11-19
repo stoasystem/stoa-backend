@@ -226,6 +226,8 @@ def _parse_time(value: object) -> datetime | None:
 class TeacherHelpRequestSummary(BaseModel):
     requestId: str
     conversationId: str
+    # The student the request is from: what the teacher assigns practice to (#495).
+    studentId: str
     studentName: str
     subject: str
     grade: str
@@ -360,6 +362,7 @@ def _help_request_summary(
     return TeacherHelpRequestSummary(
         requestId=view.request_id,
         conversationId=view.conversation_id,
+        studentId=view.student_id,
         studentName=student_name,
         subject=view.subject,
         grade=view.grade,

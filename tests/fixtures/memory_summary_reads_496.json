@@ -423,6 +423,7 @@
     },
     "proposedStatus": "recommended",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "refusalCode": "duplicate_or_active",
     "refusalReason": "Candidate duplicates active, completed, or archived assignment work.",
     "reviewRequired": true,
@@ -458,6 +459,7 @@
     },
     "proposedStatus": "recommended",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "refusalCode": "duplicate_or_active",
     "refusalReason": "Candidate duplicates active, completed, or archived assignment work.",
     "reviewRequired": true,
@@ -496,6 +498,7 @@
     },
     "proposedStatus": "recommended",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewRequired": true,
     "reviewStatus": "reviewed_source",
     "sourceId": "gleichungen-l1-c1",
@@ -529,6 +532,7 @@
     },
     "proposedStatus": "recommended",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewRequired": true,
     "reviewStatus": "reviewed_source",
     "sourceId": "kb-mathematics-l0-c0",
@@ -562,6 +566,7 @@
     },
     "proposedStatus": "recommended",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewRequired": true,
     "reviewStatus": "reviewed_source",
     "sourceId": "kb-mathematics-l12-c12",
@@ -912,6 +917,7 @@
     },
     "label": "Löse: x + 15 = 42. Was ist x?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -942,6 +948,7 @@
     },
     "label": "Löse: 4 · x = 56. Was ist x?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -972,6 +979,7 @@
     },
     "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -1002,6 +1010,7 @@
     },
     "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -1032,6 +1041,7 @@
     },
     "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -1464,6 +1474,7 @@
     },
     "label": "Löse: x + 15 = 42. Was ist x?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -1494,6 +1505,7 @@
     },
     "label": "Löse: 4 · x = 56. Was ist x?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -1524,6 +1536,7 @@
     },
     "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -1554,6 +1567,7 @@
     },
     "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -1584,6 +1598,7 @@
     },
     "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -1848,6 +1863,7 @@
     },
     "label": "Energie",
     "rationale": "Recent learning evidence points to this topic as the next reviewed remediation area.",
+    "rationaleCode": "remediation_topic",
     "reviewFlags": [
      "teacher_review_required"
     ],
@@ -1877,6 +1893,7 @@
     },
     "label": "Kräfte",
     "rationale": "Recent learning evidence points to this topic as the next reviewed remediation area.",
+    "rationaleCode": "remediation_topic",
     "reviewFlags": [
      "teacher_review_required"
     ],
@@ -2308,6 +2325,7 @@
     },
     "label": "Löse: x + 15 = 42. Was ist x?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -2338,6 +2356,7 @@
     },
     "label": "Löse: 4 · x = 56. Was ist x?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -2368,6 +2387,7 @@
     },
     "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -2398,6 +2418,7 @@
     },
     "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -2428,6 +2449,7 @@
     },
     "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -2759,6 +2781,7 @@
     },
     "label": "Löse: x + 15 = 42. Was ist x?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -2789,6 +2812,7 @@
     },
     "label": "Löse: 4 · x = 56. Was ist x?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -2819,6 +2843,7 @@
     },
     "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -2849,6 +2874,7 @@
     },
     "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
@@ -2879,6 +2905,7 @@
     },
     "label": "Welcher Bruch ist der gekürzte Bruch von 6/8?",
     "rationale": "A reviewed curriculum exercise is available for this weak topic.",
+    "rationaleCode": "curriculum_exercise",
     "reviewFlags": [
      "published_curriculum_only",
      "teacher_review_required"
