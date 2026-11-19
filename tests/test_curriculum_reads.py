@@ -29,7 +29,7 @@ from fakes.admission import seed_plan
 from fakes.ask_question import _actor
 from fakes.published_curriculum import ReadCountingTable, curriculum_rows
 from stoa.db import table as db_table
-from stoa.db.repositories import asked_knowledge_repo
+from stoa.db.repositories import asked_knowledge_repo, practice_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import parents, practice, students
 from stoa.security.authorization import AuthorizedResource, ResourceRef, ResourceType
@@ -231,3 +231,64 @@ def test_the_learning_history_reads_only_the_finished_lessons(
         if operation == "get_item"
     ]
     assert sum(lessons) >= FINISHED, reports
+
+
+# ── One topic's lessons, through GSI-TopicShelf (#513) ─────────────────────
+#
+# The roadmap, the lesson page and lesson completion still read every lesson
+# row (the roadmap every unit row too) to find one topic's. They read that
+# topic's through the index now: what they read beyond the topic's own units
+# and lessons is the same however large the curriculum.
+
+COMPLETION_GOLDEN = Path(__file__).parent / "fixtures" / "curriculum_reads_513.json"
+TOPIC_ROUTES = ("roadmap", "lesson", "complete")
+
+
+def _complete(monkeypatch: pytest.MonkeyPatch, lesson: dict[str, Any]) -> Any:
+    # Whether every exercise was answered is not what these tests are about.
+    monkeypatch.setattr(practice_repo, "unanswered_challenge_ids", lambda *_a, **_k: [])
+    response = _client("student").post(f"/practice/lessons/{lesson['lesson_id']}/complete")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _topic_rows(table: ReadCountingTable, topic_id: str) -> int:
+    """The topic's own units and lessons: what a route drawing the topic must read."""
+    return sum(
+        1
+        for (pk, sk), row in table.rows.items()
+        if pk == "PRACTICE"
+        and sk.split("#", 1)[0] in {"UNIT", "LESSON"}
+        and row.get("topic_id") == topic_id
+    )
+
+
+def test_completion_answers_as_main_did(monkeypatch: pytest.MonkeyPatch) -> None:
+    _table_, lesson = _table(monkeypatch, SMALL)
+
+    with time_machine.travel(READ_AT, tick=False):
+        response = _complete(monkeypatch, lesson)
+
+    recorded = json.loads(COMPLETION_GOLDEN.read_text(encoding="utf-8"))
+    assert response == recorded["complete"]
+
+
+@pytest.mark.parametrize("name", TOPIC_ROUTES)
+def test_one_topic_is_read_not_the_curriculum(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    read: dict[float, ReadCountingTable] = {}
+    beyond: dict[float, int] = {}
+    for scale in (SMALL, LARGE):
+        table, lesson = _table(monkeypatch, scale)
+        with time_machine.travel(READ_AT, tick=False):
+            if name == "complete":
+                _complete(monkeypatch, lesson)
+            else:
+                _get(name, lesson)
+        topic_rows = _topic_rows(table, lesson["topic_id"])
+        read[scale] = table
+        beyond[scale] = table.total_rows_scanned - topic_rows
+        assert table.total_rows_scanned <= topic_rows + OWN_ROWS, table.report()
+        assert not any(operation == "scan" for operation, *_ in table.reads), table.report()
+
+    reports = "\n\n".join(f"scale {scale}:\n{table.report()}" for scale, table in read.items())
+    assert beyond[SMALL] == beyond[LARGE], reports

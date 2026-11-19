@@ -497,6 +497,60 @@ def topic_shelf_fields(row: Mapping[str, Any]) -> dict[str, str]:
     return {"topic_shelf": topic_shelf(kind, topic_id), "topic_order": order}
 
 
+#: What an index page's continuation key holds: the base key and the index's own.
+_TOPIC_SHELF_PAGE_KEY = ("PK", "SK", *TOPIC_SHELF_FIELDS)
+
+
+def _topic_shelf_query(kind: str, topic_id: str) -> dict[str, object]:
+    return {
+        "IndexName": TOPIC_SHELF_INDEX,
+        "KeyConditionExpression": Key("topic_shelf").eq(topic_shelf(kind, topic_id)),
+        "key": _TOPIC_SHELF_PAGE_KEY,
+    }
+
+
+def _topic_shelf_rows(kind: str, topic_id: str) -> list[dict]:
+    """Every row of one kind on one topic's shelf, in key order as a whole read gave them.
+
+    Filtered on `topic_id` as the whole read was, though a row is on the shelf
+    of the topic it names: every writer derives the shelf from it."""
+    items = _query_all_challenge_pages(db_table.table(), **_topic_shelf_query(kind, topic_id))
+    return [item for item in items if item.get("topic_id") == topic_id]
+
+
+def topic_challenges(topic_id: str, *, page_size: int | None = None) -> Iterator[dict]:
+    """One topic's exercises, in the order `get_all_challenges` lists them, read
+    page by page as the caller takes them: a caller wanting the first few reads a
+    page, not the topic, let alone every exercise (#513).
+
+    Each row is held to its version and to a unique identity, as
+    `get_all_challenges` holds every row it reads."""
+    query = _topic_shelf_query("CHALLENGE", topic_id)
+    if page_size is not None:
+        query["Limit"] = page_size
+    ids: set[str] = set()
+    identities: set[tuple[str, str]] = set()
+    previous_marker: PracticeItem | None = None
+    for page in islice(_query_pages(db_table.table(), **query), _MAX_CHALLENGE_PAGES):
+        for item in _response_items(page.items):
+            if not _valid_versioned_challenge(item):
+                raise ValueError("malformed versioned challenge row")
+            identity = (item["challenge_id"], item["challenge_version"])
+            if item["challenge_id"] in ids or identity in identities:
+                raise ValueError("duplicate challenge identity")
+            ids.add(item["challenge_id"])
+            identities.add(identity)
+            if item.get("topic_id") == topic_id:
+                yield item
+        marker = page.last_key
+        if marker is None:
+            return
+        if marker == previous_marker:
+            raise ValueError("challenge pagination did not make progress")
+        previous_marker = marker
+    raise ValueError("challenge pagination exceeded the bounded page limit")
+
+
 def get_subjects() -> list[dict]:
     table = db_table.table()
     return _query_all_challenge_pages(
@@ -521,12 +575,14 @@ def get_topic(topic_id: str) -> dict | None:
 
 
 def get_lessons(topic_id: str | None = None, unit_id: str | None = None) -> list[dict]:
-    table = db_table.table()
-    items = _query_all_challenge_pages(
-        table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("LESSON#"))
-    )
+    """Every lesson row, or one topic's, read through its shelf (#513)."""
     if topic_id:
-        items = [i for i in items if i.get("topic_id") == topic_id]
+        items = _topic_shelf_rows("LESSON", topic_id)
+    else:
+        items = _query_all_challenge_pages(
+            db_table.table(),
+            KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("LESSON#")),
+        )
     if unit_id:
         items = [i for i in items if i.get("unit_id") == unit_id]
     return items
@@ -611,11 +667,12 @@ def get_challenge(challenge_id: str) -> dict | None:
 
 
 def get_units(topic_id: str) -> list[dict]:
-    return [i for i in get_all_units() if i.get("topic_id") == topic_id]
+    """One topic's unit rows, in key order, read through its shelf (#513)."""
+    return _topic_shelf_rows("UNIT", topic_id)
 
 
 def get_all_units() -> list[dict]:
-    """Every unit row, in key order; `get_units` is these, one topic's."""
+    """Every unit row, in key order; `get_units` is one topic's of these."""
     table = db_table.table()
     return _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("UNIT#"))
