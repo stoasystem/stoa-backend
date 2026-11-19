@@ -45,6 +45,8 @@ INDEX_KEY_ATTRIBUTES = frozenset(
         "review_state",
         "sweep_bucket",
         "sweep_due_at",
+        "topic_shelf",
+        "topic_order",
     }
 )
 
