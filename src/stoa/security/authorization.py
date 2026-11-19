@@ -158,6 +158,10 @@ class TeacherAuthorizationFacts:
     assignment: Mapping[str, object] | None = None
     teacher_account: Mapping[str, object] | None = None
     student_account: Mapping[str, object] | None = None
+    #: The student's help requests, read for their learning profile only (#495).
+    student_requests: tuple[Mapping[str, object], ...] = ()
+    #: The learning assignment the resource is, when it is one (#495).
+    learning_assignment: Mapping[str, object] | None = None
 
     def permits(
         self,
@@ -172,6 +176,8 @@ class TeacherAuthorizationFacts:
         if not _active_account(self.student_account, resource.student_id, CanonicalRole.STUDENT):
             return False
         if self._current_task_permits(actor_id, resource, action, purpose, now):
+            return True
+        if self._helped_student_permits(actor_id, resource, action, purpose, now):
             return True
         if resource.resource_type is ResourceType.ATTACHMENT:
             # Only the request it was sent in opens it; a standing assignment
@@ -196,6 +202,40 @@ class TeacherAuthorizationFacts:
             and purpose.value in _string_set(assignment.get("purposes"))
         )
         return exact_scope or declared_scope
+
+    def helped_student(self, actor_id: str, student_id: str, now: datetime) -> bool:
+        """The teacher took one of this student's help requests (布置练习的权限, #495)."""
+        from stoa.services import help_requests
+
+        return help_requests.teacher_helped_student(
+            self.student_requests, actor_id, student_id, now=now
+        )
+
+    def _helped_student_permits(
+        self,
+        actor_id: str,
+        resource: ResourceRef,
+        action: AuthorizationAction,
+        purpose: AuthorizationPurpose,
+        now: datetime,
+    ) -> bool:
+        """The student's learning profile and assignments, for the teacher who helped them.
+
+        Nothing else of the student's: their questions, practice and reports
+        are read under the same purpose and stay closed to it. An assignment
+        is read, but archived only by the teacher who made it.
+        """
+        if (
+            resource.resource_type is not ResourceType.ADAPTIVE_PROFILE
+            or purpose not in HELPED_STUDENT_PURPOSES
+            or action not in _HELPED_STUDENT_ACTIONS
+        ):
+            return False
+        if not self.helped_student(actor_id, resource.student_id, now):
+            return False
+        if self.learning_assignment is not None and action is not AuthorizationAction.READ:
+            return self.learning_assignment.get("created_by") == actor_id
+        return True
 
     def _current_task_permits(
         self,
@@ -263,6 +303,23 @@ class TeacherAuthorizationFacts:
 
 _TEACHER_WRITE_ACTIONS = frozenset(
     {AuthorizationAction.RESPOND, AuthorizationAction.RESOLVE, AuthorizationAction.UPDATE}
+)
+
+#: What the adaptive routes ask of a teacher about a student's learning profile.
+HELPED_STUDENT_PURPOSES = frozenset(
+    {
+        AuthorizationPurpose.LEARNING_ASSIGNMENT,
+        AuthorizationPurpose.ASSIGNMENT_AUTOMATION_PREVIEW,
+        AuthorizationPurpose.ASSIGNMENT_AUTOMATION_EXECUTE,
+    }
+)
+_HELPED_STUDENT_ACTIONS = frozenset(
+    {
+        AuthorizationAction.READ,
+        AuthorizationAction.CREATE,
+        AuthorizationAction.UPDATE,
+        AuthorizationAction.ASSIGN,
+    }
 )
 
 
@@ -532,6 +589,18 @@ class CurrentAuthorizationFactRepository:
                 # Read under the help request it was sent in: the resolver
                 # hands that request's record, as the request's own routes do (#140).
                 request = resource_value
+            student_requests: tuple[Mapping[str, object], ...] = ()
+            learning_assignment: Mapping[str, object] | None = None
+            if (
+                resource.resource_type is ResourceType.ADAPTIVE_PROFILE
+                and purpose in HELPED_STUDENT_PURPOSES
+            ):
+                # Whether this teacher helped the student (#495).
+                student_requests = tuple(
+                    help_requests.for_student(resource.student_id).values()
+                )
+                if resource_value.get("assignment_id") == resource.resource_id:
+                    learning_assignment = resource_value
             return AuthorizationFacts(
                 teacher=TeacherAuthorizationFacts(
                     request=request,
@@ -540,6 +609,8 @@ class CurrentAuthorizationFactRepository:
                     ),
                     teacher_account=user_repo.get_user(actor.user_id),
                     student_account=user_repo.get_user(resource.student_id),
+                    student_requests=student_requests,
+                    learning_assignment=learning_assignment,
                 )
             )
         return AuthorizationFacts()
@@ -635,7 +706,7 @@ class AuthorizationPolicy:
                 )
 
         result = SecurityErrorCode.ACTION_NOT_ALLOWED
-        if not allowed and not _relationship_known_to_actor(actor, authorized_resource):
+        if not allowed and not _relationship_known_to_actor(actor, authorized_resource, now):
             result = SecurityErrorCode.RESOURCE_NOT_FOUND
         if allowed:
             result = SecurityErrorCode.ACTION_NOT_ALLOWED
@@ -839,7 +910,9 @@ def _active_account(
     )
 
 
-def _relationship_known_to_actor(actor: Actor, resource: AuthorizedResource) -> bool:
+def _relationship_known_to_actor(
+    actor: Actor, resource: AuthorizedResource, now: datetime
+) -> bool:
     """Separate existence hiding from a known formal relationship or scoped role."""
     if resource.ref.relationship_known:
         return True
@@ -860,6 +933,9 @@ def _relationship_known_to_actor(actor: Actor, resource: AuthorizedResource) -> 
                 assignment.get("teacher_id") == actor.user_id
                 and assignment.get("student_id") == resource.ref.student_id
             )
+            # The teacher who helped the student sees their assignments, so
+            # one they may not archive is refused, not hidden (#495).
+            or facts.helped_student(actor.user_id, resource.ref.student_id, now)
         )
     if actor.role is CanonicalRole.TEACHER and resource.facts.curriculum_answer:
         # Answer scope is intentionally non-enumerable: stale, wrong-scope, and

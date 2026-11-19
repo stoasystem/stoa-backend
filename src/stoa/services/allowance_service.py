@@ -90,12 +90,13 @@ def plan_allowance_budget(
     version = _exact_count(
         allowance_version, "allowance_version", positive=True
     )
-    input_tokens, output_tokens, cases, scope = LOCKED_BUDGETS[plan]
+    input_tokens, output_tokens, text_cases, classroom_cases, scope = LOCKED_BUDGETS[plan]
     return PlanAllowanceBudget(
         planId=plan,
         inputTokens=input_tokens,
         outputTokens=output_tokens,
-        teacherSupportCases=cases,
+        teacherSupportTextCases=text_cases,
+        teacherSupportClassroomCases=classroom_cases,
         teacherSupportScope=scope,
         allowanceVersion=version,
     )

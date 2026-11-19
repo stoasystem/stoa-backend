@@ -15,7 +15,12 @@ router = APIRouter()
 class TeacherSupportAllowanceCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # Text answers a week.
     weekly_cases: int = Field(ge=0, le=teacher_support_allowance_service.ASSIGNED_WEEKLY_CASES_MAXIMUM)
+    # Online classrooms a week (#482); left out, the figure stays as it was.
+    weekly_classroom_cases: int | None = Field(
+        default=None, ge=0, le=teacher_support_allowance_service.ASSIGNED_WEEKLY_CASES_MAXIMUM
+    )
     reason: str = Field(min_length=1, max_length=1000)
 
 
@@ -24,7 +29,10 @@ async def read_teacher_support_allowance(
     student_id: str,
     actor: Actor = Depends(admin_operation),
 ):
-    """How many teacher-support cases this student has in a week, and from where."""
+    """How many teacher-support cases this student has in a week, and from where.
+
+    `weeklyCases` is text answers, `weeklyClassroomCases` online classrooms.
+    """
     del actor
     assigned = teacher_support_allowance_service.read_administered_weekly_cases(
         student_id, table=db_table.table()
@@ -32,8 +40,10 @@ async def read_teacher_support_allowance(
     return {
         "studentId": student_id,
         "weeklyCases": assigned.weekly_cases,
+        "weeklyClassroomCases": assigned.weekly_classroom_cases,
         "source": assigned.source,
         "default": teacher_support_allowance_service.ASSIGNED_WEEKLY_TEACHER_SUPPORT_CASES,
+        "classroomDefault": teacher_support_allowance_service.ASSIGNED_WEEKLY_CLASSROOM_CASES,
         "maximum": teacher_support_allowance_service.ASSIGNED_WEEKLY_CASES_MAXIMUM,
     }
 
@@ -44,19 +54,28 @@ async def set_teacher_support_allowance(
     body: TeacherSupportAllowanceCommand,
     actor: Actor = Depends(admin_operation),
 ):
-    """Set this student's weekly figure, replacing whatever it was.
+    """Set this student's weekly figures, replacing whatever they were.
 
     The write carries the version it read, so two administrators changing the
     same student at once cannot both believe they set it. The admission path
     fences the same version, so a case can never be spent against a figure that
     was replaced between reading it and writing the case.
     """
+    target = db_table.table()
     next_version = teacher_support_allowance_service.administer_weekly_cases(
-        student_id, body.weekly_cases, actor=actor, table=db_table.table()
+        student_id,
+        body.weekly_cases,
+        weekly_classroom_cases=body.weekly_classroom_cases,
+        actor=actor,
+        table=target,
+    )
+    written = teacher_support_allowance_service.read_assigned_weekly_cases(
+        student_id, table=target
     )
     return {
         "studentId": student_id,
         "weeklyCases": body.weekly_cases,
+        "weeklyClassroomCases": written.weekly_classroom_cases,
         "source": "administrator",
         "stateVersion": next_version,
     }

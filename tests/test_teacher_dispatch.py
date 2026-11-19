@@ -15,6 +15,7 @@ QUESTION = _as_stored({
 TEACHERS = _as_stored([
     {
         "user_id": "teacher-low-load",
+        "dispatch_seen_at": "2026-06-15T10:04:00+00:00",
         "role": "teacher",
         "account_status": "active",
         "version": 7,
@@ -28,6 +29,7 @@ TEACHERS = _as_stored([
     },
     {
         "user_id": "teacher-busy",
+        "dispatch_seen_at": "2026-06-15T10:04:00+00:00",
         "role": "teacher",
         "account_status": "active",
         "version": 8,
@@ -39,6 +41,7 @@ TEACHERS = _as_stored([
     },
     {
         "user_id": "teacher-german",
+        "dispatch_seen_at": "2026-06-15T10:04:00+00:00",
         "role": "teacher",
         "account_status": "active",
         "version": 9,
@@ -50,6 +53,7 @@ TEACHERS = _as_stored([
     },
     {
         "user_id": "teacher-paused",
+        "dispatch_seen_at": "2026-06-15T10:04:00+00:00",
         "role": "teacher",
         "account_status": "active",
         "version": 10,

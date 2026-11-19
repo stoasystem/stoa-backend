@@ -186,7 +186,7 @@ def _settings(**overrides) -> Settings:
             "stripe_teacher_supported_price_id",
             "price_teacher_supported_live",
         )
-        values.setdefault("stripe_family_price_id", "price_family_live")
+        values.setdefault("stripe_online_classroom_price_id", "price_family_live")
     return Settings(**values)
 
 
@@ -195,7 +195,7 @@ def _checkout_settings(**overrides) -> Settings:
         stripe_api_key="sk_test_checkout",
         stripe_student_price_id="price_test_student",
         stripe_teacher_supported_price_id="price_test_teacher_supported",
-        stripe_family_price_id="price_test_family",
+        stripe_online_classroom_price_id="price_test_family",
         **overrides,
     )
 
@@ -247,7 +247,7 @@ def _profiles():
             "email": "admin@example.com",
             "role": "admin",
             "account_status": "active",
-            "subscription_tier": "family",
+            "subscription_tier": "online_classroom",
             "version": 1,
         },
     }
@@ -419,8 +419,8 @@ def _put_active_billing(
         "SK": "SUMMARY",
         "entity_type": "subscription_billing",
         "parent_id": parent_id,
-        "subscription_tier": "family",
-        "requested_tier": "family",
+        "subscription_tier": "online_classroom",
+        "requested_tier": "online_classroom",
         "billing_provider": "stripe",
         "billing_mode": "live",
         "billing_status": "active",
@@ -475,7 +475,7 @@ def test_parent_account_operations_combines_billing_entitlement_usage_and_verifi
             "beneficiary_id": "student-1",
             "grant_status": "active",
             "grant_version": 7,
-            "plan_id": "family",
+            "plan_id": "online_classroom",
             "plan_version": 2,
             "allowance_version": 2,
             "subscription_id_digest": "a" * 64,
@@ -508,7 +508,7 @@ def test_parent_account_operations_combines_billing_entitlement_usage_and_verifi
     # refusal is the section rather than the page.
     assert body["billing"] == {"status": "billing_frozen", "mode": None, "provider": None}
     assert body["children"][0]["studentId"] == "student-1"
-    assert body["children"][0]["entitlement"]["effectivePlan"] == "family"
+    assert body["children"][0]["entitlement"]["effectivePlan"] == "online_classroom"
     assert body["children"][0]["usage"]["consumed"] == 2
     assert body["parent"]["verification"]["emailVerificationStatus"] == "verified"
     assert body["parent"]["verification"]["supportRecoveryState"] == "verified"
@@ -602,7 +602,7 @@ def test_parent_can_create_subscription_request_once(monkeypatch):
 
     duplicate = client.post(
         "/parents/me/subscription/requests",
-        json={"requestType": "upgrade", "requestedTier": "family"},
+        json={"requestType": "upgrade", "requestedTier": "online_classroom"},
     )
     assert duplicate.status_code == 409
 
@@ -724,7 +724,7 @@ def test_request_history_is_isolated_by_request_id(monkeypatch):
     )
     second = parent_client.post(
         "/parents/me/subscription/requests",
-        json={"requestType": "upgrade", "requestedTier": "family"},
+        json={"requestType": "upgrade", "requestedTier": "online_classroom"},
     ).json()
 
     response = admin_client.get(f"/admin/subscriptions/requests/{first['requestId']}")
@@ -782,7 +782,7 @@ def test_production_live_checkout_is_refused_before_provider_access(monkeypatch)
         stripe_webhook_secret="whsec_live",
         stripe_student_price_id="price_student_live",
         stripe_teacher_supported_price_id="price_teacher_supported_live",
-        stripe_family_price_id="price_family_live",
+        stripe_online_classroom_price_id="price_family_live",
         stripe_live_charges_enabled=False,
     )
     client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
@@ -823,7 +823,7 @@ def test_live_checkout_is_refused_when_twint_capability_is_confirmed(monkeypatch
         stripe_webhook_secret="whsec_live",
         stripe_student_price_id="price_student_live",
         stripe_teacher_supported_price_id="price_teacher_supported_live",
-        stripe_family_price_id="price_family_live",
+        stripe_online_classroom_price_id="price_family_live",
         stripe_live_charges_enabled=True,
         stripe_twint_capability_confirmed=True,
     )
@@ -872,7 +872,7 @@ def test_admin_provider_readiness_reports_missing_production_config(monkeypatch)
     assert "missing_stripe_webhook_secret" in blockers
     assert "missing_student_price_id" in blockers
     assert "missing_teacher_supported_price_id" in blockers
-    assert "missing_family_price_id" in blockers
+    assert "missing_online_classroom_price_id" in blockers
     assert "missing_stripe_webhook_endpoint_url" in blockers
     assert body["credentials"]["apiKey"] == "missing"
 
@@ -886,7 +886,7 @@ def test_admin_provider_readiness_rejects_test_key_in_production(monkeypatch):
         stripe_webhook_secret="whsec_live",
         stripe_student_price_id="price_student_live",
         stripe_teacher_supported_price_id="price_teacher_supported_live",
-        stripe_family_price_id="price_family_live",
+        stripe_online_classroom_price_id="price_family_live",
         stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
         stripe_live_charges_enabled=True,
     )
@@ -928,7 +928,7 @@ def test_admin_provider_readiness_reports_twint_pending(monkeypatch):
         stripe_webhook_secret="whsec_live",
         stripe_student_price_id="price_student_live",
         stripe_teacher_supported_price_id="price_teacher_supported_live",
-        stripe_family_price_id="price_family_live",
+        stripe_online_classroom_price_id="price_family_live",
         stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
         stripe_live_charges_enabled=False,
         stripe_twint_capability_confirmed=True,
@@ -967,7 +967,7 @@ def test_admin_provider_readiness_redacts_provider_failures(monkeypatch):
         stripe_webhook_secret="whsec_secret_value",
         stripe_student_price_id="price_student_live",
         stripe_teacher_supported_price_id="price_teacher_supported_live",
-        stripe_family_price_id="price_family_live",
+        stripe_online_classroom_price_id="price_family_live",
         stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
         stripe_live_charges_enabled=True,
         stripe_twint_capability_confirmed=True,
@@ -1012,7 +1012,7 @@ def test_admin_provider_readiness_reports_live_success(monkeypatch):
         stripe_webhook_secret="whsec_live",
         stripe_student_price_id="price_student_live",
         stripe_teacher_supported_price_id="price_teacher_supported_live",
-        stripe_family_price_id="price_family_live",
+        stripe_online_classroom_price_id="price_family_live",
         stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
         stripe_live_charges_enabled=True,
         stripe_twint_capability_confirmed=True,
@@ -1032,8 +1032,8 @@ def test_admin_provider_readiness_reports_live_success(monkeypatch):
     assert body["twint"]["constraints"]["currency"] == "CHF"
     assert body["twint"]["constraints"]["manualCaptureSupported"] is False
     assert body["twint"]["constraints"]["refundWindowDays"] == 180
-    assert body["prices"]["family"]["currency"] == "CHF"
-    assert body["prices"]["family"]["recurring"] is True
+    assert body["prices"]["online_classroom"]["currency"] == "CHF"
+    assert body["prices"]["online_classroom"]["recurring"] is True
     assert body["webhook"]["endpointMode"] == "https"
     assert body["finance"]["accountingExportAvailable"] is True
     assert body["blockers"] == []
@@ -1272,7 +1272,7 @@ def test_rollout_checkout_rollback_does_not_override_sandbox_only_checkout(monke
         stripe_webhook_secret="whsec_live",
         stripe_student_price_id="price_student_live",
         stripe_teacher_supported_price_id="price_teacher_supported_live",
-        stripe_family_price_id="price_family_live",
+        stripe_online_classroom_price_id="price_family_live",
         stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
         stripe_live_charges_enabled=True,
         stripe_twint_capability_confirmed=True,
@@ -1376,7 +1376,7 @@ def test_provider_readiness_reports_webhook_last_observed_event(monkeypatch):
         stripe_webhook_secret="whsec_live",
         stripe_student_price_id="price_student_live",
         stripe_teacher_supported_price_id="price_teacher_supported_live",
-        stripe_family_price_id="price_family_live",
+        stripe_online_classroom_price_id="price_family_live",
         stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
         stripe_live_charges_enabled=True,
         stripe_twint_capability_confirmed=True,
@@ -1419,7 +1419,7 @@ def test_legacy_checkout_and_invoice_alone_remain_confirming(monkeypatch):
                 "subscription": "sub_test_parent",
                 "metadata": {
                     "stoa_parent_id": "parent-1",
-                    "requested_tier": "family",
+                    "requested_tier": "online_classroom",
                 },
                 "payment_method_types": ["card", "twint"],
             }
@@ -1502,7 +1502,7 @@ def test_legacy_checkout_and_invoice_alone_remain_confirming(monkeypatch):
     return
 
     assert billing_status["status"] == "active"
-    assert billing_status["subscriptionTier"] == "family"
+    assert billing_status["subscriptionTier"] == "online_classroom"
     assert billing_status["providerSubscriptionId"] == "sub_test_parent"
     assert billing_status["providerLivemode"] is False
     assert billing_status["paymentMethodType"] == "twint"
@@ -1528,7 +1528,7 @@ def test_legacy_checkout_and_invoice_alone_remain_confirming(monkeypatch):
     assert webhook_events[0]["providerLivemode"] is False
     assert webhook_events[0]["processingResult"] == "processed"
     assert any(event["processingResult"] == "deduplicated" for event in webhook_events)
-    assert profiles["parent-1"]["subscription_tier"] == "family"
+    assert profiles["parent-1"]["subscription_tier"] == "online_classroom"
     assert table.items[("BILLING_PROVIDER_LOOKUP#stripe#subscription#sub_test_parent", "SUMMARY")][
         "parent_id"
     ] == "parent-1"
@@ -1577,9 +1577,9 @@ def test_legacy_checkout_and_invoice_alone_remain_confirming(monkeypatch):
     assert stale_response.json()["billingStatus"] == "active"
     assert stale_response.json()["processingResult"] == "stale_ignored"
     assert stale_status["status"] == "active"
-    assert stale_status["subscriptionTier"] == "family"
+    assert stale_status["subscriptionTier"] == "online_classroom"
     assert stale_events[0]["processingResult"] == "stale_ignored"
-    assert profiles["parent-1"]["subscription_tier"] == "family"
+    assert profiles["parent-1"]["subscription_tier"] == "online_classroom"
     support_evidence = admin_client.get("/admin/subscriptions/billing/parent-1").json()["supportEvidence"]
     assert support_evidence["lifecycle"]["status"] == "active"
     assert support_evidence["lifecycle"]["source"] == "provider_billing"
@@ -1627,7 +1627,7 @@ def test_legacy_checkout_and_invoice_alone_remain_confirming(monkeypatch):
         requested_tier="student",
         checkout_session_id=replacement_session_id,
         previous_billing_status="active",
-        previous_subscription_tier="family",
+        previous_subscription_tier="online_classroom",
         billing_status="checkout_pending",
     )
     expired = {
@@ -1658,8 +1658,8 @@ def test_legacy_checkout_and_invoice_alone_remain_confirming(monkeypatch):
     assert expired_response.json()["billingStatus"] == "active"
     preserved_status = parent_client.get("/parents/me/subscription/billing").json()
     assert preserved_status["status"] == "active"
-    assert preserved_status["subscriptionTier"] == "family"
-    assert profiles["parent-1"]["subscription_tier"] == "family"
+    assert preserved_status["subscriptionTier"] == "online_classroom"
+    assert profiles["parent-1"]["subscription_tier"] == "online_classroom"
 
 
 def test_payment_failed_projects_dunning_and_twint_lifecycle(monkeypatch):

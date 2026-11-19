@@ -299,7 +299,7 @@ def test_a_student_can_read_their_own_plan(monkeypatch):
         students.entitlement_service,
         "resolve_student_entitlement",
         lambda *_a, **_k: {
-            "effectivePlan": "family",
+            "effectivePlan": "online_classroom",
             "newUsageAllowed": True,
             "limits": {"dailyAiQuestionLimit": 30, "dailyChatMessageLimit": 60},
             "freeTrial": {"active": False},
@@ -312,7 +312,7 @@ def test_a_student_can_read_their_own_plan(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["effectivePlan"] == "family"
+    assert body["effectivePlan"] == "online_classroom"
     assert body["dailyChatMessageLimit"] == 60
     assert body["teacherSupportIncluded"] is True
     # Nothing about the parent's billing leaks through.

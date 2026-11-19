@@ -235,7 +235,7 @@ def _assert_paid(plan: BillingPlanId) -> None:
     assert admitted.disposition is support.TeacherSupportAdmissionDisposition.ADMITTED
     assert admitted.admission is not None
     assert admitted.admission.plan_id is plan
-    assert admitted.admission.limit == budget.teacher_support_cases
+    assert admitted.admission.limit == budget.teacher_support_text_cases
 
 
 def _assert_unpaid(effect: str) -> None:
@@ -274,9 +274,9 @@ def test_the_grant_it_writes_is_accepted_by_every_reader(fake_table, accounts) -
 
 
 def test_family_is_still_a_choice(fake_table, accounts) -> None:
-    _run("--parent", PARENT, "--student", STUDENT, "--plan", "family", "--apply")
+    _run("--parent", PARENT, "--student", STUDENT, "--plan", "online_classroom", "--apply")
 
-    _assert_paid(BillingPlanId.FAMILY)
+    _assert_paid(BillingPlanId.ONLINE_CLASSROOM)
 
 
 def test_accounts_are_found_by_email_through_the_identity_binding(fake_table, accounts) -> None:
@@ -411,16 +411,16 @@ def test_a_different_grant_is_not_overwritten_unless_asked(fake_table, accounts)
     before = _snapshot(fake_table)
 
     with pytest.raises(tool.ToolError) as refusal:
-        _run("--parent", "P26-0001", "--student", "S26-0001", "--plan", "family", "--apply")
+        _run("--parent", "P26-0001", "--student", "S26-0001", "--plan", "online_classroom", "--apply")
 
-    assert "plan_id: 'teacher_supported' -> 'family'" in refusal.value.message
+    assert "plan_id: 'teacher_supported' -> 'online_classroom'" in refusal.value.message
     assert "--replace" in refusal.value.message
     assert fake_table.rows == before
 
-    _run("--parent", "P26-0001", "--student", "S26-0001", "--plan", "family", "--replace", "--apply")
+    _run("--parent", "P26-0001", "--student", "S26-0001", "--plan", "online_classroom", "--replace", "--apply")
 
     grant = _grant_row(fake_table)
-    assert grant["plan_id"] == "family" and grant["grant_version"] == 2
+    assert grant["plan_id"] == "online_classroom" and grant["grant_version"] == 2
     kept = fake_table.rows[(f"PAID_GRANT_HISTORY#{PARENT}", f"BENEFICIARY#{STUDENT}#VERSION#1")]
     assert kept["plan_id"] == "teacher_supported"
 
@@ -543,26 +543,22 @@ def _help() -> str:
 # -- the app behaviour the PR reports ----------------------------------------------------
 
 
-def test_a_sign_in_after_the_grant_stops_paid_teacher_help_until_it_is_restamped(
+def test_a_sign_in_after_the_grant_does_not_stop_paid_teacher_help(
     fake_table, accounts
 ) -> None:
-    """Teacher-help admission fences the profile versions the grant recorded.
+    """The grant needs no re-stamping after the student or the parent signs in (#510).
 
-    Every password sign-in moves `version` (`user_repo.record_sign_in`), so after
-    the student signs in the paid scope is still resolved but its transaction is
-    refused, four times, and the admission answers `retryable_dependency`. Not the
-    tool's to fix; `--replace` re-stamps the grant with the current versions.
+    Every password sign-in moves `version` (`user_repo.record_sign_in`). Admission
+    used to hold both profiles to the versions the grant recorded, so after a
+    sign-in it was refused four times and answered `retryable_dependency`. The
+    real sign-in route is driven in `test_paid_teacher_help_after_sign_in.py`.
     """
     _run("--parent", "P26-0001", "--student", "S26-0001", "--apply")
-    profile = user_repo.get_user(STUDENT)
-    user_repo.record_sign_in(STUDENT, profile, signed_in_at=NOW.isoformat())
+    for user_id in (STUDENT, PARENT):
+        profile = user_repo.get_user(user_id)
+        user_repo.record_sign_in(user_id, profile, signed_in_at=NOW.isoformat())
 
-    stale = _admit("case-after-sign-in")
-    assert stale.disposition is support.TeacherSupportAdmissionDisposition.RETRYABLE
-
-    _run("--parent", "P26-0001", "--student", "S26-0001", "--replace", "--apply")
     _assert_paid(BillingPlanId.TEACHER_SUPPORTED)
-
 
 
 # -- the script as an operator starts it: a fresh interpreter -------------------------
@@ -672,7 +668,7 @@ def run(*argv):
 
 run("grant", "--parent", "parent@test.stoaedu.ch", "--student", "S26-0001", *switches)
 run("grant", "--parent", "parent@test.stoaedu.ch", "--student", "S26-0001", *switches, "--apply")
-run("grant", "--parent", "P26-0001", "--student", t.STUDENT, "--plan", "family", "--replace", "--apply")
+run("grant", "--parent", "P26-0001", "--student", t.STUDENT, "--plan", "online_classroom", "--replace", "--apply")
 run("revoke", "--parent", "P26-0001", "--student", "S26-0001", *undo)
 run("revoke", "--parent", "P26-0001", "--student", "S26-0001", *undo, "--apply")
 t._assert_unpaid("fresh-process")

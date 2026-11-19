@@ -5,15 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from hashlib import blake2s
-import logging
 import secrets
 
 from botocore.exceptions import ClientError
 
+from stoa import log_facts
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 
 
-logger = logging.getLogger(__name__)
+logger = log_facts.get_logger(__name__)
 _DIGEST_KEY = secrets.token_bytes(32)
 _RETRY_AFTER_SECONDS = 15
 

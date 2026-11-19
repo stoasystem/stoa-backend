@@ -165,6 +165,9 @@ class MemoryRecommendation(_MemoryItem):
     subject: str
     topic_id: str = Field(alias="topicId")
     label: str
+    # Why it is recommended, as a code a client translates
+    # (`assignment_automation.rationale.<code>`, #495); `rationale` is its English.
+    rationale_code: str = Field(alias="rationaleCode")
     rationale: str
     confidence: Literal["high", "medium", "low"]
     freshness: MemoryRecommendationFreshness

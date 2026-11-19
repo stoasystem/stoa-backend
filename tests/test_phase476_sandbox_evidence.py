@@ -50,7 +50,7 @@ def _preflight_receipt() -> dict[str, object]:
         "priceModes": {
             "student": "test",
             "teacher_supported": "test",
-            "family": "test",
+            "online_classroom": "test",
         },
         "eventDestinationVersion": "2025-06-30.basil",
         "enabledPaymentMethods": ["card"],
@@ -102,7 +102,7 @@ def _observation(preflight_path: Path) -> dict[str, object]:
             "priceModes": {
                 "student": "test",
                 "teacher_supported": "test",
-                "family": "test",
+                "online_classroom": "test",
             },
             "checkoutSessionId": "cs_test_phase476_sensitive",
             "invoiceId": "in_phase476_sensitive",

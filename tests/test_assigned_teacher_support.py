@@ -173,20 +173,21 @@ def test_lowering_the_figure_below_what_was_spent_refuses_rather_than_fails(
 def test_a_paid_grant_still_wins_where_one_exists(
     grants: dict[str, dict[str, object]],
 ) -> None:
-    """The assigned figure is a floor, not a replacement.
+    """Where a parent has bought a plan, the plan's figures are the ones spent against.
 
-    A family that bought the wider budget keeps it, and the scope spent against
-    is still the grant's - otherwise the counters would part company.
+    The scope spent against is the grant's - otherwise the counters would part
+    company - and the plan decides both ways of help (#482).
     """
-    grants["student-1"] = _grant("student-1", plan_id="family")
+    grants["student-1"] = _grant("student-1", plan_id="online_classroom")
 
     projection = service.get_teacher_support_projection(
         beneficiary_id="student-1", observed_at=NOW, table=AtomicSupportTable()
     )
 
-    assert projection["planId"] == "family"
-    assert projection["supportScope"] == "shared_family"
-    assert projection["limit"] == 10
+    assert projection["planId"] == "online_classroom"
+    assert projection["supportScope"] == "per_beneficiary"
+    assert projection["limit"] == 2
+    assert projection["classroom"]["limit"] == 2
 
 
 @pytest.mark.parametrize(("field", "value"), [("role", "parent"), ("account_status", "suspended")])
@@ -434,12 +435,33 @@ def test_the_figure_an_administrator_sets_is_the_figure_the_service_reads(admin_
     assert client.get(ALLOWANCE_PATH).json() == {
         "studentId": STUDENT,
         "weeklyCases": 20,
+        "weeklyClassroomCases": service.ASSIGNED_WEEKLY_CLASSROOM_CASES,
         "source": "administrator",
         "default": 7,
+        "classroomDefault": service.ASSIGNED_WEEKLY_CLASSROOM_CASES,
         "maximum": service.ASSIGNED_WEEKLY_CASES_MAXIMUM,
     }
     # The join: the stored row read by the admission path, not by the endpoint.
     assert service.assigned_weekly_cases(_stored(admin_table)) == 20
+
+
+def test_the_administrator_sets_the_classroom_figure_and_a_later_text_change_keeps_it(
+    admin_table,
+) -> None:
+    _seed_profile(admin_table, STUDENT, "student")
+    client = _admin_client()
+
+    first = client.put(
+        ALLOWANCE_PATH,
+        json={"weekly_cases": 5, "weekly_classroom_cases": 1, "reason": "pilot"},
+    )
+    second = client.put(ALLOWANCE_PATH, json={"weekly_cases": 6, "reason": "exam week"})
+
+    assert first.status_code == second.status_code == 200
+    assert second.json()["weeklyClassroomCases"] == 1
+    read = client.get(ALLOWANCE_PATH).json()
+    assert (read["weeklyCases"], read["weeklyClassroomCases"]) == (6, 1)
+    assert service.assigned_weekly_classroom_cases(_stored(admin_table)) == 1
 
 
 def test_the_raised_figure_is_what_the_student_may_actually_spend(admin_table) -> None:
