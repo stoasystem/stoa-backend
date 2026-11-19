@@ -37,9 +37,9 @@ from stoa.services.ask_question._admission import AdmissionError
 logger = logging.getLogger(__name__)
 
 # How long a committed command may wait for its direct invocation before the
-# sweep takes it. The request invokes right after committing, so a minute
-# covers a slow start without taking work a delivery is about to do.
-_UNCLAIMED_AFTER = timedelta(seconds=60)
+# sweep takes it. Kept with the store, which writes when a command is due in
+# the sweep's index (#502).
+_UNCLAIMED_AFTER = _store.UNCLAIMED_AFTER
 
 # The sweep answers only questions someone may still be waiting for, counted
 # from the latest attempt. The chat stops waiting after six minutes, and a live
@@ -59,18 +59,11 @@ _KEPT_ANSWER_MAX_AGE = timedelta(days=1)
 # lease to run out, which costs the student five minutes.
 _SWEEP_MIN_REMAINING_SECONDS = 100.0
 
-# How long a failure's reservation is left before the sweep settles it. A lost
-# answer is never tried again, so two sweep runs is enough to be sure no
-# attempt still holds it. A reservation kept at admission is the student's
-# retry to reuse for as long as the sweep would still answer that retry.
-_SETTLE_AFTER = {
-    "needs_reconciliation": timedelta(minutes=10),
-    "deadline_exceeded": timedelta(minutes=20),
-}
+# How long a failure's reservation is left before the sweep settles it, and a
+# command whose last attempt died (E27). Kept with the store, as above.
+_SETTLE_AFTER = _store.SETTLE_AFTER
 assert set(_SETTLE_AFTER) == set(_store.UNSETTLED_RESERVATION_FAILURES)
-# A command whose last attempt died is left two sweep runs after it is marked,
-# as a lost answer is, before its reservation is settled (E27).
-_SETTLE_TERMINAL_AFTER = timedelta(minutes=10)
+_SETTLE_TERMINAL_AFTER = _store.SETTLE_TERMINAL_AFTER
 
 # Settling calls no model; this is only enough for its few writes.
 _SETTLE_MIN_REMAINING_SECONDS = 10.0

@@ -43,6 +43,8 @@ INDEX_KEY_ATTRIBUTES = frozenset(
         "teacher_id",
         "started_at",
         "review_state",
+        "sweep_bucket",
+        "sweep_due_at",
     }
 )
 
