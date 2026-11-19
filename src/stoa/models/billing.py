@@ -28,13 +28,13 @@ class BillingPlanId(StrEnum):
     FREE_TRIAL = "free_trial"
     STUDENT = "student"
     TEACHER_SUPPORTED = "teacher_supported"
-    FAMILY = "family"
+    ONLINE_CLASSROOM = "online_classroom"
 
 
 class PurchasablePlanId(StrEnum):
     STUDENT = "student"
     TEACHER_SUPPORTED = "teacher_supported"
-    FAMILY = "family"
+    ONLINE_CLASSROOM = "online_classroom"
 
 
 class CheckoutCommandState(StrEnum):
@@ -105,9 +105,9 @@ class CheckoutIntent(_BillingModel):
     def validate_beneficiary_scope(self) -> "CheckoutIntent":
         if len(set(self.beneficiary_ids)) != len(self.beneficiary_ids):
             raise ValueError("beneficiary IDs must be unique")
-        if self.plan_id in {PurchasablePlanId.STUDENT, PurchasablePlanId.TEACHER_SUPPORTED}:
-            if len(self.beneficiary_ids) != 1:
-                raise ValueError("selected plan requires exactly one beneficiary")
+        # Every plan is bought for one child (#482: the shared Family plan is gone).
+        if len(self.beneficiary_ids) != 1:
+            raise ValueError("selected plan requires exactly one beneficiary")
         return self
 
 

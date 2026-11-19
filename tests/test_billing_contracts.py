@@ -52,7 +52,7 @@ def _week_payload() -> dict[str, object]:
 
 
 def _checkout_intent_payload(plan: str = "student") -> dict[str, object]:
-    beneficiaries = ["student-1", "student-2"] if plan == "family" else ["student-1"]
+    beneficiaries = ["student-1"]
     return {
         "commandId": "command-1",
         "parentId": "parent-1",
@@ -125,12 +125,12 @@ def test_billing_plan_ids_are_exactly_the_four_product_values() -> None:
         "free_trial",
         "student",
         "teacher_supported",
-        "family",
+        "online_classroom",
     }
     assert {member.value for member in PurchasablePlanId} == {
         "student",
         "teacher_supported",
-        "family",
+        "online_classroom",
     }
 
 
@@ -155,9 +155,10 @@ def test_free_trial_cannot_construct_a_checkout_intent() -> None:
         ("student", ["student-1", "student-2"]),
         ("teacher_supported", []),
         ("teacher_supported", ["student-1", "student-2"]),
-        ("family", []),
-        ("family", ["student-1", "student-2", "student-3", "student-4"]),
-        ("family", ["student-1", "student-1"]),
+        ("online_classroom", []),
+        # The classroom plan is for one child, as every plan is (#482).
+        ("online_classroom", ["student-1", "student-2"]),
+        ("online_classroom", ["student-1", "student-1"]),
     ],
 )
 def test_checkout_intent_enforces_explicit_unique_plan_beneficiaries(
@@ -172,10 +173,10 @@ def test_checkout_intent_enforces_explicit_unique_plan_beneficiaries(
 
 
 def test_checkout_intent_uses_explicit_api_aliases_and_snake_case_storage_fields() -> None:
-    intent = CheckoutIntent.model_validate(_checkout_intent_payload("family"))
+    intent = CheckoutIntent.model_validate(_checkout_intent_payload("online_classroom"))
 
-    assert intent.plan_id is PurchasablePlanId.FAMILY
-    assert intent.beneficiary_ids == ("student-1", "student-2")
+    assert intent.plan_id is PurchasablePlanId.ONLINE_CLASSROOM
+    assert intent.beneficiary_ids == ("student-1",)
     assert set(intent.model_dump()) == {
         "command_id",
         "parent_id",
@@ -204,7 +205,7 @@ def test_checkout_intent_uses_explicit_api_aliases_and_snake_case_storage_fields
         ("successUrl", "https://example.test/billing/success"),
         ("cancelUrl", "https://example.test/billing/cancel"),
         ("redirectPath", "/billing/success"),
-        ("plan", "family"),
+        ("plan", "online_classroom"),
         ("providerEvent", "checkout.session.completed"),
     ],
 )
@@ -469,19 +470,20 @@ def test_invalid_week_boundaries_are_rejected(start: datetime, end: datetime) ->
 
 
 @pytest.mark.parametrize(
-    ("plan", "input_tokens", "output_tokens", "support_cases", "scope"),
+    ("plan", "input_tokens", "output_tokens", "text_cases", "classroom_cases", "scope"),
     [
-        ("free_trial", 50_000, 10_000, 0, "none"),
-        ("student", 500_000, 100_000, 0, "none"),
-        ("teacher_supported", 1_000_000, 200_000, 2, "per_beneficiary"),
-        ("family", 1_000_000, 200_000, 10, "shared_family"),
+        ("free_trial", 50_000, 10_000, 0, 0, "none"),
+        ("student", 500_000, 100_000, 0, 0, "none"),
+        ("teacher_supported", 1_000_000, 200_000, 2, 0, "per_beneficiary"),
+        ("online_classroom", 1_000_000, 200_000, 2, 2, "per_beneficiary"),
     ],
 )
 def test_plan_allowance_budgets_match_locked_weekly_values(
     plan: str,
     input_tokens: int,
     output_tokens: int,
-    support_cases: int,
+    text_cases: int,
+    classroom_cases: int,
     scope: str,
 ) -> None:
     budget = PlanAllowanceBudget.model_validate(
@@ -489,7 +491,8 @@ def test_plan_allowance_budgets_match_locked_weekly_values(
             "planId": plan,
             "inputTokens": input_tokens,
             "outputTokens": output_tokens,
-            "teacherSupportCases": support_cases,
+            "teacherSupportTextCases": text_cases,
+            "teacherSupportClassroomCases": classroom_cases,
             "teacherSupportScope": scope,
             "allowanceVersion": 1,
         }
@@ -497,7 +500,8 @@ def test_plan_allowance_budgets_match_locked_weekly_values(
 
     assert budget.input_tokens == input_tokens
     assert budget.output_tokens == output_tokens
-    assert budget.teacher_support_cases == support_cases
+    assert budget.teacher_support_text_cases == text_cases
+    assert budget.teacher_support_classroom_cases == classroom_cases
 
 
 def test_plan_allowance_budget_rejects_values_not_matching_the_plan() -> None:
@@ -507,7 +511,8 @@ def test_plan_allowance_budget_rejects_values_not_matching_the_plan() -> None:
                 "planId": "student",
                 "inputTokens": 1_000_000,
                 "outputTokens": 100_000,
-                "teacherSupportCases": 0,
+                "teacherSupportTextCases": 0,
+                "teacherSupportClassroomCases": 0,
                 "teacherSupportScope": "none",
                 "allowanceVersion": 1,
             }

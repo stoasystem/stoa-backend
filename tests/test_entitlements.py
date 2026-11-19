@@ -57,7 +57,7 @@ def test_active_parent_billing_grants_linked_student_paid_entitlement(monkeypatc
             "PK": "SUBSCRIPTION_BILLING#parent-1",
             "SK": "SUMMARY",
             "billing_status": "active",
-            "subscription_tier": "family",
+            "subscription_tier": "online_classroom",
             "current_period_start": "2026-07-01T00:00:00+00:00",
             "current_period_end": "2026-08-01T00:00:00+00:00",
         }
@@ -72,7 +72,7 @@ def test_active_parent_billing_grants_linked_student_paid_entitlement(monkeypatc
             "beneficiary_id": "student-1",
             "grant_status": "active",
             "grant_version": 7,
-            "plan_id": "family",
+            "plan_id": "online_classroom",
             "plan_version": 2,
             "allowance_version": 2,
             "subscription_id_digest": "a" * 64,
@@ -86,7 +86,7 @@ def test_active_parent_billing_grants_linked_student_paid_entitlement(monkeypatc
         student_profile=profiles["student-1"],
     )
 
-    assert entitlement["effectivePlan"] == "family"
+    assert entitlement["effectivePlan"] == "online_classroom"
     assert entitlement["source"] == "paid_beneficiary_grant"
     assert entitlement["limits"]["dailyAiQuestionLimit"] == 100
     assert entitlement["limits"]["dailyChatMessageLimit"] == 200
@@ -101,7 +101,7 @@ def test_pending_checkout_does_not_grant_paid_parent_access(monkeypatch, link_ro
             "PK": "SUBSCRIPTION_BILLING#parent-1",
             "SK": "SUMMARY",
             "billing_status": "checkout_pending",
-            "requested_tier": "family",
+            "requested_tier": "online_classroom",
             "subscription_tier": "free_trial",
         }
     )
@@ -206,7 +206,7 @@ def test_legacy_binding_rows_and_profile_pointer_alone_buy_a_student_nothing(
             "PK": "SUBSCRIPTION_BILLING#parent-1",
             "SK": "SUMMARY",
             "billing_status": "active",
-            "subscription_tier": "family",
+            "subscription_tier": "online_classroom",
             "current_period_start": "2026-07-01T00:00:00+00:00",
             "current_period_end": "2026-08-01T00:00:00+00:00",
         }
@@ -221,7 +221,7 @@ def test_legacy_binding_rows_and_profile_pointer_alone_buy_a_student_nothing(
             "beneficiary_id": "student-1",
             "grant_status": "active",
             "grant_version": 7,
-            "plan_id": "family",
+            "plan_id": "online_classroom",
             "plan_version": 2,
             "allowance_version": 2,
             "subscription_id_digest": "a" * 64,

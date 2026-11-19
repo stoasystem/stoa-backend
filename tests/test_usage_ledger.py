@@ -276,7 +276,7 @@ def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
         lambda student_id, settings, student_profile=None: {
             "studentId": student_id,
             "parentId": "parent-1",
-            "effectivePlan": "family",
+            "effectivePlan": "online_classroom",
             "source": "provider_billing",
             "billingState": "active",
             "limits": {"dailyAiQuestionLimit": 100},

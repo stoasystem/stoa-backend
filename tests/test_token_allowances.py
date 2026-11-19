@@ -178,23 +178,25 @@ def _reserve(
 
 
 @pytest.mark.parametrize(
-    ("plan_id", "input_tokens", "output_tokens", "cases", "scope"),
+    ("plan_id", "input_tokens", "output_tokens", "text_cases", "classroom_cases", "scope"),
     [
-        (BillingPlanId.FREE_TRIAL, 50_000, 10_000, 0, TeacherSupportScope.NONE),
-        (BillingPlanId.STUDENT, 500_000, 100_000, 0, TeacherSupportScope.NONE),
+        (BillingPlanId.FREE_TRIAL, 50_000, 10_000, 0, 0, TeacherSupportScope.NONE),
+        (BillingPlanId.STUDENT, 500_000, 100_000, 0, 0, TeacherSupportScope.NONE),
         (
             BillingPlanId.TEACHER_SUPPORTED,
             1_000_000,
             200_000,
             2,
+            0,
             TeacherSupportScope.PER_BENEFICIARY,
         ),
         (
-            BillingPlanId.FAMILY,
+            BillingPlanId.ONLINE_CLASSROOM,
             1_000_000,
             200_000,
-            10,
-            TeacherSupportScope.SHARED_FAMILY,
+            2,
+            2,
+            TeacherSupportScope.PER_BENEFICIARY,
         ),
     ],
 )
@@ -202,7 +204,8 @@ def test_plan_budgets_are_the_exact_locked_values(
     plan_id: BillingPlanId,
     input_tokens: int,
     output_tokens: int,
-    cases: int,
+    text_cases: int,
+    classroom_cases: int,
     scope: TeacherSupportScope,
 ) -> None:
     budget = allowance_service.plan_allowance_budget(plan_id, allowance_version=7)
@@ -210,9 +213,10 @@ def test_plan_budgets_are_the_exact_locked_values(
     assert (
         budget.input_tokens,
         budget.output_tokens,
-        budget.teacher_support_cases,
+        budget.teacher_support_text_cases,
+        budget.teacher_support_classroom_cases,
         budget.teacher_support_scope,
-    ) == (input_tokens, output_tokens, cases, scope)
+    ) == (input_tokens, output_tokens, text_cases, classroom_cases, scope)
 
 
 @pytest.mark.parametrize(
@@ -286,7 +290,7 @@ def test_higher_allowance_version_preserves_usage_and_stale_version_fails_closed
     upgraded = allowance_service.reserve_token_allowance(
         beneficiary_id="student-1",
         effect_id="family-effect",
-        plan_id=BillingPlanId.FAMILY,
+        plan_id=BillingPlanId.ONLINE_CLASSROOM,
         allowance_version=8,
         input_tokens=60_000,
         max_output_tokens=20_000,
@@ -310,7 +314,7 @@ def test_higher_allowance_version_preserves_usage_and_stale_version_fails_closed
     assert stale.disposition is allowance_repo.ReservationDisposition.RETRYABLE
     counter = table.counter()
     assert counter["allowance_version"] == 8
-    assert counter["plan_id"] == "family"
+    assert counter["plan_id"] == "online_classroom"
     assert counter["reserved_input_tokens"] == 60_100
     assert counter["reserved_output_tokens"] == 20_050
 

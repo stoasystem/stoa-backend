@@ -36,7 +36,7 @@ _PLAN_RANK = {
     BillingPlanId.FREE_TRIAL: 0,
     BillingPlanId.STUDENT: 1,
     BillingPlanId.TEACHER_SUPPORTED: 2,
-    BillingPlanId.FAMILY: 3,
+    BillingPlanId.ONLINE_CLASSROOM: 3,
 }
 
 
@@ -694,11 +694,8 @@ def validate_beneficiary_selection(
     )
     if len(selected) != len(set(selected)):
         raise ValueError("beneficiary_ids must be unique")
-    if plan_id in {BillingPlanId.STUDENT, BillingPlanId.TEACHER_SUPPORTED}:
-        valid = len(selected) == 1
-    else:
-        valid = 1 <= len(selected) <= 3
-    if not valid:
+    # Every plan is for one child (#482 removed the shared Family plan).
+    if len(selected) != 1:
         raise ValueError("beneficiary selection does not match the paid plan")
     return tuple(sorted(selected))
 

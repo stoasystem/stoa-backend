@@ -324,7 +324,7 @@ def attachment_storage_limit(
     settings: Settings | None = None,
 ) -> int:
     """Return the admission-only byte limit for one effective product plan."""
-    paid = effective_plan in {"student", "teacher_supported", "family"}
+    paid = effective_plan in {"student", "teacher_supported", "online_classroom"}
     if settings is not None:
         return (
             settings.paid_attachment_storage_bytes

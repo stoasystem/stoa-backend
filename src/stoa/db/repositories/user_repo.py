@@ -412,6 +412,82 @@ def record_sign_in(
     )
 
 
+#: The row beside a teacher's profile that says when they last had STOA open
+#: (#472). Its own row, so the heartbeat never moves the profile's version.
+TEACHER_SEEN_SK = "DISPATCH_SEEN"
+
+
+def record_teacher_seen(
+    user_id: str, *, seen_at: str, written_before: str, expires_at: int
+) -> None:
+    """Stamp when a teacher was last seen, unless it was stamped after `written_before`.
+
+    The write is refused when a stamp at or after `written_before` is already
+    there; that refusal is how polls inside one interval cost no second stamp,
+    and it is not an error. Behind the account's fence, unread, like the
+    sign-in stamp: a deleted account is never written to again. `expires_at`
+    lets the table drop the row once it can no longer mean anything.
+    """
+    try:
+        db_table.fenced(
+            user_id,
+            [
+                {
+                    "Update": {
+                        "Key": {"PK": f"USER#{user_id}", "SK": TEACHER_SEEN_SK},
+                        "UpdateExpression": (
+                            "SET entity_type = :entity, user_id = :user_id, "
+                            "seen_at = :seen_at, expires_at = :expires_at"
+                        ),
+                        "ConditionExpression": (
+                            "attribute_not_exists(seen_at) OR seen_at < :written_before"
+                        ),
+                        "ExpressionAttributeValues": {
+                            ":entity": "teacher_seen",
+                            ":user_id": user_id,
+                            ":seen_at": seen_at,
+                            ":expires_at": expires_at,
+                            ":written_before": written_before,
+                        },
+                    }
+                }
+            ],
+            any_generation=True,
+        )
+    except db_table.WriteRefused:
+        return
+
+
+def pause_teacher_dispatch(
+    user_id: str, *, expected_version: object, dispatch_id: str, paused_at: str
+) -> None:
+    """Pause a teacher on the profile version read, for the offer they let lapse (#472).
+
+    Both status fields get the word, as a teacher's own save writes them, and
+    the offer is kept in `dispatch_paused_for` so the same lapse never pauses
+    them twice. `WriteRefused` when the profile moved since it was read.
+    """
+    db_table.fenced(
+        user_id,
+        [
+            profile_update_operation(
+                user_id,
+                update_expression=(
+                    "SET availability_status = :paused, dispatch_availability = :paused, "
+                    "dispatch_paused_for = :dispatch_id, dispatch_paused_at = :paused_at, "
+                    "updated_at = :paused_at"
+                ),
+                expression_attribute_values={
+                    ":paused": "paused",
+                    ":dispatch_id": dispatch_id,
+                    ":paused_at": paused_at,
+                },
+                expected_version=_optional_profile_version(expected_version),
+            )
+        ],
+    )
+
+
 TEACHER_AVAILABILITY_FIELDS = ("dispatch_availability", "availability_status", "teacher_status")
 
 

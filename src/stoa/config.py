@@ -346,7 +346,7 @@ class Settings(BaseSettings):
         paid_price_ids = (
             self.stripe_student_price_id.strip(),
             self.stripe_teacher_supported_price_id.strip(),
-            self.stripe_family_price_id.strip(),
+            self.stripe_online_classroom_price_id.strip(),
         )
         checkout_configured = bool(api_key) or any(paid_price_ids)
         if checkout_configured and not all(paid_price_ids):
@@ -508,7 +508,7 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_student_price_id: str = ""
     stripe_teacher_supported_price_id: str = ""
-    stripe_family_price_id: str = ""
+    stripe_online_classroom_price_id: str = ""
     stripe_webhook_endpoint_url: str = ""
     stripe_checkout_web_origins: List[str] = ["http://localhost:5173"]
     stripe_checkout_result_path: str = "/billing/checkout/result"

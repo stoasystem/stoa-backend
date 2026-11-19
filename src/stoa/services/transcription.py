@@ -17,15 +17,14 @@ no text of the provider's, which could quote what it was sent.
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Final, Protocol
 
 from botocore.exceptions import BotoCoreError, ClientError
 
-from stoa import aws, config
+from stoa import aws, config, log_facts
 from stoa.services.voice_audio import Container
 
-logger = logging.getLogger(__name__)
+logger = log_facts.get_logger(__name__)
 
 # Without "do not translate" Voxtral answers a French question in English
 # (#469, measured 2026-11-16). It must not answer the question either: Voxtral

@@ -21,7 +21,7 @@ def _grant(
     *,
     parent_id: str = "parent-1",
     student_id: str = "student-1",
-    plan: BillingPlanId = BillingPlanId.FAMILY,
+    plan: BillingPlanId = BillingPlanId.ONLINE_CLASSROOM,
     grant_version: int = 7,
     plan_version: int = 7,
 ) -> dict[str, object]:
@@ -98,7 +98,7 @@ def test_cancel_or_downgrade_applies_only_at_period_end_once(
         parent_id="parent-1",
         beneficiary_ids=("student-1",),
         subscription_id_digest=_DIGEST,
-        current_plan=BillingPlanId.FAMILY,
+        current_plan=BillingPlanId.ONLINE_CLASSROOM,
         target_plan=BillingPlanId.STUDENT,
         plan_version=8,
         period_end=_PERIOD_END,
@@ -315,7 +315,7 @@ def test_over_free_limit_blocks_only_new_bytes_and_never_deletes() -> None:
 def test_failed_upgrade_leaves_prior_grant_and_aggregates_byte_identical(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    grant = _grant(plan=BillingPlanId.FAMILY)
+    grant = _grant(plan=BillingPlanId.ONLINE_CLASSROOM)
     counter = {"PK": "ALLOWANCE#student-1", "SK": "WEEK#2026-W31", "used": 17}
     storage = {"PK": "ATTACHMENT_STORAGE#student-1", "SK": "USAGE", "used_bytes": 99}
     items = {

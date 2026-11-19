@@ -546,6 +546,41 @@ def teacher_may(
     return False
 
 
+#: How long after resolving a student's request its teacher may still assign
+#: them practice (#495).
+HELPED_STUDENT_DAYS = 14
+
+
+def teacher_helped_student(
+    records: Sequence[Mapping[str, Any]], teacher_id: str, student_id: str, *, now: datetime
+) -> bool:
+    """Whether this teacher took one of this student's requests (布置练习的权限, #495).
+
+    The teacher holds one of them in progress, or resolved it no more than
+    `HELPED_STUDENT_DAYS` ago. An offer never taken, a request reassigned to
+    another teacher, one withdrawn or expired, and one closed to the teacher
+    whose account was scrubbed do not count. A resolution time that cannot be
+    read counts as long past. The accounts are the policy's to judge.
+    """
+    if not teacher_id or not student_id:
+        return False
+    for record in records:
+        if record.get("student_id") != student_id or record.get("teacher_id") != teacher_id:
+            continue
+        if str(record.get("dispatch_status") or "") in _CLOSED_DISPATCH:
+            continue
+        status = stored_status(record)
+        if status == IN_PROGRESS:
+            return True
+        if status == RESOLVED:
+            resolved_at = _parse(record.get("escalation_resolved_at"))
+            if resolved_at is not None and now - resolved_at <= timedelta(
+                days=HELPED_STUDENT_DAYS
+            ):
+                return True
+    return False
+
+
 def admit_student_to_classroom(record: Mapping[str, Any] | None) -> None:
     """Refuse the student entry unless a teacher has accepted their classroom request (#481).
 
@@ -749,6 +784,8 @@ def ask(
         support_case_id=conversation_id,
         case_kind="conversation",
         beneficiary_id=student_id,
+        # Counted against the weekly figure of the way the student chose (#482).
+        mode=mode,
         observed_at=_parse(timestamp) or datetime.now(timezone.utc),
         persist_case=persist_case,
         table=store,
@@ -830,6 +867,8 @@ def dispatch(record: Mapping[str, Any], *, now: str | None = None, table: Any | 
         return dict(record)
     previous = _previous(record, timestamp)
     declined = _declined(record)
+    # Before the plan reads the teachers, so it reads this one paused (#472).
+    _pause_lapsed_teacher(record, timestamp)
     profiles = teacher_dispatch_service.list_teacher_profiles()
 
     def plan(excluded: list[str]) -> dict[str, Any]:
@@ -861,6 +900,34 @@ def dispatch(record: Mapping[str, Any], *, now: str | None = None, table: Any | 
         )
     reason = str(first["summary"]["noCandidateReason"] or "no_eligible_teacher")
     return _record_no_candidate(record, reason=reason, previous=previous, now=timestamp, table=store)
+
+
+def _pause_lapsed_teacher(record: Mapping[str, Any], now: str) -> None:
+    """Pause the teacher an ordinary offer lapsed on, and tell them (#472).
+
+    A standing offer is not one: it stays open until the request expires.
+    Best effort: the request goes on to the next teacher whatever happens here.
+    """
+    teacher_id = str(record.get("dispatched_teacher_id") or "")
+    dispatch_id = str(record.get("dispatch_id") or "")
+    if (
+        not teacher_id
+        or not dispatch_id
+        or record.get("dispatch_status") != "dispatched"
+        or record.get("dispatch_fallback")
+        or not _expired(record.get("dispatch_deadline_at"), now)
+    ):
+        return
+    try:
+        if not teacher_dispatch_service.pause_after_lapse(teacher_id, dispatch_id=dispatch_id, now=now):
+            return
+        notification_service.emit_teacher_dispatch_paused(
+            teacher_id=teacher_id,
+            dispatch_id=dispatch_id,
+            accept_minutes=teacher_dispatch_service.DISPATCH_ACCEPT_TIMEOUT_SECONDS // 60,
+        )
+    except Exception as exc:  # noqa: BLE001 - best effort by contract
+        logger.warning("dispatch_lapse_pause_failed error=%s", type(exc).__name__)
 
 
 def _offer(

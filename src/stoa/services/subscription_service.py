@@ -202,12 +202,12 @@ PLAN_BENEFITS: dict[str, dict[str, Any]] = {
         "teacherSupport": "priority_support",
         "weeklyReport": "enhanced",
     },
-    "family": {
-        "label": "Family",
+    "online_classroom": {
+        "label": "Online classroom",
         "dailyAiQuestionLimit": 100,
         "dailyChatMessageLimit": 200,
         "dailyHintLimit": 80,
-        "teacherSupport": "priority_support",
+        "teacherSupport": "classroom_support",
         "weeklyReport": "enhanced",
     },
 }
@@ -268,14 +268,8 @@ def _require_checkout_beneficiaries(
     if (
         len(set(beneficiary_ids)) != len(beneficiary_ids)
         or not beneficiary_ids
-        or (plan is PurchasablePlanId.FAMILY and len(beneficiary_ids) > 3)
-        or (
-            plan in {
-                PurchasablePlanId.STUDENT,
-                PurchasablePlanId.TEACHER_SUPPORTED,
-            }
-            and len(beneficiary_ids) != 1
-        )
+        # Every plan is for one child (#482 removed the shared Family plan).
+        or len(beneficiary_ids) != 1
     ):
         raise _checkout_http_error(
             status_code=400,
@@ -836,7 +830,7 @@ _ZURICH = ZoneInfo("Europe/Zurich")
 _PAID_PLAN_IDS = {
     BillingPlanId.STUDENT.value,
     BillingPlanId.TEACHER_SUPPORTED.value,
-    BillingPlanId.FAMILY.value,
+    BillingPlanId.ONLINE_CLASSROOM.value,
 }
 _CHECKOUT_LIFECYCLE_STATES = {
     "confirming",
@@ -1309,10 +1303,8 @@ def project_parent_billing_overview(
     if len(plan_ids) != 1 or len(subscription_digests) != 1:
         raise ValueError("current grants do not share one paid lifecycle")
     effective_plan = next(iter(plan_ids))
-    if effective_plan != BillingPlanId.FAMILY.value and len(grant_values) != 1:
-        raise ValueError("non-family plan has multiple beneficiaries")
-    if len(grant_values) > 3:
-        raise ValueError("family beneficiary limit is exceeded")
+    if len(grant_values) != 1:
+        raise ValueError("a paid plan has exactly one beneficiary")
 
     input_remaining: dict[str, int] = {}
     output_remaining: dict[str, int] = {}
@@ -1384,7 +1376,6 @@ def project_parent_billing_overview(
 
     support_scope: str | None = None
     support_limit: int | None = None
-    shared_remaining: int | None = None
     per_beneficiary: dict[str, int] = {}
     for index, projection in enumerate(teacher):
         beneficiary_id = _billing_required_text(
@@ -1393,7 +1384,7 @@ def project_parent_billing_overview(
         scope = _billing_required_text(
             projection.get("supportScope"), "teacher support scope", maximum=32
         )
-        if scope not in {"none", "per_beneficiary", "shared_family"}:
+        if scope not in {"none", "per_beneficiary"}:
             raise ValueError("teacher support scope is invalid")
         if projection.get("weekIdentity") != week_identity:
             raise ValueError("teacher support projection spans a different week")
@@ -1411,11 +1402,7 @@ def project_parent_billing_overview(
             raise ValueError("teacher support limits are inconsistent")
         support_scope = scope
         support_limit = limit
-        if scope == "shared_family":
-            if shared_remaining is not None and remaining != shared_remaining:
-                raise ValueError("shared family support projection is inconsistent")
-            shared_remaining = remaining
-        elif scope == "per_beneficiary":
+        if scope == "per_beneficiary":
             per_beneficiary[beneficiary_id] = remaining
         elif remaining != 0 or limit != 0:
             raise ValueError("unsupported teacher cases must be zero")
@@ -1443,7 +1430,8 @@ def project_parent_billing_overview(
         },
         "teacherCasesRemaining": {
             "scope": support_scope or "none",
-            "remaining": shared_remaining,
+            # Only a shared (Family) scope had one figure for all; none is left (#482).
+            "remaining": None,
             "limit": support_limit or 0,
             "byBeneficiary": {
                 key: per_beneficiary[key] for key in sorted(per_beneficiary)
@@ -1818,8 +1806,8 @@ def get_provider_readiness(settings: Settings) -> dict[str, Any]:
             settings.stripe_teacher_supported_price_id,
             settings=settings,
         ),
-        "family": _price_readiness(
-            "family", settings.stripe_family_price_id, settings=settings
+        "online_classroom": _price_readiness(
+            "online_classroom", settings.stripe_online_classroom_price_id, settings=settings
         ),
     }
 
@@ -1902,7 +1890,9 @@ def get_provider_readiness(settings: Settings) -> dict[str, Any]:
             "teacherSupportedPriceConfigured": bool(
                 settings.stripe_teacher_supported_price_id.strip()
             ),
-            "familyPriceConfigured": bool(settings.stripe_family_price_id.strip()),
+            "onlineClassroomPriceConfigured": bool(
+                settings.stripe_online_classroom_price_id.strip()
+            ),
         },
         "prices": prices,
         "twint": twint,
@@ -2229,13 +2219,9 @@ def activation_predicate(
     if (
         plan is BillingPlanId.FREE_TRIAL
         or not isinstance(beneficiaries, list)
-        or not 1 <= len(beneficiaries) <= 3
-        or len(set(beneficiaries)) != len(beneficiaries)
+        # Every plan is for one child (#482 removed the shared Family plan).
+        or len(beneficiaries) != 1
         or any(not isinstance(value, str) or not value for value in beneficiaries)
-        or (
-            plan in {BillingPlanId.STUDENT, BillingPlanId.TEACHER_SUPPORTED}
-            and len(beneficiaries) != 1
-        )
     ):
         return ActivationPredicateResult(False, "command_intent_invalid")
     return ActivationPredicateResult(True, "joint_provider_predicate_satisfied")
@@ -3547,7 +3533,7 @@ def get_billing_readiness(settings: Settings) -> dict[str, Any]:
     webhook_secret = settings.stripe_webhook_secret.strip()
     student_price = settings.stripe_student_price_id.strip()
     teacher_supported_price = settings.stripe_teacher_supported_price_id.strip()
-    family_price = settings.stripe_family_price_id.strip()
+    online_classroom_price = settings.stripe_online_classroom_price_id.strip()
     blockers: list[str] = []
     warnings: list[str] = []
     sdk_available = _stripe_sdk_available()
@@ -3564,8 +3550,8 @@ def get_billing_readiness(settings: Settings) -> dict[str, Any]:
             blockers.append("missing_student_price_id")
         if not teacher_supported_price:
             blockers.append("missing_teacher_supported_price_id")
-        if not family_price:
-            blockers.append("missing_family_price_id")
+        if not online_classroom_price:
+            blockers.append("missing_online_classroom_price_id")
         if not sdk_available:
             blockers.append("stripe_sdk_missing")
         if blockers:
@@ -3602,7 +3588,7 @@ def get_billing_readiness(settings: Settings) -> dict[str, Any]:
             "webhookSecret": _redacted_presence(webhook_secret),
             "studentPrice": _redacted_presence(student_price),
             "teacherSupportedPrice": _redacted_presence(teacher_supported_price),
-            "familyPrice": _redacted_presence(family_price),
+            "onlineClassroomPrice": _redacted_presence(online_classroom_price),
             "webOrigins": bool(settings.stripe_checkout_web_origins),
             "resultPath": bool(settings.stripe_checkout_result_path),
             "stripeSdk": sdk_available,
@@ -4013,7 +3999,7 @@ def _price_id_for_tier(tier: str, settings: Settings) -> str:
     configured = {
         SubscriptionTier.STUDENT.value: settings.stripe_student_price_id,
         SubscriptionTier.TEACHER_SUPPORTED.value: settings.stripe_teacher_supported_price_id,
-        SubscriptionTier.FAMILY.value: settings.stripe_family_price_id,
+        SubscriptionTier.ONLINE_CLASSROOM.value: settings.stripe_online_classroom_price_id,
     }[tier]
     return configured or f"price_test_stoa_{tier}_monthly"
 
@@ -5187,7 +5173,7 @@ def _tier_rank(value: str) -> int:
         SubscriptionTier.FREE_TRIAL.value: 0,
         SubscriptionTier.STUDENT.value: 1,
         SubscriptionTier.TEACHER_SUPPORTED.value: 2,
-        SubscriptionTier.FAMILY.value: 3,
+        SubscriptionTier.ONLINE_CLASSROOM.value: 3,
     }[value]
 
 

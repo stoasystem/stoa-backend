@@ -199,7 +199,7 @@ def _admission(admitted_at: datetime, case_id: str = "question-1") -> teacher_su
         support_case_id=case_id,
         support_scope_id="scope-1",
         beneficiary_id="student-1",
-        plan_id=BillingPlanId.FAMILY,
+        plan_id=BillingPlanId.ONLINE_CLASSROOM,
         week_identity="2026-W39",
         window_start=admitted_at - timedelta(days=1),
         window_end=admitted_at + timedelta(days=6),
