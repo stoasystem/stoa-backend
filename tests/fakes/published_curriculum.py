@@ -102,7 +102,8 @@ def curriculum_rows(scale: float = 1.0) -> list[dict[str, Any]]:
             }
         )
     rows.extend(seed_practice.prepare_challenge_items(challenges))
-    return rows
+    # Where a publish puts them in GSI-TopicShelf (#513), as the seed does its own.
+    return [{**row, **practice_repo.topic_shelf_fields(row)} for row in rows]
 
 
 # ── Who read what ───────────────────────────────────────────────────────────

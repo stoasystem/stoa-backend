@@ -275,10 +275,13 @@ def test_practice_history_names_the_lesson_not_its_topic(monkeypatch):
             ],
         ),
     )
+    # Read by its key, not out of every lesson row (#513).
     monkeypatch.setattr(
         students.practice_repo,
-        "get_lessons",
-        lambda *_a, **_k: [{"lesson_id": "brueche-l1", "title": "Brüche lesen und kürzen"}],
+        "get_lesson",
+        lambda lesson_id: {"lesson_id": "brueche-l1", "title": "Brüche lesen und kürzen"}
+        if lesson_id == "brueche-l1"
+        else None,
     )
 
     response = _client(_actor(CanonicalRole.STUDENT, "student-1")).get(
