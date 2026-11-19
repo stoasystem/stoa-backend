@@ -17,6 +17,22 @@ def _client(router, prefix: str, user: dict) -> TestClient:
     return TestClient(app)
 
 
+TEXT_STANDING = {
+    "canRequest": True,
+    "blockedReason": None,
+    "remainingCases": 7,
+    "weeklyCases": 7,
+    "resetsAt": "2026-11-01T23:00:00+00:00",
+}
+CLASSROOM_STANDING = {
+    "canRequest": False,
+    "blockedReason": "teacher_support_not_included",
+    "remainingCases": 0,
+    "weeklyCases": 0,
+    "resetsAt": None,
+}
+
+
 def test_teacher_help_availability_reports_online_teacher_to_student(monkeypatch):
     monkeypatch.setattr(
         conversations.teacher_dispatch_service,
@@ -30,13 +46,7 @@ def test_teacher_help_availability_reports_online_teacher_to_student(monkeypatch
     monkeypatch.setattr(
         conversations.teacher_support_allowance_service,
         "get_student_teacher_support_standing",
-        lambda **_kwargs: {
-            "canRequest": True,
-            "blockedReason": None,
-            "remainingCases": 7,
-            "weeklyCases": 7,
-            "resetsAt": "2026-11-01T23:00:00+00:00",
-        },
+        lambda **_kwargs: {**TEXT_STANDING, "text": TEXT_STANDING, "classroom": CLASSROOM_STANDING},
     )
 
     response = _client(
@@ -52,11 +62,9 @@ def test_teacher_help_availability_reports_online_teacher_to_student(monkeypatch
         "nextWindow": None,
         "responseTime": "Teacher support is available now.",
         "teacherSupport": {
-            "canRequest": True,
-            "blockedReason": None,
-            "remainingCases": 7,
-            "weeklyCases": 7,
-            "resetsAt": "2026-11-01T23:00:00+00:00",
+            **TEXT_STANDING,
+            "text": TEXT_STANDING,
+            "classroom": CLASSROOM_STANDING,
         },
     }
 

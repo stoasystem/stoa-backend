@@ -62,7 +62,7 @@ def test_upload_contract_constants_are_locked() -> None:
         ("free_trial", FREE_STORAGE_BYTES),
         ("student", PAID_STORAGE_BYTES),
         ("teacher_supported", PAID_STORAGE_BYTES),
-        ("family", PAID_STORAGE_BYTES),
+        ("online_classroom", PAID_STORAGE_BYTES),
     ],
 )
 def test_effective_entitlement_contract_includes_attachment_storage(
@@ -199,4 +199,4 @@ def test_storage_quota_uses_authoritative_entitlement_tiers() -> None:
     assert storage_limit_for_entitlement("free_trial") == FREE_STORAGE_BYTES
     assert storage_limit_for_entitlement("student") == PAID_STORAGE_BYTES
     assert storage_limit_for_entitlement("teacher_supported") == PAID_STORAGE_BYTES
-    assert storage_limit_for_entitlement("family") == PAID_STORAGE_BYTES
+    assert storage_limit_for_entitlement("online_classroom") == PAID_STORAGE_BYTES

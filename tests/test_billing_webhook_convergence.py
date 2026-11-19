@@ -43,7 +43,7 @@ def _settings() -> Settings:
         stripe_webhook_secret=SECRET,
         stripe_student_price_id="price_test_student_v1",
         stripe_teacher_supported_price_id="price_test_teacher_v1",
-        stripe_family_price_id="price_test_family_v1",
+        stripe_online_classroom_price_id="price_test_family_v1",
     )
 
 

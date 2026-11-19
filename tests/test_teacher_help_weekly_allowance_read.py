@@ -100,9 +100,18 @@ def _ask(table: FakeTable, conversation_id: str):
 
 
 def _standing() -> dict:
+    """The text standing: the top-level fields, which are the `text` way (#482).
+
+    A request in these tests names no way, so it is a text one; the classroom
+    way is `test_teacher_support_modes.py`'s.
+    """
     response = _student().get("/teacher-help/availability")
     assert response.status_code == 200, response.text
-    return response.json()["teacherSupport"]
+    standing = dict(response.json()["teacherSupport"])
+    text = standing.pop("text")
+    standing.pop("classroom")
+    assert text == standing
+    return standing
 
 
 def test_a_student_with_cases_left_can_ask_and_is_told_how_many(table) -> None:

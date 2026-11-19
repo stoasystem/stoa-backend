@@ -86,9 +86,9 @@ REGION = "eu-central-2"
 TABLE_NAME = "stoa-main"
 USER_POOL_ID = "eu-central-2_Ss93YQzjJ"
 
-# `teacher_supported` is the default: `family` is expected to be withdrawn (#482).
+# The plans with teacher help: text answers only, or text and online classrooms (#482).
 DEFAULT_PLAN = BillingPlanId.TEACHER_SUPPORTED
-PLAN_CHOICES = (BillingPlanId.TEACHER_SUPPORTED.value, BillingPlanId.FAMILY.value)
+PLAN_CHOICES = (BillingPlanId.TEACHER_SUPPORTED.value, BillingPlanId.ONLINE_CLASSROOM.value)
 TIER_CHOICES = tuple(plan.value for plan in BillingPlanId)
 STUDENT_SUBJECTS = ["mathematics"]
 TEACHER_SUBJECTS = ["mathematics", "physics"]

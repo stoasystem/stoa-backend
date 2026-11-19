@@ -561,7 +561,7 @@
             "enum": [
               "student",
               "teacher_supported",
-              "family"
+              "online_classroom"
             ],
             "title": "Targetplan",
             "type": "string"
@@ -7295,7 +7295,7 @@
               "free_trial",
               "student",
               "teacher_supported",
-              "family"
+              "online_classroom"
             ],
             "title": "Effectiveplan",
             "type": "string"
@@ -7339,8 +7339,7 @@
           "teacherSupportScope": {
             "enum": [
               "none",
-              "per_beneficiary",
-              "shared_family"
+              "per_beneficiary"
             ],
             "title": "Teachersupportscope",
             "type": "string"
@@ -7409,7 +7408,7 @@
             "enum": [
               "student",
               "teacher_supported",
-              "family"
+              "online_classroom"
             ],
             "title": "Effectiveplan",
             "type": "string"
@@ -7563,7 +7562,7 @@
               "free_trial",
               "student",
               "teacher_supported",
-              "family"
+              "online_classroom"
             ],
             "title": "Effectiveplan",
             "type": "string"
@@ -9069,8 +9068,7 @@
           "scope": {
             "enum": [
               "none",
-              "per_beneficiary",
-              "shared_family"
+              "per_beneficiary"
             ],
             "title": "Scope",
             "type": "string"
@@ -9979,7 +9977,7 @@
         "enum": [
           "student",
           "teacher_supported",
-          "family"
+          "online_classroom"
         ],
         "title": "PurchasablePlanId",
         "type": "string"
@@ -13640,7 +13638,7 @@
           "free_trial",
           "student",
           "teacher_supported",
-          "family"
+          "online_classroom"
         ],
         "title": "SubscriptionTier",
         "type": "string"
@@ -14658,6 +14656,19 @@
             "minimum": 0.0,
             "title": "Weekly Cases",
             "type": "integer"
+          },
+          "weekly_classroom_cases": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Classroom Cases"
           }
         },
         "required": [
@@ -14667,8 +14678,8 @@
         "title": "TeacherSupportAllowanceCommand",
         "type": "object"
       },
-      "TeacherSupportStanding": {
-        "description": "Whether this student can still ask a teacher this Zurich week (#144).\n\n`blockedReason` is the code `POST /teacher-help/request` would refuse with:\n`teacher_support_allowance_exhausted` comes back at `resetsAt`;\n`teacher_support_not_included` does not come back with the week, so it has\nno `resetsAt`.",
+      "TeacherSupportModeStanding": {
+        "description": "Whether this student can still ask for one way of help this Zurich week.\n\n`blockedReason` is the code `POST /teacher-help/request` would refuse a\nrequest of this way with: `teacher_support_allowance_exhausted` comes back\nat `resetsAt`; `teacher_support_not_included` (the plan has none of this\nway) does not come back with the week, so it has no `resetsAt`.",
         "properties": {
           "blockedReason": {
             "anyOf": [
@@ -14713,6 +14724,64 @@
           "canRequest",
           "remainingCases",
           "weeklyCases"
+        ],
+        "title": "TeacherSupportModeStanding",
+        "type": "object"
+      },
+      "TeacherSupportStanding": {
+        "description": "Whether this student can still ask a teacher this Zurich week (#144, #482).\n\nA text answer and an online classroom are two weekly allowances: `text`\nand `classroom` answer for each. The top-level fields are the text one,\nas they were before there were two ways.",
+        "properties": {
+          "blockedReason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "teacher_support_allowance_exhausted",
+                  "teacher_support_not_included"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blockedreason"
+          },
+          "canRequest": {
+            "title": "Canrequest",
+            "type": "boolean"
+          },
+          "classroom": {
+            "$ref": "#/components/schemas/TeacherSupportModeStanding"
+          },
+          "remainingCases": {
+            "title": "Remainingcases",
+            "type": "integer"
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resetsat"
+          },
+          "text": {
+            "$ref": "#/components/schemas/TeacherSupportModeStanding"
+          },
+          "weeklyCases": {
+            "title": "Weeklycases",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canRequest",
+          "remainingCases",
+          "weeklyCases",
+          "text",
+          "classroom"
         ],
         "title": "TeacherSupportStanding",
         "type": "object"
@@ -24107,7 +24176,7 @@
     },
     "/admin/teacher-support/allowances/{student_id}": {
       "get": {
-        "description": "How many teacher-support cases this student has in a week, and from where.",
+        "description": "How many teacher-support cases this student has in a week, and from where.\n\n`weeklyCases` is text answers, `weeklyClassroomCases` online classrooms.",
         "operationId": "read_teacher_support_allowance_admin_teacher_support_allowances__student_id__get",
         "parameters": [
           {
@@ -24185,7 +24254,7 @@
         }
       },
       "put": {
-        "description": "Set this student's weekly figure, replacing whatever it was.\n\nThe write carries the version it read, so two administrators changing the\nsame student at once cannot both believe they set it. The admission path\nfences the same version, so a case can never be spent against a figure that\nwas replaced between reading it and writing the case.",
+        "description": "Set this student's weekly figures, replacing whatever they were.\n\nThe write carries the version it read, so two administrators changing the\nsame student at once cannot both believe they set it. The admission path\nfences the same version, so a case can never be spent against a figure that\nwas replaced between reading it and writing the case.",
         "operationId": "set_teacher_support_allowance_admin_teacher_support_allowances__student_id__put",
         "parameters": [
           {

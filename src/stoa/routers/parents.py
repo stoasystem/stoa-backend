@@ -421,7 +421,7 @@ class ParentBillingBeneficiarySummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     studentId: str
-    effectivePlan: Literal["student", "teacher_supported", "family"]
+    effectivePlan: Literal["student", "teacher_supported", "online_classroom"]
 
 
 class ParentAllowanceWindow(BaseModel):
@@ -438,7 +438,7 @@ class ParentAllowanceWindow(BaseModel):
 class ParentTeacherCasesProjection(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    scope: Literal["none", "per_beneficiary", "shared_family"]
+    scope: Literal["none", "per_beneficiary"]
     remaining: int | None = Field(default=None, ge=0)
     limit: int = Field(ge=0)
     byBeneficiary: dict[str, int] = Field(default_factory=dict)
@@ -487,7 +487,7 @@ class ParentBillingOverviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     parentId: str
-    effectivePlan: Literal["free_trial", "student", "teacher_supported", "family"]
+    effectivePlan: Literal["free_trial", "student", "teacher_supported", "online_classroom"]
     beneficiaries: list[ParentBillingBeneficiarySummary]
     allowanceWindow: ParentAllowanceWindow | None = None
     inputRemaining: dict[str, int]
@@ -511,7 +511,7 @@ class ParentAllowanceProjection(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     studentId: str
-    effectivePlan: Literal["free_trial", "student", "teacher_supported", "family"]
+    effectivePlan: Literal["free_trial", "student", "teacher_supported", "online_classroom"]
     allowanceVersion: int = Field(ge=1)
     allowanceWindow: ParentAllowanceWindow
     inputRemaining: int = Field(ge=0)
@@ -520,7 +520,7 @@ class ParentAllowanceProjection(BaseModel):
     outputPercentUsed: float = Field(ge=0, le=100)
     teacherCasesRemaining: int = Field(ge=0)
     teacherCasesLimit: int = Field(ge=0)
-    teacherSupportScope: Literal["none", "per_beneficiary", "shared_family"]
+    teacherSupportScope: Literal["none", "per_beneficiary"]
 
 
 class ParentAccountOperationsResponse(BaseModel):
@@ -1377,7 +1377,7 @@ async def get_my_subscription_billing(
             allowance_projections,
             strict=True,
         ):
-            if grant.get("plan_id") in {"teacher_supported", "family"}:
+            if grant.get("plan_id") in {"teacher_supported", "online_classroom"}:
                 teacher_support_projections.append(
                     teacher_support_allowance_service.get_teacher_support_projection(
                         beneficiary_id=str(grant["beneficiary_id"]),
@@ -1623,7 +1623,7 @@ async def get_child_usage_summary(
             observed_at=observed_at,
             viewer_role="parent",
         )
-        if plan_id in {"teacher_supported", "family"}:
+        if plan_id in {"teacher_supported", "online_classroom"}:
             teacher = (
                 teacher_support_allowance_service.get_teacher_support_projection(
                     beneficiary_id=child_id,

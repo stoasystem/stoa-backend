@@ -63,7 +63,7 @@ def _command(
         "lease_expires_at": lease_expires_at,
         "price_id": PRICE_ID,
         "environment": "test",
-        "plan_id": "family",
+        "plan_id": "online_classroom",
         "beneficiary_ids": ["student-a", "student-b"],
         "created_at": "2026-07-24T10:00:00+00:00",
         "updated_at": "2026-07-24T10:05:00+00:00",

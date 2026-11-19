@@ -388,28 +388,31 @@ def test_grant_numbers_stored_as_decimal_still_admit(
     assert result.disposition.value == "admitted"
 
 
-def test_family_limit_is_ten_shared_across_three_beneficiaries(
+def test_the_classroom_plan_counts_each_child_apart(
     grants: dict[str, dict[str, object]],
 ) -> None:
-    for student_id in ("student-1", "student-2", "student-3"):
-        grants[student_id] = _grant(student_id, plan_id="family")
+    """No plan is shared across children any more (#482 removed Family)."""
+    grants["student-1"] = _grant("student-1", plan_id="online_classroom")
+    grants["student-2"] = _grant(
+        "student-2",
+        plan_id="online_classroom",
+        parent_id="parent-2",
+        subscription_digest="b" * 64,
+    )
     table = AtomicSupportTable()
 
-    results = [
-        _admit(
-            table,
-            case_id=f"family-{index}",
-            student_id=f"student-{(index % 3) + 1}",
-        )
-        for index in range(11)
-    ]
+    first = [_admit(table, case_id=f"one-{index}", student_id="student-1") for index in range(3)]
+    second = [_admit(table, case_id=f"two-{index}", student_id="student-2") for index in range(2)]
 
-    assert [result.disposition.value for result in results].count("admitted") == 10
-    assert results[-1].disposition.value == "limit_exceeded"
+    assert [result.disposition.value for result in first] == [
+        "admitted",
+        "admitted",
+        "limit_exceeded",
+    ]
+    assert [result.disposition.value for result in second] == ["admitted", "admitted"]
     counters = table.support_rows("teacher_support_counter")
-    assert len(counters) == 1
-    assert counters[0]["admitted_cases"] == 10
-    assert counters[0]["limit"] == 10
+    assert sorted(counter["admitted_cases"] for counter in counters) == [2, 2]
+    assert {counter["limit"] for counter in counters} == {2}
 
 
 def test_concurrent_final_slot_has_one_winner(
@@ -467,10 +470,10 @@ def test_denied_plan_persists_no_case_queue_notification_assignment_or_counter(
 def test_cross_family_case_identity_cannot_replay_into_another_grant(
     grants: dict[str, dict[str, object]],
 ) -> None:
-    grants["student-1"] = _grant("student-1", plan_id="family")
+    grants["student-1"] = _grant("student-1", plan_id="online_classroom")
     grants["student-2"] = _grant(
         "student-2",
-        plan_id="family",
+        plan_id="online_classroom",
         parent_id="parent-2",
         subscription_digest="b" * 64,
     )
@@ -487,7 +490,7 @@ def test_cross_family_case_identity_cannot_replay_into_another_grant(
 def test_projection_reports_exact_scope_week_count_and_limit(
     grants: dict[str, dict[str, object]],
 ) -> None:
-    grants["student-1"] = _grant("student-1", plan_id="family")
+    grants["student-1"] = _grant("student-1", plan_id="online_classroom")
     table = AtomicSupportTable()
     _admit(table, case_id="projection")
 
@@ -499,12 +502,13 @@ def test_projection_reports_exact_scope_week_count_and_limit(
 
     assert projection == {
         "schemaVersion": "teacher_support_projection.v1",
-        "planId": "family",
-        "supportScope": "shared_family",
+        "planId": "online_classroom",
+        "supportScope": "per_beneficiary",
         "weekIdentity": "2026-W13",
         "admittedCases": 1,
-        "remainingCases": 9,
-        "limit": 10,
+        "remainingCases": 1,
+        "limit": 2,
+        "classroom": {"admittedCases": 0, "remainingCases": 2, "limit": 2},
     }
 
 

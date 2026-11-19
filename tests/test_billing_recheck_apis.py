@@ -45,7 +45,7 @@ def _settings() -> Settings:
         stripe_api_key="sk_test_private_canary",
         stripe_student_price_id="price_test_student",
         stripe_teacher_supported_price_id="price_test_teacher",
-        stripe_family_price_id="price_test_family",
+        stripe_online_classroom_price_id="price_test_family",
         stripe_checkout_web_origins=["http://localhost:5173"],
     )
 
@@ -72,7 +72,7 @@ def _command(
         "lease_expires_at": 1784890000,
         "price_id": "price_test_family",
         "environment": "test",
-        "plan_id": "family",
+        "plan_id": "online_classroom",
         "beneficiary_ids": ["student-a", "student-b"],
         "created_at": "2026-07-24T10:00:00+00:00",
         "updated_at": "2026-07-24T10:05:00+00:00",
@@ -218,7 +218,7 @@ def test_parent_status_and_recheck_use_original_owner_authorized_command(monkeyp
         "outcome": "confirming",
         "newCheckoutAllowed": False,
         "safeActions": ["recheck_payment", "contact_support"],
-        "targetPlan": "family",
+        "targetPlan": "online_classroom",
         "beneficiaries": ["student-a", "student-b"],
         "effectivePlan": None,
         "lastRecheckedAt": "2026-07-24T10:06:00+00:00",
@@ -263,7 +263,7 @@ def test_student_and_unknown_recheck_body_fail_before_repository_or_provider(mon
     parent, parent_provider = _parent_app()
     rejected = parent.post(
         f"/parents/me/subscription/checkout/{CHECKOUT_REF}/recheck",
-        json={"plan": "family", "callback": "https://private-canary.invalid"},
+        json={"plan": "online_classroom", "callback": "https://private-canary.invalid"},
     )
     assert rejected.status_code == 422
     assert lookup_calls == []
@@ -321,7 +321,7 @@ def test_admin_read_and_recheck_use_billing_support_capability_and_redaction(mon
     expected = {
         "checkoutRef": CHECKOUT_REF,
         "parentId": PARENT_ID,
-        "targetPlan": "family",
+        "targetPlan": "online_classroom",
         "beneficiaryIds": ["student-a", "student-b"],
         "createdAt": "2026-07-24T10:00:00+00:00",
         "updatedAt": "2026-07-24T10:05:00+00:00",

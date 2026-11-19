@@ -111,7 +111,7 @@ FACT_KEYS = frozenset(
         "providerLivemode",
     }
 )
-PRICE_MODES = frozenset({"student", "teacher_supported", "family"})
+PRICE_MODES = frozenset({"student", "teacher_supported", "online_classroom"})
 
 
 class EvidenceError(RuntimeError):

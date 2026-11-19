@@ -189,7 +189,7 @@ class AdminBillingOperationDetail(BaseModel):
 
     checkoutRef: str
     parentId: str
-    targetPlan: Literal["student", "teacher_supported", "family"]
+    targetPlan: Literal["student", "teacher_supported", "online_classroom"]
     beneficiaryIds: list[str]
     commandLifecycle: AdminBillingCommandLifecycle
     factLifecycle: list[AdminBillingFactLifecycle]

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import StrEnum
@@ -32,6 +32,13 @@ ADMISSION_SCHEMA_VERSION = "teacher_support_admission.v1"
 COUNTER_SCHEMA_VERSION = "teacher_support_counter.v1"
 _CASE_KINDS = frozenset({"question", "conversation"})
 
+# How a teacher helps, as the student chose it (#480). Each way is its own
+# weekly figure and its own counter (#482): spending one never uses the other.
+# The same words as `help_requests.MODES`, which imports this module.
+TEXT = "text"
+CLASSROOM = "classroom"
+MODES = (TEXT, CLASSROOM)
+
 # Where a student's teacher-support allowance comes from.
 #
 # `paid_grant` is a parent's purchase, which is the only source this service had.
@@ -41,8 +48,10 @@ _CASE_KINDS = frozenset({"question", "conversation"})
 SUPPORT_SOURCE_PAID_GRANT = "paid_grant"
 SUPPORT_SOURCE_ASSIGNED = "assigned"
 
-# What an assigned student gets each Zurich week when nobody has said otherwise.
+# What an assigned student gets each Zurich week when nobody has said otherwise:
+# text answers, and online classrooms beside them.
 ASSIGNED_WEEKLY_TEACHER_SUPPORT_CASES = 7
+ASSIGNED_WEEKLY_CLASSROOM_CASES = 2
 
 # Where an administrator's raised figure is kept, one row per student.
 ASSIGNED_ALLOWANCE_SK = "TEACHER_SUPPORT_ALLOWANCE"
@@ -121,7 +130,10 @@ class _ResolvedScope:
     subscription_id_digest: str
     grant_id: str
     support_scope: TeacherSupportScope
+    # The counter of `mode`: the text one is the scope's own id, as it was
+    # before there were two ways, so a week under way keeps its row.
     support_scope_id: str
+    # The weekly figure of `mode`.
     limit: int
     grant: dict[str, object]
     # What authorizes the pair now: a current link, or an assigned allowance.
@@ -132,6 +144,30 @@ class _ResolvedScope:
     student_profile_version: int | None = None
     # Present when an administrator has raised this student's weekly figure.
     assigned_allowance_version: int | None = None
+    mode: str = TEXT
+    # Both weekly figures of the source, by mode; `limit` is the one of `mode`.
+    weekly: Mapping[str, int] = field(default_factory=dict)
+
+
+def _for_mode(scope: _ResolvedScope, mode: str) -> _ResolvedScope | None:
+    """The scope a case of this mode is counted in, or None when the source has none.
+
+    The source decides both figures: a plan without classrooms does not borrow
+    the assigned ones.
+    """
+    figure = scope.weekly.get(mode, 0)
+    if figure <= 0:
+        return None
+    if mode == TEXT:
+        return replace(scope, mode=TEXT, limit=figure)
+    return replace(
+        scope,
+        mode=mode,
+        limit=figure,
+        support_scope_id=_domain_digest(
+            b"stoa.teacher-support.mode-scope.v1", mode, scope.support_scope_id
+        ),
+    )
 
 
 
@@ -275,7 +311,9 @@ def _resolve_scope(
     A parent's purchase still wins where one exists, because it is the wider
     budget and it is the one the grant rows are fenced against. Where there is
     none - which today is every student, payments being frozen - the student
-    has the figure they were assigned.
+    has the figures they were assigned. The source carries both weekly figures,
+    text and classroom; `_for_mode` picks the one a case is counted against,
+    so a plan without classrooms never falls through to the assigned ones.
     """
     beneficiary = _required_text(beneficiary_id, "beneficiary_id")
     student = _active_student(beneficiary)
@@ -313,6 +351,24 @@ def assigned_weekly_cases(student: Mapping[str, object] | None) -> int:
     return stored
 
 
+def assigned_weekly_classroom_cases(row: Mapping[str, object] | None) -> int:
+    """The classroom figure off the same row; a row written before #482 has none."""
+    stored = None if row is None else _stored_integer(row.get("weekly_classroom_cases"))
+    if stored is None or stored < 0 or stored > ASSIGNED_WEEKLY_CASES_MAXIMUM:
+        return ASSIGNED_WEEKLY_CLASSROOM_CASES
+    return stored
+
+
+def _valid_figure(value: object, name: str) -> int:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not 0 <= value <= ASSIGNED_WEEKLY_CASES_MAXIMUM
+    ):
+        raise ValueError(f"{name} is out of range")
+    return value
+
+
 # ── The assigned figure, as an administrator sets it ──────────────────────────
 
 
@@ -325,6 +381,8 @@ class AssignedWeeklyCases:
     source: str
     # The version of the row it was read from; None while there is none.
     state_version: int | None
+    # Online classrooms a week, beside the text answers in `weekly_cases`.
+    weekly_classroom_cases: int = ASSIGNED_WEEKLY_CLASSROOM_CASES
 
 
 class AssignedCasesDisposition(StrEnum):
@@ -358,6 +416,7 @@ def read_assigned_weekly_cases(
         weekly_cases=assigned_weekly_cases(stored),
         source="administrator" if stored else "default",
         state_version=None if stored is None else _stored_integer(stored.get("state_version")),
+        weekly_classroom_cases=assigned_weekly_classroom_cases(stored),
     )
 
 
@@ -365,27 +424,32 @@ def set_assigned_weekly_cases(
     student_id: str,
     weekly_cases: int,
     *,
+    weekly_classroom_cases: int | None = None,
     actor_id: str,
     now: datetime | None = None,
     table: object | None = None,
 ) -> AssignedCasesWrite:
-    """Replace the student's weekly figure, under the version it was read at.
+    """Replace the student's weekly figures, under the version they were read at.
 
-    Two administrators changing the same student at once cannot both believe
-    they set it: the first write may only create the row, every later one only
-    replace the version it read. The admission fences that same version, so a
-    case is never spent against a figure replaced between reading and writing.
+    ``weekly_cases`` is the text answers; ``weekly_classroom_cases`` the online
+    classrooms, kept as stored when not given. Two administrators changing the
+    same student at once cannot both believe they set it: the first write may
+    only create the row, every later one only replace the version it read. The
+    admission fences that same version, so a case is never spent against a
+    figure replaced between reading and writing.
     """
     student = _required_text(student_id, "student_id")
-    if (
-        isinstance(weekly_cases, bool)
-        or not isinstance(weekly_cases, int)
-        or not 0 <= weekly_cases <= ASSIGNED_WEEKLY_CASES_MAXIMUM
-    ):
-        raise ValueError("weekly_cases is out of range")
+    _valid_figure(weekly_cases, "weekly_cases")
+    if weekly_classroom_cases is not None:
+        _valid_figure(weekly_classroom_cases, "weekly_classroom_cases")
     target = table or db_table.table()
     key = _assigned_allowance_key(student)
     previous = _strong_get(target, key)
+    if weekly_classroom_cases is None and previous is not None:
+        kept = _stored_integer(previous.get("weekly_classroom_cases"))
+        weekly_classroom_cases = (
+            kept if kept is not None and 0 <= kept <= ASSIGNED_WEEKLY_CASES_MAXIMUM else None
+        )
     next_version = (
         0 if previous is None else (_stored_integer(previous.get("state_version")) or 0)
     ) + 1
@@ -406,6 +470,11 @@ def set_assigned_weekly_cases(
                 "schema_version": ASSIGNED_ALLOWANCE_SCHEMA_VERSION,
                 "student_id": student,
                 "weekly_cases": weekly_cases,
+                **(
+                    {"weekly_classroom_cases": weekly_classroom_cases}
+                    if weekly_classroom_cases is not None
+                    else {}
+                ),
                 "state_version": next_version,
                 "updated_at": _timestamp(_aware(now, "now")),
                 "updated_by": actor_id,
@@ -443,12 +512,14 @@ def administer_weekly_cases(
     student_id: str,
     weekly_cases: int,
     *,
+    weekly_classroom_cases: int | None = None,
     actor: Actor,
     now: datetime | None = None,
     table: object | None = None,
 ) -> int:
-    """An administrator sets this student's weekly figure; returns the version written.
+    """An administrator sets this student's weekly figures; returns the version written.
 
+    ``weekly_classroom_cases`` left out keeps the classroom figure as it was.
     Refuses an id that is not a student account, and a write that lost to a
     concurrent administrator (their figure stands). A figure that was written
     leaves one durable administrator event naming who set what.
@@ -456,7 +527,12 @@ def administer_weekly_cases(
     target = table or db_table.table()
     student = _administered_student(student_id, target)
     written = set_assigned_weekly_cases(
-        student, weekly_cases, actor_id=actor.user_id, now=now, table=target
+        student,
+        weekly_cases,
+        weekly_classroom_cases=weekly_classroom_cases,
+        actor_id=actor.user_id,
+        now=now,
+        table=target,
     )
     if written.disposition is AssignedCasesDisposition.VERSION_CONFLICT:
         raise AccountViolation(AccountErrorCode.ALLOWANCE_VERSION_CONFLICT)
@@ -475,7 +551,13 @@ def administer_weekly_cases(
             "created_at": _timestamp(_aware(now, "now").replace(microsecond=0)),
             "reason_code": "teacher_support_allowance_set",
             "evidence_reference": (
-                f"weekly_cases={weekly_cases};state_version={written.state_version}"
+                f"weekly_cases={weekly_cases};"
+                + (
+                    f"weekly_classroom_cases={weekly_classroom_cases};"
+                    if weekly_classroom_cases is not None
+                    else ""
+                )
+                + f"state_version={written.state_version}"
             ),
         },
         table=target,
@@ -511,7 +593,8 @@ def _resolve_assigned_scope(
             raise _DependencyFailure("assigned allowance row is malformed")
         allowance_version = _positive_integer(raised.get("state_version"), "state_version")
     limit = assigned_weekly_cases(raised)
-    if limit <= 0:
+    classroom = assigned_weekly_classroom_cases(raised)
+    if limit <= 0 and classroom <= 0:
         return None
 
     # Stable per student: raising the figure must not start the week over, and
@@ -542,6 +625,7 @@ def _resolve_assigned_scope(
         support_source=SUPPORT_SOURCE_ASSIGNED,
         student_profile_version=profile_version,
         assigned_allowance_version=allowance_version,
+        weekly={TEXT: limit, CLASSROOM: classroom},
     )
 
 
@@ -582,20 +666,15 @@ def _resolve_paid_scope(
     if budget.teacher_support_scope is TeacherSupportScope.NONE:
         return None
 
-    grant_values: tuple[str, ...]
-    scope_values: tuple[str, ...]
-    if budget.teacher_support_scope is TeacherSupportScope.PER_BENEFICIARY:
-        grant_values = (
-            parent_id,
-            beneficiary,
-            subscription_digest,
-            str(grant_version),
-            str(plan_version),
-        )
-        scope_values = grant_values
-    else:
-        grant_values = (parent_id, subscription_digest, str(plan_version))
-        scope_values = grant_values
+    # Every plan counts for one child (#482 removed the shared Family scope).
+    grant_values = (
+        parent_id,
+        beneficiary,
+        subscription_digest,
+        str(grant_version),
+        str(plan_version),
+    )
+    scope_values = grant_values
     grant_id = _domain_digest(
         b"stoa.teacher-support.grant.v1",
         *grant_values,
@@ -616,9 +695,13 @@ def _resolve_paid_scope(
         grant_id=grant_id,
         support_scope=budget.teacher_support_scope,
         support_scope_id=support_scope_id,
-        limit=budget.teacher_support_cases,
+        limit=budget.teacher_support_text_cases,
         grant=grant,
         relationship_source=paid_entitlement_service.RELATIONSHIP_SOURCE_LINK,
+        weekly={
+            TEXT: budget.teacher_support_text_cases,
+            CLASSROOM: budget.teacher_support_classroom_cases,
+        },
     )
 
 
@@ -712,6 +795,10 @@ def _assigned_condition_operations(
     if scope.assigned_allowance_version is not None:
         # The figure was raised by somebody. Fence the row it was raised on, so a
         # change made between reading it and spending a case cannot slip past.
+        # Every write raises the version, so the version alone holds both
+        # figures; the text one is asserted too, as it was before #482. A row
+        # written before #482 has no classroom figure to assert.
+        text = scope.mode == TEXT
         operations.append(
             {
                 "ConditionCheck": {
@@ -719,11 +806,13 @@ def _assigned_condition_operations(
                         "PK": f"USER#{scope.beneficiary_id}",
                         "SK": ASSIGNED_ALLOWANCE_SK,
                     },
-                    "ConditionExpression": "#version=:version AND weekly_cases=:cases",
+                    "ConditionExpression": (
+                        "#version=:version AND weekly_cases=:cases" if text else "#version=:version"
+                    ),
                     "ExpressionAttributeNames": {"#version": "state_version"},
                     "ExpressionAttributeValues": {
                         ":version": scope.assigned_allowance_version,
-                        ":cases": scope.limit,
+                        **({":cases": scope.limit} if text else {}),
                     },
                 }
             }
@@ -930,11 +1019,14 @@ def admit_teacher_support_case(
     case_kind: str,
     beneficiary_id: str,
     persist_case: PersistAdmission,
+    mode: str = TEXT,
     observed_at: datetime | None = None,
     table: object | None = None,
 ) -> TeacherSupportAdmissionResult:
     """Persist the first durable case and its weekly debit in one transaction.
 
+    The case is counted against the weekly figure of ``mode`` (#482); a source
+    whose figure for it is zero refuses it ``PLAN_DENIED``.
     ``persist_case(operations, fences)`` must write the supplied allowance
     operations and the durable case mutation behind the beneficiary's account
     fence and the fences in ``fences`` (the granting parent's), in one
@@ -945,6 +1037,8 @@ def admit_teacher_support_case(
     beneficiary = _required_text(beneficiary_id, "beneficiary_id")
     if kind not in _CASE_KINDS:
         raise ValueError("case_kind is invalid")
+    if mode not in MODES:
+        raise ValueError("mode is invalid")
     if not callable(persist_case):
         raise ValueError("persist_case is required")
     observed = _aware(observed_at, "observed_at")
@@ -974,12 +1068,13 @@ def admit_teacher_support_case(
     # help them.
     def attempt() -> TeacherSupportAdmissionResult:
         try:
-            scope = _resolve_scope(beneficiary, table=target)
+            source = _resolve_scope(beneficiary, table=target)
         except _DependencyFailure:
             logger.warning("Teacher-support admission deferred", exc_info=True)
             return TeacherSupportAdmissionResult(
                 TeacherSupportAdmissionDisposition.RETRYABLE
             )
+        scope = None if source is None else _for_mode(source, mode)
         if scope is None:
             return TeacherSupportAdmissionResult(
                 TeacherSupportAdmissionDisposition.PLAN_DENIED
@@ -1031,6 +1126,7 @@ def admit_teacher_support_case(
             "grant_id": scope.grant_id,
             "support_scope": scope.support_scope.value,
             "support_scope_id": scope.support_scope_id,
+            "mode": scope.mode,
             "week_identity": identity,
             "window_start": _timestamp(week.window_start),
             "window_end": _timestamp(week.window_end),
@@ -1230,30 +1326,53 @@ def get_teacher_support_projection(
     observed_at: datetime | None = None,
     table: object | None = None,
 ) -> dict[str, object]:
-    """Return the current exact case count for the beneficiary's active grant scope."""
+    """The exact case counts of the beneficiary's week, text first, then classroom.
+
+    The top-level counts are the text answers, as they were before #482;
+    ``classroom`` carries the online classrooms. A way the source has no
+    figure for counts zero of zero.
+    """
     observed = _aware(observed_at, "observed_at")
     target = table or db_table.table()
     try:
-        scope = _resolve_scope(beneficiary_id, table=target)
+        source = _resolve_scope(beneficiary_id, table=target)
     except _DependencyFailure:
         raise ValueError("teacher-support projection is temporarily unavailable") from None
-    if scope is None:
+    if source is None:
         raise ValueError("teacher support is not included in the active plan")
     week = weekly_counter.zurich_week(observed)
-    identity = week.identity
+    counts: dict[str, tuple[int, int]] = {}
     try:
-        admitted = _spent(target, scope, week)
+        for mode in MODES:
+            scope = _for_mode(source, mode)
+            counts[mode] = (0, 0) if scope is None else (_spent(target, scope, week), scope.limit)
     except _DependencyFailure:
         raise ValueError("teacher-support projection is temporarily unavailable") from None
+    text_admitted, text_limit = counts[TEXT]
+    classroom_admitted, classroom_limit = counts[CLASSROOM]
     return {
         "schemaVersion": "teacher_support_projection.v1",
-        "planId": str(scope.plan_id),
-        "supportScope": scope.support_scope.value,
-        "weekIdentity": identity,
-        "admittedCases": admitted,
-        "remainingCases": scope.limit - admitted,
-        "limit": scope.limit,
+        "planId": str(source.plan_id),
+        "supportScope": source.support_scope.value,
+        "weekIdentity": week.identity,
+        "admittedCases": text_admitted,
+        "remainingCases": text_limit - text_admitted,
+        "limit": text_limit,
+        "classroom": {
+            "admittedCases": classroom_admitted,
+            "remainingCases": max(classroom_limit - classroom_admitted, 0),
+            "limit": classroom_limit,
+        },
     }
+
+
+_NOT_INCLUDED: dict[str, object] = {
+    "canRequest": False,
+    "blockedReason": "teacher_support_not_included",
+    "remainingCases": 0,
+    "weeklyCases": 0,
+    "resetsAt": None,
+}
 
 
 def get_student_teacher_support_standing(
@@ -1262,45 +1381,49 @@ def get_student_teacher_support_standing(
     observed_at: datetime | None = None,
     table: object | None = None,
 ) -> dict[str, object]:
-    """Whether a request made now would be admitted, and when a spent week is whole again.
+    """Whether a request made now would be admitted, way by way, and when a spent week is whole again.
 
     Read the way admission reads it: the same scope, the same Zurich week, the
-    same counter. A refusal is named by the code the request route answers it
-    with, so the button and the refusal cannot disagree. A student with no
-    teacher support has no reset to wait for. Raises ``ValueError`` when the
+    same counter. ``text`` and ``classroom`` answer for each way (#482); the
+    top-level fields are the text one, which is what a request without a way
+    asks for. A refusal is named by the code the request route answers it
+    with, so the button and the refusal cannot disagree. A way the student
+    does not have has no reset to wait for. Raises ``ValueError`` when the
     allowance cannot be read right now.
     """
     observed = _aware(observed_at, "observed_at")
     target = table or db_table.table()
     week = weekly_counter.zurich_week(observed)
+    standings: dict[str, dict[str, object]] = {}
     try:
-        scope = _resolve_scope(beneficiary_id, table=target)
-        if scope is None:
-            return {
-                "canRequest": False,
-                "blockedReason": "teacher_support_not_included",
-                "remainingCases": 0,
-                "weeklyCases": 0,
-                "resetsAt": None,
+        source = _resolve_scope(beneficiary_id, table=target)
+        for mode in MODES:
+            scope = None if source is None else _for_mode(source, mode)
+            if scope is None:
+                standings[mode] = dict(_NOT_INCLUDED)
+                continue
+            admitted = _spent(target, scope, week)
+            # An administrator may lower the figure below what the week already spent.
+            remaining = max(scope.limit - admitted, 0)
+            standings[mode] = {
+                "canRequest": remaining > 0,
+                "blockedReason": None if remaining else "teacher_support_allowance_exhausted",
+                "remainingCases": remaining,
+                "weeklyCases": scope.limit,
+                "resetsAt": _timestamp(week.window_end),
             }
-        admitted = _spent(target, scope, week)
     except _DependencyFailure:
         raise ValueError("teacher-support standing is temporarily unavailable") from None
-    # An administrator may lower the figure below what the week already spent.
-    remaining = max(scope.limit - admitted, 0)
-    return {
-        "canRequest": remaining > 0,
-        "blockedReason": None if remaining else "teacher_support_allowance_exhausted",
-        "remainingCases": remaining,
-        "weeklyCases": scope.limit,
-        "resetsAt": _timestamp(week.window_end),
-    }
+    return {**standings[TEXT], "text": standings[TEXT], "classroom": standings[CLASSROOM]}
 
 
 __all__ = [
     "AssignedCasesDisposition",
     "AssignedCasesWrite",
     "AssignedWeeklyCases",
+    "CLASSROOM",
+    "MODES",
+    "TEXT",
     "TeacherSupportAdmissionDisposition",
     "TeacherSupportAdmissionResult",
     "TeacherSupportRefundDisposition",
