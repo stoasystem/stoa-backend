@@ -18,18 +18,17 @@ S3, not to the table, not to a log line or an exception message.
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any, Final
 
-from stoa import config
+from stoa import config, log_facts
 from stoa.db.repositories import voice_transcription_usage_repo as usage_repo
 from stoa.rule_violation import RuleContract, RuleViolation, register_codes
 from stoa.services import voice_audio, voice_questions
 from stoa.services.transcription import Transcriber, TranscriptionFailed, VoxtralTranscriber
 
-logger = logging.getLogger(__name__)
+logger = log_facts.get_logger(__name__)
 
 # A spoken question is meant to take under 30 seconds (#469); a minute leaves a
 # child room to finish a sentence. The client stops recording there.

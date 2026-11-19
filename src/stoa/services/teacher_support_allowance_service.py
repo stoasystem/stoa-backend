@@ -127,7 +127,8 @@ class _ResolvedScope:
     # What authorizes the pair now: a current link, or an assigned allowance.
     relationship_source: str = paid_entitlement_service.RELATIONSHIP_SOURCE_LINK
     support_source: str = SUPPORT_SOURCE_PAID_GRANT
-    # Only an assigned scope carries this: the paid path reads it off the grant.
+    # Only an assigned scope carries this; a paid admission is not held to a
+    # profile version (#510).
     student_profile_version: int | None = None
     # Present when an administrator has raised this student's weekly figure.
     assigned_allowance_version: int | None = None
@@ -624,7 +625,19 @@ def _resolve_paid_scope(
 def _grant_condition_operations(
     scope: _ResolvedScope,
 ) -> tuple[tuple[AdmissionOperation, ...], dict[str, int]]:
-    """The conditions an admission is made under, and the parent fence beside them."""
+    """The conditions an admission is made under, and the parent fence beside them.
+
+    A paid admission is held to the grant row as it is now and to the accounts
+    the grant was made for: the parent's account fence generation the grant
+    recorded (the student's fence comes from the case repository), both
+    profiles still an active parent and an active student, and the two link
+    rows. It is not held to any profile version. Every profile write moves
+    `version`, a password sign-in included (`user_repo.record_sign_in`), so
+    holding the grant to the versions it recorded stopped paid teacher help at
+    the first sign-in after the grant (#510). Nothing else the paid scope uses
+    is read from either profile, so their role and status are all there is to
+    assert.
+    """
     if scope.support_source == SUPPORT_SOURCE_ASSIGNED:
         return _assigned_condition_operations(scope), {}
     grant = scope.grant
@@ -635,12 +648,6 @@ def _grant_condition_operations(
     _positive_integer(
         grant.get("student_account_fence_generation"),
         "student_account_fence_generation",
-    )
-    parent_profile_version = _positive_integer(
-        grant.get("parent_profile_version"), "parent_profile_version"
-    )
-    student_profile_version = _positive_integer(
-        grant.get("student_profile_version"), "student_profile_version"
     )
     common_values: dict[str, object] = {
         ":active": "active",
@@ -673,22 +680,18 @@ def _grant_condition_operations(
         {
             "ConditionCheck": {
                 "Key": {"PK": f"USER#{scope.parent_id}", "SK": "PROFILE"},
-                "ConditionExpression": (
-                    "#role=:parent_role AND #status=:active AND #version=:version"
-                ),
+                "ConditionExpression": "#role=:parent_role AND #status=:active",
                 "ExpressionAttributeNames": {
                     "#role": "role",
                     "#status": "account_status",
-                    "#version": "version",
                 },
                 "ExpressionAttributeValues": {
                     ":parent_role": "parent",
                     ":active": "active",
-                    ":version": parent_profile_version,
                 },
             }
         },
-        _student_profile_condition(scope, student_profile_version),
+        _student_profile_condition(scope, None),
         *_relationship_conditions(scope),
     ), {scope.parent_id: parent_generation}
 
@@ -743,24 +746,25 @@ def _assigned_condition_operations(
 
 
 def _student_profile_condition(
-    scope: _ResolvedScope, student_profile_version: int
+    scope: _ResolvedScope, student_profile_version: int | None
 ) -> AdmissionOperation:
-    """The relationship is not mirrored onto the profile; the link rows carry it."""
-    expression = "#role=:student_role AND #status=:active AND #version=:version"
-    values: dict[str, object] = {
-        ":student_role": "student",
-        ":active": "active",
-        ":version": student_profile_version,
-    }
+    """The relationship is not mirrored onto the profile; the link rows carry it.
+
+    The version is fenced only when one is given: an assigned admission gives the
+    one it read, a paid admission none (see `_grant_condition_operations`).
+    """
+    expression = "#role=:student_role AND #status=:active"
+    names = {"#role": "role", "#status": "account_status"}
+    values: dict[str, object] = {":student_role": "student", ":active": "active"}
+    if student_profile_version is not None:
+        expression += " AND #version=:version"
+        names["#version"] = "version"
+        values[":version"] = student_profile_version
     return {
         "ConditionCheck": {
             "Key": {"PK": f"USER#{scope.beneficiary_id}", "SK": "PROFILE"},
             "ConditionExpression": expression,
-            "ExpressionAttributeNames": {
-                "#role": "role",
-                "#status": "account_status",
-                "#version": "version",
-            },
+            "ExpressionAttributeNames": names,
             "ExpressionAttributeValues": values,
         }
     }
