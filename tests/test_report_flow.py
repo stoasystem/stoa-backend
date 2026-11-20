@@ -10,7 +10,9 @@ from stoa import config
 from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.jobs import weekly_reports
-from stoa.services import report_service
+from stoa.services import model_call, report_service
+from stoa.services.model_call.adapter import ProviderError
+from stoa.services.model_call.fake import FakeAdapter
 
 
 @pytest.fixture(autouse=True)
@@ -117,13 +119,16 @@ class FakeDataTable:
         }
 
 
-class FailingBedrockClient:
+class FailingModel(FakeAdapter):
+    """The model, out of service: every report falls back to the deterministic one."""
+
     def __init__(self, events):
+        super().__init__(answer=ProviderError("ServiceUnavailableException", http_status=503))
         self.events = events
 
-    def invoke_model(self, **kwargs):
-        self.events.append(("bedrock", kwargs["modelId"]))
-        raise RuntimeError("bedrock unavailable")
+    def stream(self, model_id, body):
+        self.events.append(("model", model_id))
+        return super().stream(model_id, body)
 
 
 class RecordingS3Client:
@@ -278,8 +283,8 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
     monkeypatch.setattr(report_service.report_repo, "put_report", put_report)
     monkeypatch.setattr(report_service.report_repo, "update_report_status", update_report_status)
 
+    model_call.install(FailingModel(events))
     aws.install({
-        Kind.BEDROCK_RUNTIME: FailingBedrockClient(events),
         Kind.S3: s3,
         Kind.SES: ses,
     })
@@ -304,7 +309,7 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
     assert len(data_table.queries) == 2
     assert [event[0] for event in events] == [
         "claim",
-        "bedrock",
+        "model",
         "s3",
         "s3",
         "put_report",

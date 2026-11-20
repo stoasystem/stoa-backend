@@ -378,7 +378,11 @@ class Settings(BaseSettings):
     # Bedrock
     # EU cross-region inference profile — no manual model access approval needed
     bedrock_model_id: str = "eu.anthropic.claude-sonnet-4-6"
-    bedrock_max_tokens: int = 2048
+    # The output cap of an Ask answer, and so what one question reserves of the
+    # weekly allowance before the model is called. 2048 cut off a multi-step
+    # derivative answer, LaTeX and all (#531); the prompt's length budget keeps
+    # most answers far below 4096. The weekly report caps itself lower.
+    bedrock_max_tokens: int = 4096
 
     # Voice questions (#469, #477). A recording is transcribed by Voxtral Small
     # on Bedrock in Ireland: Zurich has no model that listens, and ADR-010 lets

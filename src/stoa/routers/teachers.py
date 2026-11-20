@@ -491,11 +491,23 @@ class CreateSummaryDraftResponse(BaseModel):
     studentDeliveryStatus: str = "not_delivered"
 
 
+ExerciseDifficulty = Literal["targeted", "standard", "stretch"]
+StudentDeliveryStatus = Literal["not_delivered", "delivered"]
+
+
 class ExerciseDraftRequest(BaseModel):
+    """What an exercise draft is picked for (#519).
+
+    Its exercises come from the question bank: those of `starIds` (stars on
+    the star map, as the request's preparation table names them), then of
+    `topicIds`. At least one of the two names something.
+    """
+
     studentId: str
     subject: str
-    topicIds: list[str]
-    difficulty: str
+    topicIds: list[str] = Field(default_factory=list)
+    starIds: list[str] = Field(default_factory=list)
+    difficulty: ExerciseDifficulty
     exerciseCount: int
     questionId: str | None = None
 
@@ -505,11 +517,20 @@ class ReviewDraftRequest(BaseModel):
 
 
 class AiTeacherDraftResponse(CreateSummaryDraftResponse):
+    # `easy`/`medium`/`hard` on a draft stored before #519.
     difficulty: str | None = None
     exerciseCount: int = 0
+    starIds: list[str] = Field(default_factory=list)
+    # The lesson title of its first exercise, in the student's language.
+    title: str | None = None
     items: list[dict[str, Any]] = Field(default_factory=list)
     answerKey: list[dict[str, Any]] = Field(default_factory=list)
     explanations: list[dict[str, Any]] = Field(default_factory=list)
+    # `delivered` once an accepted exercise draft is set for the student
+    # (`POST /adaptive/assignments`, `sourceType: ai_draft`), with that assignment.
+    studentDeliveryStatus: StudentDeliveryStatus = "not_delivered"
+    deliveredAssignmentId: str | None = None
+    deliveredAt: str | None = None
 
 
 class AiTeacherDraftListResponse(BaseModel):
@@ -822,11 +843,12 @@ async def create_exercise_draft(
     authorized: AuthorizedResource = Depends(_exercise_context_dependency),
     actor: Actor = Depends(get_actor),
 ):
-    """Create a reviewed practice exercise draft from teacher-visible learning context."""
+    """Pick a practice exercise draft from the question bank for the teacher to review."""
     return ai_teacher_tools_service.create_exercise_draft(
         student_id=body.studentId,
         subject=body.subject,
         topic_ids=body.topicIds,
+        star_ids=body.starIds,
         difficulty=body.difficulty,
         exercise_count=body.exerciseCount,
         question_id=body.questionId,
@@ -909,7 +931,11 @@ async def accept_ai_teacher_draft(
     authorized: AuthorizedResource = Depends(_ai_teacher_draft(AuthorizationAction.UPDATE)),
     actor: Actor = Depends(get_actor),
 ):
-    """Mark a draft as reviewed and accepted without delivering it to students."""
+    """Mark a draft as reviewed and accepted.
+
+    Accepting sends nothing: an accepted exercise draft reaches the student as
+    an assignment (`POST /adaptive/assignments`, `sourceType: ai_draft`).
+    """
     return ai_teacher_tools_service.review_draft(
         authorized=authorized,
         action="accept",

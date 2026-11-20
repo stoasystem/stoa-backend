@@ -64,4 +64,10 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Le nombre d'exercices doit être compris entre 1 et {max}.",
         "it": "Il numero di esercizi deve essere compreso tra 1 e {max}.",
     },
+    "error.no_bank_exercises": {
+        "de": "Dazu gibt es noch keine Übungsaufgaben. Wähle einen anderen Stern oder ein anderes Thema.",
+        "en": "There are no practice exercises for this yet. Choose another star or topic.",
+        "fr": "Il n'y a pas encore d'exercices pour cela. Choisissez une autre étoile ou un autre thème.",
+        "it": "Non ci sono ancora esercizi per questo. Scegli un'altra stella o un altro argomento.",
+    },
 }

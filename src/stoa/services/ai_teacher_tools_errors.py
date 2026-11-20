@@ -16,6 +16,7 @@ class AiTeacherToolsErrorCode(StrEnum):
     SUBJECT_UNSUPPORTED = "subject_unsupported"
     TOPIC_REQUIRED = "topic_required"
     EXERCISE_COUNT_INVALID = "exercise_count_invalid"
+    NO_BANK_EXERCISES = "no_bank_exercises"
 
     @property
     def contract(self) -> RuleContract:
@@ -39,6 +40,9 @@ AI_TEACHER_TOOLS_ERROR_REGISTRY: dict[AiTeacherToolsErrorCode, RuleContract] = {
     _C.SUBJECT_UNSUPPORTED: _INPUT,
     _C.TOPIC_REQUIRED: _INPUT,
     _C.EXERCISE_COUNT_INVALID: _INPUT,
+    # The named stars and topics have no published exercise of the subject:
+    # nothing is written in their place (#519); another star may have some.
+    _C.NO_BANK_EXERCISES: _INPUT,
 }
 
 register_codes("ai_teacher_tools", AiTeacherToolsErrorCode, AI_TEACHER_TOOLS_ERROR_REGISTRY)

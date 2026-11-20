@@ -8,9 +8,19 @@ checks two things for every account at once:
 1. **Unregistered rows.** A row that names an account (any string attribute,
    or a `#`/`:`/`/`-separated part of one, equal to an account id) in a
    partition that is neither one of that account's derived partitions nor
-   registered under it. The fenced write registers the owner and its `also=`
-   accounts; a row that names anyone else, or that was written before the
-   dual-write or by a writer outside `fenced`, shows up here.
+   registered under it. Each is then put to the deletion's own scans
+   (`DELETION_SCANS`), and falls into one of two kinds:
+
+   - **A missing registration**: some branch of that account's deletion would
+     take the row. The registry path reads only derived and registered
+     partitions, so it would never see it. These are what close the registry
+     path (`record_run`, `registry_path_ready`) and raise the alarm.
+   - **An unmatched mention**: no branch would take it - the administrator
+     who opened an account, the teacher a notification went to. Scan or
+     registry, the account's deletion leaves the row as it is, so the two
+     paths agree and nothing is missing from the registry. Counted and
+     logged, because a row that keeps a deleted account's id is worth a
+     look, but it closes nothing.
 2. **Leftovers of deleted accounts.** A row the deletion's own matcher
    (`account_deletion_repo._targets_user`) still takes for an account whose
    fence says `deleted`, other than what deletion keeps on purpose (the fence,
@@ -45,7 +55,18 @@ from typing import Any
 
 from stoa.db import owner_registry
 from stoa.db import table as db_table
-from stoa.db.repositories import account_deletion_repo, curriculum_analytics_repo
+from stoa.db.repositories import (
+    account_deletion_repo,
+    adaptive_learning_repo,
+    ai_teacher_tools_repo,
+    attachment_repo,
+    curriculum_analytics_repo,
+    moderation_repo,
+    notification_repo,
+    practice_repo,
+    report_repo,
+    websocket_repo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +116,63 @@ _OWNER_ATTRIBUTES = frozenset(
 
 _SEPARATORS = ("#", ":", "/")
 
+# Every scan a deletion branch finds an account's rows with. Each pages the
+# table through `account_deletion_repo.sweep_pages`, which is also where the
+# registry path narrows the read to derived and registered partitions - so a
+# row one of these takes, in a partition that is neither, is exactly what the
+# registry path would miss. `tests/test_owner_registry_sweep.py` holds this
+# list to every caller of `sweep_pages` in the tree. (The attachments branch
+# pages inline and takes rows by `owner_id` / `student_id`, which
+# `scan_owned_private_rows` also does.)
+DELETION_SCANS: tuple[Callable[..., Any], ...] = (
+    account_deletion_repo.scan_owned_private_rows,
+    adaptive_learning_repo.scan_adaptive_private_rows,
+    ai_teacher_tools_repo.scan_ai_draft_private_rows,
+    attachment_repo.scan_conversation_private_rows,
+    curriculum_analytics_repo.scan_curriculum_signal_manifests,
+    moderation_repo.scan_moderation_private_rows,
+    notification_repo.scan_notification_private_rows,
+    practice_repo.scan_practice_private_rows,
+    report_repo.scan_report_private_rows,
+    websocket_repo.scan_account_connections,
+)
+
+
+class _OneRow:
+    """The table as a deletion scan would see it if it held this one row.
+
+    A scan answers with the row and ends; every other read (a moderation
+    event looking up its case) goes to the real table.
+    """
+
+    def __init__(self, row: Mapping[str, Any], table: object) -> None:
+        self._row = dict(row)
+        self._table = table
+
+    def scan(self, **_request: object) -> dict[str, Any]:
+        return {"Items": [dict(self._row)]}
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._table, name)
+
+
+def deletion_takes(item: Mapping[str, Any], account: str, *, table: object) -> bool:
+    """Whether any branch of `account`'s deletion would take this row.
+
+    Asked of the scans themselves rather than of a copy of their rules. A scan
+    that counts the row as unresolved, or cannot make it out at all, counts as
+    taking it: in doubt, the registration is missing.
+    """
+    view = _OneRow(item, table)
+    for scan in DELETION_SCANS:
+        try:
+            page = scan(account, table=view, maximum_pages=1)
+        except Exception:  # noqa: BLE001 - any refusal is a reason not to vouch
+            return True
+        if page.items or getattr(page, "unresolved", 0):
+            return True
+    return False
+
 
 @dataclass
 class SweepReport:
@@ -106,6 +184,9 @@ class SweepReport:
     # family of the first row that showed them.
     unregistered: Counter[str] = field(default_factory=Counter)
     unregistered_samples: list[dict[str, str]] = field(default_factory=list)
+    # Named in an unregistered partition by a row no deletion branch takes.
+    mentions: Counter[str] = field(default_factory=Counter)
+    mention_samples: list[dict[str, str]] = field(default_factory=list)
     registry_written: int = 0
     leftovers: Counter[str] = field(default_factory=Counter)
     leftover_samples: list[dict[str, str]] = field(default_factory=list)
@@ -132,6 +213,9 @@ class SweepReport:
             "missing_registrations": sum(self.unregistered.values()),
             "unregistered_by_family": dict(sorted(self.unregistered.items())),
             "unregistered_samples": self.unregistered_samples,
+            "unmatched_mentions": sum(self.mentions.values()),
+            "unmatched_mentions_by_family": dict(sorted(self.mentions.items())),
+            "unmatched_mention_samples": self.mention_samples,
             "registry_written": self.registry_written,
             "leftover_rows": sum(self.leftovers.values()),
             "leftovers_by_family": dict(sorted(self.leftovers.items())),
@@ -291,6 +375,7 @@ def record_run(report: SweepReport, *, now_iso: str, table: object | None = None
             "complete": report.complete,
             "rows_scanned": report.rows_scanned,
             "missing_registrations": sum(report.unregistered.values()),
+            "unmatched_mentions": sum(report.mentions.values()),
             "leftover_rows": sum(report.leftovers.values()),
         },
     )
@@ -315,6 +400,9 @@ def run(
 ) -> SweepReport:
     """Census, then the check (and, with `write`, the backfill) from `start`.
 
+    A backfill writes the missing registrations only: an unmatched mention
+    needs no registry row.
+
     Resumable: `report.last_key` is where the second scan stopped (`None` once
     it reached the end, with `report.complete`). Handing it back as `start`
     goes on from there; the census is always taken afresh. Idempotent: every
@@ -328,6 +416,7 @@ def run(
         registry_rows=len(seen.registry),
     )
     registry = set(seen.registry)
+    mentioned: set[tuple[str, str]] = set()
     # A deleted account's derived partitions, the registry rows other accounts
     # hold for them, and every (account, partition) some row still names.
     gone_partitions = {
@@ -367,6 +456,17 @@ def run(
             for account, role in missing:
                 if (account, key["PK"]) in registry:
                     continue
+                if not deletion_takes(item, account, table=target):
+                    # Once per (account, partition), like a registration; a
+                    # later row there that a branch does take still counts.
+                    if (account, key["PK"]) not in mentioned:
+                        mentioned.add((account, key["PK"]))
+                        report.mentions[family(item)] += 1
+                        if len(report.mention_samples) < SAMPLE_LIMIT:
+                            report.mention_samples.append(
+                                {**key, "account": account, "role": role}
+                            )
+                    continue
                 report.unregistered[family(item)] += 1
                 if len(report.unregistered_samples) < SAMPLE_LIMIT:
                     report.unregistered_samples.append({**key, "account": account, "role": role})
@@ -392,12 +492,13 @@ def run(
         if remaining_seconds is not None and remaining_seconds() < min_remaining_seconds:
             break
     logger.info(
-        "owner_registry_sweep accounts=%d deleted=%d rows=%d unregistered=%d written=%d "
-        "leftovers=%d deleted_registry=%d stale_references=%d complete=%s",
+        "owner_registry_sweep accounts=%d deleted=%d rows=%d unregistered=%d mentions=%d "
+        "written=%d leftovers=%d deleted_registry=%d stale_references=%d complete=%s",
         report.accounts,
         report.deleted_accounts,
         report.rows_scanned,
         sum(report.unregistered.values()),
+        sum(report.mentions.values()),
         report.registry_written,
         sum(report.leftovers.values()),
         report.registry_of_deleted_accounts,

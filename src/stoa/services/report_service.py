@@ -5,12 +5,11 @@ from datetime import date, datetime, time, timedelta, timezone
 import json
 import logging
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from time import monotonic
 from typing import Any, Protocol, runtime_checkable
 
 
-from stoa import aws
-from stoa.aws import Kind
 from stoa import config
 from stoa.db import table as db_table
 from stoa.db.repositories import (
@@ -26,6 +25,7 @@ from stoa.services import (
     learning_session,
     locale_service,
     message_catalog,
+    model_call,
     notification_service,
     notify_service,
     report_artifact_service,
@@ -59,19 +59,67 @@ _MAX_REPORT_WEAK_TOPICS = 5
 _MAX_REPORT_ACTIVITIES = 6
 _MAX_ACTIVITY_SUMMARY_CHARS = 160
 
-_REPORT_SYSTEM_PROMPT = """You write weekly parent reports for STOA.
+# The report is the input of one tool, forced by the request (#438): `strict`
+# holds the input to the schema, so the JSON is the API's to write. The schema
+# says what `parse_generated_report_json` accepts, in what strict tool schemas
+# can say; the parser still checks the rest (no blank strings, at least one
+# strength and one recommendation, no internal terms). The prompt names the
+# tool; the two must stay the same.
+REPORT_TOOL_NAME = "give_weekly_report"
+
+# How freely the model writes a report, and how long it may write.
+REPORT_TEMPERATURE = 0.2
+REPORT_MAX_OUTPUT_TOKENS = 1200
+
+# The report job has no deadline of its own; one model call gets at most this
+# long (#435 item 9).
+REPORT_DEADLINE_SECONDS = 60
+
+_REPORT_TEXTS: dict[str, object] = {"type": "array", "items": {"type": "string"}}
+
+REPORT_TOOL = model_call.Tool(
+    name=REPORT_TOOL_NAME,
+    description="Give the parent the whole weekly report.",
+    strict=True,
+    input_schema={
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string", "description": "2-3 sentences."},
+            "strengths": {**_REPORT_TEXTS, "description": "Short bullets; at least one."},
+            "weakTopics": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {"type": "string"},
+                        "note": {"type": "string"},
+                    },
+                    "required": ["topic", "note"],
+                    "additionalProperties": False,
+                },
+            },
+            "recommendations": {**_REPORT_TEXTS, "description": "Short actions; at least one."},
+            "teacherNote": {
+                "type": ["string", "null"],
+                "description": "An optional short note, or null.",
+            },
+        },
+        "required": ["summary", "strengths", "weakTopics", "recommendations", "teacherNote"],
+        "additionalProperties": False,
+    },
+)
+
+_REPORT_SYSTEM_PROMPT = f"""You write weekly parent reports for STOA.
 
 Use only the structured report input provided by the user. Do not invent activity.
 Write warm, concise parent-facing English.
 
-Return ONLY strict JSON with this exact shape:
-{
-  "summary": "2-3 sentences",
-  "strengths": ["short bullet"],
-  "weakTopics": [{"topic": "topic name", "note": "short note"}],
-  "recommendations": ["short action"],
-  "teacherNote": "optional short note or null"
-}
+Give the whole report as one call of `{REPORT_TOOL_NAME}` and nothing else:
+- summary: 2-3 sentences
+- strengths: short bullets, at least one
+- weakTopics: each a topic name and a short note; empty when there are none
+- recommendations: short actions, at least one
+- teacherNote: an optional short note, or null
 
 Do not mention providers, model names, prompts, systems, or implementation details."""
 
@@ -276,35 +324,68 @@ def parse_generated_report_json(raw_text: str) -> dict[str, Any]:
     return content
 
 
+def weekly_report_request(payload: dict[str, Any]) -> dict[str, Any]:
+    """What the model is asked for a report: `model_call.call`'s arguments but the deadline."""
+    report_input = build_bedrock_report_input(payload)
+    return {
+        "system": _REPORT_SYSTEM_PROMPT,
+        "messages": [
+            {
+                "role": "user",
+                "content": json.dumps(report_input, separators=(",", ":"), ensure_ascii=False),
+            }
+        ],
+        "tool": REPORT_TOOL,
+        "max_tokens": min(config.settings().bedrock_max_tokens, REPORT_MAX_OUTPUT_TOKENS),
+        "temperature": REPORT_TEMPERATURE,
+    }
+
+
 def generate_weekly_report_content(
     payload: dict[str, Any],
+    *,
+    clock: Callable[[], float] = monotonic,
 ) -> dict[str, Any]:
-    """Generate parent-facing weekly report content with deterministic fallback."""
-    report_input = build_bedrock_report_input(payload)
-    client = aws.client(Kind.BEDROCK_RUNTIME)
-    body = json.dumps(
-        {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": min(config.settings().bedrock_max_tokens, 1200),
-            "temperature": 0.2,
-            "system": _REPORT_SYSTEM_PROMPT,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": json.dumps(report_input, separators=(",", ":"), ensure_ascii=False),
-                }
-            ],
-        }
-    )
+    """Generate parent-facing weekly report content with deterministic fallback.
 
+    One model call (#438), without an admission hook: the report is paid by
+    STOA, not from anyone's allowance. Whatever keeps it from giving a report
+    the parser accepts (not sent, paid but unusable, a tool input the parser
+    refuses, anything raised) ends in the deterministic report instead.
+    """
     try:
-        response = client.invoke_model(modelId=config.settings().bedrock_model_id, body=body)
-        result = json.loads(response["body"].read())
-        raw_text = result["content"][0]["text"]
-        return parse_generated_report_json(raw_text)
+        result = model_call.call(
+            **weekly_report_request(payload),
+            deadline=clock() + REPORT_DEADLINE_SECONDS,
+            clock=clock,
+        )
+    except model_call.NotInstalled:
+        raise
     except Exception as exc:
-        logger.warning("Weekly report generation fallback used after %s", type(exc).__name__)
-        return build_deterministic_report_fallback(payload)
+        return _report_fallback(payload, type(exc).__name__)
+    if isinstance(result, model_call.NotSent):
+        return _report_fallback(payload, result.category)
+    _log_report_usage(result.usage)
+    if isinstance(result, model_call.PaidUnusable):
+        return _report_fallback(payload, result.category)
+    try:
+        return parse_generated_report_json(result.tool_input)
+    except ValueError as exc:
+        return _report_fallback(payload, type(exc).__name__)
+
+
+def _report_fallback(payload: dict[str, Any], failure: str) -> dict[str, Any]:
+    logger.warning("Weekly report generation fallback used after %s", failure)
+    return build_deterministic_report_fallback(payload)
+
+
+def _log_report_usage(usage: model_call.Usage) -> None:
+    """What one report cost: provider cost only, charged to no allowance."""
+    logger.info(
+        "Weekly report model call paid input_tokens=%s output_tokens=%s",
+        usage.input_tokens,
+        usage.output_tokens,
+    )
 
 
 def build_deterministic_report_fallback(payload: dict[str, Any]) -> dict[str, Any]:

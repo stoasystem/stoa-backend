@@ -7,3 +7,7 @@ Issues live in [stoasystem/stoa-backend](https://github.com/stoasystem/stoa-back
 ### Domain docs
 
 Single-context: `CONTEXT.md` at the repo root; the architecture decisions are in the docs repo, `stoa-docs/ADR.md`. See `docs/agents/domain.md`.
+
+### Conventions
+
+How code here is usually written (typing, FastAPI dependencies, configuration and AWS access, DynamoDB, errors, generated contracts, mobile): `docs/conventions.md`.

@@ -20,6 +20,7 @@ from stoa.db.repositories import (
     question_repo,
 )
 from stoa.services import (
+    ai_teacher_tools_service,
     curriculum_analytics_service,
     curriculum_service,
     learning_profile_service,
@@ -252,9 +253,29 @@ def create_assignment(
         due_at=due_at,
         note=note,
     )
+    if item["source_type"] == "ai_draft":
+        return _deliver_ai_draft(item, user=user)
     adaptive_learning_repo.put_assignment(item)
     _record_assignment_generation_usage(item)
     return assignment_response(item, user=user)
+
+
+def _deliver_ai_draft(item: dict[str, Any], *, user: dict[str, Any]) -> dict[str, Any]:
+    """An accepted exercise draft set for its student: one assignment per draft.
+
+    The assignment's id is the one an automation batch gives the same source,
+    so sending a draft again - a retry, or after a batch sent it - gives back
+    the assignment already made instead of a second one (#519).
+    """
+    item["assignment_id"] = _automation_source_assignment_id(
+        str(item["student_id"]),
+        {"sourceType": "ai_draft", "sourceId": item["source_id"]},
+    )
+    stored, created = _put_assignment_if_absent(item)
+    if created:
+        _record_assignment_generation_usage(stored)
+    ai_teacher_tools_service.mark_delivered(stored)
+    return assignment_response(stored, user=user)
 
 
 def execute_assignment_automation_batch(
@@ -993,6 +1014,8 @@ def _execute_assignment_automation_candidate(
             ),
         }
     if not created:
+        # A draft sent once is marked once: again here if that mark was lost.
+        ai_teacher_tools_service.mark_delivered(stored)
         return {
             **base,
             "status": "duplicate",
@@ -1002,6 +1025,7 @@ def _execute_assignment_automation_candidate(
         }
 
     _record_assignment_generation_usage(stored)
+    ai_teacher_tools_service.mark_delivered(stored)
     result_status = _automation_delivery_state(candidate["proposedStatus"])
     return {
         **base,
@@ -1581,10 +1605,12 @@ def _assignment_source(source_type: str, source_id: str, student_id: str, *, use
             raise AdaptiveLearningViolation(_L.DRAFT_OF_ANOTHER_STUDENT)
         return {
             "sourceType": "ai_draft",
-            "title": "Reviewed practice exercise",
+            # Its exercises are the bank's (#519): the title is their lesson's,
+            # and the lesson is where the student opens them.
+            "title": draft.get("title") or "Reviewed practice exercise",
             "subject": draft.get("subject"),
             "topicIds": draft.get("topic_ids") or [],
-            "lessonId": None,
+            "lessonId": draft.get("lesson_id"),
             "exerciseId": None,
             "items": draft.get("items") or [],
             "answerKey": draft.get("answer_key") or [],

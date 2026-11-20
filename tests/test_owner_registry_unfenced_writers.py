@@ -212,7 +212,6 @@ REVIEWED: dict[str, str] = {
     "src/stoa/db/repositories/teacher_application_repo.py::claim_invitation": "not_deletion_data",
     "src/stoa/db/repositories/teacher_application_repo.py::set_application_review_state": "not_deletion_data",
     "src/stoa/db/repositories/teacher_application_repo.py::update_activation_command": "not_deletion_data",
-    "src/stoa/jobs/migrate_billing_plan_identity.py::conditional_apply": "not_deletion_data",
     "src/stoa/routers/analytics.py::ingest_event": "not_deletion_data",
     "src/stoa/routers/auth.py::admit_invitation_claim": "not_deletion_data",
     "src/stoa/services/billing_reconciliation_service.py::bind_webhook_provider_identity": "not_deletion_data",
