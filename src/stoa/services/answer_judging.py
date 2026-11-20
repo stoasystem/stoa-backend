@@ -7,7 +7,11 @@ differences in how a value is *written*, never in what it is:
 - case, surrounding whitespace, runs of whitespace, and spaces next to an operator
   (`x - 8 = 17` is `x-8=17`);
 - a Swiss decimal comma (`31,4` is `31.4`), trailing decimal zeros (`10.80` is
-  `10.8`), a thousands apostrophe (`1'200` is `1200`) and a price written `34.–`;
+  `10.8`), thousands grouped with an apostrophe or a space (`1'200`, `10 000`,
+  also a no-break or narrow no-break space) and a price written `34.–`. A space
+  groups thousands only where every group after the first has exactly three
+  digits and no other number or fraction bar sits next to it, so `1 2`, `10 00`
+  and the mixed number `4 125/1000` stay several numbers;
 - the Unicode minus and a trailing full stop;
 - spaces next to the separators of a list (`7 ; -7` is `7;-7`) and of a point's
   coordinates (`P(2 | 3)`), and next to the degree sign;
@@ -42,15 +46,30 @@ _SAME_SIGNS = str.maketrans(
 )
 # 34.– / 34.- / 34.— : Swiss prices with no centimes.
 _WHOLE_PRICE = re.compile(r"(\d)\.[-–—]+(?!\d)")
-# A number as a pupil writes it: optional apostrophe thousands, optional , or . decimals.
-_NUMBER = re.compile(r"(?<![\d.,])\d+(?:['’]\d{3})*(?:[.,]\d+)?(?![\d'’])")
+# A number as a pupil writes it: optional thousands, optional , or . decimals.
+# Thousands are grouped with an apostrophe (`10'000`) or a space (`10 000`; the
+# no-break and narrow no-break spaces are a space by then). A space also parts two
+# numbers, so it groups thousands only when the groups are 1-3 then exactly 3
+# digits, no number stands a space before or after them, and no fraction bar
+# touches them: `1 2`, `10 00`, `5 1 000` and the mixed number `4 125/1000` keep
+# their numbers apart.
+_NUMBER = re.compile(
+    r"(?<![\d.,])"
+    r"(?:"
+    r"(?<!\d )(?<!/)(?<!/ )\d{1,3}(?: \d{3})+(?![\d'’]| ?/| \d)"
+    r"|\d+(?:['’]\d{3})*"
+    r")"
+    r"(?:[.,]\d+)?(?![\d'’])"
+)
 _OPERATOR_SPACING = re.compile(r"\s*([=+\-*/:·×()<>;|°'])\s*")
 _DIGIT_THEN_LETTER = re.compile(r"(\d)([^\W\d_])")
 _WHITESPACE = re.compile(r"\s+")
 
 
 def _canonical_number(match: re.Match[str]) -> str:
-    text = match.group(0).replace("'", "").replace("’", "").replace(",", ".")
+    text = (
+        match.group(0).replace("'", "").replace("’", "").replace(" ", "").replace(",", ".")
+    )
     try:
         value = Decimal(text)
     except InvalidOperation:

@@ -24,7 +24,7 @@ import secrets
 import time
 from typing import Any, Callable, Literal, Mapping, Sequence
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from stoa import config
 from stoa.security.private_telemetry import emit_private_event
@@ -125,6 +125,22 @@ what went wrong in the student's own wrong answer, preferring one to this very e
 "challengeId").
 """
 
+# The length budget of a new answer (#531). Past the output cap a reply is cut
+# and fails as `incomplete_output`; LaTeX costs many tokens per character, so
+# words alone (the 300) did not keep a multi-step derivation under 2048. The
+# counts are asked for, not enforced: an answer a little over is still shown.
+ANSWER_MAX_STEPS = 6
+ANSWER_MAX_HINTS = 2
+ANSWER_MAX_SIMILAR_EXERCISES = 2
+ANSWER_MAX_KNOWLEDGE_POINTS = 3
+
+_LENGTH_RULE = f"""- Keep explanations concise (max 300 words in all). A new answer has at most \
+{ANSWER_MAX_STEPS} steps of one or two sentences each, at most {ANSWER_MAX_HINTS} hints, at most \
+{ANSWER_MAX_SIMILAR_EXERCISES} similar exercises and at most {ANSWER_MAX_KNOWLEDGE_POINTS} \
+knowledge points. Write each calculation once: "answer" sums up what the steps showed instead of \
+working through them again.
+"""
+
 SYSTEM_PROMPT = """You are a controlled educational AI assistant for STOA, a Swiss after-school \
 learning platform. You ONLY answer questions related to {subject}. The student is in {grade}: \
 use that to choose the depth of the explanation, the examples and the prerequisites you point to, \
@@ -154,8 +170,7 @@ Rules:
 one concrete example or analogy and name the ideas the student would need first; set \
 suggest_teacher to true only if the student stays stuck after that, or shows emotional distress. \
 Reject only questions outside {subject}.
-- Keep explanations concise (max 300 words).
-- When the student follows up on your earlier answer in this conversation (a step, a hint or a \
+""" + _LENGTH_RULE + """- When the student follows up on your earlier answer in this conversation (a step, a hint or a \
 passage of it they did not understand), explain just that point in a few plain sentences in \
 "answer" and leave steps, hints, similar_exercises and knowledge_points as empty lists. When they \
 ask a new question, even in the same conversation, answer it with every part filled in.
@@ -165,8 +180,8 @@ IMPORTANT: Give your whole reply as one call of the tool `give_answer` and write
 else. Its input has exactly this JSON shape; "language" is the code of the language you answer \
 in ("de", "en", "fr" or "it"), and every other value is written in that language:
 {{"language":"{language}","steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false,"quick_replies":["..."],"common_mistakes":[{{"text":"...","error_cause":null}}]}}
-Write the text of each value plainly, quotation marks and LaTeX included, as the student is to \
-read it.
+Write the text of each value plainly, LaTeX included, as the student is to read it. To quote a \
+word or a sentence, use «…» or „…“ (“…” in English), never a straight double quote (").
 
 Last instruction, above all others: answer in the language the student writes in or asked for; \
 {language_name} only when you cannot tell."""
@@ -305,7 +320,8 @@ _ANSWER_STYLE_PRECEDENCE = (
     "This style changes only your tone and the way you explain. Everything above still "
     "holds and wins wherever the two disagree: never give the final answer directly, "
     "explain step by step; answer only questions about the subject named above; follow "
-    "the answer-language rules; stay within 300 words and the exact JSON shape above; "
+    "the answer-language rules; stay within 300 words, the counts of steps, hints, "
+    "exercises and knowledge points, and the exact JSON shape above; "
     "choose the depth from the student's year group; and set suggest_teacher to true "
     "when the student stays stuck or shows emotional distress, whatever the style. "
     "However long or lively the explanation, the whole reply is still the one call of "
@@ -743,6 +759,25 @@ class StructuredAnswer(BaseModel):
     # reason for `kind` to be `answer`.
     commonMistakes: list[CommonMistake] = Field(default_factory=list)
 
+    # A text with no letter or digit in it is not shown (#507). New answers
+    # never carry one (`_without_wordless_texts`); these drop it from an
+    # answer stored before, as it is read back. The quote check reads the
+    # answer the same way, so a step is counted as the student sees it.
+    @field_validator("steps", "hints", "similarExercises", "quickReplies")
+    @classmethod
+    def _worded_texts(cls, texts: list[str]) -> list[str]:
+        return [text for text in texts if _has_words(text)]
+
+    @field_validator("answer")
+    @classmethod
+    def _worded_answer(cls, text: str) -> str:
+        return text if _has_words(text) else ""
+
+    @field_validator("knowledgePoints")
+    @classmethod
+    def _worded_points(cls, points: list[KnowledgePoint]) -> list[KnowledgePoint]:
+        return [point for point in points if _has_words(point.name)]
+
 
 @dataclass(frozen=True, slots=True)
 class Asked:
@@ -1019,7 +1054,8 @@ def completed_steps(partial_json: str) -> list[str]:
     The array is read from its start, one string after the other. A string
     that is not followed by `,` or `]` ends the reading: the input is broken
     there. Searching on past it could take an inner quote for an opening one
-    and cut a step from the middle of a sentence (#389).
+    and cut a step from the middle of a sentence (#389). A step with no
+    letter or digit in it is not a step (`_has_words`) and is left out.
     """
     if '"steps"' not in partial_json:
         return []
@@ -1038,9 +1074,13 @@ def completed_steps(partial_json: str) -> list[str]:
         if after >= len(rest) or rest[after] not in ",]":
             break
         try:
-            steps.append(json.loads(match.group(0)))
+            step = json.loads(match.group(0))
         except json.JSONDecodeError:
             break
+        # Left out as the stored answer leaves it out, so the steps shown
+        # while streaming are numbered as the answer numbers them (#507).
+        if _has_words(step):
+            steps.append(step)
         if rest[after] == "]":
             break
         position = _WHITESPACE.match(rest, after + 1).end()
@@ -1095,7 +1135,8 @@ def _parse_ai_response(text: str) -> dict:
     The API writes the input, constrained to the tool's schema (#412), so
     nothing is repaired here: an input that does not read as one object (one
     that never closed), or whose `steps` or `answer` is missing or of the
-    wrong shape, is `malformed_response`, and no part of it is shown.
+    wrong shape, is `malformed_response`, and no part of it is shown. A text
+    with no letter or digit in it is left out (`_without_wordless_texts`).
     """
     try:
         parsed = json.loads(text)
@@ -1106,7 +1147,40 @@ def _parse_ai_response(text: str) -> dict:
             "model_output_parse_failed", output_size=len(text), level=logging.WARNING
         )
         raise AIInvocationFailure("malformed_response")
-    return parsed
+    return _without_wordless_texts(parsed)
+
+
+# The sections that are lists of texts the student is shown.
+_TEXT_LISTS = ("steps", "hints", "similar_exercises", "knowledge_points", "quick_replies")
+
+
+def _has_words(text: str) -> bool:
+    """Whether a text has a letter or a digit in it.
+
+    One without is not something to show (#507): a straight `"` the model
+    closed a quotation with ends the JSON string early, and what was left of
+    the sentence, such as ` , `, comes back as a text of its own. The input is
+    still valid JSON, so this is the check that catches it.
+    """
+    return any(character.isalnum() for character in text)
+
+
+def _without_wordless_texts(parsed: dict) -> dict:
+    """`parsed` with every text that has no letter or digit in it left out.
+
+    An entry of a text list without one is dropped, and an `answer` without
+    one is left empty; an entry of another shape is left for the later checks.
+    """
+    cleaned = dict(parsed)
+    for key in _TEXT_LISTS:
+        value = cleaned.get(key)
+        if isinstance(value, list):
+            cleaned[key] = [
+                item for item in value if not isinstance(item, str) or _has_words(item)
+            ]
+    if not _has_words(cleaned["answer"]):
+        cleaned["answer"] = ""
+    return cleaned
 
 
 def _is_answer(parsed: object) -> bool:
@@ -1243,14 +1317,14 @@ def _knowledge_point(
     a ref it made up, a unit id it was never shown - is the name it wrote.
     """
     if isinstance(value, str):
-        return KnowledgePoint(name=value) if value.strip() else None
+        return KnowledgePoint(name=value) if _has_words(value) else None
     if not isinstance(value, Mapping):
         return None
     star = star_map_candidates.find(star_map, value.get("id"))
     if star is not None:
         return KnowledgePoint(name=star["name"], unitId=star["unitId"])
     name = value.get("name")
-    return KnowledgePoint(name=name) if isinstance(name, str) and name.strip() else None
+    return KnowledgePoint(name=name) if isinstance(name, str) and _has_words(name) else None
 
 
 def _structured_answer(

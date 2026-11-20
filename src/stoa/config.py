@@ -346,7 +346,7 @@ class Settings(BaseSettings):
         paid_price_ids = (
             self.stripe_student_price_id.strip(),
             self.stripe_teacher_supported_price_id.strip(),
-            self.stripe_family_price_id.strip(),
+            self.stripe_online_classroom_price_id.strip(),
         )
         checkout_configured = bool(api_key) or any(paid_price_ids)
         if checkout_configured and not all(paid_price_ids):
@@ -378,7 +378,11 @@ class Settings(BaseSettings):
     # Bedrock
     # EU cross-region inference profile — no manual model access approval needed
     bedrock_model_id: str = "eu.anthropic.claude-sonnet-4-6"
-    bedrock_max_tokens: int = 2048
+    # The output cap of an Ask answer, and so what one question reserves of the
+    # weekly allowance before the model is called. 2048 cut off a multi-step
+    # derivative answer, LaTeX and all (#531); the prompt's length budget keeps
+    # most answers far below 4096. The weekly report caps itself lower.
+    bedrock_max_tokens: int = 4096
 
     # Voice questions (#469, #477). A recording is transcribed by Voxtral Small
     # on Bedrock in Ireland: Zurich has no model that listens, and ADR-010 lets
@@ -508,7 +512,7 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_student_price_id: str = ""
     stripe_teacher_supported_price_id: str = ""
-    stripe_family_price_id: str = ""
+    stripe_online_classroom_price_id: str = ""
     stripe_webhook_endpoint_url: str = ""
     stripe_checkout_web_origins: List[str] = ["http://localhost:5173"]
     stripe_checkout_result_path: str = "/billing/checkout/result"

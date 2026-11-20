@@ -376,8 +376,8 @@ def test_the_switch_is_off_and_both_switches_agree() -> None:
 
 def test_a_manual_override_row_no_longer_grants_paid_access() -> None:
     decision = entitlement_service._billing_decision(  # noqa: SLF001
-        billing={"billing_status": "manual_override", "subscription_tier": "family"},
-        parent_profile={"subscription_tier": "family"},
+        billing={"billing_status": "manual_override", "subscription_tier": "online_classroom"},
+        parent_profile={"subscription_tier": "online_classroom"},
         student_tier="free_trial",
         has_active_binding=True,
         paid_grant=None,
@@ -391,8 +391,8 @@ def test_a_manual_override_row_no_longer_grants_paid_access() -> None:
 def test_an_override_does_not_take_away_what_the_student_profile_already_carries() -> None:
     """The freeze removes the bypass, it does not demote an assigned student."""
     decision = entitlement_service._billing_decision(  # noqa: SLF001
-        billing={"billing_status": "manual_override", "subscription_tier": "family"},
-        parent_profile={"subscription_tier": "family"},
+        billing={"billing_status": "manual_override", "subscription_tier": "online_classroom"},
+        parent_profile={"subscription_tier": "online_classroom"},
         student_tier="student",
         has_active_binding=True,
         paid_grant=None,
@@ -409,14 +409,14 @@ def test_the_override_branch_is_still_there_to_unfreeze(
     monkeypatch.setattr(entitlement_service, "MANUAL_BILLING_OVERRIDE_ENABLED", True)
 
     decision = entitlement_service._billing_decision(  # noqa: SLF001
-        billing={"billing_status": "manual_override", "subscription_tier": "family"},
-        parent_profile={"subscription_tier": "family"},
+        billing={"billing_status": "manual_override", "subscription_tier": "online_classroom"},
+        parent_profile={"subscription_tier": "online_classroom"},
         student_tier="free_trial",
         has_active_binding=True,
         paid_grant=None,
     )
 
-    assert decision["effective_plan"] == "family"
+    assert decision["effective_plan"] == "online_classroom"
     assert decision["source"] == "manual_override"
 
 
@@ -477,7 +477,7 @@ def test_a_route_that_can_reach_the_billing_facts_says_nothing_about_them() -> N
     summary = account_operations_service._billing_summary(
         {
             "status": "manual_override",
-            "subscriptionTier": "family",
+            "subscriptionTier": "online_classroom",
             "provider": "stripe",
             "currentPeriodEnd": "2026-02-01",
             "manualOverrideSource": "subreq-1",
@@ -485,7 +485,7 @@ def test_a_route_that_can_reach_the_billing_facts_says_nothing_about_them() -> N
         include_events=True,
     )
     assert summary == {"status": "billing_frozen", "mode": None, "provider": None}
-    assert "family" not in str(summary)
+    assert "online_classroom" not in str(summary)
     assert "stripe" not in str(summary)
 
 

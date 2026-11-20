@@ -275,10 +275,13 @@ def test_practice_history_names_the_lesson_not_its_topic(monkeypatch):
             ],
         ),
     )
+    # Read by its key, not out of every lesson row (#513).
     monkeypatch.setattr(
         students.practice_repo,
-        "get_lessons",
-        lambda *_a, **_k: [{"lesson_id": "brueche-l1", "title": "Brüche lesen und kürzen"}],
+        "get_lesson",
+        lambda lesson_id: {"lesson_id": "brueche-l1", "title": "Brüche lesen und kürzen"}
+        if lesson_id == "brueche-l1"
+        else None,
     )
 
     response = _client(_actor(CanonicalRole.STUDENT, "student-1")).get(
@@ -296,7 +299,7 @@ def test_a_student_can_read_their_own_plan(monkeypatch):
         students.entitlement_service,
         "resolve_student_entitlement",
         lambda *_a, **_k: {
-            "effectivePlan": "family",
+            "effectivePlan": "online_classroom",
             "newUsageAllowed": True,
             "limits": {"dailyAiQuestionLimit": 30, "dailyChatMessageLimit": 60},
             "freeTrial": {"active": False},
@@ -309,7 +312,7 @@ def test_a_student_can_read_their_own_plan(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["effectivePlan"] == "family"
+    assert body["effectivePlan"] == "online_classroom"
     assert body["dailyChatMessageLimit"] == 60
     assert body["teacherSupportIncluded"] is True
     # Nothing about the parent's billing leaks through.

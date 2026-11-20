@@ -32,7 +32,6 @@ class _AllowanceModel(BaseModel):
 class TeacherSupportScope(StrEnum):
     NONE = "none"
     PER_BENEFICIARY = "per_beneficiary"
-    SHARED_FAMILY = "shared_family"
 
 
 class ZurichWeek(_AllowanceModel):
@@ -74,20 +73,25 @@ class ZurichWeek(_AllowanceModel):
         return f"{self.iso_year:04d}-W{self.iso_week:02d}"
 
 
-LOCKED_BUDGETS: dict[BillingPlanId, tuple[int, int, int, TeacherSupportScope]] = {
-    BillingPlanId.FREE_TRIAL: (50_000, 10_000, 0, TeacherSupportScope.NONE),
-    BillingPlanId.STUDENT: (500_000, 100_000, 0, TeacherSupportScope.NONE),
+# Per plan: input tokens, output tokens, text answers and online classrooms a
+# teacher gives each week, and whom those cases are counted for (#482: the two
+# ways of teacher help are two figures, and every plan is for one child).
+LOCKED_BUDGETS: dict[BillingPlanId, tuple[int, int, int, int, TeacherSupportScope]] = {
+    BillingPlanId.FREE_TRIAL: (50_000, 10_000, 0, 0, TeacherSupportScope.NONE),
+    BillingPlanId.STUDENT: (500_000, 100_000, 0, 0, TeacherSupportScope.NONE),
     BillingPlanId.TEACHER_SUPPORTED: (
         1_000_000,
         200_000,
         2,
+        0,
         TeacherSupportScope.PER_BENEFICIARY,
     ),
-    BillingPlanId.FAMILY: (
+    BillingPlanId.ONLINE_CLASSROOM: (
         1_000_000,
         200_000,
-        10,
-        TeacherSupportScope.SHARED_FAMILY,
+        2,
+        2,
+        TeacherSupportScope.PER_BENEFICIARY,
     ),
 }
 
@@ -96,7 +100,10 @@ class PlanAllowanceBudget(_AllowanceModel):
     plan_id: BillingPlanId = Field(alias="planId")
     input_tokens: ExactNonnegativeCount = Field(alias="inputTokens")
     output_tokens: ExactNonnegativeCount = Field(alias="outputTokens")
-    teacher_support_cases: ExactNonnegativeCount = Field(alias="teacherSupportCases")
+    teacher_support_text_cases: ExactNonnegativeCount = Field(alias="teacherSupportTextCases")
+    teacher_support_classroom_cases: ExactNonnegativeCount = Field(
+        alias="teacherSupportClassroomCases"
+    )
     teacher_support_scope: TeacherSupportScope = Field(alias="teacherSupportScope")
     allowance_version: PositiveVersion = Field(alias="allowanceVersion")
 
@@ -105,7 +112,8 @@ class PlanAllowanceBudget(_AllowanceModel):
         actual = (
             self.input_tokens,
             self.output_tokens,
-            self.teacher_support_cases,
+            self.teacher_support_text_cases,
+            self.teacher_support_classroom_cases,
             self.teacher_support_scope,
         )
         if actual != LOCKED_BUDGETS[self.plan_id]:

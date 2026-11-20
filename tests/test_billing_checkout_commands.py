@@ -49,7 +49,7 @@ def _settings() -> Settings:
         stripe_api_key=SECRET,
         stripe_student_price_id="price_test_student",
         stripe_teacher_supported_price_id="price_test_teacher_supported",
-        stripe_family_price_id="price_test_family",
+        stripe_online_classroom_price_id="price_test_family",
         stripe_checkout_web_origins=["http://localhost:5173"],
     )
 

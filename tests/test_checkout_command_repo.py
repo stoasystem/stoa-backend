@@ -197,8 +197,8 @@ def _intent(
     *,
     parent_id: str = "parent-private-canary",
     idempotency_key: str = "browser-private-canary",
-    plan: PurchasablePlanId = PurchasablePlanId.FAMILY,
-    beneficiaries: tuple[str, ...] = ("student-b", "student-a"),
+    plan: PurchasablePlanId = PurchasablePlanId.ONLINE_CLASSROOM,
+    beneficiaries: tuple[str, ...] = ("student-a",),
 ) -> CheckoutIntent:
     command_id = checkout_command_repo.checkout_command_id(parent_id, idempotency_key)
     return CheckoutIntent(
@@ -242,11 +242,10 @@ def test_repository_contract_links_checkout_models_and_has_no_provider_dependenc
 
 def test_fingerprint_is_canonical_and_binds_every_immutable_intent_coordinate() -> None:
     first = _intent()
-    reordered = _intent(beneficiaries=("student-a", "student-b"))
     assert checkout_command_repo.checkout_intent_fingerprint(
         first, price_id="price_test_family_v7", environment="test"
     ) == checkout_command_repo.checkout_intent_fingerprint(
-        reordered, price_id="price_test_family_v7", environment="test"
+        _intent(), price_id="price_test_family_v7", environment="test"
     )
 
     baseline = checkout_command_repo.checkout_intent_fingerprint(
@@ -259,7 +258,7 @@ def test_fingerprint_is_canonical_and_binds_every_immutable_intent_coordinate() 
             "price_test_student_v7",
             "test",
         ),
-        (_intent(beneficiaries=("student-a", "student-c")), "price_test_family_v7", "test"),
+        (_intent(beneficiaries=("student-c",)), "price_test_family_v7", "test"),
         (_intent(), "price_test_family_v8", "test"),
         (_intent(), "price_test_family_v7", "staging"),
     ]
@@ -366,7 +365,7 @@ def test_same_key_changed_intent_mismatches_without_additional_write() -> None:
     table = AtomicCheckoutTable()
     original = _register(table)
     before = {key: dict(value) for key, value in table.rows.items()}
-    changed = _intent(beneficiaries=("student-a", "student-c"))
+    changed = _intent(beneficiaries=("student-c",))
     result = checkout_command_repo.register_checkout_command(
         changed,
         price_id="price_test_family_v7",

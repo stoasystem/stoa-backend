@@ -221,37 +221,56 @@ def _exercise_list(
     return {"items": items, "count": len(items)}
 
 
+#: How many of a topic's exercises one read of its shelf asks for, when the
+#: caller wants only the first few (#513).
+TOPIC_EXERCISE_PAGE = 10
+
+
 def topic_exercise_reader(
-    *, include_preview: bool = False, locale: str = "de"
+    *, include_preview: bool = False, locale: str = "de", first: int | None = None
 ) -> Callable[[str, str], list[dict[str, Any]]]:
     """`read(subject_id, topic_id)`: what `list_exercises` lists for that
-    subject and topic, with every exercise read once, on the first call.
+    subject and topic - its `first` items, when given.
 
-    `list_exercises` reads every exercise row whatever it is asked for; a
-    caller wanting the exercises of several topics read them all once per
-    topic, which is how a learning memory with a dozen weak topics read some
-    150,000 rows (#496). The rows are filtered here as `get_all_challenges`
-    filters them, so each topic's list is the one `list_exercises` gives.
+    A topic's exercises are read through its shelf in GSI-TopicShelf, in the
+    order `list_exercises` lists them, so the first few are a page of reads
+    however many exercises the topic or the curriculum holds (#513). A learning
+    memory with a dozen weak topics read every exercise row once per topic
+    before (#496), then every exercise row once.
+
+    Without a topic there is no shelf: every exercise is read, once, on the
+    first such call, and filtered as `get_all_challenges` filters them.
     """
     loaded: list[dict[str, Any]] | None = None
 
+    def visible(item: dict[str, Any], subject_id: str) -> bool:
+        return (not subject_id or same_subject(item.get("subject_id", ""), subject_id)) and (
+            _matches_state(item, None, include_preview)
+        )
+
     def read(subject_id: str, topic_id: str) -> list[dict[str, Any]]:
         nonlocal loaded
-        if loaded is None:
-            loaded = practice_repo.get_all_challenges()
-        raw_items = [
-            item
-            for item in loaded
-            if (not subject_id or same_subject(item.get("subject_id", ""), subject_id))
-            and (not topic_id or item.get("topic_id") == topic_id)
-        ]
-        return _exercise_list(
+        if topic_id:
+            raw_items: list[dict[str, Any]] = []
+            page_size = None if first is None else max(first, TOPIC_EXERCISE_PAGE)
+            for item in practice_repo.topic_challenges(topic_id, page_size=page_size):
+                if not visible(item, subject_id):
+                    continue
+                raw_items.append(item)
+                if first is not None and len(raw_items) >= first:
+                    break
+        else:
+            if loaded is None:
+                loaded = practice_repo.get_all_challenges()
+            raw_items = [item for item in loaded if visible(item, subject_id)]
+        items = _exercise_list(
             raw_items,
             difficulty=None,
             rollout_state=None,
             include_preview=include_preview,
             locale=locale,
         )["items"]
+        return items if first is None else items[:first]
 
     return read
 

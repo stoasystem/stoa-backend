@@ -107,6 +107,86 @@ def test_a_list_or_point_with_other_values_is_still_wrong(submitted: str, key: s
     assert not answer_judging.judge(submitted, key)
 
 
+# ── thousands separators ─────────────────────────────────────────────────────
+# Swiss pupils group thousands with an apostrophe (10'000, an iPad's 10’000) or a
+# space, which a keyboard may type as a no-break or narrow no-break space. Spaces
+# also separate other things (the whole part of a mixed number, two numbers), so
+# a space groups thousands only where every group after the first is exactly
+# three digits and nothing around it could make it two numbers.
+
+NBSP = " "
+NARROW_NBSP = " "
+
+
+@pytest.mark.parametrize(
+    ("submitted", "key"),
+    [
+        ("10 000", "10000"),
+        (f"10{NBSP}000", "10000"),
+        (f"10{NARROW_NBSP}000", "10000"),
+        ("10'000", "10000"),
+        ("10’000", "10000"),
+        ("10000", "10 000"),
+        ("10'000", f"10{NARROW_NBSP}000"),
+        ("1 234 567", "1234567"),
+        ("999 999", "999999"),
+        ("1 234,5", "1234.5"),
+        ("1 234.50", "1234.5"),
+        ("-10 000", "-10000"),
+        ("−10 000", "-10000"),
+        ("12 500.–", "12500"),
+        ("10 000 m", "10000 m"),
+        ("10 000m", "10000 m"),
+        ("x = 10 000", "x=10000"),
+        ("10 000; 20 000", "10000; 20000"),
+        ("P(1 000 | 2 000)", "P(1000|2000)"),
+    ],
+)
+def test_a_number_grouped_in_thousands_is_the_number(submitted: str, key: str) -> None:
+    assert answer_judging.judge(submitted, key)
+
+
+@pytest.mark.parametrize(
+    ("submitted", "key"),
+    [
+        # Groups that are not three digits are not a thousands separator.
+        ("1 2", "12"),
+        ("10 00", "1000"),
+        ("1 0000", "10000"),
+        ("1000 000", "1000000"),
+        ("12 3456", "123456"),
+        ("1 000 00", "100000"),
+        ("1 000 0000", "10000000"),
+        # A number next to a grouped one stays its own number.
+        ("5 1 000", "51000"),
+        ("5 1 000", "5 1000"),
+        # The whole part of a mixed number, and a fraction's terms, stay apart.
+        ("4 125/1000", "4125/1000"),
+        ("4 125 / 1000", "4125/1000"),
+        ("1/2 000", "1/2000"),
+        # Decimals are never grouped.
+        ("3,141 592", "3.141592"),
+        # A list or a point keeps its numbers apart.
+        ("10 000; 20 000", "1000020000"),
+        ("P(1 000 | 2 000)", "P(1000 2000)"),
+    ],
+)
+def test_spaces_that_do_not_group_thousands_keep_the_numbers_apart(
+    submitted: str, key: str
+) -> None:
+    assert not answer_judging.judge(submitted, key)
+
+
+def test_a_mixed_number_with_a_three_digit_numerator_keeps_its_whole_part() -> None:
+    assert answer_judging.normalize_answer("4 125/1000") == "4 125/1000"
+    assert answer_judging.judge("4 125 / 1000", "4 125/1000")
+
+
+def test_a_choices_answer_compares_grouped_thousands_item_by_item() -> None:
+    assert answer_judging.judge(["10 000", "2"], ["10000", "2"])
+    assert not answer_judging.judge(["10 000", "2"], ["10000", "3"])
+
+
 def test_choices_and_list_answers_compare_item_by_item() -> None:
     assert answer_judging.judge(["1/2", "0,75"], ["1/2", "0.75"])
     assert not answer_judging.judge(["0,75", "1/2"], ["1/2", "0.75"])
@@ -126,6 +206,20 @@ def test_choices_and_list_answers_compare_item_by_item() -> None:
         ("100", ["100 Fr.", "100 CHF"], ["100", "100 Fr", "100 fr.", "100 CHF"], ["10"]),
         # EX-D0070-8: unit required for full credit, so the bare number is not listed
         ("3120 km", ["3120000 m"], ["3120 km", "3'120 km", "3120000 m"], ["3120", "3120 m"]),
+        # Thousands grouped by a space, in the key, in a listed alternative or in
+        # the submission.
+        (
+            "12500 CHF",
+            ["12 500 Fr."],
+            ["12 500 CHF", "12 500 chf", "12500 Fr.", "12'500 fr", "12’500.– Fr."],
+            ["12 50 CHF", "125 00 Fr.", "1 2500 CHF", "12 500"],
+        ),
+        (
+            "1 000 000 m",
+            ["1 000 km"],
+            ["1000000 m", "1'000'000 m", "1 000 000m", "1000 km", "1 000 km"],
+            ["100 000 m", "1 000 m", "1000 000 m"],
+        ),
     ],
 )
 def test_listed_alternatives_count_and_nothing_else_does(

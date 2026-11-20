@@ -61,6 +61,7 @@ from stoa.services import (
     student_evidence,
     teacher_assistance_service,
     teacher_dispatch_service,
+    teacher_help_prep,
     teacher_reply_service,
 )
 
@@ -225,6 +226,8 @@ def _parse_time(value: object) -> datetime | None:
 class TeacherHelpRequestSummary(BaseModel):
     requestId: str
     conversationId: str
+    # The student the request is from: what the teacher assigns practice to (#495).
+    studentId: str
     studentName: str
     subject: str
     grade: str
@@ -301,6 +304,24 @@ class TeacherAiHelpedStar(BaseModel):
     askedAi: int
 
 
+class TeacherPrepQuestion(BaseModel):
+    """One of the student's questions as the prep table shows it (#517)."""
+
+    messageId: str
+    content: str
+    createdAt: str
+    # The files this message carries.
+    attachments: list[AttachmentSummary] = Field(default_factory=list)
+
+
+class TeacherAskedStar(BaseModel):
+    """A star the conversation's Ask answers named (#517)."""
+
+    unitId: str
+    # In the teacher's language.
+    title: str
+
+
 class TeacherHelpRequestDetail(BaseModel):
     requestId: str
     conversationId: str
@@ -325,6 +346,14 @@ class TeacherHelpRequestDetail(BaseModel):
     # right were answered after asking AI (#451), in the catalog's order, titled
     # in the teacher's language. Empty when there are none.
     aiHelpedStars: list[TeacherAiHelpedStar] = Field(default_factory=list)
+    # The prep table (#517), by the rules of `teacher_help_prep`: the
+    # student's first question; their last one before asking for a teacher,
+    # `null` when it is the first; every file they sent in the conversation;
+    # and the stars the conversation's Ask answers named, newest first.
+    firstQuestion: TeacherPrepQuestion | None = None
+    lastQuestion: TeacherPrepQuestion | None = None
+    uploads: list[AttachmentSummary] = Field(default_factory=list)
+    askedStars: list[TeacherAskedStar] = Field(default_factory=list)
 
 
 def _help_request_summary(
@@ -333,6 +362,7 @@ def _help_request_summary(
     return TeacherHelpRequestSummary(
         requestId=view.request_id,
         conversationId=view.conversation_id,
+        studentId=view.student_id,
         studentName=student_name,
         subject=view.subject,
         grade=view.grade,
@@ -461,11 +491,23 @@ class CreateSummaryDraftResponse(BaseModel):
     studentDeliveryStatus: str = "not_delivered"
 
 
+ExerciseDifficulty = Literal["targeted", "standard", "stretch"]
+StudentDeliveryStatus = Literal["not_delivered", "delivered"]
+
+
 class ExerciseDraftRequest(BaseModel):
+    """What an exercise draft is picked for (#519).
+
+    Its exercises come from the question bank: those of `starIds` (stars on
+    the star map, as the request's preparation table names them), then of
+    `topicIds`. At least one of the two names something.
+    """
+
     studentId: str
     subject: str
-    topicIds: list[str]
-    difficulty: str
+    topicIds: list[str] = Field(default_factory=list)
+    starIds: list[str] = Field(default_factory=list)
+    difficulty: ExerciseDifficulty
     exerciseCount: int
     questionId: str | None = None
 
@@ -475,11 +517,20 @@ class ReviewDraftRequest(BaseModel):
 
 
 class AiTeacherDraftResponse(CreateSummaryDraftResponse):
+    # `easy`/`medium`/`hard` on a draft stored before #519.
     difficulty: str | None = None
     exerciseCount: int = 0
+    starIds: list[str] = Field(default_factory=list)
+    # The lesson title of its first exercise, in the student's language.
+    title: str | None = None
     items: list[dict[str, Any]] = Field(default_factory=list)
     answerKey: list[dict[str, Any]] = Field(default_factory=list)
     explanations: list[dict[str, Any]] = Field(default_factory=list)
+    # `delivered` once an accepted exercise draft is set for the student
+    # (`POST /adaptive/assignments`, `sourceType: ai_draft`), with that assignment.
+    studentDeliveryStatus: StudentDeliveryStatus = "not_delivered"
+    deliveredAssignmentId: str | None = None
+    deliveredAt: str | None = None
 
 
 class AiTeacherDraftListResponse(BaseModel):
@@ -727,6 +778,9 @@ async def update_my_availability(
         updated_at=_now(),
         status=body.status,
     )
+    # Saving is also a heartbeat (#472): a teacher who just set themselves
+    # available is online at once, not only from their next poll.
+    teacher_dispatch_service.record_seen_if_teacher(actor)
     return _availability_response(updated)
 
 
@@ -789,11 +843,12 @@ async def create_exercise_draft(
     authorized: AuthorizedResource = Depends(_exercise_context_dependency),
     actor: Actor = Depends(get_actor),
 ):
-    """Create a reviewed practice exercise draft from teacher-visible learning context."""
+    """Pick a practice exercise draft from the question bank for the teacher to review."""
     return ai_teacher_tools_service.create_exercise_draft(
         student_id=body.studentId,
         subject=body.subject,
         topic_ids=body.topicIds,
+        star_ids=body.starIds,
         difficulty=body.difficulty,
         exercise_count=body.exerciseCount,
         question_id=body.questionId,
@@ -876,7 +931,11 @@ async def accept_ai_teacher_draft(
     authorized: AuthorizedResource = Depends(_ai_teacher_draft(AuthorizationAction.UPDATE)),
     actor: Actor = Depends(get_actor),
 ):
-    """Mark a draft as reviewed and accepted without delivering it to students."""
+    """Mark a draft as reviewed and accepted.
+
+    Accepting sends nothing: an accepted exercise draft reaches the student as
+    an assignment (`POST /adaptive/assignments`, `sourceType: ai_draft`).
+    """
     return ai_teacher_tools_service.review_draft(
         authorized=authorized,
         action="accept",
@@ -922,6 +981,9 @@ async def list_help_requests(
     portal: tuple[Actor, AuthorizationContext] = Depends(_help_list_actor),
 ):
     """Return only help requests currently assigned to this Actor."""
+    # The queue polls this while the teacher's tab is shown, so each read is
+    # also their heartbeat (#472).
+    teacher_dispatch_service.record_seen_if_teacher(portal[0])
     escalated = await _current_help_requests(*portal)
     items = []
     for conv in sorted(
@@ -981,6 +1043,10 @@ async def get_help_request(
     # One evidence for the prep's items, read lazily: each reads what it needs once.
     locale = locale_service.reader_locale(actor.user_id)
     evidence = student_evidence.for_student(student_id, locale=locale)
+    asked_records = _asked_records(conv_id)
+    asked = teacher_help_prep.questions(
+        history, asked_at=_text(authorized.value.get("escalated_at")) or None
+    )
 
     return TeacherHelpRequestDetail(
         requestId=view.request_id,
@@ -998,9 +1064,17 @@ async def get_help_request(
         notes=notes,
         firstTeacherActionAt=view.first_teacher_action_at,
         sla=view.sla,
-        weakTopics=_asked_topics(conv_id),
+        weakTopics=_asked_topics(asked_records),
         commonErrorCause=_common_error_cause(evidence, locale),
         aiHelpedStars=_ai_helped_stars(evidence),
+        firstQuestion=_prep_question(asked.first, attachment_summaries),
+        lastQuestion=_prep_question(asked.last, attachment_summaries),
+        uploads=[
+            attachment_summaries[value]
+            for value in teacher_help_prep.uploads(history)
+            if value in attachment_summaries
+        ],
+        askedStars=_asked_stars(asked_records, evidence),
     )
 
 
@@ -1008,25 +1082,73 @@ async def get_help_request(
 _PREP_TOPIC_LIMIT = 5
 
 
-def _asked_topics(conversation_id: str) -> list[str]:
-    """What the questions of this conversation asked about, newest first, once each.
+def _asked_records(conversation_id: str) -> list[dict[str, Any]]:
+    """The asked-knowledge records of this conversation, newest first.
 
     The request opens without them rather than not at all, as it does without
-    its attachments.
+    its attachments: its asked topics and stars are then empty.
     """
     try:
-        records = asked_knowledge_repo.list_for_conversation(conversation_id)
+        return asked_knowledge_repo.list_for_conversation(conversation_id)
     except Exception as exc:
         logger.warning(
             "help_request_asked_topics_unavailable error_class=%s", type(exc).__name__
         )
         return []
+
+
+def _asked_topics(records: list[dict[str, Any]]) -> list[str]:
+    """What the questions of this conversation asked about, newest first, once each."""
     topics: dict[str, str] = {}
     for record in records:
         for name in record.get("knowledge_points") or []:
             if isinstance(name, str) and name.casefold() not in topics:
                 topics[name.casefold()] = name
     return list(topics.values())[:_PREP_TOPIC_LIMIT]
+
+
+def _prep_question(
+    message: learning_session.Message | None,
+    attachment_summaries: Mapping[str, AttachmentSummary],
+) -> TeacherPrepQuestion | None:
+    if message is None:
+        return None
+    return TeacherPrepQuestion(
+        messageId=message.id,
+        content=message.content,
+        createdAt=message.created_at,
+        attachments=[
+            attachment_summaries[value]
+            for value in message.attachment_ids
+            if value in attachment_summaries
+        ],
+    )
+
+
+def _asked_stars(
+    records: list[dict[str, Any]], evidence: student_evidence.StudentEvidence
+) -> list[TeacherAskedStar]:
+    """The stars the conversation's Ask answers named, newest first (#517).
+
+    Titled from the catalog in the teacher's language; a star the catalog no
+    longer has is left out. As the asked topics, the request opens without
+    them rather than not at all.
+    """
+    unit_ids = teacher_help_prep.asked_star_ids(records)
+    if not unit_ids:
+        return []
+    try:
+        titles = {str(unit.get("id") or ""): unit.get("title") for unit in evidence.content.units}
+    except Exception as exc:
+        logger.warning(
+            "help_request_asked_stars_unavailable error_class=%s", type(exc).__name__
+        )
+        return []
+    return [
+        TeacherAskedStar(unitId=unit_id, title=_text(titles.get(unit_id)) or unit_id)
+        for unit_id in unit_ids
+        if unit_id in titles
+    ][:_PREP_TOPIC_LIMIT]
 
 
 def _common_error_cause(

@@ -561,7 +561,7 @@
             "enum": [
               "student",
               "teacher_supported",
-              "family"
+              "online_classroom"
             ],
             "title": "Targetplan",
             "type": "string"
@@ -1137,6 +1137,28 @@
             ],
             "title": "Createdbyrole"
           },
+          "deliveredAssignmentId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deliveredassignmentid"
+          },
+          "deliveredAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deliveredat"
+          },
           "difficulty": {
             "anyOf": [
               {
@@ -1292,12 +1314,23 @@
             "title": "Sourcecontext",
             "type": "object"
           },
+          "starIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Starids",
+            "type": "array"
+          },
           "status": {
             "title": "Status",
             "type": "string"
           },
           "studentDeliveryStatus": {
             "default": "not_delivered",
+            "enum": [
+              "not_delivered",
+              "delivered"
+            ],
             "title": "Studentdeliverystatus",
             "type": "string"
           },
@@ -1333,6 +1366,17 @@
               }
             ],
             "title": "Suggestedteachingfocus"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
           },
           "topicIds": {
             "items": {
@@ -4713,8 +4757,14 @@
         "type": "object"
       },
       "ExerciseDraftRequest": {
+        "description": "What an exercise draft is picked for (#519).\n\nIts exercises come from the question bank: those of `starIds` (stars on\nthe star map, as the request's preparation table names them), then of\n`topicIds`. At least one of the two names something.",
         "properties": {
           "difficulty": {
+            "enum": [
+              "targeted",
+              "standard",
+              "stretch"
+            ],
             "title": "Difficulty",
             "type": "string"
           },
@@ -4732,6 +4782,13 @@
               }
             ],
             "title": "Questionid"
+          },
+          "starIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Starids",
+            "type": "array"
           },
           "studentId": {
             "title": "Studentid",
@@ -4752,7 +4809,6 @@
         "required": [
           "studentId",
           "subject",
-          "topicIds",
           "difficulty",
           "exerciseCount"
         ],
@@ -5591,6 +5647,10 @@
             "title": "Rationale",
             "type": "string"
           },
+          "rationaleCode": {
+            "title": "Rationalecode",
+            "type": "string"
+          },
           "reviewFlags": {
             "items": {
               "type": "string"
@@ -5636,6 +5696,7 @@
           "subject",
           "topicId",
           "label",
+          "rationaleCode",
           "rationale",
           "confidence",
           "freshness",
@@ -7321,7 +7382,7 @@
               "free_trial",
               "student",
               "teacher_supported",
-              "family"
+              "online_classroom"
             ],
             "title": "Effectiveplan",
             "type": "string"
@@ -7365,8 +7426,7 @@
           "teacherSupportScope": {
             "enum": [
               "none",
-              "per_beneficiary",
-              "shared_family"
+              "per_beneficiary"
             ],
             "title": "Teachersupportscope",
             "type": "string"
@@ -7435,7 +7495,7 @@
             "enum": [
               "student",
               "teacher_supported",
-              "family"
+              "online_classroom"
             ],
             "title": "Effectiveplan",
             "type": "string"
@@ -7589,7 +7649,7 @@
               "free_trial",
               "student",
               "teacher_supported",
-              "family"
+              "online_classroom"
             ],
             "title": "Effectiveplan",
             "type": "string"
@@ -9095,8 +9155,7 @@
           "scope": {
             "enum": [
               "none",
-              "per_beneficiary",
-              "shared_family"
+              "per_beneficiary"
             ],
             "title": "Scope",
             "type": "string"
@@ -10005,7 +10064,7 @@
         "enum": [
           "student",
           "teacher_supported",
-          "family"
+          "online_classroom"
         ],
         "title": "PurchasablePlanId",
         "type": "string"
@@ -13673,7 +13732,7 @@
           "free_trial",
           "student",
           "teacher_supported",
-          "family"
+          "online_classroom"
         ],
         "title": "SubscriptionTier",
         "type": "string"
@@ -13893,6 +13952,25 @@
           "statement"
         ],
         "title": "TeacherApplicationRequest",
+        "type": "object"
+      },
+      "TeacherAskedStar": {
+        "description": "A star the conversation's Ask answers named (#517).",
+        "properties": {
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unitId": {
+            "title": "Unitid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unitId",
+          "title"
+        ],
+        "title": "TeacherAskedStar",
         "type": "object"
       },
       "TeacherAvailability": {
@@ -14124,6 +14202,13 @@
             "title": "Aihelpedstars",
             "type": "array"
           },
+          "askedStars": {
+            "items": {
+              "$ref": "#/components/schemas/TeacherAskedStar"
+            },
+            "title": "Askedstars",
+            "type": "array"
+          },
           "commonErrorCause": {
             "anyOf": [
               {
@@ -14138,6 +14223,16 @@
             "title": "Conversationid",
             "type": "string"
           },
+          "firstQuestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeacherPrepQuestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "firstTeacherActionAt": {
             "anyOf": [
               {
@@ -14148,6 +14243,16 @@
               }
             ],
             "title": "Firstteacheractionat"
+          },
+          "lastQuestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeacherPrepQuestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "messages": {
             "items": {
@@ -14211,6 +14316,13 @@
           "subject": {
             "title": "Subject",
             "type": "string"
+          },
+          "uploads": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentSummary"
+            },
+            "title": "Uploads",
+            "type": "array"
           },
           "weakTopics": {
             "items": {
@@ -14302,6 +14414,10 @@
             "title": "Status",
             "type": "string"
           },
+          "studentId": {
+            "title": "Studentid",
+            "type": "string"
+          },
           "studentName": {
             "title": "Studentname",
             "type": "string"
@@ -14314,6 +14430,7 @@
         "required": [
           "requestId",
           "conversationId",
+          "studentId",
           "studentName",
           "subject",
           "grade",
@@ -14448,6 +14565,37 @@
           "teacher"
         ],
         "title": "TeacherNoteOut",
+        "type": "object"
+      },
+      "TeacherPrepQuestion": {
+        "description": "One of the student's questions as the prep table shows it (#517).",
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentSummary"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "messageId": {
+            "title": "Messageid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "messageId",
+          "content",
+          "createdAt"
+        ],
+        "title": "TeacherPrepQuestion",
         "type": "object"
       },
       "TeacherProfile": {
@@ -14602,6 +14750,19 @@
             "minimum": 0.0,
             "title": "Weekly Cases",
             "type": "integer"
+          },
+          "weekly_classroom_cases": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Classroom Cases"
           }
         },
         "required": [
@@ -14611,8 +14772,8 @@
         "title": "TeacherSupportAllowanceCommand",
         "type": "object"
       },
-      "TeacherSupportStanding": {
-        "description": "Whether this student can still ask a teacher this Zurich week (#144).\n\n`blockedReason` is the code `POST /teacher-help/request` would refuse with:\n`teacher_support_allowance_exhausted` comes back at `resetsAt`;\n`teacher_support_not_included` does not come back with the week, so it has\nno `resetsAt`.",
+      "TeacherSupportModeStanding": {
+        "description": "Whether this student can still ask for one way of help this Zurich week.\n\n`blockedReason` is the code `POST /teacher-help/request` would refuse a\nrequest of this way with: `teacher_support_allowance_exhausted` comes back\nat `resetsAt`; `teacher_support_not_included` (the plan has none of this\nway) does not come back with the week, so it has no `resetsAt`.",
         "properties": {
           "blockedReason": {
             "anyOf": [
@@ -14657,6 +14818,64 @@
           "canRequest",
           "remainingCases",
           "weeklyCases"
+        ],
+        "title": "TeacherSupportModeStanding",
+        "type": "object"
+      },
+      "TeacherSupportStanding": {
+        "description": "Whether this student can still ask a teacher this Zurich week (#144, #482).\n\nA text answer and an online classroom are two weekly allowances: `text`\nand `classroom` answer for each. The top-level fields are the text one,\nas they were before there were two ways.",
+        "properties": {
+          "blockedReason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "teacher_support_allowance_exhausted",
+                  "teacher_support_not_included"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blockedreason"
+          },
+          "canRequest": {
+            "title": "Canrequest",
+            "type": "boolean"
+          },
+          "classroom": {
+            "$ref": "#/components/schemas/TeacherSupportModeStanding"
+          },
+          "remainingCases": {
+            "title": "Remainingcases",
+            "type": "integer"
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resetsat"
+          },
+          "text": {
+            "$ref": "#/components/schemas/TeacherSupportModeStanding"
+          },
+          "weeklyCases": {
+            "title": "Weeklycases",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canRequest",
+          "remainingCases",
+          "weeklyCases",
+          "text",
+          "classroom"
         ],
         "title": "TeacherSupportStanding",
         "type": "object"
@@ -24051,7 +24270,7 @@
     },
     "/admin/teacher-support/allowances/{student_id}": {
       "get": {
-        "description": "How many teacher-support cases this student has in a week, and from where.",
+        "description": "How many teacher-support cases this student has in a week, and from where.\n\n`weeklyCases` is text answers, `weeklyClassroomCases` online classrooms.",
         "operationId": "read_teacher_support_allowance_admin_teacher_support_allowances__student_id__get",
         "parameters": [
           {
@@ -24129,7 +24348,7 @@
         }
       },
       "put": {
-        "description": "Set this student's weekly figure, replacing whatever it was.\n\nThe write carries the version it read, so two administrators changing the\nsame student at once cannot both believe they set it. The admission path\nfences the same version, so a case can never be spent against a figure that\nwas replaced between reading it and writing the case.",
+        "description": "Set this student's weekly figures, replacing whatever they were.\n\nThe write carries the version it read, so two administrators changing the\nsame student at once cannot both believe they set it. The admission path\nfences the same version, so a case can never be spent against a figure that\nwas replaced between reading it and writing the case.",
         "operationId": "set_teacher_support_allowance_admin_teacher_support_allowances__student_id__put",
         "parameters": [
           {
@@ -35797,7 +36016,7 @@
     },
     "/teachers/ai-tools/drafts/{draft_id}/accept": {
       "post": {
-        "description": "Mark a draft as reviewed and accepted without delivering it to students.",
+        "description": "Mark a draft as reviewed and accepted.\n\nAccepting sends nothing: an accepted exercise draft reaches the student as\nan assignment (`POST /adaptive/assignments`, `sourceType: ai_draft`).",
         "operationId": "accept_ai_teacher_draft_teachers_ai_tools_drafts__draft_id__accept_post",
         "parameters": [
           {
@@ -36200,7 +36419,7 @@
     },
     "/teachers/ai-tools/exercise-drafts": {
       "post": {
-        "description": "Create a reviewed practice exercise draft from teacher-visible learning context.",
+        "description": "Pick a practice exercise draft from the question bank for the teacher to review.",
         "operationId": "create_exercise_draft_teachers_ai_tools_exercise_drafts_post",
         "requestBody": {
           "content": {

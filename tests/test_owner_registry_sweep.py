@@ -52,8 +52,15 @@ def table() -> FakeTable:
         # Written before the dual-write: owner and reference unregistered.
         {"PK": "CONV#c1", "SK": "CONV", "owner_id": STUDENT, "entity_type": "conversation"},
         {"PK": "CONV#c1", "SK": "MSG#1", "entity_type": "message"},
+        # A help request's teacher is a reviewed reference: the teacher's own
+        # deletion takes the row.
         {"PK": "TEACHER_SUPPORT_CASE#k", "SK": "CASE", "student_id": STUDENT,
-         "teacher_id": TEACHER},
+         "teacher_id": TEACHER, "entity_type": "help_request"},
+        # The student's notification that went to the teacher: registered for
+        # its owner, and no branch of the teacher's deletion takes it.
+        {"PK": "NOTIFICATION#n1", "SK": "META", "entity_type": "notification_event",
+         "owner_id": STUDENT, "recipient_id": TEACHER},
+        owner_registry.registry_item(STUDENT, "NOTIFICATION#n1"),
         # Already registered.
         {"PK": "REPORT#r1", "SK": "META", "student_id": STUDENT},
         owner_registry.registry_item(STUDENT, "REPORT#r1"),
@@ -98,6 +105,99 @@ def test_a_dry_run_reports_and_writes_nothing(table):
         (STUDENT, "MODERATION#m1", "reference"),
     }
     assert table.calls["put_item"] == table.calls["transact_write_items"] == 0
+
+
+def test_a_row_no_deletion_branch_takes_is_a_mention_not_a_missing_registration(table):
+    """What closes the registry path is what it would miss, not every id in a row.
+
+    The teacher's deletion leaves the student's notification alone on either
+    path, so its `recipient_id` is no gap in the registry - while the same
+    teacher on a help request is, because that deletion does take the request.
+    """
+    result = sweep.run(table=table).as_dict()
+
+    assert result["unmatched_mentions"] == 1
+    assert result["unmatched_mentions_by_family"] == {"NOTIFICATION/META": 1}
+    assert result["unmatched_mention_samples"] == [
+        {"PK": "NOTIFICATION#n1", "SK": "META", "account": TEACHER, "role": "reference"}
+    ]
+    assert (TEACHER, "TEACHER_SUPPORT_CASE#k") in {
+        (sample["account"], sample["PK"]) for sample in result["unregistered_samples"]
+    }
+
+
+def test_a_mention_alone_leaves_the_registry_complete_and_is_never_backfilled():
+    double = FakeTable()
+    double.seed(
+        _fence(STUDENT),
+        _fence(TEACHER),
+        {"PK": "NOTIFICATION#n1", "SK": "META", "entity_type": "notification_event",
+         "owner_id": STUDENT, "recipient_id": TEACHER},
+        owner_registry.registry_item(STUDENT, "NOTIFICATION#n1"),
+    )
+    before = _registry(double)
+
+    report = sweep.run(table=double, write=True)
+
+    assert report.registry_complete and report.registry_written == 0
+    assert sum(report.mentions.values()) == 1
+    assert _registry(double) == before
+
+
+def test_a_row_only_one_branchs_own_rule_takes_is_a_missing_registration():
+    """The scans are asked, not `_targets_user`: a branch may read what it does not.
+
+    A recovery job's summary names the student in its filters, which only the
+    report branch reads.
+    """
+    double = FakeTable()
+    row = {"PK": "REPORT_RECOVERY_JOB#j1", "SK": "SUMMARY", "filters": {"student_id": STUDENT}}
+    double.seed(_fence(STUDENT), row)
+    assert not sweep.account_deletion_repo._targets_user(row, STUDENT)
+
+    report = sweep.run(table=double)
+
+    assert report.unregistered == {"REPORT_RECOVERY_JOB/SUMMARY": 1}
+    assert not report.mentions
+
+
+def test_a_scan_that_cannot_judge_the_row_counts_as_taking_it(monkeypatch):
+    def refuses(account, *, table, maximum_pages):
+        raise RuntimeError("cannot read this row")
+
+    monkeypatch.setattr(sweep, "DELETION_SCANS", (refuses,))
+
+    assert sweep.deletion_takes({"PK": "X#1", "SK": "META"}, STUDENT, table=FakeTable())
+
+
+def test_every_deletion_scan_is_asked():
+    """Each function that pages through `sweep_pages` to find an account's rows.
+
+    A new deletion branch with its own scan has to be added to `DELETION_SCANS`,
+    or a row only it takes would be filed as a mention.
+    """
+    import ast
+
+    # Not an account's rows: the pending-command sweep (and the helper nested
+    # in it). And the attachments branch, which pages inline and takes rows by
+    # `owner_id` / `student_id` as `scan_owned_private_rows` does.
+    not_a_row_scan = {
+        "scan_pending_deletion_commands",
+        "_scan_commands",
+        "_attachments_branch",
+    }
+    callers: set[str] = set()
+    for path in (ROOT / "src" / "stoa").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            for call in ast.walk(node):
+                target = getattr(call, "func", None)
+                name = getattr(target, "attr", None) or getattr(target, "id", None)
+                if isinstance(call, ast.Call) and name == "sweep_pages":
+                    callers.add(node.name)
+    assert callers - not_a_row_scan == {scan.__name__ for scan in sweep.DELETION_SCANS}
 
 
 def test_the_sweep_finds_a_deleted_accounts_leftovers_and_registry(table):
@@ -208,11 +308,41 @@ def test_the_daily_job_is_report_only_and_logs_findings(table, caplog):
     assert table.rows == before
     assert marker["complete"] is True
     assert marker["missing_registrations"] == 4 and marker["leftover_rows"] == 2
+    assert marker["unmatched_mentions"] == 1
     assert summary["missing_registrations"] == 4 and summary["leftover_rows"] == 2
     assert "owner_registry_sweep_findings" in caplog.text
     assert STUDENT not in json.dumps(marker, default=str)
     # Keys and counts only: no row contents in what is logged.
     assert "owner_id" not in caplog.text
+
+
+def test_the_daily_job_logs_a_mention_without_raising_a_finding(caplog):
+    double = FakeTable()
+    double.seed(
+        _fence(STUDENT),
+        _fence(TEACHER),
+        {"PK": "NOTIFICATION#n1", "SK": "META", "entity_type": "notification_event",
+         "owner_id": STUDENT, "recipient_id": TEACHER},
+        owner_registry.registry_item(STUDENT, "NOTIFICATION#n1"),
+    )
+    db_table.install(double)
+    try:
+        with caplog.at_level("INFO"):
+            summary = account_deletion_job.handler({"job": "owner_registry_sweep"}, None)
+    finally:
+        db_table.install(None)
+
+    marker = double.rows[(sweep.RUN_MARKER_KEY["PK"], sweep.RUN_MARKER_KEY["SK"])]
+    assert marker["missing_registrations"] == 0 and marker["unmatched_mentions"] == 1
+    assert summary["registry_complete"] is True
+    assert "owner_registry_sweep_mentions count=1" in caplog.text
+    # The alarm's metric filter matches these three, and none was logged.
+    for alarming in (
+        "owner_registry_sweep_findings",
+        "owner_registry_sweep_incomplete",
+        "owner_registry_sweep_marker_failed",
+    ):
+        assert alarming not in caplog.text
 
 
 # -- what the audit added -----------------------------------------------------------------

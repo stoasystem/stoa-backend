@@ -109,6 +109,7 @@ def test_the_operation_list_is_exactly_this() -> None:
         "count_review_queues": catalog.Effect.READ,
         "report_email_stats": catalog.Effect.READ,
         "get_usage_period": catalog.Effect.READ,
+        "get_teacher_help_allowance": catalog.Effect.READ,
         "extend_usage_period": catalog.Effect.WRITE,
         "set_usage_period": catalog.Effect.WRITE,
         "get_lesson_state": catalog.Effect.READ,
@@ -1145,7 +1146,7 @@ def test_a_student_covered_by_a_paid_plan_is_refused(fake_table, link_rows) -> N
             "SK": "BENEFICIARY#student-1",
             "entity_type": "beneficiary_grant",
             "grant_status": "active",
-            "plan_id": "family",
+            "plan_id": "online_classroom",
             "parent_id": "parent-1",
             "beneficiary_id": "student-1",
         }

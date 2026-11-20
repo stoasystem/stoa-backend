@@ -24,6 +24,7 @@ import pytest
 from fakes.dynamodb import FakeTable
 from scripts import seed_practice
 from stoa.db import table as db_table
+from stoa.db.repositories import practice_repo
 from stoa.services import curriculum_service, practice_projection_service
 
 
@@ -45,7 +46,8 @@ def _seed_rows() -> list[dict[str, Any]]:
     rows += [{"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u} for u in units]
     rows += [{"PK": "PRACTICE", "SK": f"LESSON#{lesson['lesson_id']}", **lesson} for lesson in lessons]
     rows += seed_practice.prepare_challenge_items(challenges)
-    return rows
+    # On their topic's shelf, as `seed_practice.seed_rows` puts them (#513).
+    return [{**row, **practice_repo.topic_shelf_fields(row)} for row in rows]
 
 
 def _seeded_table(monkeypatch: pytest.MonkeyPatch, *extra: dict[str, Any]) -> FakeTable:

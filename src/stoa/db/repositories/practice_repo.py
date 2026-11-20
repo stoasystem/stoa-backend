@@ -24,6 +24,9 @@ _CHALLENGE_METADATA_FIELDS = {
     "challenge_version",
     "entity_type",
     "hint_non_derivability_decision",
+    # Where the row sits in GSI-TopicShelf, derived from fields the hash covers.
+    "topic_shelf",
+    "topic_order",
 }
 _POINTER_FIELDS = {
     "PK",
@@ -427,6 +430,127 @@ def indexed_exercises(lesson: Mapping[str, Any]) -> list[dict[str, Any]] | None:
 
 
 
+# ── One topic's curriculum (#513) ─────────────────────────────────────────
+#
+# Unit, lesson and exercise rows are keyed by their own id, with no topic in the
+# key, so finding one topic's meant reading every row of the kind. Each of them
+# also carries `topic_shelf` - `UNIT#<topic>`, `LESSON#<topic>`, `CHALLENGE#<topic>`
+# - and `topic_order`, the partition and sort key of GSI-TopicShelf. Every writer
+# of these rows adds them with `topic_shelf_fields`: the seed, and the projection
+# a curriculum publish writes.
+
+TOPIC_SHELF_INDEX = "GSI-TopicShelf"
+TOPIC_SHELF_FIELDS = ("topic_shelf", "topic_order")
+TOPIC_SHELF_KINDS = ("UNIT", "LESSON", "CHALLENGE")
+#: `topic_order` holds an exercise's order as this many digits, shifted so that
+#: a negative order sorts before zero as it does as a number.
+_ORDER_DIGITS = 13
+_ORDER_SHIFT = 10**12
+
+
+def _ordered_text(text: str) -> str:
+    """`text` such that the stored strings sort as the texts do, then a terminator.
+
+    A topic's exercises are listed by lesson id, then by order. Joined as
+    `<lesson>#<order>`, lesson `a` would sort after `a!b` (`!` is below `#`), so
+    every character at or below `$` is written as `$` and a letter, and `#` ends
+    the text: below every character that can follow inside a longer id."""
+    return "".join(f"${chr(0x40 + ord(char))}" if char <= "$" else char for char in text) + "#"
+
+
+def _order_digits(value: object) -> str:
+    try:
+        number = int(value) if value is not None else 0  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        number = 0
+    shifted = min(max(number + _ORDER_SHIFT, 0), 10**_ORDER_DIGITS - 1)
+    return f"{shifted:0{_ORDER_DIGITS}d}"
+
+
+def topic_shelf(kind: str, topic_id: str) -> str:
+    """The GSI-TopicShelf partition holding one topic's rows of one kind."""
+    return f"{kind}#{topic_id}"
+
+
+def topic_shelf_fields(row: Mapping[str, Any]) -> dict[str, str]:
+    """`topic_shelf` and `topic_order` for a curriculum unit, lesson or exercise row.
+
+    Empty for any other row and for one without a topic: it is in no topic's
+    list, as it was in none when the lists were read whole and filtered. A unit's
+    or a lesson's order is its key, the order the whole read gave; an exercise's
+    is its lesson, its order and its id, the order `list_exercises` gives."""
+    if row.get("PK") != "PRACTICE":
+        return {}
+    kind = str(row.get("SK") or "").split("#", 1)[0]
+    topic_id = row.get("topic_id")
+    if kind not in TOPIC_SHELF_KINDS or not isinstance(topic_id, str) or not topic_id:
+        return {}
+    if kind == "CHALLENGE":
+        order = (
+            _ordered_text(str(row.get("lesson_id") or ""))
+            + _order_digits(row.get("order"))
+            + "#"
+            + str(row.get("challenge_id") or "")
+        )
+    else:
+        order = str(row["SK"])
+    return {"topic_shelf": topic_shelf(kind, topic_id), "topic_order": order}
+
+
+#: What an index page's continuation key holds: the base key and the index's own.
+_TOPIC_SHELF_PAGE_KEY = ("PK", "SK", *TOPIC_SHELF_FIELDS)
+
+
+def _topic_shelf_query(kind: str, topic_id: str) -> dict[str, object]:
+    return {
+        "IndexName": TOPIC_SHELF_INDEX,
+        "KeyConditionExpression": Key("topic_shelf").eq(topic_shelf(kind, topic_id)),
+        "key": _TOPIC_SHELF_PAGE_KEY,
+    }
+
+
+def _topic_shelf_rows(kind: str, topic_id: str) -> list[dict]:
+    """Every row of one kind on one topic's shelf, in key order as a whole read gave them.
+
+    Filtered on `topic_id` as the whole read was, though a row is on the shelf
+    of the topic it names: every writer derives the shelf from it."""
+    items = _query_all_challenge_pages(db_table.table(), **_topic_shelf_query(kind, topic_id))
+    return [item for item in items if item.get("topic_id") == topic_id]
+
+
+def topic_challenges(topic_id: str, *, page_size: int | None = None) -> Iterator[dict]:
+    """One topic's exercises, in the order `get_all_challenges` lists them, read
+    page by page as the caller takes them: a caller wanting the first few reads a
+    page, not the topic, let alone every exercise (#513).
+
+    Each row is held to its version and to a unique identity, as
+    `get_all_challenges` holds every row it reads."""
+    query = _topic_shelf_query("CHALLENGE", topic_id)
+    if page_size is not None:
+        query["Limit"] = page_size
+    ids: set[str] = set()
+    identities: set[tuple[str, str]] = set()
+    previous_marker: PracticeItem | None = None
+    for page in islice(_query_pages(db_table.table(), **query), _MAX_CHALLENGE_PAGES):
+        for item in _response_items(page.items):
+            if not _valid_versioned_challenge(item):
+                raise ValueError("malformed versioned challenge row")
+            identity = (item["challenge_id"], item["challenge_version"])
+            if item["challenge_id"] in ids or identity in identities:
+                raise ValueError("duplicate challenge identity")
+            ids.add(item["challenge_id"])
+            identities.add(identity)
+            if item.get("topic_id") == topic_id:
+                yield item
+        marker = page.last_key
+        if marker is None:
+            return
+        if marker == previous_marker:
+            raise ValueError("challenge pagination did not make progress")
+        previous_marker = marker
+    raise ValueError("challenge pagination exceeded the bounded page limit")
+
+
 def get_subjects() -> list[dict]:
     table = db_table.table()
     return _query_all_challenge_pages(
@@ -451,12 +575,14 @@ def get_topic(topic_id: str) -> dict | None:
 
 
 def get_lessons(topic_id: str | None = None, unit_id: str | None = None) -> list[dict]:
-    table = db_table.table()
-    items = _query_all_challenge_pages(
-        table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("LESSON#"))
-    )
+    """Every lesson row, or one topic's, read through its shelf (#513)."""
     if topic_id:
-        items = [i for i in items if i.get("topic_id") == topic_id]
+        items = _topic_shelf_rows("LESSON", topic_id)
+    else:
+        items = _query_all_challenge_pages(
+            db_table.table(),
+            KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("LESSON#")),
+        )
     if unit_id:
         items = [i for i in items if i.get("unit_id") == unit_id]
     return items
@@ -541,11 +667,12 @@ def get_challenge(challenge_id: str) -> dict | None:
 
 
 def get_units(topic_id: str) -> list[dict]:
-    return [i for i in get_all_units() if i.get("topic_id") == topic_id]
+    """One topic's unit rows, in key order, read through its shelf (#513)."""
+    return _topic_shelf_rows("UNIT", topic_id)
 
 
 def get_all_units() -> list[dict]:
-    """Every unit row, in key order; `get_units` is these, one topic's."""
+    """Every unit row, in key order; `get_units` is one topic's of these."""
     table = db_table.table()
     return _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("UNIT#"))

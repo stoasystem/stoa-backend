@@ -147,6 +147,7 @@ _ALLOWANCE = (
     allowance_service.finalize_token_allowance,
     allowance_service.restore_user_allowance,
     allowance_service.week_exhausted,
+    allowance_service.week_allowance_version,
 )
 
 
@@ -155,7 +156,7 @@ def _patch_allowance_table(
     table: AtomicAllowanceTable,
 ) -> None:
     """Have the token allowance the answer is admitted by read and write `table`."""
-    reserve, observe, finalize, restore, exhausted = _ALLOWANCE
+    reserve, observe, finalize, restore, exhausted, week_version = _ALLOWANCE
     monkeypatch.setattr(
         allowance_service,
         "reserve_token_allowance",
@@ -180,6 +181,11 @@ def _patch_allowance_table(
         allowance_service,
         "week_exhausted",
         lambda **kwargs: exhausted(**kwargs, table=table),
+    )
+    monkeypatch.setattr(
+        allowance_service,
+        "week_allowance_version",
+        lambda **kwargs: week_version(**kwargs, table=table),
     )
 
 

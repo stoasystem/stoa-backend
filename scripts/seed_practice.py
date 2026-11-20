@@ -1158,12 +1158,12 @@ SEED_OWNED_FIELDS: dict[str, frozenset[str]] = {
     }),
     "UNIT": frozenset({
         "unit_id", "topic_id", "subject_id", "grade_level", "title", "description",
-        "order", "prerequisite_unit_ids", "rollout_state",
+        "order", "prerequisite_unit_ids", "rollout_state", *practice_repo.TOPIC_SHELF_FIELDS,
     }),
     "LESSON": frozenset({
         "lesson_id", "unit_id", "topic_id", "subject_id", "grade_level", "topic_title",
         "title", "difficulty", "estimated_minutes", "order", "challenge_count",
-        "rollout_state", "exercise_index",
+        "rollout_state", "exercise_index", *practice_repo.TOPIC_SHELF_FIELDS,
     }),
     # Every field of a challenge row but its key: the row's version is a hash of
     # all its content fields, so a field left behind would void it. The three
@@ -1176,6 +1176,7 @@ SEED_OWNED_FIELDS: dict[str, frozenset[str]] = {
         "directional_hint_template_id", "skills", "rollout_state",
         "challenge_content_hash", "challenge_version", "hint_non_derivability_decision",
         "hint", "hint_approved", "directional_hint_parameters",
+        *practice_repo.TOPIC_SHELF_FIELDS,
     }),
     "CHALLENGE_POINTER": frozenset({
         "entity_type", "challenge_id", "target_pk", "target_sk",
@@ -1240,7 +1241,8 @@ def seed_rows(*, knowledge_base: str | None = None) -> list[dict]:
         )
     # Validate all IDs before any write, then add canonical rows and direct pointers.
     rows.extend(prepare_challenge_items(all_challenges))
-    return rows
+    # Units, lessons and exercises are found by topic through GSI-TopicShelf (#513).
+    return [{**row, **practice_repo.topic_shelf_fields(row)} for row in rows]
 
 
 def _owned_values(row: dict) -> dict:
@@ -1297,8 +1299,21 @@ def seed_hash(rows: list[dict]) -> str:
 
     Needs no AWS access: a deploy recomputes it from the repository and compares
     it with the one in PRACTICE / CURRICULUM_SEED. Fields the seed does not own,
-    the star map positions above all, do not count."""
-    owned = sorted((_owned_values(row) for row in rows), key=lambda row: (row["PK"], row["SK"]))
+    the star map positions above all, do not count. Nor do `topic_shelf` and
+    `topic_order`: they are derived from fields that do, so a table seeded before
+    the seed wrote them is still in agreement; the topic shelf backfill writes them
+    onto it (#513)."""
+    owned = sorted(
+        (
+            {
+                field: value
+                for field, value in _owned_values(row).items()
+                if field not in practice_repo.TOPIC_SHELF_FIELDS
+            }
+            for row in rows
+        ),
+        key=lambda row: (row["PK"], row["SK"]),
+    )
     encoded = json.dumps(
         owned, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=_json_default
     ).encode("utf-8")

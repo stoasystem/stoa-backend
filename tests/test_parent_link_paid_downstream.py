@@ -977,7 +977,7 @@ def test_manual_override_reaches_a_link_only_child_without_a_grant(
             "PK": f"SUBSCRIPTION_BILLING#{PARENT}",
             "SK": "SUMMARY",
             "billing_status": "manual_override",
-            "subscription_tier": "family",
+            "subscription_tier": "online_classroom",
         }
     )
 
@@ -994,7 +994,7 @@ def test_manual_override_reaches_a_link_only_child_without_a_grant(
         STUDENT, settings=_settings()
     )
 
-    assert unfrozen["effectivePlan"] == "family"
+    assert unfrozen["effectivePlan"] == "online_classroom"
     assert unfrozen["source"] == "manual_override"
 
 

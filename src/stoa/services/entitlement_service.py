@@ -37,7 +37,7 @@ PLAN_RANK = {
     SubscriptionTier.FREE_TRIAL.value: 0,
     SubscriptionTier.STUDENT.value: 1,
     SubscriptionTier.TEACHER_SUPPORTED.value: 2,
-    SubscriptionTier.FAMILY.value: 3,
+    SubscriptionTier.ONLINE_CLASSROOM.value: 3,
 }
 
 
@@ -388,7 +388,7 @@ def _daily_question_limit(plan: str, settings: Settings) -> int:
         SubscriptionTier.FREE_TRIAL.value: settings.free_tier_daily_question_limit,
         SubscriptionTier.STUDENT.value: settings.standard_tier_daily_question_limit,
         SubscriptionTier.TEACHER_SUPPORTED.value: settings.premium_tier_daily_question_limit,
-        SubscriptionTier.FAMILY.value: settings.premium_tier_daily_question_limit,
+        SubscriptionTier.ONLINE_CLASSROOM.value: settings.premium_tier_daily_question_limit,
     }.get(plan, settings.free_tier_daily_question_limit)
 
 
@@ -397,7 +397,7 @@ def _daily_chat_message_limit(plan: str, settings: Settings) -> int:
         SubscriptionTier.FREE_TRIAL.value: settings.free_tier_daily_chat_message_limit,
         SubscriptionTier.STUDENT.value: settings.standard_tier_daily_chat_message_limit,
         SubscriptionTier.TEACHER_SUPPORTED.value: settings.premium_tier_daily_chat_message_limit,
-        SubscriptionTier.FAMILY.value: settings.premium_tier_daily_chat_message_limit,
+        SubscriptionTier.ONLINE_CLASSROOM.value: settings.premium_tier_daily_chat_message_limit,
     }.get(plan, settings.free_tier_daily_chat_message_limit)
 
 
@@ -406,7 +406,7 @@ def _daily_hint_limit(plan: str, settings: Settings) -> int:
         SubscriptionTier.FREE_TRIAL.value: settings.free_tier_daily_hint_limit,
         SubscriptionTier.STUDENT.value: settings.standard_tier_daily_hint_limit,
         SubscriptionTier.TEACHER_SUPPORTED.value: settings.premium_tier_daily_hint_limit,
-        SubscriptionTier.FAMILY.value: settings.premium_tier_daily_hint_limit,
+        SubscriptionTier.ONLINE_CLASSROOM.value: settings.premium_tier_daily_hint_limit,
     }.get(plan, settings.free_tier_daily_hint_limit)
 
 

@@ -373,8 +373,9 @@ def published_challenge_rows(
         item["order"] = _integer(item.get("order") or index)
         item["PK"] = PRACTICE_PK
         item["SK"] = _challenge_sort_key(public_id, exercise_id)
-        stored = omit_none_attributes(_mapping(_storable(item)))
-        rows.append(practice_repo.version_challenge(stored))
+        stored = practice_repo.version_challenge(omit_none_attributes(_mapping(_storable(item))))
+        # Outside the hash: where the row sits in GSI-TopicShelf (#513).
+        rows.append({**stored, **practice_repo.topic_shelf_fields(stored)})
     return rows
 
 
@@ -434,10 +435,8 @@ def put_published_projection(version: CurriculumItem, manifest: CurriculumItem) 
     lesson["manifest_id"] = manifest["manifest_id"]
     lesson["challenge_count"] = len(rows)
     lesson["exercise_index"] = practice_repo.exercise_index(rows)
-    _put_item(
-        table,
-        Item={"PK": PRACTICE_PK, "SK": f"LESSON#{public_id}", **lesson},
-    )
+    lesson_row = {"PK": PRACTICE_PK, "SK": f"LESSON#{public_id}", **lesson}
+    _put_item(table, Item={**lesson_row, **practice_repo.topic_shelf_fields(lesson_row)})
 
     current = {row["SK"] for row in rows}
     for row in previous:

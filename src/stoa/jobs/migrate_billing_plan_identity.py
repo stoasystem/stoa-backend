@@ -39,7 +39,7 @@ _PAID_PLANS = frozenset(
     {
         BillingPlanId.STUDENT,
         BillingPlanId.TEACHER_SUPPORTED,
-        BillingPlanId.FAMILY,
+        BillingPlanId.ONLINE_CLASSROOM,
     }
 )
 _PRODUCTION_ENVIRONMENTS = frozenset({"prod", "production", "live"})
@@ -1053,8 +1053,7 @@ def _beneficiary_scope_matches(
 ) -> bool:
     if beneficiaries is None:
         return False
-    if target_plan is BillingPlanId.FAMILY:
-        return 1 <= len(beneficiaries) <= 3
+    # Every plan is for one child (#482 removed the shared Family plan).
     return len(beneficiaries) == 1
 
 

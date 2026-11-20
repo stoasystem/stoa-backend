@@ -43,13 +43,13 @@ answer (`answer_recording.record_quiz_answer`). Refusals are `Refused`, with a
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
+from stoa import log_facts
 from stoa.db.repositories import practice_repo
 from stoa.services import (
     answer_recording,
@@ -59,7 +59,7 @@ from stoa.services import (
 )
 from stoa.services.quiz import rules
 
-logger = logging.getLogger(__name__)
+logger = log_facts.get_logger(__name__)
 
 __all__ = [
     "LESSON",

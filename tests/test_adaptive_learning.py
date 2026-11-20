@@ -214,6 +214,13 @@ def _install_memory_repo(monkeypatch):
             return [dict(item) for item in items]
         return [dict(item) for item in items[:limit]]
 
+    # An accepted draft set as an assignment is marked delivered on the draft
+    # (#519); the drafts these tests serve are stand-ins, so the mark is kept here.
+    def update_draft(draft_id, updates, *, existing=None):
+        return {**(existing or {}), **updates}
+
+    monkeypatch.setattr(adaptive_learning_service.ai_teacher_tools_repo, "update_draft", update_draft)
+
     repo = adaptive_learning_service.adaptive_learning_repo
     monkeypatch.setattr(repo, "put_memory_snapshot", put_memory_snapshot)
     monkeypatch.setattr(repo, "list_memory_snapshots", list_memory_snapshots)

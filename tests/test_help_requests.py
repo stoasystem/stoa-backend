@@ -17,7 +17,7 @@ from fakes.learning_session import seed_conversation
 
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
-from stoa.services import help_requests, teacher_support_allowance_service
+from stoa.services import help_requests, teacher_dispatch_service, teacher_support_allowance_service
 from fakes.admission import seed_period_active
 
 STUDENT = "student-189"
@@ -83,6 +83,18 @@ class World:
                 "available" if teacher in teachers else "paused"
             )
 
+    def seen(self, now: str) -> None:
+        """Both teachers have STOA open (#472): their bell polled just now."""
+        for teacher in (TEACHER, OTHER):
+            teacher_dispatch_service.record_teacher_seen(teacher, now=now)
+
+    def sweep(self, now: str) -> dict:
+        self.seen(now)
+        return help_requests.sweep(now=now, table=self.table)
+
+    def paused(self) -> list[dict]:
+        return [kwargs for name, kwargs in self.events if name == "emit_teacher_dispatch_paused"]
+
     @property
     def record(self) -> dict:
         return dict(self.table.rows[(f"CONV#{CONV}", "HELP")])
@@ -120,6 +132,7 @@ def world(monkeypatch) -> World:
     # The modules already on the table gateway read it there.
     db_table.install(table)
     built = World(table)
+    built.seen(at())
 
     def admit(*, persist_case, **_kwargs):
         if built.admission is not Admission.ADMITTED:
@@ -142,6 +155,7 @@ def world(monkeypatch) -> World:
         "emit_teacher_help_takeover",
         "emit_teacher_help_reply",
         "close_teacher_help_offer",
+        "emit_teacher_dispatch_paused",
     ):
         monkeypatch.setattr(
             help_requests.notification_service,
@@ -222,7 +236,7 @@ def test_a_lapsed_offer_goes_to_someone_else_first(world) -> None:
     first = world.record["dispatch_id"]
     world.available(TEACHER, OTHER)
 
-    report = help_requests.sweep(now=at(11), table=world.table)
+    report = world.sweep(at(11))
 
     record = world.record
     assert record["dispatched_teacher_id"] == OTHER
@@ -235,31 +249,81 @@ def test_a_lapsed_offer_goes_to_someone_else_first(world) -> None:
     assert _closed(world) == [{"dispatch_id": first, "state": "reassigned", "now": at(11)}]
 
 
-def test_a_lapsed_offer_with_nobody_else_goes_back_to_its_teacher(world) -> None:
-    """The only teacher let the offer lapse: it is offered to them again (#391).
+def test_a_teacher_who_lets_an_offer_lapse_is_paused_and_told(world) -> None:
+    """A teacher who does not take an offer is taken off dispatch (#472).
 
-    The offer stands until the request would expire, so a teacher who comes
-    back later finds it in their list and can take it; the student is still
-    told nobody is free yet.
+    As a ride-hailing app takes a driver offline who does not confirm a trip:
+    otherwise a student would wait out ten minutes on every absent teacher in
+    turn. The teacher hears why in the bell and comes back by setting
+    themselves available. With nobody else free the student is told so, and
+    the paused teacher gets no standing offer.
     """
     world.ask()
     first = world.record["dispatch_id"]
 
-    report = help_requests.sweep(now=at(11), table=world.table)
+    report = world.sweep(at(11))
 
+    profile = world.table.rows[(f"USER#{TEACHER}", "PROFILE")]
+    assert profile["dispatch_availability"] == "paused"
+    assert profile["availability_status"] == "paused"
+    assert [(item["teacher_id"], item["dispatch_id"]) for item in world.paused()] == [(TEACHER, first)]
     record = world.record
+    assert record["dispatch_status"] == "no_candidate"
+    assert "dispatched_teacher_id" not in record
+    assert record["previous_dispatch_teacher_ids"] == [TEACHER]
+    assert help_requests.student_view(record, now=at(12)) == ("waiting_no_teacher", "")
+    assert report["reassigned"] == 1
+    assert len(_offers(world)) == 1
+    assert _closed(world) == [{"dispatch_id": first, "state": "expired", "now": at(11)}]
+
+
+def test_a_lapse_pauses_the_teacher_once(world) -> None:
+    """A teacher who came back is not paused again for the same lapse.
+
+    Should the sweep's write of the request be lost after the pause, the next
+    sweep reads the same lapsed offer again.
+    """
+    world.ask()
+    offer = {
+        key: world.record[key]
+        for key in ("dispatch_status", "dispatched_teacher_id", "dispatch_id", "dispatch_deadline_at")
+    }
+    world.sweep(at(11))
+    world.available(TEACHER)
+    world.table.rows[(f"CONV#{CONV}", "HELP")].update(offer)
+
+    world.sweep(at(12))
+
+    assert world.table.rows[(f"USER#{TEACHER}", "PROFILE")]["dispatch_availability"] == "available"
+    assert len(world.paused()) == 1
+
+
+def _standing_offer(world: World) -> dict:
+    """The only teacher let the offer lapse, was paused, and is back (#391, #472)."""
+    world.ask()
+    world.sweep(at(11))
+    world.available(TEACHER)
+    world.sweep(at(12))
+    return world.record
+
+
+def test_a_lapsed_offer_with_nobody_else_goes_back_to_its_teacher_once_back(world) -> None:
+    """The teacher who let it lapse is offered it again when nobody else is free (#391).
+
+    Only once they are back on dispatch: a lapse pauses them (#472). The offer
+    stands until the request would expire, so the teacher finds it in their list
+    and can take it; the student is still told nobody is free yet.
+    """
+    record = _standing_offer(world)
+
     assert record["dispatch_status"] == "dispatched"
     assert record["dispatched_teacher_id"] == TEACHER
-    assert record["dispatch_id"] != first
     assert record["dispatch_fallback"] is True
     assert record["previous_dispatch_teacher_ids"] == []
     assert record["dispatch_deadline_at"] == at(24 * 60)
-    assert help_requests.student_view(record, now=at(12)) == ("waiting_no_teacher", "")
-    assert report["conversationsDispatched"] == [{"conversationId": CONV, "status": "dispatched"}]
-    # The lapsed offer's notification is marked expired; the new one stands.
-    assert _closed(world) == [{"dispatch_id": first, "state": "expired", "now": at(11)}]
+    assert help_requests.student_view(record, now=at(13)) == ("waiting_no_teacher", "")
     assert [offer["standing"] for offer in _offers(world)] == [False, True]
-    # Hours later the teacher sees it and takes it.
+    # Hours later the teacher takes it.
     later = at(5 * 60)
     assert help_requests.teacher_may(
         record, TEACHER, help_requests.AuthorizationAction.READ, now=datetime.fromisoformat(later)
@@ -272,24 +336,21 @@ def test_a_lapsed_offer_with_nobody_else_goes_back_to_its_teacher(world) -> None
 
 
 def test_a_standing_offer_is_not_made_again_on_every_sweep(world) -> None:
-    world.ask()
-    help_requests.sweep(now=at(11), table=world.table)
-    standing = world.record
+    standing = _standing_offer(world)
 
     for minutes in (16, 21, 60, 600):
-        help_requests.sweep(now=at(minutes), table=world.table)
+        world.sweep(at(minutes))
 
     assert world.record == standing
     assert len(_offers(world)) == 2
+    assert len(world.paused()) == 1
 
 
 def test_a_standing_offer_goes_to_a_teacher_who_becomes_free(world) -> None:
-    world.ask()
-    help_requests.sweep(now=at(11), table=world.table)
-    standing = world.record["dispatch_id"]
+    standing = _standing_offer(world)["dispatch_id"]
     world.available(TEACHER, OTHER)
 
-    help_requests.sweep(now=at(30), table=world.table)
+    world.sweep(at(30))
 
     record = world.record
     assert record["dispatched_teacher_id"] == OTHER
@@ -303,7 +364,7 @@ def test_a_teacher_who_declined_is_never_offered_it_again(world) -> None:
     world.ask()
     world.table.rows[(f"CONV#{CONV}", "HELP")]["declined_dispatch_teacher_ids"] = [TEACHER]
 
-    help_requests.sweep(now=at(11), table=world.table)
+    world.sweep(at(11))
 
     record = world.record
     assert record["dispatch_status"] == "no_candidate"
@@ -331,7 +392,7 @@ def test_a_request_stuck_before_391_is_offered_back_to_its_teacher(world) -> Non
         previous_dispatch_teacher_ids=[TEACHER],
     )
 
-    help_requests.sweep(now=at(20), table=world.table)
+    world.sweep(at(20))
 
     record = world.record
     assert record["dispatched_teacher_id"] == TEACHER
@@ -340,11 +401,9 @@ def test_a_request_stuck_before_391_is_offered_back_to_its_teacher(world) -> Non
 
 
 def test_a_standing_offer_still_expires_after_24_hours_and_its_case_goes_back(world) -> None:
-    world.ask()
-    help_requests.sweep(now=at(11), table=world.table)
-    standing = world.record["dispatch_id"]
+    standing = _standing_offer(world)["dispatch_id"]
 
-    report = help_requests.sweep(now=at(24 * 60 + 1), table=world.table)
+    report = world.sweep(at(24 * 60 + 1))
 
     assert report["conversationsExpired"] == [CONV]
     assert world.record["escalation_status"] == "expired"
@@ -358,10 +417,9 @@ def test_a_standing_offer_waiting_too_long_is_still_reported(world, monkeypatch)
     monkeypatch.setattr(
         help_requests, "emit_private_event", lambda event, **kwargs: reported.append({"event": event, **kwargs})
     )
-    world.ask()
-    help_requests.sweep(now=at(11), table=world.table)
+    _standing_offer(world)
 
-    help_requests.sweep(now=at(31), table=world.table)
+    world.sweep(at(31))
 
     assert [item["event"] for item in reported] == ["teacher_help_waiting_no_candidate"]
 
@@ -370,7 +428,7 @@ def test_a_live_offer_is_left_alone(world) -> None:
     world.ask()
     before = world.record
 
-    report = help_requests.sweep(now=at(5), table=world.table)
+    report = world.sweep(at(5))
 
     assert world.record == before
     assert report["conversationsWaiting"] == 0
@@ -380,7 +438,7 @@ def test_a_request_nobody_took_in_24_hours_expires_and_its_case_goes_back(world,
     world.available()
     world.ask()
 
-    report = help_requests.sweep(now=at(24 * 60 + 1), table=world.table)
+    report = world.sweep(at(24 * 60 + 1))
 
     assert report["conversationsExpired"] == [CONV]
     assert world.record["escalation_status"] == "expired"
@@ -396,11 +454,11 @@ def test_a_long_wait_with_nobody_free_is_reported(world, monkeypatch) -> None:
     world.available()
     world.ask()
 
-    help_requests.sweep(now=at(29), table=world.table)
+    world.sweep(at(29))
     assert reported == []
     # The no-candidate record is unchanged, so only the alert remains to say it.
     world.table.rows[(f"CONV#{CONV}", "HELP")]["dispatch_no_candidate_reason"] = "other"
-    help_requests.sweep(now=at(31), table=world.table)
+    world.sweep(at(31))
 
     assert [item["event"] for item in reported] == ["teacher_help_waiting_no_candidate"]
     assert reported[0]["wait_minutes"] == 31

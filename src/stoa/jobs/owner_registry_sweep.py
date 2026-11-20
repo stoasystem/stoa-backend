@@ -2,8 +2,11 @@
 
 Runs on the account-deletion function, which already holds the table; its
 schedule sends `{"job": "owner_registry_sweep"}`. One walk over the table checks
-every account at once - rows that name an account in a partition it has not
+every account at once - rows its deletion would take in a partition it has not
 registered, and rows a deleted account left behind - and logs what it found.
+A row that only mentions an account, which no deletion branch would take, is
+counted on its own line (`owner_registry_sweep_mentions`, INFO): it is not a
+finding and closes nothing.
 It writes its own result row (`owner_registry_sweep.RUN_MARKER_KEY`, counts
 only), which acceptance reads before sealing a deletion for the registry path,
 and it removes registry rows other accounts still hold for a deleted account's
@@ -46,6 +49,12 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
             logger.info("owner_registry_sweep_stale_references removed=%d", removed)
     if not report.complete:
         logger.warning("owner_registry_sweep_incomplete rows=%d", report.rows_scanned)
+    if report.mentions:
+        logger.info(
+            "owner_registry_sweep_mentions count=%d families=%s",
+            summary["unmatched_mentions"],
+            sorted(report.mentions),
+        )
     if report.unregistered or report.leftovers:
         logger.warning(
             "owner_registry_sweep_findings missing_registrations=%d leftovers=%d families=%s",

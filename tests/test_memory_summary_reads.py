@@ -36,6 +36,7 @@ from stoa.db.repositories import asked_knowledge_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import adaptive
 from stoa.services import adaptive_learning_service as service
+from stoa.services import curriculum_service
 
 STUDENT = "student-1"
 GOLDEN = Path(__file__).parent / "fixtures" / "memory_summary_reads_496.json"
@@ -187,9 +188,11 @@ def _memory(table: ReadCountingTable, subject: str | None) -> None:
 
 
 @pytest.mark.parametrize("subject", [None, "math"])
-def test_the_memory_reads_the_exercises_once_and_scans_nothing(
+def test_the_memory_reads_the_same_rows_however_large_the_curriculum(
     monkeypatch: pytest.MonkeyPatch, subject: str | None
 ) -> None:
+    """It recommends the first two published exercises of each weak topic, and
+    reads those through GSI-TopicShelf, not every exercise row (#513)."""
     small = _table(monkeypatch, SMALL)
     _memory(small, subject)
     large = _table(monkeypatch, LARGE)
@@ -198,26 +201,30 @@ def test_the_memory_reads_the_exercises_once_and_scans_nothing(
     reports = f"small:\n{small.report()}\n\nlarge:\n{large.report()}"
     for table in (small, large):
         assert not any(operation == "scan" for operation, *_ in table.reads), reports
-    # Beyond one read of the exercises, the reads do not grow with the curriculum.
-    assert (
-        large.total_rows_scanned - _exercise_rows(large)
-        == small.total_rows_scanned - _exercise_rows(small)
-    ), reports
+    assert large.total_rows_scanned == small.total_rows_scanned, reports
+    assert large.total_rows_scanned < _exercise_rows(small), reports
 
 
-def test_more_weak_topics_do_not_read_the_exercises_again(monkeypatch: pytest.MonkeyPatch) -> None:
+def _shelf_reads(table: ReadCountingTable) -> tuple[int, int]:
+    """(queries, rows) of the exercise shelves the memory read."""
+    queries = rows = 0
+    for (operation, _inner, caller), count in table.reads.items():
+        if operation == "query" and caller.startswith("services/curriculum_service"):
+            queries += count
+            rows += table.rows_scanned[(operation, _inner, caller)]
+    return queries, rows
+
+
+def test_each_weak_topic_reads_a_page_of_its_own_exercises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     few = _table(monkeypatch, SMALL, asked=ASKED[:1])
     _memory(few, "math")
     many = _table(monkeypatch, SMALL)
     _memory(many, "math")
 
-    def exercise_reads(table: ReadCountingTable) -> int:
-        return sum(
-            rows
-            for (operation, _inner, _caller), rows in table.rows_scanned.items()
-            if operation == "query" and rows >= _exercise_rows(table) // 2
-        )
-
-    assert exercise_reads(many) == exercise_reads(few) == _exercise_rows(many), (
-        f"few:\n{few.report()}\n\nmany:\n{many.report()}"
-    )
+    reports = f"few:\n{few.report()}\n\nmany:\n{many.report()}"
+    (few_queries, _few_rows), (many_queries, many_rows) = _shelf_reads(few), _shelf_reads(many)
+    assert 0 < few_queries < many_queries, reports
+    # A page per topic, not the topic's every exercise, let alone every exercise.
+    assert many_rows <= many_queries * curriculum_service.TOPIC_EXERCISE_PAGE, reports

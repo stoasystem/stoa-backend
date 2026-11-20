@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from itertools import islice
@@ -73,6 +73,72 @@ MESSAGE_ATTEMPT_TRACE_FIELDS = (
     "provider_result_attempt",
     "provider_result_json",
 )
+
+
+# ── The sweep's index (#502) ─────────────────────────────────────────────────
+#
+# A sparse index of the commands the generation sweep may act on, so it reads
+# those instead of scanning the whole table. A command carries `sweep_bucket`
+# and `sweep_due_at` exactly while it is in a state the sweep acts on: waiting
+# for an answer (`message_committed`, `ai_running`), or ended with a
+# reservation not yet settled (`failed` with an unsettled-reservation category,
+# `terminal_failed`). Every write that moves a command into such a state sets
+# both; every write that moves it out removes them. Account deletion replaces
+# the row with a tombstone that does not keep them.
+SWEEP_PENDING_INDEX = "GSI-SweepPending"
+SWEEP_PENDING_BUCKET = "pending"
+SWEEP_INDEX_FIELDS = ("sweep_bucket", "sweep_due_at")
+_SET_SWEEP_INDEX = "sweep_bucket=:sweep_bucket, sweep_due_at=:sweep_due_at"
+_REMOVE_SWEEP_INDEX = ", ".join(SWEEP_INDEX_FIELDS)
+
+# When the sweep may first act on a command, from the moment it entered its
+# state. The sweep reads them from here too (`_sweep`).
+#
+# How long a committed command may wait for its direct invocation before the
+# sweep takes it. The request invokes right after committing, so a minute
+# covers a slow start without taking work a delivery is about to do.
+UNCLAIMED_AFTER = timedelta(seconds=60)
+# How long a failure's reservation is left before the sweep settles it. A lost
+# answer is never tried again, so two sweep runs is enough to be sure no
+# attempt still holds it. A reservation kept at admission is the student's
+# retry to reuse for as long as the sweep would still answer that retry.
+SETTLE_AFTER = {
+    "needs_reconciliation": timedelta(minutes=10),
+    "deadline_exceeded": timedelta(minutes=20),
+}
+# A command whose last attempt died is left two sweep runs after it is marked,
+# as a lost answer is, before its reservation is settled (E27).
+SETTLE_TERMINAL_AFTER = timedelta(minutes=10)
+
+
+def sweep_due_at(moment: datetime) -> str:
+    """The index's sort key for `moment`: UTC to the second, so it sorts as text.
+
+    Truncated, never rounded up: a command is never due later than it is.
+    """
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _due_after(moment_iso: str, delay: timedelta) -> str:
+    """`delay` after a time the store was handed as text.
+
+    One it cannot read is due now: a command is better read early than hidden.
+    """
+    try:
+        moment = datetime.fromisoformat(str(moment_iso).replace("Z", "+00:00"))
+    except ValueError:
+        return sweep_due_at(datetime.now(UTC))
+    return sweep_due_at(moment + delay)
+
+
+def _due_at_epoch(epoch: int) -> str:
+    return sweep_due_at(datetime.fromtimestamp(epoch, UTC))
+
+
+def _sweep_index_values(due_at: str) -> dict[str, str]:
+    return {":sweep_bucket": SWEEP_PENDING_BUCKET, ":sweep_due_at": due_at}
 
 
 def message_command_key(conversation_id: str, idempotency_key: str) -> dict[str, str]:
@@ -550,7 +616,10 @@ def message_committed_operations(
                         attachment_repo._required_text(command.get("conversation_id")),
                         attachment_repo._required_text(command.get("idempotency_key")),
                     ),
-                    "UpdateExpression": "SET #status=:committed, message_committed_at=:now",
+                    "UpdateExpression": (
+                        "SET #status=:committed, message_committed_at=:now, "
+                        + _SET_SWEEP_INDEX
+                    ),
                     "ConditionExpression": (
                         "owner_id=:owner AND fingerprint=:fingerprint AND #status=:claimed"
                     ),
@@ -561,6 +630,7 @@ def message_committed_operations(
                         ":claimed": "claimed",
                         ":committed": "message_committed",
                         ":now": now_iso,
+                        **_sweep_index_values(_due_after(now_iso, UNCLAIMED_AFTER)),
                     },
                 }
             },
@@ -790,7 +860,7 @@ def claim_message_ai_lease(
                             "Key": message_command_key(conversation_id, idempotency_key),
                             "UpdateExpression": (
                                 "SET #status=:running, leaseOwner=:lease_owner, claimedAt=:claimed, "
-                                "expiresAt=:expires, attempt=:attempt "
+                                f"expiresAt=:expires, attempt=:attempt, {_SET_SWEEP_INDEX} "
                                 f"REMOVE {', '.join(MESSAGE_FAILURE_FIELDS)}"
                             ),
                             "ConditionExpression": (
@@ -819,6 +889,7 @@ def claim_message_ai_lease(
                                 ":now": now_epoch,
                                 ":attempt": attempt,
                                 ":max_attempts": max_attempts,
+                                **_sweep_index_values(_due_at_epoch(expires_at)),
                                 **mark_values,
                             },
                         }
@@ -917,7 +988,7 @@ def complete_message_command(
                     "Key": message_command_key(conversation_id, idempotency_key),
                     "UpdateExpression": (
                         "SET #status=:completed, result_json=:result, completed_at=:completed_at "
-                        "REMOVE leaseOwner, claimedAt, expiresAt, "
+                        f"REMOVE leaseOwner, claimedAt, expiresAt, {_REMOVE_SWEEP_INDEX}, "
                         + ", ".join(MESSAGE_ATTEMPT_TRACE_FIELDS)
                     ),
                     "ConditionExpression": (
@@ -1094,7 +1165,7 @@ def reopen_failed_message_command(
             table or db_table.table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
-                "SET #status=:committed, message_committed_at=:now "
+                f"SET #status=:committed, message_committed_at=:now, {_SET_SWEEP_INDEX} "
                 f"REMOVE {', '.join(MESSAGE_FAILURE_FIELDS)}"
             ),
             ConditionExpression=(
@@ -1110,6 +1181,7 @@ def reopen_failed_message_command(
                 ":attempt": attempt,
                 ":max_attempts": MESSAGE_AI_MAX_ATTEMPTS,
                 ":now": now_iso,
+                **_sweep_index_values(_due_after(now_iso, UNCLAIMED_AFTER)),
             },
         )
     except db_table.WriteRefused:
@@ -1136,15 +1208,25 @@ def fail_message_command(
     `retryable` says whether the same command may be generated again: only when
     no provider result was paid for. Returns False when the lease was no longer
     this attempt's, which leaves the command as the newer holder left it.
+
+    A failure that may leave a reservation unsettled stays in the sweep's
+    index, due when the sweep may settle it; any other leaves it.
     """
+    settle_after = SETTLE_AFTER.get(failure_category)
+    if settle_after is None:
+        sweep_set, sweep_remove, sweep_values = "", f"{_REMOVE_SWEEP_INDEX}, ", {}
+    else:
+        sweep_set = f", {_SET_SWEEP_INDEX}"
+        sweep_remove = ""
+        sweep_values = _sweep_index_values(_due_after(now_iso, settle_after))
     try:
         attachment_repo._update_item(
             table or db_table.table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:failed, failure_category=:category, "
-                "failure_retryable=:retryable, failed_at=:now "
-                "REMOVE leaseOwner, claimedAt, expiresAt, "
+                f"failure_retryable=:retryable, failed_at=:now{sweep_set} "
+                f"REMOVE leaseOwner, claimedAt, expiresAt, {sweep_remove}"
                 + ", ".join(MESSAGE_ATTEMPT_TRACE_FIELDS)
             ),
             ConditionExpression=(
@@ -1161,6 +1243,7 @@ def fail_message_command(
                 ":category": failure_category,
                 ":retryable": retryable,
                 ":now": now_iso,
+                **sweep_values,
             },
         )
     except db_table.WriteRefused:
@@ -1537,7 +1620,7 @@ def mark_allowance_settled(
         owner_id=owner_id,
         status=status,
         ended_at=ended_at,
-        update_expression="SET allowance_settled_at=:now",
+        update_expression=f"SET allowance_settled_at=:now REMOVE {_REMOVE_SWEEP_INDEX}",
         values={":now": now_iso},
         table=table,
     )
@@ -1566,7 +1649,7 @@ def close_stale_lease(
             table or db_table.table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
-                "SET #status=:terminal, terminal_at=:now_iso "
+                f"SET #status=:terminal, terminal_at=:now_iso, {_SET_SWEEP_INDEX} "
                 "REMOVE leaseOwner, claimedAt, expiresAt"
             ),
             ConditionExpression=(
@@ -1582,6 +1665,7 @@ def close_stale_lease(
                 ":expires": expires_at,
                 ":now": now_epoch,
                 ":now_iso": now_iso,
+                **_sweep_index_values(_due_after(now_iso, SETTLE_TERMINAL_AFTER)),
             },
         )
     except db_table.WriteRefused:
@@ -1610,7 +1694,9 @@ def renew_message_ai_lease(
                     {
                         "Update": {
                             "Key": message_command_key(conversation_id, idempotency_key),
-                            "UpdateExpression": "SET claimedAt=:now, expiresAt=:expires",
+                            "UpdateExpression": (
+                                f"SET claimedAt=:now, expiresAt=:expires, {_SET_SWEEP_INDEX}"
+                            ),
                             "ConditionExpression": (
                                 "owner_id=:owner AND account_fence_generation=:generation AND "
                                 "#status=:running AND leaseOwner=:lease_owner AND expiresAt>:now"
@@ -1623,6 +1709,7 @@ def renew_message_ai_lease(
                                 ":lease_owner": lease_owner,
                                 ":now": now_epoch,
                                 ":expires": expires_at,
+                                **_sweep_index_values(_due_at_epoch(expires_at)),
                             },
                         }
                     },
@@ -1770,7 +1857,8 @@ def mark_message_command_terminal(
         attachment_repo._update_item(table or db_table.table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
-                "SET #status=:terminal, terminal_at=:now REMOVE leaseOwner, claimedAt, expiresAt"
+                f"SET #status=:terminal, terminal_at=:now, {_SET_SWEEP_INDEX} "
+                "REMOVE leaseOwner, claimedAt, expiresAt"
             ),
             # A command holding its answer is finished, never ended here (E28).
             ConditionExpression=(
@@ -1784,6 +1872,7 @@ def mark_message_command_terminal(
                 ":terminal": "terminal_failed",
                 ":now": now_iso,
                 ":max": 3,
+                **_sweep_index_values(_due_after(now_iso, SETTLE_TERMINAL_AFTER)),
             },
         )
     except db_table.WriteRefused:

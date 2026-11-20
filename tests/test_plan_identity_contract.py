@@ -16,7 +16,7 @@ CANONICAL_PLAN_VALUES = {
     "free_trial",
     "student",
     "teacher_supported",
-    "family",
+    "online_classroom",
 }
 LEGACY_PLAN_VALUES = {"free", "standard", "premium", "tutor_supported"}
 AUTH_PATH = Path("src/stoa/routers/auth.py")
@@ -104,7 +104,7 @@ def test_subscription_and_billing_plan_types_have_one_byte_identical_value_set()
         "FREE_TRIAL",
         "STUDENT",
         "TEACHER_SUPPORTED",
-        "FAMILY",
+        "ONLINE_CLASSROOM",
     }
     assert subscription_values.isdisjoint(LEGACY_PLAN_VALUES)
     assert (
@@ -124,7 +124,7 @@ def test_settings_expose_exact_paid_price_identity_without_compatibility_aliases
     assert paid_price_fields == {
         "stripe_student_price_id",
         "stripe_teacher_supported_price_id",
-        "stripe_family_price_id",
+        "stripe_online_classroom_price_id",
     }
     assert "stripe_standard_price_id" not in settings_fields
     assert "stripe_premium_price_id" not in settings_fields
@@ -167,12 +167,12 @@ def test_checkout_configuration_requires_three_distinct_paid_prices() -> None:
         stripe_api_key="sk_test_plan_identity",
         stripe_student_price_id="price_student_test",
         stripe_teacher_supported_price_id="price_teacher_supported_test",
-        stripe_family_price_id="price_family_test",
+        stripe_online_classroom_price_id="price_family_test",
     )
     assert {
         configured.stripe_student_price_id,
         configured.stripe_teacher_supported_price_id,
-        configured.stripe_family_price_id,
+        configured.stripe_online_classroom_price_id,
     } == {
         "price_student_test",
         "price_teacher_supported_test",
@@ -191,7 +191,7 @@ def test_checkout_configuration_requires_three_distinct_paid_prices() -> None:
             stripe_api_key="sk_test_plan_identity",
             stripe_student_price_id="price_shared_test",
             stripe_teacher_supported_price_id="price_shared_test",
-            stripe_family_price_id="price_family_test",
+            stripe_online_classroom_price_id="price_family_test",
         )
 
 
@@ -200,7 +200,7 @@ def test_nonproduction_settings_reject_live_keys_and_charge_mode(environment: st
     paid_prices = {
         "stripe_student_price_id": "price_student_test",
         "stripe_teacher_supported_price_id": "price_teacher_supported_test",
-        "stripe_family_price_id": "price_family_test",
+        "stripe_online_classroom_price_id": "price_family_test",
     }
 
     with pytest.raises(ValidationError, match="stripe_live_api_key_forbidden"):
@@ -241,7 +241,7 @@ def test_environment_example_names_every_plan_setting_without_live_secrets() -> 
 
     assert example["STRIPE_STUDENT_PRICE_ID"] == ""
     assert example["STRIPE_TEACHER_SUPPORTED_PRICE_ID"] == ""
-    assert example["STRIPE_FAMILY_PRICE_ID"] == ""
+    assert example["STRIPE_ONLINE_CLASSROOM_PRICE_ID"] == ""
     assert example["STRIPE_API_KEY"] == ""
     assert example["STRIPE_WEBHOOK_SECRET"] == ""
     assert example["STRIPE_LIVE_CHARGES_ENABLED"].lower() == "false"
@@ -267,7 +267,7 @@ def test_daily_limit_compatibility_is_keyed_by_canonical_plans_only() -> None:
     assert entitlement_service._daily_question_limit("free_trial", settings) == 5
     assert entitlement_service._daily_question_limit("student", settings) == 30
     assert entitlement_service._daily_question_limit("teacher_supported", settings) == 100
-    assert entitlement_service._daily_question_limit("family", settings) == 100
+    assert entitlement_service._daily_question_limit("online_classroom", settings) == 100
     assert entitlement_service._daily_chat_message_limit("student", settings) == 80
     assert entitlement_service._daily_hint_limit("teacher_supported", settings) == 80
     assert entitlement_service._normalize_tier(None) == "free_trial"
@@ -279,7 +279,7 @@ def test_runtime_price_and_storage_helpers_cover_each_canonical_paid_plan() -> N
         stripe_api_key="sk_test_runtime_identity",
         stripe_student_price_id="price_student_runtime",
         stripe_teacher_supported_price_id="price_teacher_runtime",
-        stripe_family_price_id="price_family_runtime",
+        stripe_online_classroom_price_id="price_family_runtime",
     )
 
     assert subscription_service._price_id_for_tier("student", settings) == (
@@ -288,13 +288,13 @@ def test_runtime_price_and_storage_helpers_cover_each_canonical_paid_plan() -> N
     assert subscription_service._price_id_for_tier(
         "teacher_supported", settings
     ) == "price_teacher_runtime"
-    assert subscription_service._price_id_for_tier("family", settings) == (
+    assert subscription_service._price_id_for_tier("online_classroom", settings) == (
         "price_family_runtime"
     )
     assert attachment_service.storage_limit_for_entitlement("free_trial") == (
         FREE_STORAGE_BYTES
     )
-    for paid_plan in ("student", "teacher_supported", "family"):
+    for paid_plan in ("student", "teacher_supported", "online_classroom"):
         assert (
             attachment_service.storage_limit_for_entitlement(paid_plan)
             == PAID_STORAGE_BYTES

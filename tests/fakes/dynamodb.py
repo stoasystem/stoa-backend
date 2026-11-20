@@ -70,6 +70,8 @@ DEFAULT_INDEXES: dict[str, IndexSchema] = {
     "GSI-ParentId": IndexSchema("parent_id", "week_start"),
     "GSI-TeacherId": IndexSchema("teacher_id", "started_at"),
     "GSI-ReviewState": IndexSchema("review_state", "created_at"),
+    "GSI-SweepPending": IndexSchema("sweep_bucket", "sweep_due_at"),
+    "GSI-TopicShelf": IndexSchema("topic_shelf", "topic_order"),
 }
 
 
