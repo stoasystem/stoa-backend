@@ -334,17 +334,6 @@ KEPT: dict[str, str] = {
     "SUPPORT_HANDOFF_DELIVERY": "no_caller",
     "SUPPORT_HANDOFF_DELIVERY_AUDIT_EVENT": "no_caller",
     "SUPPORT_HANDOFF_DELIVERY_FEED": "no_caller",
-    # -- gap ----------------------------------------------------------------------
-    # The weekly AI token and teacher-help allowance of a student. Found (their
-    # partitions are `ALLOWANCE#{id}` and `USER#{id}`, or registered), but no
-    # branch picks them, and none has a TTL the table acts on
-    # (`allowance_effect.expires_at` is an ISO string). Usage accounting under a
-    # paid plan, like `usage_period_record`, which account_profile deletes.
-    "allowance_counter": "gap",
-    "allowance_effect": "gap",
-    "provider_usage_evidence": "gap",
-    "teacher_support_admission": "gap",
-    "teacher_support_assigned_allowance": "gap",
 }
 
 _REASONS = {"deletion_flow", "removed_with", "not_deletion_data", "expires", "no_caller", "gap"}
@@ -370,6 +359,7 @@ def deleted_by_branch() -> dict[str, tuple[str, dict[str, Any]]]:
     from stoa.db.repositories import (
         account_invitation_repo,
         ai_teacher_tools_repo,
+        allowance_repo,
         asked_knowledge_repo,
         attachment_repo,
         capability_repo,
@@ -382,8 +372,9 @@ def deleted_by_branch() -> dict[str, tuple[str, dict[str, Any]]]:
         voice_question_consent_repo,
         voice_transcription_usage_repo,
         websocket_repo,
+        weekly_counter,
     )
-    from stoa.services import help_requests, usage_period
+    from stoa.services import help_requests, teacher_support_allowance_service, usage_period
     from stoa.services.ask_question import _store as ask_store
     from stoa.services.learning_session import _store as conversation_store
 
@@ -413,6 +404,21 @@ def deleted_by_branch() -> dict[str, tuple[str, dict[str, Any]]]:
     add("account_profile", _row(
         voice_transcription_usage_repo.day_key(ACCOUNT, "2026-11-01"),
         "voice_transcription_day", student_id=ACCOUNT))
+    add("account_profile", _row(
+        allowance_repo._effect_key(ACCOUNT, "b" * 64), "allowance_effect",
+        beneficiary_id=ACCOUNT, plan_id="plan-1"))
+    add("account_profile", _row(
+        allowance_repo._evidence_key(ACCOUNT, "c" * 64), "provider_usage_evidence",
+        beneficiary_id=ACCOUNT, effect_id="b" * 64))
+    add("account_profile", _row(
+        {"PK": f"{weekly_counter.TOKENS.namespace}#{ACCOUNT}", "SK": "WEEK#2026-W45"},
+        weekly_counter.TOKENS.entity_type, beneficiary_id=ACCOUNT))
+    add("account_profile", _row(
+        {"PK": "TEACHER_SUPPORT_CASE#case-digest", "SK": "ADMISSION"},
+        "teacher_support_admission", beneficiary_id=ACCOUNT, parent_id=OTHER))
+    add("account_profile", _row(
+        {"PK": f"USER#{ACCOUNT}", "SK": teacher_support_allowance_service.ASSIGNED_ALLOWANCE_SK},
+        "teacher_support_assigned_allowance", student_id=ACCOUNT, weekly_cases=3))
     # identity_cross_account
     add("identity_cross_account", _row(
         {"PK": "IDENTITY#issuer#subject", "SK": "BINDING"}, "identity_binding",

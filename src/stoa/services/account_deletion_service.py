@@ -793,6 +793,12 @@ def _account_profile_branch(
         # And the child's daily voice transcription counters (#477): found by
         # `student_id` too, and removed here rather than left to their TTL,
         # which can lag by days.
+        # And the student's weekly AI token and teacher-help allowance (#534):
+        # the counters, each question's reservation and the provider's usage
+        # evidence, each teacher-help admission, and the weekly figure an
+        # administrator set. Usage accounting like the usage periods, found by
+        # `beneficiary_id` (or `student_id`); a paying parent's deletion leaves
+        # them.
         predicate=lambda item: item.get("SK") == "PROFILE"
         or item.get("entity_type")
         in {
@@ -801,6 +807,11 @@ def _account_profile_branch(
             voice_question_consent_repo.ENTITY_TYPE,
             voice_question_consent_repo.CHANGE_ENTITY_TYPE,
             voice_transcription_usage_repo.ENTITY_TYPE,
+            "allowance_counter",
+            "allowance_effect",
+            "provider_usage_evidence",
+            "teacher_support_admission",
+            "teacher_support_assigned_allowance",
         },
         mutate=mutate,
     )
