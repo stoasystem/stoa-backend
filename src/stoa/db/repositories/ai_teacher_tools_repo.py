@@ -169,6 +169,28 @@ def _generation(item: Mapping[str, object], table: object) -> tuple[str, int]:
     return owner, 1
 
 
+def _update_expression(
+    updates: Mapping[str, object],
+) -> tuple[str, dict[str, str], dict[str, object]]:
+    """The update expression, names and values that write `updates` onto a draft.
+
+    A field given as `None` is removed rather than set: the table gateway leaves
+    every `None` out of `ExpressionAttributeValues`, and DynamoDB refuses a whole
+    request whose expression names a value it was not sent. Accepting a draft
+    without a note (`review_note: None`) was refused that way in production
+    (#543).
+    """
+    names = {f"#{key}": key for key in updates}
+    values = {f":{key}": value for key, value in updates.items() if value is not None}
+    removed = [key for key, value in updates.items() if value is None]
+    parts = []
+    if values:
+        parts.append("SET " + ", ".join(f"#{token[1:]}={token}" for token in values))
+    if removed:
+        parts.append("REMOVE " + ", ".join(f"#{key}" for key in removed))
+    return " ".join(parts), names, values
+
+
 def build_ai_draft_write_transaction(
     *,
     item: Mapping[str, object],
@@ -197,14 +219,13 @@ def build_ai_draft_write_transaction(
         return operations
     if mode != "update" or not updates:
         raise ValueError("AI draft write mode is invalid")
-    names = {f"#{key}": key for key in updates}
-    values = {f":{key}": value for key, value in updates.items()}
+    expression, names, values = _update_expression(updates)
     values.update({":owner": owner_id, ":generation": generation})
     operations.append(
         {
             "Update": {
                 "Key": {"PK": stored["PK"], "SK": stored["SK"]},
-                "UpdateExpression": "SET " + ", ".join(f"#{key}=:{key}" for key in updates),
+                "UpdateExpression": expression,
                 "ConditionExpression": (
                     "attribute_exists(PK) AND attribute_exists(SK) AND "
                     "owner_id=:owner AND account_fence_generation=:generation"
@@ -259,8 +280,7 @@ def update_draft(
         return existing
     table = db_table.table()
     owner, generation = _generation(existing, table)
-    names = {f"#{key}": key for key in updates}
-    values = {f":{key}": value for key, value in updates.items()}
+    expression, names, values = _update_expression(updates)
     if _atomic_table(table):
         operations = build_ai_draft_write_transaction(
             item=existing,
@@ -274,9 +294,9 @@ def update_draft(
         _update_item(
             table,
             Key={"PK": draft_pk(draft_id), "SK": "META"},
-            UpdateExpression="SET " + ", ".join(f"#{key} = :{key}" for key in updates),
+            UpdateExpression=expression,
             ExpressionAttributeNames=names,
-            ExpressionAttributeValues=values,
+            **({"ExpressionAttributeValues": values} if values else {}),
             ConditionExpression=Attr("PK").exists() & Attr("student_id").eq(owner),
         )
     return {
