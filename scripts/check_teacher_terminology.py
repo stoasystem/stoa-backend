@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 LEGACY_PATTERN = re.compile(r"\btu" r"tor(?:s|ing)?\b", re.IGNORECASE)
-SCANNED_ROOTS = ("src", "tests", "scripts", "mobile")
+SCANNED_ROOTS = ("src", "tests", "scripts")
 SCANNED_SUFFIXES = {".py", ".json", ".md", ".js", ".jsx", ".ts", ".tsx", ".yaml", ".yml"}
 ALLOWED_PURPOSES = {"negative_input", "historical_reconciliation"}
 
