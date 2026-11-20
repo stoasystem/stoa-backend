@@ -385,8 +385,9 @@ def test_a_model_failure_is_retryable_and_not_counted(table, allowed, failure) -
             "ValidationException",
             "This model doesn't support the audio format that you provided for user messages.",
         ),
+        client_error("AccessDeniedException"),
     ],
-    ids=["format-refused"],
+    ids=["format-refused", "denied"],
 )
 def test_a_model_refusal_is_not_retryable_and_not_counted(table, allowed, refusal) -> None:
     """Sending it again cannot help: the student is told to type, and nothing invites a retry."""
@@ -434,7 +435,7 @@ def test_only_a_refusal_writes_the_line_the_alarm_counts(
 ) -> None:
     aws.install({aws.Kind.VOICE_TRANSCRIPTION: FakeConverse(client_error(code))})
     with caplog.at_level(logging.WARNING, logger="stoa.services.transcription"):
-        _post(recordings.webm(5))
+        _post(recordings.wav(5))
 
     [record] = [r for r in caplog.records if r.name == "stoa.services.transcription"]
     assert record.event == event
