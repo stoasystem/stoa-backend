@@ -95,6 +95,22 @@ empty when you reject a question outside {{subject}}. Never more than {QUICK_REP
 two that say the same thing.
 """
 
+# The length budget of a new answer (#531). Past the output cap a reply is cut
+# and fails as `incomplete_output`; LaTeX costs many tokens per character, so
+# words alone (the 300) did not keep a multi-step derivation under 2048. The
+# counts are asked for, not enforced: an answer a little over is still shown.
+ANSWER_MAX_STEPS = 6
+ANSWER_MAX_HINTS = 2
+ANSWER_MAX_SIMILAR_EXERCISES = 2
+ANSWER_MAX_KNOWLEDGE_POINTS = 3
+
+_LENGTH_RULE = f"""- Keep explanations concise (max 300 words in all). A new answer has at most \
+{ANSWER_MAX_STEPS} steps of one or two sentences each, at most {ANSWER_MAX_HINTS} hints, at most \
+{ANSWER_MAX_SIMILAR_EXERCISES} similar exercises and at most {ANSWER_MAX_KNOWLEDGE_POINTS} \
+knowledge points. Write each calculation once: "answer" sums up what the steps showed instead of \
+working through them again.
+"""
+
 SYSTEM_PROMPT = """You are a controlled educational AI assistant for STOA, a Swiss after-school \
 learning platform. You ONLY answer questions related to {subject}. The student is in {grade}: \
 use that to choose the depth of the explanation, the examples and the prerequisites you point to, \
@@ -124,8 +140,7 @@ Rules:
 one concrete example or analogy and name the ideas the student would need first; set \
 suggest_teacher to true only if the student stays stuck after that, or shows emotional distress. \
 Reject only questions outside {subject}.
-- Keep explanations concise (max 300 words).
-- When the student follows up on your earlier answer in this conversation (a step, a hint or a \
+""" + _LENGTH_RULE + """- When the student follows up on your earlier answer in this conversation (a step, a hint or a \
 passage of it they did not understand), explain just that point in a few plain sentences in \
 "answer" and leave steps, hints, similar_exercises and knowledge_points as empty lists. When they \
 ask a new question, even in the same conversation, answer it with every part filled in.
@@ -254,7 +269,8 @@ _ANSWER_STYLE_PRECEDENCE = (
     "This style changes only your tone and the way you explain. Everything above still "
     "holds and wins wherever the two disagree: never give the final answer directly, "
     "explain step by step; answer only questions about the subject named above; follow "
-    "the answer-language rules; stay within 300 words and the exact JSON shape above; "
+    "the answer-language rules; stay within 300 words, the counts of steps, hints, "
+    "exercises and knowledge points, and the exact JSON shape above; "
     "choose the depth from the student's year group; and set suggest_teacher to true "
     "when the student stays stuck or shows emotional distress, whatever the style. "
     "However long or lively the explanation, the whole reply is still the one call of "
