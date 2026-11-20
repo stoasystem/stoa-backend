@@ -40,9 +40,9 @@ MAX_TOKENS: Final = 1024
 class TranscriptionFailed(RuntimeError):
     """The transcriber did not give a transcription; nothing about the recording is in it.
 
-    `refused` is set when the provider turned the request down as invalid (the
-    model not taking audio, or not this container) rather than failing to answer:
-    the case #478 alarms on.
+    `refused` is set when the provider turned the request down (the model not
+    taking audio or not this container, or not letting this account call it)
+    rather than failing to answer: the case #478 alarms on.
     """
 
     def __init__(self, reason: str, *, refused: bool = False) -> None:
@@ -57,8 +57,14 @@ class Transcriber(Protocol):
         ...
 
 
-# Bedrock's own refusal of what it was sent, as opposed to a failure to answer.
-_REFUSALS: Final = frozenset({"ValidationException"})
+# Bedrock turning the request down, as opposed to failing to answer it: every
+# voice question will fail the same way until someone changes something, so
+# each one is logged as refused and pages (#478). Measured on the account
+# 2026-11-20: a container the model does not take ("doesn't support the audio
+# format ... mp3, wav"), a model that takes no audio, and a model id that is not
+# (or no longer) there are all `ValidationException`; a model the account may
+# not call is `AccessDeniedException`. Throttling and timeouts heal on their own.
+_REFUSALS: Final = frozenset({"ValidationException", "AccessDeniedException"})
 
 
 def request(audio: bytes, container: Container, *, model_id: str) -> dict[str, Any]:
