@@ -97,8 +97,54 @@ def _no_memory_personalisation(stub_memory_summary) -> None:
     """The prompt enrichment reads three tables; keep it out."""
 
 
+def sweep_index_as_written(row: dict[str, Any]) -> dict[str, Any]:
+    """A command row with the sweep's index attributes its store writes would leave.
+
+    The store sets `sweep_bucket` and `sweep_due_at` on every write into a state
+    the sweep acts on and removes them on every write out (#502), the due time
+    from the time that write recorded. A test that plants a command, or moves
+    its times back to stand for time gone by, is planting what those writes
+    would have left: the same row, due when its own times make it due. The
+    writes themselves are held to the rule in `tests/test_sweep_pending_index.py`.
+    """
+    if row.get("entity_type") != "message_command":
+        return row
+    row = {key: value for key, value in row.items() if key not in _store.SWEEP_INDEX_FIELDS}
+    status = row.get("status")
+    due: str | None = None
+
+    def after(field: str, delay: timedelta) -> str:
+        # A time the store cannot read is due at once, as the store writes it.
+        try:
+            moment = datetime.fromisoformat(str(row.get(field)).replace("Z", "+00:00"))
+        except ValueError:
+            return _store.sweep_due_at(datetime(2000, 1, 1, tzinfo=UTC))
+        return _store.sweep_due_at(moment + delay)
+
+    if status == "message_committed":
+        due = after("message_committed_at", _store.UNCLAIMED_AFTER)
+    elif status == "ai_running" and row.get("expiresAt") is not None:
+        due = _store.sweep_due_at(datetime.fromtimestamp(int(row["expiresAt"]), UTC))
+    elif "allowance_settled_at" in row:
+        due = None
+    elif status == "failed" and row.get("failure_category") in _store.SETTLE_AFTER:
+        due = after("failed_at", _store.SETTLE_AFTER[str(row["failure_category"])])
+    elif status == "terminal_failed":
+        due = after("terminal_at", _store.SETTLE_TERMINAL_AFTER)
+    if due is not None:
+        row.update(sweep_bucket=_store.SWEEP_PENDING_BUCKET, sweep_due_at=due)
+    return row
+
+
 class _Table(FakeTable):
-    """The shared double."""
+    """The shared double.
+
+    A command planted here carries the sweep's index attributes as its store
+    writes would have left them (`sweep_index_as_written`).
+    """
+
+    def seed(self, *items: dict[str, Any]) -> None:
+        super().seed(*(sweep_index_as_written(item) for item in items))
 
 
 @pytest.fixture
