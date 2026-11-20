@@ -82,7 +82,7 @@ def test_the_tool_asks_for_every_section_of_an_answer() -> None:
 
     assert set(schema["required"]) == {
         "language", "steps", "answer", "hints", "similar_exercises",
-        "knowledge_points", "suggest_teacher", "quick_replies",
+        "knowledge_points", "suggest_teacher", "quick_replies", "common_mistakes",
     }
     assert schema["additionalProperties"] is False
     assert "target_unit_id" not in schema["properties"]
@@ -98,6 +98,53 @@ def test_the_quick_replies_are_texts_with_no_constraint_beyond_those_already_use
         "type": "array", "items": {"type": "string"},
     }
     assert quick == {**schema["properties"]["steps"], "description": quick["description"]}
+
+
+def _keywords(node: object) -> set[str]:
+    """Every JSON Schema keyword a schema uses, at any depth (property names aside)."""
+    if isinstance(node, list):
+        return set().union(*(_keywords(item) for item in node)) if node else set()
+    if not isinstance(node, dict):
+        return set()
+    found = set(node)
+    for key, value in node.items():
+        if key == "properties":
+            found |= set().union(*(_keywords(item) for item in value.values()))
+        elif key in {"items", "anyOf"}:
+            found |= _keywords(value)
+    return found
+
+
+def test_the_common_mistakes_use_no_keyword_the_schema_did_not_already_use() -> None:
+    # #430: each entry is an object written the way a knowledge point is, and
+    # its category a nullable string like a knowledge point's id; how many
+    # there may be, how long each is and which categories exist are the
+    # checks' to decide, not an `enum` or a length here.
+    schema = ask_answer.answer_tool(star_map=True).input_schema
+    mistakes = schema["properties"]["common_mistakes"]
+    rest = {
+        **schema,
+        "properties": {
+            name: value for name, value in schema["properties"].items() if name != "common_mistakes"
+        },
+    }
+
+    assert {key: value for key, value in mistakes.items() if key != "description"} == {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+                "error_cause": {"type": ["string", "null"]},
+            },
+            "required": ["text", "error_cause"],
+            "additionalProperties": False,
+        },
+    }
+    assert _keywords(mistakes) <= _keywords(rest)
+    point = schema["properties"]["knowledge_points"]["items"]["anyOf"][1]
+    assert mistakes["items"]["properties"]["error_cause"] == point["properties"]["id"]
+    assert set(mistakes["items"]) == set(point)
 
 
 def test_with_a_star_map_the_tool_also_takes_the_star_to_go_to() -> None:

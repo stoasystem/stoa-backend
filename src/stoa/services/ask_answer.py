@@ -30,6 +30,7 @@ from stoa import config
 from stoa.security.private_telemetry import emit_private_event
 from stoa.services import (
     curriculum_service,
+    error_causes,
     knowledge_map_service,
     learning_profile_service,
     locale_service,
@@ -95,6 +96,35 @@ empty when you reject a question outside {{subject}}. Never more than {QUICK_REP
 two that say the same thing.
 """
 
+# The common mistakes (#444): where students most often go wrong on a
+# question like this one. At most `COMMON_MISTAKE_COUNT` are kept, the first
+# ones the model wrote; the prompt asks for at most
+# `COMMON_MISTAKE_PROMPT_CHARS` each, and one up to `COMMON_MISTAKE_MAX_CHARS`
+# (a misconception's length, `error_causes.MAX_MISCONCEPTION_LENGTH`) is kept,
+# one longer left out whole rather than cut. Each may name the category of its
+# cause from the `error_causes` vocabulary. Like the quick replies, every limit
+# and the vocabulary are checked in `_common_mistakes`, not in the schema (#430).
+COMMON_MISTAKE_COUNT = 2
+COMMON_MISTAKE_PROMPT_CHARS = 200
+COMMON_MISTAKE_MAX_CHARS = error_causes.MAX_MISCONCEPTION_LENGTH
+
+_COMMON_MISTAKE_RULE = f"""- In "common_mistakes", point out where students most often go wrong on a question like this \
+one, as if a classmate had made the mistake beside them: each one a single sentence of at most \
+{COMMON_MISTAKE_PROMPT_CHARS} characters, in the language you answer in, naming the mistake itself \
+and, where it helps, showing it (for example: "Many students add the denominators too: \
+$1/2 + 1/3 \\neq 2/5$"). Give "text" the sentence and \
+"error_cause" the kind of mistake it is: "structural" (the concept is not built yet), "deviation" \
+(knows it, slipped), "application" (fails once the setting changes) or "metacognitive" (does not \
+notice they do not know), written as these English codes whatever language you answer in; null \
+when none of the four clearly fits. Give 1 or 2 after a new \
+question; leave the list empty after a follow-up, when you reject a question outside {{subject}}, \
+and when the question has no typical mistake (a greeting, a wish to practise or review a topic). \
+Never more than {COMMON_MISTAKE_COUNT}, never two that say the same thing. When the student asks \
+beside an exercise and its practice context lists "recentMistakes", make the first one explain \
+what went wrong in the student's own wrong answer, preferring one to this very exercise (the same \
+"challengeId").
+"""
+
 # The length budget of a new answer (#531). Past the output cap a reply is cut
 # and fails as `incomplete_output`; LaTeX costs many tokens per character, so
 # words alone (the 300) did not keep a multi-step derivation under 2048. The
@@ -144,12 +174,12 @@ Reject only questions outside {subject}.
 passage of it they did not understand), explain just that point in a few plain sentences in \
 "answer" and leave steps, hints, similar_exercises and knowledge_points as empty lists. When they \
 ask a new question, even in the same conversation, answer it with every part filled in.
-""" + _QUICK_REPLY_RULE + """- Format mathematical expressions using LaTeX: inline equations with $...$ and block equations with $$...$$.
+""" + _QUICK_REPLY_RULE + _COMMON_MISTAKE_RULE + """- Format mathematical expressions using LaTeX: inline equations with $...$ and block equations with $$...$$.
 
 IMPORTANT: Give your whole reply as one call of the tool `give_answer` and write nothing \
 else. Its input has exactly this JSON shape; "language" is the code of the language you answer \
 in ("de", "en", "fr" or "it"), and every other value is written in that language:
-{{"language":"{language}","steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false,"quick_replies":["..."]}}
+{{"language":"{language}","steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false,"quick_replies":["..."],"common_mistakes":[{{"text":"...","error_cause":null}}]}}
 Write the text of each value plainly, LaTeX included, as the student is to read it. To quote a \
 word or a sentence, use «…» or „…“ (“…” in English), never a straight double quote (").
 
@@ -229,6 +259,27 @@ _ANSWER_PROPERTIES: dict[str, object] = {
         "description": (
             f"Up to {QUICK_REPLY_COUNT} short replies the student may send next; "
             "empty when none fits."
+        ),
+    },
+    # Each entry an object of the shape the knowledge points already use, its
+    # category a nullable string like their `id`: the four categories are
+    # named in the prompt and checked in `_common_mistakes`, not put in an
+    # `enum` here, since a nullable `enum` is a form this schema has not used
+    # before (#430).
+    "common_mistakes": {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+                "error_cause": {"type": ["string", "null"]},
+            },
+            "required": ["text", "error_cause"],
+            "additionalProperties": False,
+        },
+        "description": (
+            f"Up to {COMMON_MISTAKE_COUNT} mistakes students often make on a question like this; "
+            "empty after a follow-up."
         ),
     },
 }
@@ -666,6 +717,20 @@ class KnowledgePoint(BaseModel):
     unitId: str | None = None
 
 
+# The categories a common mistake may name: the `error_causes` vocabulary.
+ErrorCauseCategory = Literal[error_causes.CATEGORIES]  # type: ignore[valid-type]
+
+
+class CommonMistake(BaseModel):
+    """One mistake students often make on a question like the one asked (#444)."""
+
+    # One sentence, LaTeX as in the rest of the answer.
+    text: str
+    # The kind of mistake, one of the `error_causes` categories; None when the
+    # model named none or one outside them. Never `unclassified`.
+    errorCause: ErrorCauseCategory | None = None
+
+
 class StructuredAnswer(BaseModel):
     """An assistant answer in the sections the model wrote it in (#132).
 
@@ -688,6 +753,11 @@ class StructuredAnswer(BaseModel):
     # message. Empty when the model offered none, on every answer written
     # before they existed, and never a reason for `kind` to be `answer`.
     quickReplies: list[str] = Field(default_factory=list)
+    # Up to two mistakes students often make on a question like this (#444),
+    # in the language of the answer. Empty on a follow-up, when the model
+    # offered none, and on every answer written before they existed; never a
+    # reason for `kind` to be `answer`.
+    commonMistakes: list[CommonMistake] = Field(default_factory=list)
 
     # A text with no letter or digit in it is not shown (#507). New answers
     # never carry one (`_without_wordless_texts`); these drop it from an
@@ -1172,7 +1242,7 @@ def _answer_from(
     reply = provider.content
     if not isinstance(reply, Mapping):
         raise AIInvocationFailure("malformed_response")
-    structured = _structured_answer(reply, star_map)
+    structured = _structured_answer(reply, star_map, follow_up=asked.follow_up)
     return AskAnswer(
         content=_joined_text(reply, default_locale=asker.locale),
         structured=structured,
@@ -1260,12 +1330,15 @@ def _knowledge_point(
 def _structured_answer(
     reply: Mapping[str, object],
     star_map: list[star_map_candidates.Candidate] | None,
+    *,
+    follow_up: bool = False,
 ) -> StructuredAnswer:
     """The model's sections under the API's names.
 
     The sections the joined text is not made of are taken as they are, and an
     entry of the wrong shape is left out: one is no reason to fail an answer
-    already paid for.
+    already paid for. A follow-up - asked about one part of an earlier answer,
+    or answered in plain words - has no common mistakes (#444).
     """
     steps = _texts(reply.get("steps"))
     hints = _texts(reply.get("hints"))
@@ -1276,8 +1349,11 @@ def _structured_answer(
         for value in (named if isinstance(named, list) else [])
         if (point := _knowledge_point(value, star_map)) is not None
     ]
+    kind: Literal["answer", "followUp"] = (
+        "answer" if steps or hints or similar or points else "followUp"
+    )
     return StructuredAnswer(
-        kind="answer" if steps or hints or similar or points else "followUp",
+        kind=kind,
         steps=steps,
         answer=str(reply.get("answer") or ""),
         hints=hints,
@@ -1285,6 +1361,11 @@ def _structured_answer(
         knowledgePoints=points,
         suggestTeacher=reply.get("suggest_teacher") is True,
         quickReplies=_quick_replies(reply.get("quick_replies")),
+        commonMistakes=(
+            []
+            if follow_up or kind == "followUp"
+            else _common_mistakes(reply.get("common_mistakes"))
+        ),
     )
 
 
@@ -1318,6 +1399,53 @@ def _quick_replies(value: object) -> list[str]:
         if len(kept) == QUICK_REPLY_COUNT:
             break
     return kept
+
+
+# ── Common mistakes (#444) ──────────────────────────────────────────────────
+
+def _common_mistakes(value: object) -> list[CommonMistake]:
+    """The common mistakes worth showing, in the order the model wrote them.
+
+    Each one is taken onto one line. One with no letter or digit in it (left
+    empty, or only the punctuation a cut-off string leaves, #507), one longer
+    than `COMMON_MISTAKE_MAX_CHARS`, one the leaked-term check redacted, one
+    that reads as an attempt to override the prompt, and one that repeats an
+    earlier one (ignoring case) is left out; of the rest, the first
+    `COMMON_MISTAKE_COUNT` are kept. A category outside the `error_causes`
+    vocabulary keeps its mistake and is taken as none. None of this fails the
+    answer.
+    """
+    kept: list[CommonMistake] = []
+    seen: set[str] = set()
+    for entry in value if isinstance(value, list) else []:
+        if isinstance(entry, str):
+            raw_text, raw_cause = entry, None
+        elif isinstance(entry, Mapping) and isinstance(entry.get("text"), str):
+            raw_text, raw_cause = entry["text"], entry.get("error_cause")
+        else:
+            continue
+        text = " ".join(raw_text.split())
+        if (
+            not any(character.isalnum() for character in text)
+            or len(text) > COMMON_MISTAKE_MAX_CHARS
+            or _REDACTED in text
+            or _INJECTION_RE.search(text)
+        ):
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append(CommonMistake(text=text, errorCause=_error_cause_category(raw_cause)))
+        if len(kept) == COMMON_MISTAKE_COUNT:
+            break
+    return kept
+
+
+def _error_cause_category(value: object) -> str | None:
+    """The `error_causes` category the model named, or None for anything else."""
+    category = value.strip().lower() if isinstance(value, str) else ""
+    return category if category in error_causes.CATEGORIES else None
 
 
 def _target_unit_id(
