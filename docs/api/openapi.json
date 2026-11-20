@@ -1137,6 +1137,28 @@
             ],
             "title": "Createdbyrole"
           },
+          "deliveredAssignmentId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deliveredassignmentid"
+          },
+          "deliveredAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deliveredat"
+          },
           "difficulty": {
             "anyOf": [
               {
@@ -1292,12 +1314,23 @@
             "title": "Sourcecontext",
             "type": "object"
           },
+          "starIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Starids",
+            "type": "array"
+          },
           "status": {
             "title": "Status",
             "type": "string"
           },
           "studentDeliveryStatus": {
             "default": "not_delivered",
+            "enum": [
+              "not_delivered",
+              "delivered"
+            ],
             "title": "Studentdeliverystatus",
             "type": "string"
           },
@@ -1333,6 +1366,17 @@
               }
             ],
             "title": "Suggestedteachingfocus"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
           },
           "topicIds": {
             "items": {
@@ -4682,8 +4726,14 @@
         "type": "object"
       },
       "ExerciseDraftRequest": {
+        "description": "What an exercise draft is picked for (#519).\n\nIts exercises come from the question bank: those of `starIds` (stars on\nthe star map, as the request's preparation table names them), then of\n`topicIds`. At least one of the two names something.",
         "properties": {
           "difficulty": {
+            "enum": [
+              "targeted",
+              "standard",
+              "stretch"
+            ],
             "title": "Difficulty",
             "type": "string"
           },
@@ -4701,6 +4751,13 @@
               }
             ],
             "title": "Questionid"
+          },
+          "starIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Starids",
+            "type": "array"
           },
           "studentId": {
             "title": "Studentid",
@@ -4721,7 +4778,6 @@
         "required": [
           "studentId",
           "subject",
-          "topicIds",
           "difficulty",
           "exerciseCount"
         ],
@@ -35922,7 +35978,7 @@
     },
     "/teachers/ai-tools/drafts/{draft_id}/accept": {
       "post": {
-        "description": "Mark a draft as reviewed and accepted without delivering it to students.",
+        "description": "Mark a draft as reviewed and accepted.\n\nAccepting sends nothing: an accepted exercise draft reaches the student as\nan assignment (`POST /adaptive/assignments`, `sourceType: ai_draft`).",
         "operationId": "accept_ai_teacher_draft_teachers_ai_tools_drafts__draft_id__accept_post",
         "parameters": [
           {
@@ -36325,7 +36381,7 @@
     },
     "/teachers/ai-tools/exercise-drafts": {
       "post": {
-        "description": "Create a reviewed practice exercise draft from teacher-visible learning context.",
+        "description": "Pick a practice exercise draft from the question bank for the teacher to review.",
         "operationId": "create_exercise_draft_teachers_ai_tools_exercise_drafts_post",
         "requestBody": {
           "content": {

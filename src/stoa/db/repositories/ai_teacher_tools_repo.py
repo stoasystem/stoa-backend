@@ -22,6 +22,8 @@ AI_DRAFT_PRIVATE_FIELDS = frozenset(
         "question_id",
         "subject",
         "topic_ids",
+        "requested_topic_ids",
+        "star_ids",
         "session_summary",
         "misconception_summary",
         "suggested_teaching_focus",
