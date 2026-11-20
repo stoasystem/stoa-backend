@@ -14,6 +14,7 @@ from stoa.config import Settings
 from stoa.services import email_layout, message_catalog, model_call, report_service
 from stoa.services.model_call.fake import FakeAdapter, Prose, Reply, check_body
 from stoa.services.model_call.adapter import ProviderError
+from stoa.services.model_call.fake import system_text
 
 
 @pytest.fixture(autouse=True)
@@ -503,7 +504,11 @@ def test_generate_weekly_report_content_asks_for_the_report_through_the_forced_t
     assert tool["input_schema"] == report_service.REPORT_TOOL.input_schema
     assert request["temperature"] == 0.2
     assert request["max_tokens"] == min(config.settings().bedrock_max_tokens, 1200)
-    assert "give_weekly_report" in request["system"]
+    assert "give_weekly_report" in system_text(request)
+    # The whole system prompt is the same for every report, so it ends in the
+    # cache point (#442); the week's numbers are in the message.
+    [system] = request["system"]
+    assert system["cache_control"] == {"type": "ephemeral"}
     user_input = json.loads(request["messages"][0]["content"])
     assert user_input["metrics"]["questionsAsked"] == 3
     assert len(user_input["activities"]) == 6

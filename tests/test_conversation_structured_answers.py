@@ -44,6 +44,7 @@ from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.services import ask_answer
 from fakes.ask_question import AtomicAllowanceTable
+from stoa.services.model_call.fake import system_text
 
 LOCALES = sorted(ANSWERS)
 
@@ -588,7 +589,7 @@ def test_the_model_is_told_which_part_of_its_answer_is_quoted(part, named) -> No
 
     turn = _student_turn(body)
     assert named in turn
-    assert named not in body["system"]
+    assert named not in system_text(body)
 
 
 def test_a_quote_without_a_part_names_none() -> None:
@@ -598,7 +599,7 @@ def test_a_quote_without_a_part_names_none() -> None:
 
 
 def test_the_model_is_told_a_follow_up_is_answered_in_plain_words() -> None:
-    system = _sent({"text": "x", "source": {"kind": "message", "id": "m-1"}})["system"]
+    system = system_text(_sent({"text": "x", "source": {"kind": "message", "id": "m-1"}}))
 
     assert "follows up on your earlier answer" in system
     assert "a new question" in system

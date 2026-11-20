@@ -655,6 +655,12 @@ def _evidence_from_item(item: Mapping[str, object]) -> ProviderUsageEvidence:
                 "output_tokens": _stored_count(
                     item.get("output_tokens"), "output_tokens"
                 ),
+                "cache_write_input_tokens": _stored_count(
+                    item.get("cache_write_input_tokens", 0), "cache_write_input_tokens"
+                ),
+                "cache_read_input_tokens": _stored_count(
+                    item.get("cache_read_input_tokens", 0), "cache_read_input_tokens"
+                ),
                 "provider_cost_retained": provider_cost_retained,
                 "observed_at": item.get("observed_at"),
             }
@@ -692,9 +698,16 @@ def record_provider_usage(
     input_tokens: int,
     output_tokens: int,
     observed_at: datetime,
+    cache_write_input_tokens: int = 0,
+    cache_read_input_tokens: int = 0,
     table: object | None = None,
 ) -> ProviderUsageResult:
-    """Persist one immutable provider observation and increment cost exactly once."""
+    """Persist one immutable provider observation and increment cost exactly once.
+
+    `input_tokens` is every input token the reply read, the cost counted
+    against the week; the cache counts are how many of them the provider wrote
+    to and read from its prompt cache (#442), kept on the evidence only.
+    """
     return _record_usage(
         beneficiary_id=beneficiary_id,
         effect_id=effect_id,
@@ -702,6 +715,8 @@ def record_provider_usage(
         model_id_digest=model_id_digest,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
+        cache_write_input_tokens=cache_write_input_tokens,
+        cache_read_input_tokens=cache_read_input_tokens,
         observed_at=observed_at,
         unknown_cost=False,
         table=table,
@@ -719,6 +734,8 @@ def _record_usage(
     observed_at: datetime,
     unknown_cost: bool,
     table: object | None,
+    cache_write_input_tokens: int = 0,
+    cache_read_input_tokens: int = 0,
 ) -> ProviderUsageResult:
     beneficiary = _required_text(beneficiary_id, "beneficiary_id")
     effect = _sha256(effect_id, "effect_id")
@@ -728,6 +745,24 @@ def _record_usage(
     provider_model_digest = _sha256(model_id_digest, "model_id_digest")
     actual_input = _exact_count(input_tokens, "input_tokens")
     actual_output = _exact_count(output_tokens, "output_tokens")
+    # Only when not 0, so evidence of a reply that touched no cache is
+    # written, and digested, as it was before caching.
+    cache_counts = {
+        field: count
+        for field, count in (
+            (
+                "cache_write_input_tokens",
+                _exact_count(cache_write_input_tokens, "cache_write_input_tokens"),
+            ),
+            (
+                "cache_read_input_tokens",
+                _exact_count(cache_read_input_tokens, "cache_read_input_tokens"),
+            ),
+        )
+        if count
+    }
+    if sum(cache_counts.values()) > actual_input:
+        raise ValueError("cached input tokens exceed the input tokens")
     now = _aware_timestamp(observed_at, "observed_at")
     evidence_id = _evidence_id(effect)
     evidence_key = _evidence_key(beneficiary, evidence_id)
@@ -741,6 +776,7 @@ def _record_usage(
             "model_id_digest": provider_model_digest,
             "input_tokens": actual_input,
             "output_tokens": actual_output,
+            **cache_counts,
             **({"cost_basis": "unknown_cost"} if unknown_cost else {}),
         },
     )
@@ -797,6 +833,7 @@ def _record_usage(
             "model_id_digest": provider_model_digest,
             "input_tokens": actual_input,
             "output_tokens": actual_output,
+            **cache_counts,
             "provider_cost_retained": True,
             "provider_payload_digest": payload_digest,
             "observed_at": _timestamp_text(now),

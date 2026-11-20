@@ -53,8 +53,8 @@ def _call(
 ) -> model_call.Result:
     if model is not None:
         model_call.install(model)
+    kwargs.setdefault("system", "System.")
     return model_call.call(
-        system="System.",
         messages=[{"role": "user", "content": "Frage"}],
         tool=TOOL,
         max_tokens=512,
@@ -108,7 +108,11 @@ def test_the_request_forces_the_tool_and_reads_the_model_from_the_configuration(
         }
     ]
     assert sent["tool_choice"] == {"type": "tool", "name": "give_it"}
-    assert (sent["max_tokens"], sent["temperature"], sent["system"]) == (512, 0.4, "System.")
+    assert (sent["max_tokens"], sent["temperature"]) == (512, 0.4)
+    # The whole system prompt is shared: one block, ending in the cache point.
+    assert sent["system"] == [
+        {"type": "text", "text": "System.", "cache_control": {"type": "ephemeral"}}
+    ]
     assert sent["anthropic_version"] == "bedrock-2023-05-31"
 
 
@@ -540,3 +544,116 @@ def test_a_stream_that_breaks_off_is_a_provider_error_not_an_answer(
     assert result == model_call.NotSent("provider_error", retryable=True)
     assert "stage=stream" in caplog.text
     assert "provider_error_code=ReadTimeoutError" in caplog.text
+
+
+# ── The shared prefix is cached (#442) ──────────────────────────────────────
+
+
+def test_what_changes_from_call_to_call_is_sent_after_the_cache_point() -> None:
+    model = FakeAdapter(answer=INPUT)
+
+    _call(model, system_tail="For this student.")
+
+    [sent] = model.requests
+    assert sent["system"] == [
+        {"type": "text", "text": "System.", "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": "For this student."},
+    ]
+    assert model.cached_system() == "System."
+
+
+def test_a_reply_that_touched_the_cache_counts_every_input_token_it_read() -> None:
+    usage = {
+        "input_tokens": 40,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 1500,
+        "output_tokens": 30,
+    }
+    result = _call(FakeAdapter(Reply(input=INPUT, usage=usage)))
+
+    assert isinstance(result, model_call.Answered)
+    assert result.usage.input_tokens == 1540
+    assert result.usage.cache_write_input_tokens == 0
+    assert result.usage.cache_read_input_tokens == 1500
+    evidence = result.usage.evidence(effect_id="effect-1")
+    assert (
+        evidence.input_tokens,
+        evidence.cache_write_input_tokens,
+        evidence.cache_read_input_tokens,
+    ) == (1540, 0, 1500)
+
+
+def test_a_reply_without_cache_counts_touched_no_cache() -> None:
+    result = _call(FakeAdapter(answer=INPUT))
+
+    assert isinstance(result, model_call.Answered)
+    assert result.usage.input_tokens == 90
+    assert (result.usage.cache_write_input_tokens, result.usage.cache_read_input_tokens) == (0, 0)
+
+
+@pytest.mark.parametrize("count", [-1, 1.5, "12"])
+def test_a_cache_count_that_is_not_a_count_is_not_answered(count: object) -> None:
+    usage = {"input_tokens": 40, "cache_read_input_tokens": count, "output_tokens": 30}
+
+    result = _call(FakeAdapter(Reply(input=INPUT, usage=usage)))
+
+    assert result == model_call.NotSent("malformed_provider_usage", retryable=True)
+
+
+@pytest.mark.parametrize(
+    "system",
+    [
+        [{"type": "text", "text": "x", "cache_control": {"type": "forever"}}],
+        [{"type": "text", "text": "x", "cache_control": {"type": "ephemeral"}}] * 5,
+        [{"type": "text", "text": "   "}],
+    ],
+)
+def test_the_fake_refuses_a_system_prompt_bedrock_refuses(system: list[Any]) -> None:
+    body = {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 10,
+        "system": system,
+        "messages": [{"role": "user", "content": "x"}],
+    }
+
+    with pytest.raises(ProviderError):
+        check_body(body, counted=False)
+
+
+def test_the_fake_cache_reads_a_prefix_it_was_sent_before_whatever_follows_it() -> None:
+    model = FakeAdapter(answer=INPUT)
+    model.cached_tokens = 1500
+
+    first = _call(model, system_tail="Student one.")
+    second = _call(model, system_tail="Student two.")
+    other = _call(model, system="Another system.")
+
+    assert isinstance(first, model_call.Answered)
+    assert isinstance(second, model_call.Answered)
+    assert isinstance(other, model_call.Answered)
+    assert (first.usage.cache_write_input_tokens, first.usage.cache_read_input_tokens) == (1500, 0)
+    assert (second.usage.cache_write_input_tokens, second.usage.cache_read_input_tokens) == (0, 1500)
+    assert (other.usage.cache_write_input_tokens, other.usage.cache_read_input_tokens) == (1500, 0)
+    assert second.usage.input_tokens == 90 + 1500
+
+
+def test_the_bedrock_adapter_reads_the_cache_counts_off_the_wire() -> None:
+    client = _runtime()
+    sent: list[bytes] = []
+    start = {"type": "message_start", "message": {
+        "id": "msg_bdrk_2", "model": "claude-sonnet-4-6", "usage": {
+            "input_tokens": 37,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 1413,
+            "output_tokens": 1,
+        }}}
+    _streaming(client, [start, *_STREAMED[1:]], sent)
+    model_call.install(bedrock.BedrockAdapter(client))
+
+    result = _call()
+
+    assert isinstance(result, model_call.Answered)
+    assert (result.usage.input_tokens, result.usage.output_tokens) == (1450, 21)
+    assert result.usage.cache_read_input_tokens == 1413
+    [body] = sent
+    assert json.loads(body)["system"][0]["cache_control"] == {"type": "ephemeral"}

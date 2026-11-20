@@ -283,7 +283,7 @@ def test_a_command_without_context_is_generated_in_the_profile_language(
     assert _deliver("key-1") == {"outcome": "completed"}
 
     assert default_language(model, 0) == "it"
-    assert "ONLY answer questions related to math." in model.system(0)
+    assert "Subject: math\n" in model.system(0)
     assert ask_answer.grade_for_prompt("Grade 6", "it") in model.system(0)
 
 

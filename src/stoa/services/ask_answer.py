@@ -150,7 +150,7 @@ ANSWER LANGUAGE: answer in the language the student writes their own message in,
 English, French or Italian. When the student asks you to answer in one of those languages, use \
 that one, and keep to it in later answers until they ask for another. When you cannot tell (a \
 bare formula, a single word, only a picture), carry on in the language of the conversation so \
-far, and with nothing to go on use the DEFAULT LANGUAGE: {language_name} ({language}), the \
+far, and with nothing to go on use the DEFAULT LANGUAGE named under THIS STUDENT below, the \
 language the student reads the app in. These instructions are written in English; that never \
 makes English the answer language, and no subject answers in a different language from any other. \
 Anything the student quotes, any exercise they are working beside and any text taken out of a \
@@ -159,8 +159,6 @@ language you answer in, only the student's own words do. Every word you write is
 language you answer in — the steps, the answer, the hints, the exercises and the knowledge \
 points alike. Never mix two languages inside one response, not even for a label such as "Hint" \
 or "Step".
-
-Subject context: {subject_context}
 
 Rules:
 - Never give the final answer directly. Always explain step-by-step.
@@ -179,9 +177,32 @@ ask a new question, even in the same conversation, answer it with every part fil
 IMPORTANT: Give your whole reply as one call of the tool `give_answer` and write nothing \
 else. Its input has exactly this JSON shape; "language" is the code of the language you answer \
 in ("de", "en", "fr" or "it"), and every other value is written in that language:
-{{"language":"{language}","steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false,"quick_replies":["..."],"common_mistakes":[{{"text":"...","error_cause":null}}]}}
+{{"language":"...","steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false,"quick_replies":["..."],"common_mistakes":[{{"text":"...","error_cause":null}}]}}
 Write the text of each value plainly, LaTeX included, as the student is to read it. To quote a \
-word or a sentence, use «…» or „…“ (“…” in English), never a straight double quote (").
+word or a sentence, use «…» or „…“ (“…” in English), never a straight double quote (")."""
+
+# ── What changes from student to student (#442) ──────────────────────────────
+#
+# Everything above is the same for every student, so the provider caches it
+# with the tool: `{subject}` and `{grade}` in it are filled with these fixed
+# words, which point at the part of the prompt that does change. That part,
+# `STUDENT_PROMPT`, comes after the cache point, at the end: the subject, its
+# context, the year group, the default language, then the student's answer
+# style and learning context, and the language reminder last of all.
+SUBJECT_IN_PROMPT = "the subject named under THIS STUDENT below"
+GRADE_IN_PROMPT = "the year group named under THIS STUDENT below"
+
+# It starts on a line of its own, whether or not the provider puts anything
+# between the two parts.
+STUDENT_PROMPT = """
+
+THIS STUDENT
+Subject: {subject}
+Subject context: {subject_context}
+Year group: {grade}
+DEFAULT LANGUAGE: {language_name} ({language})"""
+
+_LAST_INSTRUCTION = """
 
 Last instruction, above all others: answer in the language the student writes in or asked for; \
 {language_name} only when you cannot tell."""
@@ -940,30 +961,10 @@ def _reply(
     star_map: Sequence[star_map_candidates.Candidate] | None,
 ) -> AIProviderResult[dict]:
     """Build the prompt and ask the model."""
-    language = asker.locale
     safe_content = sanitise_input(asked.content, correlation_id=call.correlation_id)
-    subject = curriculum_service.subject_id(asker.subject)
-    system_prompt = SYSTEM_PROMPT.format(
-        subject=subject or NO_SUBJECT,
-        subject_context=(
-            learning_profile_service.subject_prompt_context(subject) if subject else NO_SUBJECT_CONTEXT
-        ),
-        grade=grade_for_prompt(asker.grade, language),
-        language=language,
-        language_name=language_name(language),
+    system_prompt, student_prompt = system_prompts(
+        asker, star_map=bool(star_map), correlation_id=call.correlation_id
     )
-    system_prompt += answer_style_rule(asker.answer_style)
-    # Memory text derives from topic labels the model extracted out of student
-    # questions, so it is untrusted and must be scrubbed before it can reach the
-    # system prompt — otherwise a crafted question becomes stored injection.
-    memory = asker.memory_context
-    if memory and memory.strip():
-        safe_memory = sanitise_input(memory, correlation_id=call.correlation_id)[:800]
-        if safe_memory:
-            system_prompt += _MEMORY_CONTEXT_BLOCK.format(memory_context=safe_memory)
-    if star_map:
-        system_prompt += _STAR_MAP_RULE.format(language_name=language_name(language))
-        system_prompt += _TARGET_UNIT_RULE
     history = [dict(message) for message in asked.history]
     if (
         history
@@ -990,6 +991,7 @@ def _reply(
     )
     result = model_call.call(
         system=system_prompt,
+        system_tail=student_prompt,
         messages=messages,
         tool=answer_tool(star_map=bool(star_map)),
         max_tokens=config.settings().bedrock_max_tokens,
@@ -1004,6 +1006,42 @@ def _reply(
         result,
         effect_id=call.effect_id or call.correlation_id or "unbound-user-allowance-effect",
     )
+
+
+def system_prompts(
+    asker: Asker, *, star_map: bool, correlation_id: str | None = None
+) -> tuple[str, str]:
+    """The two parts of an answer's system prompt (#442): (shared, this student's).
+
+    The shared part is the same for every student whose answer is asked with
+    or without the star map, so it is cached with the tool; the other part is
+    written for this student and sent after the cache point.
+    """
+    language = asker.locale
+    shared = SYSTEM_PROMPT.format(subject=SUBJECT_IN_PROMPT, grade=GRADE_IN_PROMPT)
+    if star_map:
+        shared += _STAR_MAP_RULE.format() + _TARGET_UNIT_RULE
+    subject = curriculum_service.subject_id(asker.subject)
+    student = STUDENT_PROMPT.format(
+        subject=subject or NO_SUBJECT,
+        subject_context=(
+            learning_profile_service.subject_prompt_context(subject) if subject else NO_SUBJECT_CONTEXT
+        ),
+        grade=grade_for_prompt(asker.grade, language),
+        language=language,
+        language_name=language_name(language),
+    )
+    student += answer_style_rule(asker.answer_style)
+    # Memory text derives from topic labels the model extracted out of student
+    # questions, so it is untrusted and must be scrubbed before it can reach the
+    # system prompt — otherwise a crafted question becomes stored injection.
+    memory = asker.memory_context
+    if memory and memory.strip():
+        safe_memory = sanitise_input(memory, correlation_id=correlation_id)[:800]
+        if safe_memory:
+            student += _MEMORY_CONTEXT_BLOCK.format(memory_context=safe_memory)
+    student = student.rstrip() + _LAST_INSTRUCTION.format(language_name=language_name(language))
+    return shared, student
 
 
 def _step_reporter(on_step: Callable[[int, str], None]) -> Callable[[str], None]:

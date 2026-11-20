@@ -11,6 +11,8 @@ the rules measured against production Bedrock (#430, 2026-11-15):
   `strict`: any other field, such as `eager_input_streaming`, is a
   `ValidationException` reading `tools.<n>.custom.<field>: Extra inputs are
   not permitted`. InvokeModel takes `eager_input_streaming` as well.
+- `system` is a string or a list of text blocks; a block's `cache_control` is
+  `{"type": "ephemeral"}`, and a body has at most four of them (#442).
 
 A body the rules refuse raises `ProviderError` as Bedrock would. Otherwise each
 sent body takes the next of `outcomes`:
@@ -24,6 +26,11 @@ sent body takes the next of `outcomes`:
 With none left, `respond(body)` answers when given, else `answer`. A `gate`,
 when set, holds every reply until it opens; `pieces` is how many
 `input_json_delta` pieces the tool input is cut into.
+
+`cached_tokens`, when set, makes the fake a prompt cache (#442): the tools and
+the system blocks up to the last cache point are the prefix, and a reply whose
+prefix was sent before reads that many tokens from the cache, one whose
+prefix is new writes them. Either way, the reply reads `input_tokens` more.
 """
 
 from __future__ import annotations
@@ -41,6 +48,9 @@ SENT_TOOL_FIELDS = COUNTED_TOOL_FIELDS | {"eager_input_streaming"}
 
 INPUT_TOKENS = 90
 OUTPUT_TOKENS = 30
+
+# Bedrock takes at most this many cache points in one body.
+MAX_CACHE_POINTS = 4
 
 
 @dataclass(frozen=True)
@@ -85,6 +95,27 @@ def check_body(body: Mapping[str, Any], *, counted: bool, request_id: str = "fak
             raise _refused("anthropic_version: Field required", request_id)
         if type(body.get("max_tokens")) is not int or body["max_tokens"] < 1:
             raise _refused("max_tokens: Field required", request_id)
+    system = body.get("system", "")
+    if not isinstance(system, (str, list)):
+        raise _refused("system: Input should be a valid list", request_id)
+    cache_points = 0
+    for index, block in enumerate(system if isinstance(system, list) else []):
+        if (
+            not isinstance(block, Mapping)
+            or block.get("type") != "text"
+            or not isinstance(block.get("text"), str)
+            or not block["text"].strip()
+        ):
+            raise _refused(f"system.{index}: text content blocks must be non-empty", request_id)
+        if "cache_control" in block:
+            if block["cache_control"] != {"type": "ephemeral"}:
+                raise _refused(f"system.{index}.cache_control: Input tag invalid", request_id)
+            cache_points += 1
+    if cache_points > MAX_CACHE_POINTS:
+        raise _refused(
+            f"A maximum of {MAX_CACHE_POINTS} blocks with cache_control may be provided",
+            request_id,
+        )
     tools = body.get("tools", [])
     if not isinstance(tools, list):
         raise _refused("tools: Input should be a valid list", request_id)
@@ -128,6 +159,8 @@ class FakeAdapter:
         self.gate: threading.Event | None = None
         self.pieces = 2
         self.input_tokens = INPUT_TOKENS
+        self.cached_tokens = 0
+        self._cached_prefixes: set[str] = set()
 
     # ── What a test reads back ───────────────────────────────────────────────
 
@@ -142,7 +175,12 @@ class FakeAdapter:
         return len(self.counted_bodies)
 
     def system(self, index: int = -1) -> str:
-        return self.requests[index]["system"]
+        """The whole system prompt of a sent body, its blocks put back together."""
+        return system_text(self.requests[index])
+
+    def cached_system(self, index: int = -1) -> str:
+        """The part of a sent body's system prompt up to its last cache point."""
+        return "".join(block["text"] for block in _cached_blocks(self.requests[index]))
 
     def student_turn(self, index: int = -1) -> str:
         """The text of the latest turn of a sent body, images left out."""
@@ -184,10 +222,28 @@ class FakeAdapter:
         reply = outcome if isinstance(outcome, Reply) else (
             Reply(text=outcome.text) if isinstance(outcome, Prose) else Reply(input=outcome)
         )
+        # A `Reply` says its own usage; any other outcome is given the cache's.
+        if self.cached_tokens and not isinstance(outcome, Reply):
+            reply = Reply(
+                input=reply.input,
+                text=reply.text,
+                stop_reason=reply.stop_reason,
+                usage={**reply.usage, **self._cache_usage(request)},
+            )
         return Stream(
             request_id=f"req-{number}",
             events=self._events(reply, request, model_id=model_id, number=number),
         )
+
+    def _cache_usage(self, request: dict[str, Any]) -> dict[str, int]:
+        blocks = _cached_blocks(request)
+        if not blocks:
+            return {}
+        prefix = json.dumps([request.get("tools"), blocks], sort_keys=True)
+        if prefix in self._cached_prefixes:
+            return {"cache_read_input_tokens": self.cached_tokens}
+        self._cached_prefixes.add(prefix)
+        return {"cache_creation_input_tokens": self.cached_tokens}
 
     def _next(self, request: dict[str, Any]) -> Any:
         if self.outcomes:
@@ -200,8 +256,9 @@ class FakeAdapter:
         self, reply: Reply, request: dict[str, Any], *, model_id: str, number: int
     ) -> Iterator[Mapping[str, Any]]:
         usage = dict(reply.usage)
-        start_usage = {key: value for key, value in usage.items() if key == "input_tokens"}
-        end_usage = {key: value for key, value in usage.items() if key != "input_tokens"}
+        # As Bedrock streams it: every input count when the message starts.
+        start_usage = {key: value for key, value in usage.items() if key in _START_USAGE}
+        end_usage = {key: value for key, value in usage.items() if key not in _START_USAGE}
         yield {
             "type": "message_start",
             "message": {"id": f"msg_{number}", "model": model_id, "usage": start_usage},
@@ -230,6 +287,28 @@ class FakeAdapter:
                "usage": end_usage}
 
 
+_START_USAGE = frozenset(
+    {"input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"}
+)
+
+
+def system_text(body: Mapping[str, Any]) -> str:
+    """The whole system prompt of a body, as one string."""
+    system = body.get("system", "")
+    if isinstance(system, str):
+        return system
+    return "".join(block.get("text", "") for block in system)
+
+
+def _cached_blocks(body: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """The system blocks up to and including the last one with a cache point."""
+    system = body.get("system")
+    if not isinstance(system, list):
+        return []
+    points = [index for index, block in enumerate(system) if "cache_control" in block]
+    return list(system[: points[-1] + 1]) if points else []
+
+
 __all__ = [
     "COUNTED_TOOL_FIELDS",
     "FakeAdapter",
@@ -238,4 +317,5 @@ __all__ = [
     "SENT_TOOL_FIELDS",
     "Unsent",
     "check_body",
+    "system_text",
 ]
