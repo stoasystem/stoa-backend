@@ -71,15 +71,9 @@ _SETTLE_MIN_REMAINING_SECONDS = 10.0
 
 @dataclass(frozen=True, slots=True)
 class SweepSummary:
-    # This run's slice reached the end of the table: a pass over the whole
-    # table is complete, and the next run starts again from the top. On a table
-    # longer than one run's pages it is False on the runs in between (#496).
-    scanned_to_end: bool = True
-    # How long the pass this run belongs to has been going. A pass that takes
-    # longer than `_SWEEP_MAX_AGE` can reach a lost question too late to answer.
-    cycle_age_seconds: int = 0
-    # Another run had claimed this slice first; this run left it to that one.
-    overlapped: bool = False
+    # This run read every command due. False when it stopped at the index's
+    # page limit; what it left is due still, and the next run reads it (#502).
+    read_all: bool = True
     candidates: int = 0
     completed: int = 0
     failed: int = 0
@@ -110,49 +104,12 @@ def sweep(
     is settled once nothing else will.
     """
     now = datetime.now(UTC)
-    # One run reads a bounded slice of the table and carries on from where the
-    # last run stopped; without this every run read the same first slice, and
-    # a command further down was never reached (#496).
-    place = _store.get_generation_sweep_place()
-    commands, next_cursor = _store.scan_generation_sweep_commands(start=place.cursor)
-    scanned_to_end = next_cursor is None
-    cycle_started_at = place.cycle_started_at or now.isoformat()
-    cycle_age = _cycle_age_seconds(cycle_started_at, now)
-    passed_over = place.attempts >= _store.SLICE_ATTEMPT_LIMIT
-    # The slice is claimed before any command is acted on, so a run that dies
-    # leaves its attempt counted. After `SLICE_ATTEMPT_LIMIT` such runs the
-    # place moves past the slice first: dying again cannot hold it there.
-    claimed = _store.store_generation_sweep_place(
-        expected_version=place.version,
-        cursor=next_cursor if passed_over else place.cursor,
-        cycle_started_at=None if passed_over and scanned_to_end else cycle_started_at,
-        attempts=0 if passed_over else place.attempts + 1,
-        updated_at=now.isoformat(),
-    )
-    if not claimed:
-        # Another run claimed this place since it was read, and is acting on
-        # the same slice; its claim decides where the next run starts.
-        summary = SweepSummary(
-            scanned_to_end=scanned_to_end, cycle_age_seconds=cycle_age, overlapped=True
-        )
-        logger.info(
-            "conversation_generation_sweep_summary %s",
-            " ".join(f"{name}={value}" for name, value in asdict(summary).items()),
-        )
-        return summary
-    claimed_version = (place.version or 0) + 1
-    if passed_over:
+    # The commands due now, from the sweep's own index: what a run reads
+    # follows how many commands are waiting, not how large the table is (#502).
+    commands, read_all = _store.query_generation_sweep_commands(now=now)
+    if not read_all:
         logger.warning(
-            "conversation_generation_sweep_slice_passed_over version=%s attempts=%s",
-            claimed_version,
-            place.attempts,
-        )
-    if not scanned_to_end and cycle_age > _SWEEP_MAX_AGE.total_seconds():
-        # Stopping at the page limit is how a long table is read now; it is a
-        # problem only once a pass takes longer than a lost question is still
-        # answered, which is what this says.
-        logger.warning(
-            "conversation_generation_sweep_page_limit cycle_age_seconds=%s", cycle_age
+            "conversation_generation_sweep_page_limit commands=%s", len(commands)
         )
     waiting = [command for command in commands if _waiting_too_long(command, now)]
     candidates = sorted(
@@ -210,16 +167,8 @@ def sweep(
             logger.exception("conversation_generation_settlement_failed")
             outcome = "errored"
         outcomes[outcome] += 1
-    if not passed_over:
-        _move_on(
-            claimed_version,
-            next_cursor,
-            cycle_started_at,
-            unfinished=outcomes["deferred"] > 0 or outcomes["errored"] > 0,
-        )
     summary = SweepSummary(
-        scanned_to_end=scanned_to_end,
-        cycle_age_seconds=cycle_age,
+        read_all=read_all,
         candidates=len(candidates),
         **outcomes,
     )
@@ -228,44 +177,6 @@ def sweep(
         " ".join(f"{name}={value}" for name, value in asdict(summary).items()),
     )
     return summary
-
-
-def _move_on(
-    claimed_version: int,
-    next_cursor: dict[str, str] | None,
-    cycle_started_at: str,
-    *,
-    unfinished: bool,
-) -> None:
-    """Store where the next run starts, once this run has dealt with its slice.
-
-    A slice left unfinished - a command deferred for lack of time, or one that
-    broke - keeps the place, so the next run reads it again in five minutes
-    rather than a whole pass later; the claim already counted this run, so it
-    is read at most `SLICE_ATTEMPT_LIMIT` times. Reaching the end of the table
-    starts the next pass from the top. A write refused because an overlapping
-    run stored a place first is fine: that run's place stands.
-    """
-    if unfinished:
-        logger.info("conversation_generation_sweep_slice_held version=%s", claimed_version)
-        return
-    stored = _store.store_generation_sweep_place(
-        expected_version=claimed_version,
-        cursor=next_cursor,
-        cycle_started_at=None if next_cursor is None else cycle_started_at,
-        attempts=0,
-        updated_at=datetime.now(UTC).isoformat(),
-    )
-    if stored and next_cursor is None:
-        logger.info(
-            "conversation_generation_sweep_cycle_completed duration_seconds=%s",
-            _cycle_age_seconds(cycle_started_at, datetime.now(UTC)),
-        )
-
-
-def _cycle_age_seconds(started_at: str, now: datetime) -> int:
-    started = _aware_time(started_at)
-    return max(0, int((now - started).total_seconds())) if started is not None else 0
 
 
 def settle_reservation(command: dict[str, Any]) -> str:

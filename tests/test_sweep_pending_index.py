@@ -70,11 +70,52 @@ def _indexed(table) -> dict[tuple[str, str], dict[str, Any]]:
             return rows
 
 
+# The filter the sweep scanned the whole table with before it read the index
+# (#500), kept here as the definition of what the sweep acts on: the index has
+# to hold exactly the commands it admits.
+SCAN_FILTER = {
+    "FilterExpression": (
+        "entity_type=:entity AND (#status IN (:committed, :running) OR "
+        "(((#status=:failed AND failure_category IN (:needs_reconciliation, "
+        ":deadline_exceeded)) OR #status=:terminal) AND "
+        "attribute_not_exists(allowance_settled_at)))"
+    ),
+    "ExpressionAttributeNames": {"#status": "status"},
+    "ExpressionAttributeValues": {
+        ":entity": "message_command",
+        ":committed": "message_committed",
+        ":running": "ai_running",
+        ":failed": "failed",
+        ":terminal": "terminal_failed",
+        ":needs_reconciliation": "needs_reconciliation",
+        ":deadline_exceeded": "deadline_exceeded",
+    },
+}
+
+
 def _admitted(table) -> set[tuple[str, str]]:
-    """What the sweep's scan filter admits, over the whole table."""
-    commands, last_key = _store.scan_generation_sweep_commands(table=table, max_pages=10_000)
-    assert last_key is None
-    return {(str(command["PK"]), str(command["SK"])) for command in commands}
+    """What the old scan filter admits, over the whole table."""
+    admitted: set[tuple[str, str]] = set()
+    start: dict[str, Any] | None = None
+    while True:
+        request = dict(SCAN_FILTER)
+        if start is not None:
+            request["ExclusiveStartKey"] = start
+        page = table.scan(**request)
+        admitted.update((str(item["PK"]), str(item["SK"])) for item in page["Items"])
+        start = page.get("LastEvaluatedKey")
+        if not start:
+            return admitted
+
+
+def test_the_reference_filter_is_the_one_the_sweep_settles_by() -> None:
+    """Its failure categories are the store's, so the reference cannot drift."""
+    values = SCAN_FILTER["ExpressionAttributeValues"]
+    assert {
+        values[":needs_reconciliation"],
+        values[":deadline_exceeded"],
+    } == set(_store.UNSETTLED_RESERVATION_FAILURES) == set(_store.SETTLE_AFTER)
+    assert set(_store.SETTLEMENT_ENDED_AT) == {values[":failed"], values[":terminal"]}
 
 
 def _generation(table) -> int:

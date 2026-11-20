@@ -1353,126 +1353,6 @@ def record_provider_result(
     )
 
 
-# Pages one sweep run may read. The filtered scan reads the whole table, and
-# the published curriculum made it longer than this (#496): a run stops here
-# and stores its place, and the next run carries on from it, so successive runs
-# cover the table and one run's reads stay the same however large it grows.
-# A sparse index on waiting commands would replace the scan.
-GENERATION_SWEEP_MAX_PAGES = 50
-
-# Where the sweep stopped, as the deletion sweep keeps its own (#7). The version
-# rises on every write, so a run that read an older place cannot overwrite a
-# newer one. `attempts` counts runs that claimed the slice at `cursor` without
-# finishing it: a run that dies leaves its claim behind, and once
-# `SLICE_ATTEMPT_LIMIT` runs have, the next one moves the place past the slice
-# before acting on it, so no slice holds the sweep for ever.
-GENERATION_SWEEP_PLACE_KEY = {"PK": "JOB#conversation_generation", "SK": "SCAN_CURSOR"}
-SLICE_ATTEMPT_LIMIT = 3
-
-
-@dataclass(frozen=True, slots=True)
-class GenerationSweepPlace:
-    cursor: dict[str, str] | None
-    # None when no row is stored yet, which the next write tells apart from a
-    # stored row at version 0.
-    version: int | None
-    cycle_started_at: str | None
-    attempts: int = 0
-
-
-def _sweep_cursor(value: object) -> dict[str, str] | None:
-    """A stored place that is a base-table key, or None for the top of the table."""
-    if (
-        isinstance(value, Mapping)
-        and set(value) == {"PK", "SK"}
-        and all(isinstance(value[field], str) and value[field] for field in ("PK", "SK"))
-    ):
-        return {"PK": str(value["PK"]), "SK": str(value["SK"])}
-    return None
-
-
-def _whole_number(value: object) -> int | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    if isinstance(value, Decimal) and value == value.to_integral_value():
-        return int(value)
-    return None
-
-
-def get_generation_sweep_place(*, table: object | None = None) -> GenerationSweepPlace:
-    """The stored place, or the top of the table when there is none.
-
-    A cursor that is not a key reads as the top of the table: a cycle started
-    over costs one more pass, while refusing would stop the sweep. A version
-    that is not a whole number is refused, since the next write is conditional
-    on it.
-    """
-    try:
-        item = db_table.get(
-            table=table or db_table.table(),
-            Key=dict(GENERATION_SWEEP_PLACE_KEY),
-            ConsistentRead=True,
-        )
-    except db_table.TableUnavailable:
-        raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from None
-    if not isinstance(item, Mapping):
-        return GenerationSweepPlace(cursor=None, version=None, cycle_started_at=None)
-    version = _whole_number(item.get("version"))
-    if version is None or version < 0:
-        raise attachment_repo.AttachmentRepositoryConflict("dependency_failure")
-    attempts = _whole_number(item.get("attempts"))
-    started = item.get("cycle_started_at")
-    return GenerationSweepPlace(
-        cursor=_sweep_cursor(item.get("cursor")),
-        version=version,
-        cycle_started_at=started if isinstance(started, str) and started else None,
-        attempts=attempts if attempts is not None and attempts > 0 else 0,
-    )
-
-
-def store_generation_sweep_place(
-    *,
-    expected_version: int | None,
-    cursor: Mapping[str, str] | None,
-    cycle_started_at: str | None,
-    attempts: int,
-    updated_at: str,
-    table: object | None = None,
-) -> bool:
-    """Store the sweep's place if nobody has moved it since it was read.
-
-    `expected_version` is None when the read found no row. False means another
-    run stored a place first; its place stands.
-    """
-    item: dict[str, object] = {
-        **GENERATION_SWEEP_PLACE_KEY,
-        "entity_type": "conversation_generation_sweep_cursor",
-        "version": (expected_version or 0) + 1,
-        "attempts": attempts,
-        "updated_at": updated_at,
-    }
-    if cursor is not None:
-        item["cursor"] = dict(cursor)
-    if cycle_started_at is not None:
-        item["cycle_started_at"] = cycle_started_at
-    request: dict[str, Any] = {"Item": item}
-    if expected_version is None:
-        request["ConditionExpression"] = "attribute_not_exists(PK)"
-    else:
-        request["ConditionExpression"] = "#version = :expected"
-        request["ExpressionAttributeNames"] = {"#version": "version"}
-        request["ExpressionAttributeValues"] = {":expected": expected_version}
-    try:
-        db_table.put(table=table or db_table.table(), **request)
-    except db_table.WriteRefused:
-        return False
-    except db_table.TableUnavailable:
-        raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from None
-    return True
-
-
 # Failures that may leave an allowance reservation nothing else settles: a
 # model call whose answer was lost, and a reservation kept at admission when no
 # time was left to call (E10). The sweep settles them (E24).
@@ -1485,57 +1365,54 @@ UNSETTLED_RESERVATION_FAILURES = ("needs_reconciliation", "deadline_exceeded")
 SETTLEMENT_ENDED_AT = {"failed": "failed_at", "terminal_failed": "terminal_at"}
 
 
-def scan_generation_sweep_commands(
+# Pages of the index one sweep run may read. The index holds only commands the
+# sweep may act on, and a command row expires two days after it was asked, so
+# one page is normally all of it. The bound keeps a run's reads fixed should
+# something ever leave many commands there; the run says when it stopped short.
+GENERATION_SWEEP_MAX_PAGES = 10
+
+# A continuation key of the index: the base table's key and the index's own.
+_SWEEP_INDEX_PAGE_KEY = ("PK", "SK", *SWEEP_INDEX_FIELDS)
+
+
+def query_generation_sweep_commands(
     *,
-    start: Mapping[str, str] | None = None,
+    now: datetime,
     table: object | None = None,
     max_pages: int = GENERATION_SWEEP_MAX_PAGES,
-) -> tuple[list[dict[str, object]], dict[str, str] | None]:
-    """The commands the sweep may act on in one slice, and where the slice ended.
+) -> tuple[list[dict[str, object]], bool]:
+    """The commands due for the sweep at `now`, earliest due first (#502).
 
-    Those still waiting for an answer, and failed ones whose reservation may
-    still need settling, in at most `max_pages` pages from `start` (the top of
-    the table when None). The second value is the key to carry on from, or None
-    when the scan reached the end of the table. Eventually consistent: a
-    command written in the last moment is picked up by a later run, and
-    whatever acts on one does so conditionally anyway.
+    A query of `GSI-SweepPending`, which holds only the commands the sweep may
+    act on, so what a run reads follows how many are waiting, not how large
+    the table is. The second value is False when `max_pages` ran out before
+    the due commands did. Eventually consistent: a command written in the last
+    moment is picked up by a later run, and whatever acts on one does so
+    conditionally anyway, so an entry a write left behind costs a read and
+    nothing else.
     """
-    target = table or db_table.table()
-    if not isinstance(target, attachment_repo._ScanTable):
-        raise attachment_repo.AttachmentRepositoryConflict("dependency_failure")
-    request: dict[str, object] = {
-        "FilterExpression": (
-            "entity_type=:entity AND (#status IN (:committed, :running) OR "
-            "(((#status=:failed AND failure_category IN (:needs_reconciliation, "
-            ":deadline_exceeded)) OR #status=:terminal) AND "
-            "attribute_not_exists(allowance_settled_at)))"
-        ),
-        "ExpressionAttributeNames": {"#status": "status"},
-        "ExpressionAttributeValues": {
-            ":entity": "message_command",
-            ":committed": "message_committed",
-            ":running": "ai_running",
-            ":failed": "failed",
-            ":terminal": "terminal_failed",
-            **{f":{category}": category for category in UNSETTLED_RESERVATION_FAILURES},
-        },
-    }
     commands: list[dict[str, object]] = []
-    last_key: dict[str, str] | None = None
     try:
-        pages = db_table.pages("scan", start=start, table=target, **request)
+        pages = db_table.pages(
+            "query",
+            table=table or db_table.table(),
+            key=_SWEEP_INDEX_PAGE_KEY,
+            IndexName=SWEEP_PENDING_INDEX,
+            KeyConditionExpression="sweep_bucket=:bucket AND sweep_due_at<=:now",
+            ExpressionAttributeValues={
+                ":bucket": SWEEP_PENDING_BUCKET,
+                ":now": sweep_due_at(now),
+            },
+        )
         for page in islice(pages, max_pages):
             commands.extend(page.items)
             if page.last_key is None:
-                return commands, None
-            last_key = _sweep_cursor(page.last_key)
-            if last_key is None:
-                raise attachment_repo.AttachmentRepositoryConflict("dependency_failure")
+                return commands, True
     except db_table.TableUnavailable as exc:
         if exc.code.startswith("malformed"):
             raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from None
         raise
-    return commands, last_key
+    return commands, False
 
 
 def _unsettled_end_update(
