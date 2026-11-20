@@ -31,6 +31,11 @@ The result is one of three, closed:
 - `NotSent`: nothing usable was paid for, and whether the same call may be
   tried again.
 
+Who pays follows from the admission hook (`CostClass`): a call made with
+one is charged to the allowance the hook reserved from, one made without is
+the provider's cost to STOA alone (the weekly report). The usage of every
+paid reply carries it.
+
 The call does not know what the tool's input means: whether an answer is good
 is the caller's to judge. Failure categories are the strings the rest of the
 service already stores (`provider_token_count_unavailable`,
@@ -47,6 +52,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import StrEnum
 import hashlib
 import logging
 import time
@@ -85,6 +91,19 @@ CACHE_POINT = {"type": "ephemeral"}
 
 
 # ── What the caller hands over ────────────────────────────────────────────────
+
+
+class CostClass(StrEnum):
+    """Who pays for a call, as its admission hook says: there is one, or there is none."""
+
+    # Admitted by the hook, so charged to the allowance it reserved from.
+    USER_ALLOWANCE = "user_allowance"
+    # No hook: STOA pays the provider and no one's allowance is touched.
+    PROVIDER_COST_ONLY = "provider_cost_only"
+
+    @classmethod
+    def of(cls, admission: AdmissionHook | None) -> CostClass:
+        return cls.PROVIDER_COST_ONLY if admission is None else cls.USER_ALLOWANCE
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +163,7 @@ class Usage:
     model: str
     inference_profile_id: str
     observed_at: datetime
+    cost_class: CostClass
     cache_write_input_tokens: int = 0
     cache_read_input_tokens: int = 0
 
@@ -295,7 +315,7 @@ def call(
     connection = _adapter().connect(deadline - clock())
     if admission is not None:
         try:
-            input_tokens = connection.count_tokens(model_id, _count_body(body))
+            input_tokens = connection.count(model_id, _count_body(body))
         except Exception as error:
             _record_provider_error("count", error, correlation_id)
             return NotSent(TOKEN_COUNT_UNAVAILABLE, retryable=True)
@@ -322,6 +342,7 @@ def call(
         request_id=stream.request_id,
         tool_name=tool.name,
         inference_profile_id=model_id,
+        cost_class=CostClass.of(admission),
         deadline=deadline,
         clock=clock,
         on_partial=on_partial,
@@ -386,6 +407,7 @@ def _read(
     request_id: str,
     tool_name: str,
     inference_profile_id: str,
+    cost_class: CostClass,
     deadline: float,
     clock: Callable[[], float],
     on_partial: Callable[[str], None] | None,
@@ -462,6 +484,7 @@ def _read(
         model=model,
         request_id=request_id,
         inference_profile_id=inference_profile_id,
+        cost_class=cost_class,
     )
     if paid is None:
         return NotSent(MALFORMED_PROVIDER_USAGE, retryable=True)
@@ -485,6 +508,7 @@ def _usage(
     model: object,
     request_id: str,
     inference_profile_id: str,
+    cost_class: CostClass,
 ) -> Usage | None:
     """The exact usage of the reply, or None when the provider's report does not hold together.
 
@@ -518,6 +542,7 @@ def _usage(
         model=model.strip(),
         inference_profile_id=inference_profile_id.strip(),
         observed_at=datetime.now(timezone.utc),
+        cost_class=cost_class,
         cache_write_input_tokens=cache_write,
         cache_read_input_tokens=cache_read,
     )
@@ -565,6 +590,7 @@ __all__ = [
     "Admit",
     "AdmissionHook",
     "Answered",
+    "CostClass",
     "NotInstalled",
     "NotSent",
     "PaidUnusable",

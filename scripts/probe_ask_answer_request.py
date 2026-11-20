@@ -87,7 +87,7 @@ class _Recorder:
     def connect(self, remaining_seconds: float) -> _Recorder:
         return self
 
-    def count_tokens(self, model_id: str, body: Mapping[str, Any]) -> int:
+    def count(self, model_id: str, body: Mapping[str, Any]) -> int:
         self.counted = dict(body)
         return 1
 
@@ -150,7 +150,7 @@ def probe(adapter: Adapter, *, model_id: str, invoke: bool) -> list[str]:
     lines = [f"INFO tool {tool['name']} with {', '.join(properties)}"]
     connection = adapter.connect(_PROBE_SECONDS)
     try:
-        tokens = connection.count_tokens(model_id, counted)
+        tokens = connection.count(model_id, counted)
     except Exception as error:
         lines.append(f"FAIL count: {_refusal(error)}")
     else:

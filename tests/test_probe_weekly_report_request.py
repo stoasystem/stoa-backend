@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import base64
 import json
 
+from botocore.awsrequest import AWSResponse
+
+from fakes.bedrock import Wire, runtime, streaming
 from scripts import probe_weekly_report_request as probe
 from stoa import config
 from stoa.services import model_call, report_service
@@ -31,38 +35,55 @@ def test_the_probed_bodies_are_the_ones_the_report_sends_and_would_count() -> No
 
 
 def test_the_probe_streams_through_the_bedrock_adapter_production_uses() -> None:
-    """The invoke is the adapter's InvokeModelWithResponseStream, never a buffered InvokeModel."""
+    """The invoke is the adapter's InvokeModelWithResponseStream, never a buffered InvokeModel.
+
+    On a real botocore client, answered on the wire.
+    """
     from stoa.services.model_call.bedrock import BedrockAdapter
 
-    class Client:
-        def __init__(self) -> None:
-            self.operations: list[str] = []
+    client = runtime()
+    counted: list[bytes] = []
 
-        def count_tokens(self, **kwargs):
-            self.operations.append("count_tokens")
-            return {
-                "inputTokens": 12,
-                "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "c"},
-            }
+    def count(request, **_kwargs):
+        counted.append(request.body)
+        return AWSResponse(
+            request.url,
+            200,
+            {"x-amzn-RequestId": "c", "content-type": "application/json"},
+            Wire(b'{"inputTokens": 12}'),
+        )
 
-        def invoke_model_with_response_stream(self, **kwargs):
-            self.operations.append("invoke_model_with_response_stream")
-            self.body = kwargs["body"]
-            return {"body": [], "ResponseMetadata": {"RequestId": "r"}}
+    def buffered(request, **_kwargs):
+        raise AssertionError("the report never calls the buffered InvokeModel")
 
-        def invoke_model(self, **kwargs):
-            raise AssertionError("the report never calls the buffered InvokeModel")
+    client.meta.events.register("before-send.bedrock-runtime.CountTokens", count)
+    client.meta.events.register("before-send.bedrock-runtime.InvokeModel", buffered)
+    sent: list[bytes] = []
+    streaming(
+        client,
+        [
+            {"type": "message_start", "message": {
+                "id": "msg_1", "model": "claude", "usage": {"input_tokens": 12}}},
+            {"type": "message_delta", "delta": {"stop_reason": "tool_use"},
+             "usage": {"output_tokens": 1}},
+        ],
+        sent,
+    )
 
-    client = Client()
     lines = probe.probe(
         BedrockAdapter(client), model_id="eu.anthropic.claude-sonnet-4-6", invoke=True, exact=True
     )
 
-    assert client.operations == ["count_tokens", "invoke_model_with_response_stream"]
-    _, sent = probe.report_bodies()
-    assert json.loads(client.body) == sent
-    assert lines[0].startswith("PASS count")
-    assert lines[1].startswith("PASS invoke: InvokeModelWithResponseStream took the exact report body")
+    assert len(counted) == 1
+    counted_body, sent_body = probe.report_bodies()
+    counted_on_the_wire = json.loads(counted[0])["input"]["invokeModel"]["body"]
+    assert json.loads(base64.b64decode(counted_on_the_wire)) == counted_body
+    assert [json.loads(body) for body in sent] == [sent_body]
+    assert lines[0] == "PASS count: CountTokens took the report body, input_tokens=12"
+    assert lines[1] == (
+        "PASS invoke: InvokeModelWithResponseStream took the exact report body, "
+        "stop_reason=tool_use"
+    )
 
 
 def test_without_invoke_the_probe_only_counts(capsys) -> None:

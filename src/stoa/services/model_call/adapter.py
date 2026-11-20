@@ -6,7 +6,7 @@ reads the events that come back; the adapter only carries them:
 
 - `connect(remaining_seconds)` opens one connection for one call, its reads
   bounded by the time left before the call's deadline;
-- `Connection.count_tokens(model_id, body)` asks the provider how many input
+- `Connection.count(model_id, body)` asks the provider how many input
   tokens `body` costs;
 - `Connection.stream(model_id, body)` sends `body` and hands back the
   provider's request id and its stream of decoded events.
@@ -59,7 +59,7 @@ class Stream:
 
 
 class Connection(Protocol):
-    def count_tokens(self, model_id: str, body: Mapping[str, Any]) -> int: ...
+    def count(self, model_id: str, body: Mapping[str, Any]) -> int: ...
 
     def stream(self, model_id: str, body: Mapping[str, Any]) -> Stream: ...
 

@@ -203,7 +203,7 @@ class FakeAdapter:
         self.connections.append(remaining_seconds)
         return self
 
-    def count_tokens(self, model_id: str, body: Mapping[str, Any]) -> int:
+    def count(self, model_id: str, body: Mapping[str, Any]) -> int:
         recorded = json.loads(json.dumps(body))
         self.counted_bodies.append(recorded)
         if self.outcomes and isinstance(self.outcomes[0], Unsent):

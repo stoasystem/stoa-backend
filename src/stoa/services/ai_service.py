@@ -2,16 +2,15 @@
 
 The Ask prompt, and the checks the model's reply goes through, are
 `ask_answer`'s (#176, #437); the model is called through `model_call` (#436).
-These are the types the asking and the allowance's admission share with it,
-and the inventory of who calls InvokeModel under which cost class.
+These are the types the asking and the allowance's admission share with it.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Generic, TypeVar
 
 from stoa.models.allowance import ProviderUsageEvidence
+from stoa.services.model_call import CostClass
 
 
 class AIInvocationFailure(Exception):
@@ -39,13 +38,6 @@ class AIInvocationFailure(Exception):
         super().__init__(category)
 
 
-class AIInvocationClass(StrEnum):
-    """Closed cost attribution class for each direct InvokeModel caller."""
-
-    USER_ALLOWANCE = "user_allowance"
-    PROVIDER_COST_ONLY = "provider_cost_only"
-
-
 @dataclass(frozen=True, slots=True)
 class PromptImage:
     """One image the student attached, handed to the model as it is (#135)."""
@@ -67,16 +59,5 @@ class AIProviderResult(Generic[AIContent]):
     inference_profile_id: str
     provider_message_id_digest: str
     stop_reason: str
-    invocation_class: AIInvocationClass
-
-
-def inventory_ai_invocation_classes() -> dict[str, AIInvocationClass]:
-    """Return the exhaustive direct InvokeModel caller inventory."""
-    return {
-        # The Ask answer, through 模型调用 under the allowance's admission (#436).
-        # The weekly report goes through it too, without an admission hook, so
-        # at provider cost only (#438); the hook decides the class per call.
-        "src/stoa/services/model_call/bedrock.py:invoke_model_with_response_stream": (
-            AIInvocationClass.USER_ALLOWANCE
-        ),
-    }
+    # Whether the answer was admitted against an allowance (#439).
+    invocation_class: CostClass

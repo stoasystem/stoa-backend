@@ -59,9 +59,9 @@ class _Provider(FakeModel):
         self.first_event_at = first_event_at
         self.invocations: list[float] = []
 
-    def count_tokens(self, model_id: str, body: Mapping[str, Any]) -> int:
+    def count(self, model_id: str, body: Mapping[str, Any]) -> int:
         self.clock.now = self.count_at
-        return super().count_tokens(model_id, body)
+        return super().count(model_id, body)
 
     def stream(self, model_id: str, body: Mapping[str, Any]) -> Stream:
         self.invocations.append(self.clock.now)
