@@ -251,6 +251,35 @@ def test_a_quoted_step_is_counted_as_the_answer_reads_back_without_the_stray_ste
     assert len(model.calls) == 1
 
 
+
+def test_an_answer_stored_with_a_sentence_cut_in_two_reads_back_as_one_step(
+    table, model
+) -> None:
+    """Stored before #540: a straight quote cut a step inside its quotation, and
+    the rest of the sentence was stored as the next step."""
+    client = _client()
+    _send(client, "key-1", language="de")
+    [stored] = _messages(table, "assistant")
+    sections = stored["structured"]
+    _, *others = sections["steps"]
+    cut = {
+        **sections,
+        "steps": ["Man sagt, sie können gleichzeitig „aufhalten", "; bis man sie misst.", *others],
+        "hints": ["Denk an «Welle", ", nicht an «Teilchen».", *sections["hints"]],
+    }
+    table.seed({**stored, "structured": cut})
+
+    assistant = _assistant(_read_back(client))
+
+    assert assistant["structured"]["steps"] == [
+        "Man sagt, sie können gleichzeitig „aufhalten“; bis man sie misst.",
+        *others,
+    ]
+    assert assistant["structured"]["hints"] == [
+        "Denk an «Welle», nicht an «Teilchen».",
+        *sections["hints"],
+    ]
+
 # ── What the sections say ────────────────────────────────────────────────────
 
 
