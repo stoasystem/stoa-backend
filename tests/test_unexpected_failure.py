@@ -64,8 +64,7 @@ def test_an_unhandled_exception_answers_500_with_the_logged_correlation_id(
     [record] = _failure_records(caplog)
     assert record.levelno == logging.ERROR
     assert record.exc_info is not None and record.exc_info[0] is _Broken
-    assert record.correlation_id == detail["correlationId"]
-    assert detail["correlationId"] in record.getMessage()
+    assert f"correlation_id={detail['correlationId']}" in record.getMessage()
     assert BROKEN_PATH in record.getMessage()
 
 

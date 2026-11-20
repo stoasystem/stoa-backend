@@ -11,7 +11,8 @@ draft-accept 500).
 failure is answered with the standard body, `{"detail": {"code",
 "message", "correlationId"}}` under the code `internal_error`, the header is
 set on the way out, and CORS still wraps the response. The traceback is
-logged at ERROR, once, naming the same correlation id as the body.
+logged at ERROR, once, with the same correlation id as the body written into
+the line itself (Lambda's Text format keeps only the message, #503).
 
 A Starlette handler for bare `Exception` would not do: it runs in
 `ServerErrorMiddleware`, outside every other middleware, after the
@@ -93,7 +94,6 @@ class UnexpectedFailureMiddleware:
                 request.method,
                 route,
                 correlation_id,
-                extra={"correlation_id": correlation_id},
             )
             response = violation_response(
                 RuleViolation(ServerErrorCode.INTERNAL_ERROR),
