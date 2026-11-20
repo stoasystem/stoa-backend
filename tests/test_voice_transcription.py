@@ -380,6 +380,34 @@ def test_a_refused_audio_is_logged_for_the_alarm(
     assert record.provider_request_id == "ValidationException-request"
 
 
+@pytest.mark.parametrize(
+    ("code", "event"),
+    [
+        # What Bedrock answered on the account (2026-11-20): every voice question
+        # would fail this way until someone changes something, so these page.
+        ("ValidationException", "voice_transcription_refused"),
+        ("AccessDeniedException", "voice_transcription_refused"),
+        # These heal on their own; the student is told to try again.
+        ("ThrottlingException", "voice_transcription_failed"),
+        ("ServiceUnavailableException", "voice_transcription_failed"),
+        ("ModelTimeoutException", "voice_transcription_failed"),
+    ],
+)
+def test_only_a_refusal_writes_the_line_the_alarm_counts(
+    table, allowed, caplog: pytest.LogCaptureFixture, code: str, event: str
+) -> None:
+    aws.install({aws.Kind.VOICE_TRANSCRIPTION: FakeConverse(client_error(code))})
+    with caplog.at_level(logging.WARNING, logger="stoa.services.transcription"):
+        _post(recordings.webm(5))
+
+    [record] = [r for r in caplog.records if r.name == "stoa.services.transcription"]
+    assert record.event == event
+    # stoa-infra's metric filter matches this phrase in the formatted line.
+    assert ("voice transcription refused" in record.getMessage()) is (
+        event == "voice_transcription_refused"
+    )
+
+
 def test_nothing_heard_is_its_own_refusal(table, allowed) -> None:
     aws.install({aws.Kind.VOICE_TRANSCRIPTION: FakeConverse("   ")})
     response = _post(recordings.webm(5))

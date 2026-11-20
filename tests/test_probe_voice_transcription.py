@@ -50,7 +50,8 @@ def test_each_recording_is_checked_timed_and_set_next_to_what_was_said(tmp_path:
         "04-too-long.ogg",
     ]
     gsw, fr, wav, too_long = rows
-    assert (gsw.container, gsw.outcome, gsw.heard, gsw.said) == (
+    assert (gsw.language, gsw.container, gsw.outcome, gsw.heard, gsw.said) == (
+        "gsw",
         "webm",
         "transcribed",
         "Wie viel isch drü mal vier?",
@@ -58,7 +59,14 @@ def test_each_recording_is_checked_timed_and_set_next_to_what_was_said(tmp_path:
     )
     assert gsw.seconds == pytest.approx(6, abs=0.6)
     assert gsw.elapsed_ms is not None and gsw.elapsed_ms >= 0
-    assert (fr.container, fr.outcome, fr.said) == ("mp4", "transcribed", "")
+    assert (gsw.sent_as, gsw.word_error) == ("webm", 0)
+    assert (fr.language, fr.container, fr.outcome, fr.said, fr.word_error) == (
+        "fr",
+        "mp4",
+        "transcribed",
+        "",
+        None,
+    )
     # Only the two the endpoint would take reach the model, each sent as the endpoint sends it.
     assert [r["messages"][0]["content"][0]["audio"]["format"] for r in voxtral.requests] == [
         "webm",
@@ -99,6 +107,54 @@ def test_the_report_is_one_markdown_table_row_per_recording(tmp_path: Path) -> N
     header = next(i for i, line in enumerate(lines) if line.startswith("| File"))
     assert lines[header + 1].startswith("|---")
     [row] = lines[header + 2 :]
-    assert row.startswith("| a.webm | webm | 3.")
+    assert row.startswith("| a.webm |  | webm | 3.")
     # A pipe or line break in what was heard cannot break the table.
     assert "x \\| y zwei" in row
+
+
+def test_send_as_wav_converts_only_what_the_endpoint_would_take(tmp_path: Path) -> None:
+    """Voxtral takes only mp3 and wav (#542): the voice is measured on a converted copy."""
+    voxtral = FakeConverse("Wie viel isch drü mal vier?", "Combien font trois fois quatre ?")
+    aws.install({aws.Kind.VOICE_TRANSCRIPTION: voxtral})
+    converted: list[tuple[str, probe.SendAs]] = []
+
+    def convert(path: Path, send_as: probe.SendAs) -> bytes:
+        converted.append((path.name, send_as))
+        return b"RIFF-converted-" + path.name.encode()
+
+    rows = probe.run(_folder(tmp_path), send_as=probe.SendAs.WAV, convert=convert)
+
+    assert converted == [("01-kind-gsw-laerm.webm", "wav"), ("02-fr.m4a", "wav")]
+    assert [r["messages"][0]["content"][0]["audio"] for r in voxtral.requests] == [
+        {"format": "wav", "source": {"bytes": b"RIFF-converted-01-kind-gsw-laerm.webm"}},
+        {"format": "wav", "source": {"bytes": b"RIFF-converted-02-fr.m4a"}},
+    ]
+    gsw, fr, wav, too_long = rows
+    # The row keeps what the endpoint received and says what the model was sent.
+    assert (gsw.container, gsw.sent_as, gsw.outcome) == ("webm", "wav", "transcribed")
+    assert (fr.container, fr.sent_as) == ("mp4", "wav")
+    assert (wav.sent_as, too_long.sent_as) == ("", "")
+
+
+@pytest.mark.parametrize(
+    ("heard", "said", "error"),
+    [
+        ("Wie viel isch drü mal vier?", "wie viel isch drü mal vier", 0.0),
+        ("Wie viel ist drei mal vier?", "Wie viel isch drü mal vier?", 2 / 6),
+        ("How much is three times four?", "Combien font trois fois quatre ?", 6 / 5),
+        ("x² + 3x = 0", "x² + 3x = 0", 0.0),
+        ("anything", "", None),
+    ],
+    ids=["verbatim", "standard-german-for-swiss", "translated", "formula", "nothing-said"],
+)
+def test_word_error_is_how_far_what_was_heard_is_from_what_was_said(
+    heard: str, said: str, error: float | None
+) -> None:
+    assert probe.word_error(heard, said) == (pytest.approx(error) if error is not None else None)
+
+
+def test_the_language_is_read_from_the_file_name() -> None:
+    assert probe.language(Path("01-kind-gsw-laerm.webm")) == "gsw"
+    assert probe.language(Path("fr_maths.m4a")) == "fr"
+    assert probe.language(Path("Kind IT 3.ogg")) == "it"
+    assert probe.language(Path("02-unknown.webm")) == ""
