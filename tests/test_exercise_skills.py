@@ -52,9 +52,15 @@ def _seeded() -> tuple[list[dict], list[dict], list[dict]]:
 
 def test_every_seeded_exercise_carries_at_least_one_skill() -> None:
     _units, _lessons, challenges = _seeded()
+    live = [
+        item for item in challenges
+        if item["challenge_id"] not in seed_practice.RETIRED_CHALLENGES
+    ]
 
+    # 60 seeded, 7 of them retired (the circle and Pythagoras exercises, #106).
     assert len(challenges) == 60
-    without = [item["challenge_id"] for item in challenges if not item.get("skills")]
+    assert len(live) == 53
+    without = [item["challenge_id"] for item in live if not item.get("skills")]
     assert without == []
 
 
