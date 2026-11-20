@@ -759,14 +759,15 @@ class StructuredAnswer(BaseModel):
     # reason for `kind` to be `answer`.
     commonMistakes: list[CommonMistake] = Field(default_factory=list)
 
-    # A text with no letter or digit in it is not shown (#507). New answers
-    # never carry one (`_without_wordless_texts`); these drop it from an
-    # answer stored before, as it is read back. The quote check reads the
+    # A text with no letter or digit in it is not shown (#507), and a
+    # sentence a straight quote cut in two is one text again (#540). New
+    # answers are stored that way (`_without_wordless_texts`); these do the
+    # same to an answer stored before, as it is read back. The quote check reads the
     # answer the same way, so a step is counted as the student sees it.
     @field_validator("steps", "hints", "similarExercises", "quickReplies")
     @classmethod
     def _worded_texts(cls, texts: list[str]) -> list[str]:
-        return [text for text in texts if _has_words(text)]
+        return _worded(texts)
 
     @field_validator("answer")
     @classmethod
@@ -1054,8 +1055,11 @@ def completed_steps(partial_json: str) -> list[str]:
     The array is read from its start, one string after the other. A string
     that is not followed by `,` or `]` ends the reading: the input is broken
     there. Searching on past it could take an inner quote for an opening one
-    and cut a step from the middle of a sentence (#389). A step with no
-    letter or digit in it is not a step (`_has_words`) and is left out.
+    and cut a step from the middle of a sentence (#389). The steps are read
+    as the stored answer reads them (`_worded`): a sentence a straight quote
+    cut in two is one step (#540), and one with no letter or digit in it is
+    left out (#507). A step that stops inside a quotation is held back until
+    the step after it, or the end of the array, is known.
     """
     if '"steps"' not in partial_json:
         return []
@@ -1066,6 +1070,7 @@ def completed_steps(partial_json: str) -> list[str]:
     rest = tail[opening + 1 :]
     position = _WHITESPACE.match(rest).end()
     steps: list[str] = []
+    complete = False
     while position < len(rest) and rest[position] == '"':
         match = _STEP_STRING.match(rest, position)
         if match is None:
@@ -1077,14 +1082,14 @@ def completed_steps(partial_json: str) -> list[str]:
             step = json.loads(match.group(0))
         except json.JSONDecodeError:
             break
-        # Left out as the stored answer leaves it out, so the steps shown
-        # while streaming are numbered as the answer numbers them (#507).
-        if _has_words(step):
-            steps.append(step)
+        steps.append(step)
         if rest[after] == "]":
+            complete = True
             break
         position = _WHITESPACE.match(rest, after + 1).end()
-    return steps
+    # Read as the stored answer reads them, so the steps shown while
+    # streaming are numbered as the answer numbers them (#507, #540).
+    return [step for step in _rejoined(steps, complete=complete) if _has_words(step)]
 
 
 def provider_result(
@@ -1165,19 +1170,95 @@ def _has_words(text: str) -> bool:
     return any(character.isalnum() for character in text)
 
 
+# The quotation marks the prompt asks for, each opening one with the mark
+# that closes it (`SYSTEM_PROMPT`). In German „ is closed by “, which opens a
+# quotation in English, so “ opens one only where no „ is open.
+_CLOSING_QUOTE = {"„": "“", "«": "»", "“": "”"}
+# How the rest of a sentence a straight `"` cut off begins: with punctuation,
+# a space or a small letter, never as a step of its own begins (#540).
+_CONTINUATION_PUNCTUATION = frozenset(",;.:!?)…")
+
+
+def _open_quote(text: str) -> str | None:
+    """The quotation mark `text` opens and never closes, or None."""
+    opened: str | None = None
+    for character in text:
+        if opened is None:
+            if character in _CLOSING_QUOTE:
+                opened = character
+        elif character == _CLOSING_QUOTE[opened]:
+            opened = None
+    return opened
+
+
+def _continues_a_sentence(text: str) -> bool:
+    """Whether `text` reads as the rest of a sentence rather than one of its own."""
+    if not _has_words(text) or text[0].isspace():
+        return True
+    return text[0] in _CONTINUATION_PUNCTUATION or text[0].islower()
+
+
+def _rest_of_sentence(text: str) -> str:
+    """`text` as it follows the closing quotation mark it lost.
+
+    The space it began with is kept (French writes « … » : with one), and a
+    word it began with directly is set off by one. A leftover with no letter
+    or digit keeps only the marks that end a sentence: the `,` of ` , ` was
+    the model's way back into the JSON array, not part of the sentence.
+    """
+    if not _has_words(text):
+        return text.strip().strip(",;:").strip()
+    rest = text.rstrip()
+    if not rest[0].isspace() and rest[0] not in _CONTINUATION_PUNCTUATION:
+        rest = " " + rest
+    return rest
+
+
+def _rejoined(texts: list, *, complete: bool = True) -> list:
+    """`texts` with each sentence a straight `"` cut in two joined again (#540).
+
+    The model opened a quotation with „ (or «, or “) and closed it with a
+    straight `"`, which ends the JSON string: the text stops inside the
+    quotation and the rest of the sentence comes back as the next text. Such a
+    pair is one text again, the quotation closed with its own mark. A leftover
+    with no letter or digit in it (` , `, #507) only closes the quotation.
+
+    With `complete` false the list is still arriving, so a last text that
+    stops inside a quotation is held back until the one after it is known.
+    An entry of another shape is passed through as it is.
+    """
+    joined: list = []
+    for text in texts:
+        previous = joined[-1] if joined else None
+        if isinstance(text, str) and isinstance(previous, str):
+            opened = _open_quote(previous)
+            if opened is not None and _continues_a_sentence(text):
+                joined[-1] = previous.rstrip() + _CLOSING_QUOTE[opened] + _rest_of_sentence(text)
+                continue
+        joined.append(text)
+    if not complete and joined and isinstance(joined[-1], str) and _open_quote(joined[-1]):
+        joined.pop()
+    return joined
+
+
+def _worded(texts: list) -> list:
+    """`texts` rejoined (`_rejoined`) with every text that has no letter or digit left out."""
+    return [text for text in _rejoined(texts) if not isinstance(text, str) or _has_words(text)]
+
+
 def _without_wordless_texts(parsed: dict) -> dict:
     """`parsed` with every text that has no letter or digit in it left out.
 
-    An entry of a text list without one is dropped, and an `answer` without
-    one is left empty; an entry of another shape is left for the later checks.
+    A sentence a straight `"` cut in two is joined again first (`_rejoined`).
+    An entry of a text list without a letter or digit is dropped, and an
+    `answer` without one is left empty; an entry of another shape is left for
+    the later checks.
     """
     cleaned = dict(parsed)
     for key in _TEXT_LISTS:
         value = cleaned.get(key)
         if isinstance(value, list):
-            cleaned[key] = [
-                item for item in value if not isinstance(item, str) or _has_words(item)
-            ]
+            cleaned[key] = _worded(value)
     if not _has_words(cleaned["answer"]):
         cleaned["answer"] = ""
     return cleaned

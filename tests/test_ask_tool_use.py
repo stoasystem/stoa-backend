@@ -297,7 +297,8 @@ def test_an_unfinished_tool_input_fails_without_steps_and_names_no_upload(table,
 # which ends the JSON string: the step stopped before its closing quote, and
 # the leftover ` , ` became a step of its own. The input is valid JSON and
 # satisfies the schema, so it is read; a text with no letter or digit in it is
-# left out, while streaming and in the stored answer alike.
+# left out, while streaming and in the stored answer alike, and the quotation
+# it cut off is closed with its own mark (#540).
 
 CUT_STEPS = [
     "Die Ableitung misst, wie schnell sich eine Funktion ändert.",
@@ -307,7 +308,7 @@ CUT_STEPS = [
     "Ein einfaches Beispiel: $f(x) = x^2$ hat die Ableitung $f'(x) = 2x$.",
     "Bei $x = 3$ wächst $f$ also etwa sechsmal so schnell wie $x$.",
 ]
-WORDED_STEPS = [step for step in CUT_STEPS if step != " , "]
+WORDED_STEPS = [CUT_STEPS[0], CUT_STEPS[1] + "“", *CUT_STEPS[3:]]
 CUT_REPLY: dict[str, Any] = {**QUOTED_REPLY, "steps": CUT_STEPS}
 
 
@@ -333,7 +334,7 @@ def test_the_partial_input_reads_no_step_of_punctuation() -> None:
     text = json.dumps(CUT_REPLY, ensure_ascii=False)
     after_stray = text[: text.index(CUT_STEPS[3]) - 1]
 
-    assert ask_answer.completed_steps(after_stray) == CUT_STEPS[:2]
+    assert ask_answer.completed_steps(after_stray) == WORDED_STEPS[:2]
     assert ask_answer.completed_steps(text) == WORDED_STEPS
 
 
@@ -415,3 +416,114 @@ def test_a_cut_answer_is_stored_and_published_without_the_stray_step(
     generation = _generation(client, "key-1")
     assert generation["steps"] == WORDED_STEPS
     assert "3.  , " not in response.text
+
+
+# ── A sentence a straight quote cut in two (#540) ────────────────────────────
+#
+# Seen in the production smoke on 2026-11-20: the model opened „aufhalten with
+# „ and closed it with a straight ", so the step stopped inside the quotation
+# and the rest of the sentence, `; bis man sie misst.`, came back as a step of
+# its own. It has words in it, so the #507 check kept it. The two are one step
+# again, the quotation closed with its own mark.
+
+SPLIT_STEPS = [
+    "Die Quantenphysik beschreibt, wie sich die allerkleinsten Teilchen verhalten.",
+    "Bei winzigen Teilchen ist das ganz anders – sie können sich an mehreren Orten "
+    "gleichzeitig „aufhalten",
+    "; bis man sie misst.",
+    "Ein bekanntes Beispiel: Licht verhält sich manchmal wie eine Welle.",
+]
+JOINED_STEPS = [
+    SPLIT_STEPS[0],
+    "Bei winzigen Teilchen ist das ganz anders – sie können sich an mehreren Orten "
+    "gleichzeitig „aufhalten“; bis man sie misst.",
+    SPLIT_STEPS[3],
+]
+SPLIT_REPLY: dict[str, Any] = {**QUOTED_REPLY, "steps": SPLIT_STEPS}
+
+
+def test_a_sentence_cut_in_two_by_a_straight_quote_is_one_step_again() -> None:
+    result = _invoke(FakeModel(SPLIT_REPLY))
+
+    assert result.content["steps"] == JOINED_STEPS
+
+
+@pytest.mark.parametrize("pieces", [1, 2, 7, 40, 400])
+def test_a_sentence_cut_in_two_is_streamed_as_one_step(pieces: int) -> None:
+    model = FakeModel(SPLIT_REPLY)
+    model.pieces = pieces
+    reported: list[tuple[int, str]] = []
+
+    _invoke(model, reported=reported)
+
+    # The step that stops inside the quotation is held back until the rest
+    # arrives, so no step is ever shown cut, and the numbering never shifts.
+    assert reported == list(enumerate(JOINED_STEPS))
+
+
+def test_the_partial_input_holds_back_a_step_that_stops_inside_a_quotation() -> None:
+    text = json.dumps(SPLIT_REPLY, ensure_ascii=False)
+    before_rest = text[: text.index(SPLIT_STEPS[2]) - 1]
+    before_next = text[: text.index(SPLIT_STEPS[3]) - 1]
+
+    assert ask_answer.completed_steps(before_rest) == JOINED_STEPS[:1]
+    assert ask_answer.completed_steps(before_next) == JOINED_STEPS[:2]
+    assert ask_answer.completed_steps(text) == JOINED_STEPS
+
+
+def test_a_step_that_ends_inside_a_quotation_at_the_end_is_shown_when_the_array_closes() -> None:
+    steps = ["Erster Schritt.", "Er sagte: „Teile beide Seiten durch 2"]
+    text = json.dumps({**QUOTED_REPLY, "steps": steps}, ensure_ascii=False)
+
+    assert ask_answer.completed_steps(text) == steps
+    assert _invoke(FakeModel({**QUOTED_REPLY, "steps": steps})).content["steps"] == steps
+
+
+@pytest.mark.parametrize(
+    ("cut", "rest", "joined"),
+    [
+        ("Man sagt „aufhalten", ", bis man misst.", "Man sagt „aufhalten“, bis man misst."),
+        ("Man sagt „aufhalten", " bis man misst.", "Man sagt „aufhalten“ bis man misst."),
+        ("Man sagt „aufhalten", "bis man misst.", "Man sagt „aufhalten“ bis man misst."),
+        ("On dit «diviser", " : partager.", "On dit «diviser» : partager."),
+        ("We call it “the slope", ", which is 2.", "We call it “the slope”, which is 2."),
+        ("Die Frage „Wie stark?", " , ", "Die Frage „Wie stark?“"),
+    ],
+)
+def test_the_rest_of_the_sentence_is_joined_after_the_closing_mark(
+    cut: str, rest: str, joined: str
+) -> None:
+    reply = {**QUOTED_REPLY, "steps": ["Los geht's.", cut, rest, "Fertig."]}
+
+    assert _invoke(FakeModel(reply)).content["steps"] == ["Los geht's.", joined, "Fertig."]
+
+
+@pytest.mark.parametrize(
+    "steps",
+    [
+        # Every quotation closed: German, French and English marks.
+        QUOTED_STEPS,
+        ["Im Satz „Wer entscheidet?“ steht das Verb am Ende.", "; ist hier Satzzeichen."],
+        ["We say “slope”.", ", then a new step."],
+        # One left open, but the next text begins as a step of its own.
+        ["Er sagte: „Teile durch 2", "Dann bleibt x = 6."],
+        ["Er sagte: „Teile durch 2", "$x = 6$ ist die Lösung."],
+    ],
+)
+def test_steps_that_were_not_cut_are_left_as_they_are(steps: list[str]) -> None:
+    assert _invoke(FakeModel({**QUOTED_REPLY, "steps": steps})).content["steps"] == steps
+
+
+def test_every_text_list_is_rejoined() -> None:
+    reply = {
+        **QUOTED_REPLY,
+        "hints": ["Denk an „aufhalten", "; das hilft.", "Noch ein Tipp."],
+        "similar_exercises": ["Erkläre «Welle", ", dann «Teilchen»."],
+        "quick_replies": ["Was heisst „Dualismus", "?"],
+    }
+
+    content = _invoke(FakeModel(reply)).content
+
+    assert content["hints"] == ["Denk an „aufhalten“; das hilft.", "Noch ein Tipp."]
+    assert content["similar_exercises"] == ["Erkläre «Welle», dann «Teilchen»."]
+    assert content["quick_replies"] == ["Was heisst „Dualismus“?"]
