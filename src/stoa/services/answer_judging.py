@@ -21,6 +21,12 @@ differences in how a value is *written*, never in what it is:
 A list of values is written with `; `, never with a comma: `3,2` stays the
 decimal 3.2 (stoa-backend#422).
 
+A comma is a decimal comma in German, French and Italian, but English groups
+thousands with it (`1,200`, as the English exercise texts themselves do). So a
+student reading in English whose answer has comma-grouped thousands (`4,000`,
+`12,500.5`) is also judged with those commas taken out; the decimal reading
+still counts too, so nothing judged right before is judged wrong now.
+
 It does not make different values equal. `4/6` is not `2/3`: several exercises ask
 for the reduced fraction, so which equivalent forms count is the author's call,
 written down as `accepted_answers` (a mixed number, a decimal, a value with its
@@ -136,10 +142,31 @@ def accepted_answers(challenge: Mapping[str, Any]) -> list[str]:
     return [item for item in raw if isinstance(item, str) and item.strip()]
 
 
-def judge_challenge(submitted: Any, challenge: Mapping[str, Any]) -> bool:
-    """Judge a submission against one stored challenge row."""
-    return judge(
-        submitted,
-        challenge.get("correct_answer", challenge.get("answer_key", "")),
-        accepted_answers(challenge),
-    )
+# 1,200 / 12,500.5 / -4,000: thousands grouped with commas, every group after the
+# first exactly three digits, not touching another digit, comma or point.
+_COMMA_THOUSANDS = re.compile(r"(?<![\d.,])\d{1,3}(?:,\d{3})+(?:\.\d+)?(?![\d,.])")
+
+
+def _without_comma_thousands(value: object) -> object:
+    """The submission with comma-grouped thousands read as an English reader writes them."""
+    if not isinstance(value, str):
+        return value
+    return _COMMA_THOUSANDS.sub(lambda match: match.group(0).replace(",", ""), value)
+
+
+def judge_challenge(
+    submitted: Any, challenge: Mapping[str, Any], *, locale: str | None = None
+) -> bool:
+    """Judge a submission against one stored challenge row.
+
+    `locale` is the language the student reads the exercise in; in English a
+    comma may also group thousands (see the module docstring).
+    """
+    key = challenge.get("correct_answer", challenge.get("answer_key", ""))
+    alternatives = accepted_answers(challenge)
+    if judge(submitted, key, alternatives):
+        return True
+    if locale == "en":
+        english = _without_comma_thousands(submitted)
+        return english != submitted and judge(english, key, alternatives)
+    return False

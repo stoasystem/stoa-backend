@@ -93,7 +93,7 @@ def judge(challenge: Mapping[str, Any], raw_answer: object, *, locale: str) -> J
         challenge=challenge,
         shown=shown,
         answer=answer,
-        correct=answer_judging.judge_challenge(answer, shown),
+        correct=answer_judging.judge_challenge(answer, shown, locale=locale),
         correct_feedback=correct_feedback,
         incorrect_feedback=incorrect_feedback,
     )

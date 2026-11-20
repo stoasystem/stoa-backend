@@ -298,3 +298,59 @@ def test_the_answer_route_records_a_listed_alternative_as_right(monkeypatch) -> 
         assert response.status_code == 200
 
     assert recorded == [True, True, False]
+
+
+@pytest.mark.parametrize(
+    ("key", "submitted"),
+    [
+        ("4000", "4,000"),
+        ("1200", "1,200"),
+        ("10000", "10,000"),
+        ("1000000", "1,000,000"),
+        ("12500.5", "12,500.5"),
+        ("-4000", "-4,000"),
+        ("4000 m", "4,000 m"),
+        ("x=1200", "x = 1,200"),
+    ],
+)
+def test_english_readers_may_group_thousands_with_commas(key: str, submitted: str) -> None:
+    challenge = {"correct_answer": key}
+    assert answer_judging.judge_challenge(submitted, challenge, locale="en"), submitted
+    # A comma is a decimal comma in the other languages: 4,000 is 4 there.
+    for locale in ("de", "fr", "it", None):
+        assert not answer_judging.judge_challenge(submitted, challenge, locale=locale), (
+            locale,
+            submitted,
+        )
+
+
+@pytest.mark.parametrize(
+    ("key", "submitted"),
+    [
+        ("3.2", "3,2"),  # the decimal reading still counts in English
+        ("4", "4,000"),
+        ("1.5", "1,5"),
+        ("0.125", "0,125"),
+    ],
+)
+def test_the_decimal_comma_still_counts_in_english(key: str, submitted: str) -> None:
+    assert answer_judging.judge_challenge(submitted, {"correct_answer": key}, locale="en")
+
+
+@pytest.mark.parametrize(
+    ("key", "submitted"),
+    [
+        ("1200", "12,00"),  # not groups of three
+        ("1200", "1,2000"),
+        ("4000", "4,00,0"),
+        ("1200", "1,200,5"),
+        ("12000", "12,0000"),
+    ],
+)
+def test_only_well_formed_comma_groups_count_as_thousands(key: str, submitted: str) -> None:
+    assert not answer_judging.judge_challenge(submitted, {"correct_answer": key}, locale="en")
+
+
+def test_the_quiz_entry_point_reads_english_comma_thousands() -> None:
+    assert answer_recording.judge({"correct_answer": "4000"}, "4,000", locale="en").correct
+    assert not answer_recording.judge({"correct_answer": "4000"}, "4,000", locale="de").correct
