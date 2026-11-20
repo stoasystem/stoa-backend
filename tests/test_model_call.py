@@ -657,3 +657,14 @@ def test_the_bedrock_adapter_reads_the_cache_counts_off_the_wire() -> None:
     assert result.usage.cache_read_input_tokens == 1413
     [body] = sent
     assert json.loads(body)["system"][0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_the_body_counted_keeps_the_cache_point() -> None:
+    """CountTokens takes `cache_control` and counts the same with it (measured, #442)."""
+    model = FakeAdapter(answer=INPUT)
+
+    result = _call(model, system_tail="For this student.", admission=lambda *_: model_call.Admit())
+
+    assert isinstance(result, model_call.Answered)
+    [counted] = model.counted_bodies
+    assert counted["system"] == model.requests[0]["system"]

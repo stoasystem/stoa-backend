@@ -13,6 +13,8 @@ the rules measured against production Bedrock (#430, 2026-11-15):
   not permitted`. InvokeModel takes `eager_input_streaming` as well.
 - `system` is a string or a list of text blocks; a block's `cache_control` is
   `{"type": "ephemeral"}`, and a body has at most four of them (#442).
+  CountTokens takes `cache_control` as InvokeModel does, and counts the body
+  the same with it or without it (measured 2026-11-20, #442).
 
 A body the rules refuse raises `ProviderError` as Bedrock would. Otherwise each
 sent body takes the next of `outcomes`:
