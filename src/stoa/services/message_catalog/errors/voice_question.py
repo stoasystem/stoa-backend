@@ -52,4 +52,10 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Ton enregistrement ne peut pas être transformé en texte pour le moment. Réessaie dans un instant.",
         "it": "Al momento la tua registrazione non può essere trasformata in testo. Riprova tra poco.",
     },
+    "error.voice_transcription_refused": {
+        "de": "Fragen per Sprache funktionieren gerade nicht. Schreib deine Frage bitte auf.",
+        "en": "Voice questions are not working at the moment. Please type your question.",
+        "fr": "Les questions vocales ne fonctionnent pas pour le moment. Écris ta question, s'il te plaît.",
+        "it": "Le domande vocali al momento non funzionano. Scrivi la tua domanda, per favore.",
+    },
 }

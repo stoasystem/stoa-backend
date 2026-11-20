@@ -4,7 +4,7 @@ The order is the rule:
 
 1. The parent's switch (`voice_questions.allowed_for_student`): off, or no
    linked parent, and the request is refused before anything else is read.
-2. The recording itself: a container the transcription takes (`voice_audio`),
+2. The recording itself: the one format the transcription takes (`voice_audio`),
    at most `MAX_BYTES`, at most `MAX_SECONDS` long by its own headers.
 3. The day's allowance: one count per transcription, at most
    `voice_transcription_daily_limit` per UTC day. Taken before the model is
@@ -33,13 +33,12 @@ logger = log_facts.get_logger(__name__)
 # A spoken question is meant to take under 30 seconds (#469); a minute leaves a
 # child room to finish a sentence. The client stops recording there.
 MAX_SECONDS: Final = 60
-# A recording stopped at the minute ends on a whole audio frame (20 ms of Opus,
-# 1024 samples of AAC), so it can read a little longer than it was.
+# The client's timer stops the recording a little after the minute.
 _FRAME_SLACK_SECONDS: Final = 0.5
-# Chrome records Opus and Safari AAC at up to 128 kbit/s: a minute is under
-# 1 MB. 2 MiB is twice that, and stays far inside what reaches the function: a
-# binary body comes base64-encoded, 4/3 of its size, inside the 6 MB Lambda
-# request payload (HTTP API's own limit is 10 MB).
+# 16 kHz mono 16-bit WAV (`voice_audio`) is 32,000 bytes a second: a minute and
+# its slack is 1.94 MB with the header, inside 2 MiB. That stays far inside what
+# reaches the function: a binary body comes base64-encoded, 4/3 of its size,
+# inside the 6 MB Lambda request payload (HTTP API's own limit is 10 MB).
 MAX_BYTES: Final = 2 * 1024 * 1024
 
 
@@ -57,6 +56,7 @@ class VoiceQuestionErrorCode(StrEnum):
     VOICE_RECORDING_SILENT = "voice_recording_silent"
     VOICE_TRANSCRIPTION_DAILY_LIMIT = "voice_transcription_daily_limit"
     VOICE_TRANSCRIPTION_UNAVAILABLE = "voice_transcription_unavailable"
+    VOICE_TRANSCRIPTION_REFUSED = "voice_transcription_refused"
 
     @property
     def contract(self) -> RuleContract:
@@ -82,6 +82,11 @@ VOICE_QUESTION_ERROR_REGISTRY: dict[VoiceQuestionErrorCode, RuleContract] = {
     _Code.VOICE_TRANSCRIPTION_UNAVAILABLE: RuleContract(
         503, "retry_later", retryable=True, max_attempts=1, retry_after_seconds=5
     ),
+    # The model turned the request down (`TranscriptionFailed.refused`): every
+    # voice question fails the same way until someone fixes it, and the alarm
+    # has paged (#478). Sending it again cannot help, so nothing invites it; the
+    # client offers typing instead. Nothing was counted.
+    _Code.VOICE_TRANSCRIPTION_REFUSED: RuleContract(502),
 }
 
 register_codes("voice_question", VoiceQuestionErrorCode, VOICE_QUESTION_ERROR_REGISTRY)
@@ -189,9 +194,8 @@ def transcribe(
         text = transcriber().transcribe(audio, recording.container)
     except TranscriptionFailed as exc:
         _give_back(student_id, day, table=table)
-        raise VoiceQuestionViolation(
-            _Code.VOICE_TRANSCRIPTION_UNAVAILABLE, internal_detail=exc.reason
-        ) from None
+        code = _Code.VOICE_TRANSCRIPTION_REFUSED if exc.refused else _Code.VOICE_TRANSCRIPTION_UNAVAILABLE
+        raise VoiceQuestionViolation(code, internal_detail=exc.reason) from None
     if not text:
         raise VoiceQuestionViolation(_Code.VOICE_RECORDING_SILENT)
     return text

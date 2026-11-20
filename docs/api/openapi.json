@@ -34404,56 +34404,32 @@
         "operationId": "transcribe_my_voice_question_students_me_voice_questions_transcriptions_post",
         "requestBody": {
           "content": {
-            "application/ogg": {
+            "audio/vnd.wave": {
               "schema": {
                 "format": "binary",
                 "type": "string"
               }
             },
-            "audio/m4a": {
+            "audio/wav": {
               "schema": {
                 "format": "binary",
                 "type": "string"
               }
             },
-            "audio/mp4": {
+            "audio/wave": {
               "schema": {
                 "format": "binary",
                 "type": "string"
               }
             },
-            "audio/ogg": {
-              "schema": {
-                "format": "binary",
-                "type": "string"
-              }
-            },
-            "audio/webm": {
-              "schema": {
-                "format": "binary",
-                "type": "string"
-              }
-            },
-            "audio/x-m4a": {
-              "schema": {
-                "format": "binary",
-                "type": "string"
-              }
-            },
-            "video/mp4": {
-              "schema": {
-                "format": "binary",
-                "type": "string"
-              }
-            },
-            "video/webm": {
+            "audio/x-wav": {
               "schema": {
                 "format": "binary",
                 "type": "string"
               }
             }
           },
-          "description": "The recording itself, as the browser's MediaRecorder made it: WebM or Ogg (Opus), or MP4 (AAC). At most 2097152 bytes and 60 seconds.",
+          "description": "The recording itself, as a WAV file: plain PCM, 16 kHz, one channel, 16-bit samples (the model takes no WebM, Ogg or MP4). At most 2097152 bytes and 60 seconds.",
           "required": true
         },
         "responses": {

@@ -11,6 +11,11 @@ reads the length from:
   granule positions count 48 kHz samples after the pre-skip.
 - `mp4`: Safari's AAC, either one movie with its durations in `mvhd`/`mdhd`
   or fragmented (`moof`/`traf`/`trun`, durations per sample, header ones 0).
+- `wav`: what the client sends since #542 - RIFF/WAVE, plain PCM, by default
+  16 kHz mono 16-bit, the one layout the transcription takes.
+
+The model takes only the WAV (#542); the other three are what a browser's
+`MediaRecorder` writes, kept to show they are refused.
 """
 
 from __future__ import annotations
@@ -148,3 +153,26 @@ def mp4(
         fragments += _box(b"moof", _box(b"traf", tfhd + tfdt + trun)) + _box(b"mdat", payload)
         done += count
     return ftyp + moov + fragments
+
+
+# ── WAV ──────────────────────────────────────────────────────────────────────
+
+
+def wav(
+    seconds: float,
+    *,
+    rate: int = 16_000,
+    channels: int = 1,
+    bits: int = 16,
+    tag: int = 1,
+    payload: bytes = FILLER,
+    extra_chunk: bytes = b"",
+) -> bytes:
+    """A WAV of `seconds`, its samples `payload` repeated (and cut) to fill the data chunk."""
+    block = channels * bits // 8
+    size = round(seconds * rate) * block
+    data = (payload * (size // max(len(payload), 1) + 1))[:size]
+    fmt = struct.pack("<HHIIHH", tag, channels, rate, rate * block, block, bits)
+    chunks = b"fmt " + struct.pack("<I", len(fmt)) + fmt + extra_chunk
+    chunks += b"data" + struct.pack("<I", len(data)) + data
+    return b"RIFF" + struct.pack("<I", 4 + len(chunks)) + b"WAVE" + chunks

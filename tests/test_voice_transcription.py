@@ -2,8 +2,9 @@
 
 `POST /students/me/voice-questions/transcriptions` takes the recording as the
 body. Refused without the model being asked while the parent's switch is off or
-no parent is linked, for a recording that is not WebM/Ogg (Opus) or MP4 (AAC),
-over 2 MiB or over 60 seconds, and past the day's allowance. What Voxtral is
+no parent is linked, for a recording that is not 16 kHz mono 16-bit PCM WAV
+(the only format Voxtral takes of what a client can send, #542), over 2 MiB or
+over 60 seconds, and past the day's allowance. What Voxtral is
 sent is the recording and the transcription prompt, nothing more (ADR-010); the
 recording is found in no table row, no table request, no log line and no
 response besides the transcription.
@@ -114,7 +115,7 @@ def _client(user_id: str = STUDENT, role: CanonicalRole = CanonicalRole.STUDENT)
     return TestClient(app)
 
 
-def _post(audio: bytes, content_type: str = "audio/webm;codecs=opus", **kwargs: Any):
+def _post(audio: bytes, content_type: str = "audio/wav", **kwargs: Any):
     return _client(**kwargs).post(PATH, content=audio, headers={"Content-Type": content_type})
 
 
@@ -130,7 +131,7 @@ def _count() -> int:
 
 
 def test_switch_never_set_is_refused_without_asking_the_model(table, voxtral) -> None:
-    response = _post(recordings.webm(5))
+    response = _post(recordings.wav(5))
 
     assert response.status_code == 403
     assert _code(response) == "voice_questions_not_allowed"
@@ -152,7 +153,7 @@ def test_switch_on_without_a_linked_parent_is_refused_without_asking_the_model(
         }
     )
 
-    response = _post(recordings.webm(5))
+    response = _post(recordings.wav(5))
 
     assert response.status_code == 403
     assert _code(response) == "voice_questions_not_allowed"
@@ -168,7 +169,7 @@ def test_switch_is_checked_before_the_recording_is_read(table, voxtral) -> None:
 
 
 def test_only_a_student_account_may_transcribe(table, voxtral, allowed) -> None:
-    response = _post(recordings.webm(5), user_id="parent-1", role=CanonicalRole.PARENT)
+    response = _post(recordings.wav(5), user_id="parent-1", role=CanonicalRole.PARENT)
 
     assert response.status_code == 403
     assert voxtral.requests == []
@@ -178,70 +179,85 @@ def test_only_a_student_account_may_transcribe(table, voxtral, allowed) -> None:
 
 
 @pytest.mark.parametrize(
-    ("audio", "content_type", "sent_as"),
-    [
-        (recordings.webm(12), "audio/webm;codecs=opus", "webm"),
-        (recordings.ogg(12), "audio/ogg;codecs=opus", "ogg"),
-        (recordings.mp4(12), "audio/mp4", "mp4"),
-        (recordings.mp4(12, fragmented=True), "audio/mp4;codecs=mp4a.40.2", "mp4"),
-    ],
-    ids=["chrome-webm", "firefox-ogg", "safari-mp4", "fragmented-mp4"],
+    "content_type", ["audio/wav", "audio/wave", "audio/x-wav", "audio/vnd.wave", "audio/WAV; codecs=1"]
 )
-def test_a_browser_recording_is_transcribed(
-    table, voxtral, allowed, audio: bytes, content_type: str, sent_as: str
+def test_a_wav_recording_is_transcribed_and_sent_as_wav(
+    table, voxtral, allowed, content_type: str
 ) -> None:
+    audio = recordings.wav(12)
     response = _post(audio, content_type)
 
     assert response.status_code == 200, response.text
     assert response.json() == {"text": "Wie rechne ich 3 mal 4?"}
     [request] = voxtral.requests
     block = request["messages"][0]["content"][0]["audio"]
-    assert block == {"format": sent_as, "source": {"bytes": audio}}
+    assert block == {"format": "wav", "source": {"bytes": audio}}
     assert _count() == 1
+
+
+def test_the_model_is_only_ever_sent_a_format_it_takes() -> None:
+    """Voxtral takes mp3 and wav and refuses the rest (#542): nothing else can be sent."""
+    assert {container.value for container in voice_audio.Container} <= {"wav", "mp3"}
 
 
 @pytest.mark.parametrize(
     ("audio", "content_type"),
     [
-        (b"RIFF\x24\x00\x00\x00WAVEfmt " + b"\x00" * 64, "audio/wav"),
+        # What a browser's MediaRecorder writes: the model refuses all three.
+        (recordings.webm(5), "audio/webm;codecs=opus"),
+        (recordings.ogg(5), "audio/ogg;codecs=opus"),
+        (recordings.mp4(5), "audio/mp4"),
         (b"ID3\x04" + b"\x00" * 64, "audio/mpeg"),
-        (recordings.webm(5), "audio/ogg"),  # declared one container, sent another
-        (recordings.ogg(5), "audio/webm"),
-        (recordings.webm(5), "application/octet-stream"),
-        (recordings.webm(5), ""),
-        (recordings.ogg(5, codec=b"\x01vorbis\x00"), "audio/ogg"),
+        (recordings.webm(5), "audio/wav"),  # declared WAV, sent another
+        (recordings.wav(5), "audio/webm"),  # declared another, sent WAV
+        (recordings.wav(5), "application/octet-stream"),
+        (recordings.wav(5), ""),
+        # A WAV, but not the one layout taken.
+        (recordings.wav(5, rate=44_100), "audio/wav"),
+        (recordings.wav(5, rate=48_000), "audio/wav"),
+        (recordings.wav(5, channels=2), "audio/wav"),
+        (recordings.wav(5, bits=8), "audio/wav"),
+        (recordings.wav(5, bits=32, tag=3), "audio/wav"),  # float samples
+        (recordings.wav(5, tag=0xFFFE), "audio/wav"),  # WAVE_FORMAT_EXTENSIBLE
     ],
-    ids=["wav", "mp3", "webm-as-ogg", "ogg-as-webm", "octet-stream", "no-type", "ogg-vorbis"],
+    ids=[
+        "chrome-webm", "firefox-ogg", "safari-mp4", "mp3", "webm-as-wav", "wav-as-webm",
+        "octet-stream", "no-type", "44k", "48k", "stereo", "8-bit", "float", "extensible",
+    ],
 )
-def test_other_formats_are_refused_without_asking_the_model(
+def test_other_formats_are_unsupported_without_asking_the_model(
     table, voxtral, allowed, audio: bytes, content_type: str
 ) -> None:
     response = _post(audio, content_type)
 
-    assert response.status_code in (415, 422)
-    assert _code(response) in ("voice_recording_unsupported", "voice_recording_unreadable")
+    assert response.status_code == 415
+    assert _code(response) == "voice_recording_unsupported"
+    assert "Retry-After" not in response.headers
     assert voxtral.requests == []
     assert _count() == 0
 
 
-def test_ogg_that_is_not_opus_is_unsupported(table, voxtral, allowed) -> None:
-    response = _post(recordings.ogg(5, codec=b"OpusHeax"), "audio/ogg")
+def _cut_data_chunk(audio: bytes) -> bytes:
+    return audio[: audio.index(b"data") + 8 + 100]
 
-    assert response.status_code == 415
-    assert _code(response) == "voice_recording_unsupported"
+
+def _data_first(audio: bytes) -> bytes:
+    fmt_at, data_at = audio.index(b"fmt "), audio.index(b"data")
+    return audio[:fmt_at] + audio[data_at:] + audio[fmt_at:data_at]
 
 
 @pytest.mark.parametrize(
     ("audio", "content_type"),
     [
-        (recordings.webm(5)[:60], "audio/webm"),
-        (b"\x1a\x45\xdf\xa3" + b"\xff" * 20, "audio/webm"),
-        (recordings.ogg(5)[:40], "audio/ogg"),
-        (recordings.mp4(5, tracks=2), "audio/mp4"),
-        (recordings.mp4(5)[:30], "audio/mp4"),
-        (b"", "audio/webm"),
+        (_cut_data_chunk(recordings.wav(5)), "audio/wav"),
+        (recordings.wav(5)[:30], "audio/wav"),  # inside the fmt chunk
+        (recordings.wav(5)[:36], "audio/wav"),  # fmt, no data chunk
+        (_data_first(recordings.wav(5)), "audio/wav"),
+        (recordings.wav(0), "audio/wav"),
+        (recordings.wav(5)[:-1], "audio/wav"),  # the data chunk runs past the end
+        (b"", "audio/wav"),
     ],
-    ids=["webm-cut", "webm-garbage", "ogg-cut", "mp4-two-tracks", "mp4-cut", "empty"],
+    ids=["data-cut", "fmt-cut", "no-data", "data-before-fmt", "no-samples", "short-end", "empty"],
 )
 def test_a_recording_whose_length_cannot_be_read_is_refused(
     table, voxtral, allowed, audio: bytes, content_type: str
@@ -253,25 +269,22 @@ def test_a_recording_whose_length_cannot_be_read_is_refused(
     assert voxtral.requests == []
 
 
+def test_a_wav_with_chunks_besides_fmt_and_data_is_read() -> None:
+    odd = b"LIST" + struct.pack("<I", 3) + b"abc" + b"\x00"  # an odd size, padded
+    recording = voice_audio.read(recordings.wav(4, extra_chunk=odd), "audio/wav")
+
+    assert recording.seconds == pytest.approx(4)
+
+
 # ── Length and size ──────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize(
-    ("make", "content_type"),
-    [
-        (recordings.webm, "audio/webm"),
-        (recordings.ogg, "audio/ogg"),
-        (recordings.mp4, "audio/mp4"),
-        (lambda seconds: recordings.mp4(seconds, fragmented=True), "audio/mp4"),
-    ],
-    ids=["webm", "ogg", "mp4", "fragmented-mp4"],
-)
-def test_a_minute_is_taken_and_longer_is_refused(
-    table, voxtral, allowed, make, content_type: str
-) -> None:
-    assert _post(make(60), content_type).status_code == 200
+def test_a_minute_is_taken_and_longer_is_refused(table, voxtral, allowed) -> None:
+    minute = recordings.wav(60)
+    assert len(minute) < voice_transcription.MAX_BYTES
+    assert _post(minute).status_code == 200
 
-    response = _post(make(62), content_type)
+    response = _post(recordings.wav(62))
 
     assert response.status_code == 422
     assert _code(response) == "voice_recording_too_long"
@@ -280,7 +293,7 @@ def test_a_minute_is_taken_and_longer_is_refused(
 
 
 def test_a_recording_over_two_mebibytes_is_refused(table, voxtral, allowed) -> None:
-    audio = recordings.webm(5, payload=b"\x00" * (voice_transcription.MAX_BYTES // 10))
+    audio = recordings.wav(70)
     assert len(audio) > voice_transcription.MAX_BYTES
 
     response = _post(audio)
@@ -294,7 +307,7 @@ def test_a_recording_over_two_mebibytes_is_refused(table, voxtral, allowed) -> N
 def test_size_is_judged_by_the_bytes_not_only_the_declared_length() -> None:
     with pytest.raises(voice_transcription.VoiceQuestionViolation) as refused:
         voice_transcription.check_recording(
-            b"\x00" * (voice_transcription.MAX_BYTES + 1), "audio/webm", declared_length=10
+            b"\x00" * (voice_transcription.MAX_BYTES + 1), "audio/wav", declared_length=10
         )
     assert refused.value.code is voice_transcription.VoiceQuestionErrorCode.VOICE_RECORDING_TOO_LARGE
 
@@ -305,9 +318,9 @@ def test_size_is_judged_by_the_bytes_not_only_the_declared_length() -> None:
 def test_past_the_daily_limit_the_model_is_not_asked(table, voxtral, allowed) -> None:
     config.install(config.settings().model_copy(update={"voice_transcription_daily_limit": 2}))
 
-    assert _post(recordings.webm(5)).status_code == 200
-    assert _post(recordings.webm(5)).status_code == 200
-    response = _post(recordings.webm(5))
+    assert _post(recordings.wav(5)).status_code == 200
+    assert _post(recordings.wav(5)).status_code == 200
+    response = _post(recordings.wav(5))
 
     assert response.status_code == 429
     assert _code(response) == "voice_transcription_daily_limit"
@@ -317,9 +330,9 @@ def test_past_the_daily_limit_the_model_is_not_asked(table, voxtral, allowed) ->
 
 
 def test_the_counter_is_per_utc_day_and_expires(table, voxtral, allowed) -> None:
-    voice_transcription.transcribe(STUDENT, recordings.webm(5), "audio/webm", now=NOW)
+    voice_transcription.transcribe(STUDENT, recordings.wav(5), "audio/wav", now=NOW)
     voice_transcription.transcribe(
-        STUDENT, recordings.webm(5), "audio/webm", now=datetime(2026, 11, 18, 0, 1, tzinfo=UTC)
+        STUDENT, recordings.wav(5), "audio/wav", now=datetime(2026, 11, 18, 0, 1, tzinfo=UTC)
     )
 
     assert usage_repo.count(STUDENT, DAY) == 1
@@ -334,7 +347,7 @@ def test_the_counter_is_per_utc_day_and_expires(table, voxtral, allowed) -> None
 def test_an_account_being_deleted_is_not_counted_or_transcribed(table, voxtral, allowed) -> None:
     table.rows[(f"USER#{STUDENT}", "ACCOUNT_FENCE")]["status"] = "deleting"
 
-    response = _post(recordings.webm(5))
+    response = _post(recordings.wav(5))
 
     assert response.status_code == 403
     assert voxtral.requests == []
@@ -349,20 +362,43 @@ def test_an_account_being_deleted_is_not_counted_or_transcribed(table, voxtral, 
         client_error("ThrottlingException"),
         client_error("ServiceUnavailableException"),
         client_error("ModelTimeoutException"),
-        client_error("AccessDeniedException"),
-        client_error("ValidationException", "This model doesn't support audio input."),
         ReadTimeoutError(endpoint_url="https://bedrock-runtime.eu-west-1.amazonaws.com"),
     ],
-    ids=["throttled", "unavailable", "timeout", "denied", "audio-refused", "read-timeout"],
+    ids=["throttled", "unavailable", "timeout", "read-timeout"],
 )
 def test_a_model_failure_is_retryable_and_not_counted(table, allowed, failure) -> None:
     voxtral = FakeConverse(failure)
     aws.install({aws.Kind.VOICE_TRANSCRIPTION: voxtral})
-    response = _post(recordings.webm(5))
+    response = _post(recordings.wav(5))
 
     assert response.status_code == 503
     assert _code(response) == "voice_transcription_unavailable"
     assert response.headers["Retry-After"] == "5"
+    assert len(voxtral.requests) == 1
+    assert _count() == 0
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        client_error(
+            "ValidationException",
+            "This model doesn't support the audio format that you provided for user messages.",
+        ),
+    ],
+    ids=["format-refused"],
+)
+def test_a_model_refusal_is_not_retryable_and_not_counted(table, allowed, refusal) -> None:
+    """Sending it again cannot help: the student is told to type, and nothing invites a retry."""
+    voxtral = FakeConverse(refusal)
+    aws.install({aws.Kind.VOICE_TRANSCRIPTION: voxtral})
+    response = _post(recordings.wav(5))
+
+    assert response.status_code == 502
+    assert _code(response) == "voice_transcription_refused"
+    assert "Retry-After" not in response.headers
+    contract = voice_transcription.VoiceQuestionErrorCode.VOICE_TRANSCRIPTION_REFUSED.contract
+    assert (contract.retryable, contract.action, contract.max_attempts) == (False, None, 0)
     assert len(voxtral.requests) == 1
     assert _count() == 0
 
@@ -372,7 +408,7 @@ def test_a_refused_audio_is_logged_for_the_alarm(
 ) -> None:
     aws.install({aws.Kind.VOICE_TRANSCRIPTION: FakeConverse(client_error("ValidationException"))})
     with caplog.at_level(logging.WARNING, logger="stoa.services.transcription"):
-        _post(recordings.webm(5))
+        _post(recordings.wav(5))
 
     [record] = [r for r in caplog.records if r.name == "stoa.services.transcription"]
     assert record.event == "voice_transcription_refused"
@@ -410,7 +446,7 @@ def test_only_a_refusal_writes_the_line_the_alarm_counts(
 
 def test_nothing_heard_is_its_own_refusal(table, allowed) -> None:
     aws.install({aws.Kind.VOICE_TRANSCRIPTION: FakeConverse("   ")})
-    response = _post(recordings.webm(5))
+    response = _post(recordings.wav(5))
 
     assert response.status_code == 422
     assert _code(response) == "voice_recording_silent"
@@ -424,7 +460,7 @@ def test_a_response_without_a_message_is_a_failure(table, allowed) -> None:
             return {"output": {}}
 
     aws.install({aws.Kind.VOICE_TRANSCRIPTION: Broken()})
-    response = _post(recordings.webm(5))
+    response = _post(recordings.wav(5))
 
     assert response.status_code == 503
     assert _count() == 0
@@ -436,9 +472,9 @@ def test_a_response_without_a_message_is_a_failure(table, allowed) -> None:
 def test_voxtral_is_sent_the_recording_and_the_prompt_and_nothing_else(
     table, voxtral, allowed
 ) -> None:
-    audio = recordings.ogg(8, payload=MARKER)
+    audio = recordings.wav(8, payload=MARKER)
 
-    assert _post(audio, "audio/ogg").status_code == 200
+    assert _post(audio).status_code == 200
 
     [request] = voxtral.requests
     assert request == {
@@ -447,7 +483,7 @@ def test_voxtral_is_sent_the_recording_and_the_prompt_and_nothing_else(
             {
                 "role": "user",
                 "content": [
-                    {"audio": {"format": "ogg", "source": {"bytes": audio}}},
+                    {"audio": {"format": "wav", "source": {"bytes": audio}}},
                     {"text": transcription.PROMPT},
                 ],
             }
@@ -468,7 +504,7 @@ def test_the_prompt_says_transcribe_verbatim_and_do_not_translate() -> None:
 
 
 def test_voxtral_is_called_in_ireland_on_its_own_client(table, voxtral, allowed) -> None:
-    _post(recordings.webm(5))
+    _post(recordings.wav(5))
 
     kinds = {request.kind for request in aws.requests()}
     assert kinds == {aws.Kind.VOICE_TRANSCRIPTION}
@@ -510,7 +546,7 @@ def test_the_recording_is_in_no_row_request_or_log(
 ) -> None:
     voxtral = FakeConverse(outcome)
     aws.install({aws.Kind.VOICE_TRANSCRIPTION: voxtral})
-    audio = recordings.webm(5, payload=MARKER)
+    audio = recordings.wav(5, payload=MARKER)
     with _every_log_line(caplog):
         response = _post(audio)
 
@@ -532,7 +568,7 @@ def test_the_recording_is_in_no_row_request_or_log(
 def test_a_refused_recording_is_in_no_log_either(
     table, voxtral, allowed, caplog: pytest.LogCaptureFixture
 ) -> None:
-    audio = recordings.webm(90, payload=MARKER)
+    audio = recordings.wav(62, payload=MARKER)
     with _every_log_line(caplog):
         response = _post(audio)
 
@@ -540,38 +576,19 @@ def test_a_refused_recording_is_in_no_log_either(
     assert MARKER.decode() not in _everywhere_it_must_not_be(table, caplog)
 
 
-# ── The length, read from the container ──────────────────────────────────────
+# ── The length, read from the recording ──────────────────────────────────────
 
 
-@pytest.mark.parametrize(
-    ("audio", "content_type", "seconds"),
-    [
-        (recordings.webm(17.5), "audio/webm", 17.5),
-        (recordings.ogg(17.5), "audio/ogg", 17.5),
-        (recordings.mp4(17.5), "audio/x-m4a", 17.5),
-        (recordings.mp4(17.5, fragmented=True), "audio/mp4", 17.5),
-    ],
-    ids=["webm", "ogg", "mp4", "fragmented-mp4"],
-)
-def test_the_length_is_read_from_the_recording(audio: bytes, content_type: str, seconds: float) -> None:
-    recording = voice_audio.read(audio, content_type)
+@pytest.mark.parametrize("seconds", [0.5, 17.5, 59.98])
+def test_the_length_is_read_from_the_data_chunk(seconds: float) -> None:
+    recording = voice_audio.read(recordings.wav(seconds), "audio/wav")
 
-    assert recording.seconds == pytest.approx(seconds, abs=0.05)
+    assert recording.container is voice_audio.Container.WAV
+    assert recording.seconds == pytest.approx(seconds, abs=1 / 16_000)
 
 
-def test_a_webm_duration_is_honoured_when_the_writer_set_one() -> None:
-    audio = recordings.webm(2)
-    duration = b"\x44\x89\x08\x00\x00\x00\x08" + struct.pack(">d", 75_000.0)  # 75 s in ms ticks
-    info_at = audio.index(b"\x15\x49\xa9\x66")
-    size_at = info_at + 4
-    old_size = int.from_bytes(audio[size_at + 1 : size_at + 5], "big")
-    patched = (
-        audio[:size_at]
-        + b"\x08"
-        + (old_size + len(duration)).to_bytes(4, "big")
-        + audio[size_at + 5 : size_at + 5 + old_size]
-        + duration
-        + audio[size_at + 5 + old_size :]
-    )
+def test_the_riff_size_is_not_trusted_for_the_length() -> None:
+    audio = recordings.wav(3)
+    lying = audio[:4] + struct.pack("<I", 0xFFFFFFFF) + audio[8:]
 
-    assert voice_audio.read(patched, "audio/webm").seconds == pytest.approx(75.0)
+    assert voice_audio.read(lying, "audio/wav").seconds == pytest.approx(3)
