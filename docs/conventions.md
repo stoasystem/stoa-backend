@@ -39,19 +39,6 @@ How code in this repository is usually written. Moved from the old `.planning/co
 - Generators are deterministic. After changing what they read, regenerate and commit, then make sure `scripts/generate_openapi_snapshot.py --check`, `scripts/generate_route_authorization_inventory.py --check` and `scripts/generate_client_error_actions.py --check` pass.
 - Generated JSON changes only through its generator, never by hand.
 
-## Mobile (`mobile/`)
-
-- `mobile/tsconfig.json` extends the Expo defaults, enables `strict`, and maps `@/*` to `mobile/src/*`.
-- `mobile/app/` follows Expo Router file-based routing. Shared code lives under `mobile/src/`, grouped by `features/`, `services/`, `release/`, `navigation/`, `config/`, `providers/`, `i18n/` and `ui/`.
-- Exported data contracts are `type` aliases with discriminated string unions, for example `MobileSession` in `mobile/src/services/auth/authTypes.ts` and `DeepLinkValidation` in `mobile/src/services/notifications/deepLinks.ts`.
-- Type-only dependencies use `import type`. Internal imports use the `@/` alias; close siblings use relative imports.
-- API modules such as `mobile/src/features/student/studentApi.ts` take the shared client and return endpoint methods. Request adapters translate camelCase fields into the backend's snake_case and encode path values with `encodeURIComponent`.
-- Screens are function components using `StyleSheet.create`; providers are composed in `mobile/src/providers/AppProviders.tsx`.
-- Routes are declared as explicit arrays in `mobile/src/navigation/routes.ts` (path, label, guard, deep-link flag). Keep them aligned with the screen contracts in `mobile/src/features/*/*Screens.ts` and with `mobile/docs/JOURNEYS.md`.
-- Cached reads are typed and TTL-bound (`mobile/src/services/offline/readThroughCache.ts`). Mutations stay server-authoritative and are never replayed offline; TanStack Query allows one query retry and no mutation retries.
-- Sign-out clears push registration, query state and secure metadata (`mobile/src/services/auth/signOutCleanup.ts`). Client-visible failures map to support-safe account states (`mobile/src/services/auth/accountState.ts`), never raw provider text.
-- `mobile/scripts/validate-mobile-contracts.mjs` is a light static check of required dependencies, the `stoa` scheme, route-group exports and required environment names.
-
 ## Repository hygiene
 
 - `.env.example` is tracked; real `.env` files are ignored.
