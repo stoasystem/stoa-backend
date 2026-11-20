@@ -23,6 +23,7 @@ from stoa.services.message_catalog.errors import (
     rate_limit,
     report_recovery,
     security,
+    server,
     teacher_reply,
     validation,
     voice_question,
@@ -48,6 +49,7 @@ _DOMAINS = (
     report_recovery,
     classroom,
     voice_question,
+    server,
 )
 
 

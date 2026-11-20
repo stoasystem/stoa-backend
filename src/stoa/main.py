@@ -8,6 +8,7 @@ from stoa import config
 from stoa.operator_calls.catalog import OPERATOR_CALL_KEY
 from stoa.rule_violation import CorrelationMiddleware, install_rule_violation_handler
 from stoa.security.errors import redacted_validation_errors
+from stoa.unexpected_failure import UnexpectedFailureMiddleware
 from stoa.services import locale_service, runtime_budget_service
 from stoa.security.route_inventory import (
     explicit_route_classification,
@@ -104,6 +105,12 @@ class RequestBudgetMiddleware:
 
 app.add_middleware(RequestBudgetMiddleware)
 
+
+# Anything a route raises that nothing else handles is answered with the
+# standard body under `internal_error`. Added before the correlation
+# middleware so it runs inside it: the body, the header and the logged
+# traceback name the same id, and CORS still wraps the 500.
+app.add_middleware(UnexpectedFailureMiddleware)
 
 # One correlation id per request, on every response (#272). Added after the
 # locale and budget middleware, so it runs outside them and the whole request
