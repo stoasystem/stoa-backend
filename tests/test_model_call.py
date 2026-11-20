@@ -9,21 +9,18 @@ decoded by botocore's own parser (`Stubber` cannot carry a stream body).
 
 from __future__ import annotations
 
-import base64
-import binascii
 import json
 import logging
-import struct
 import time
 from collections.abc import Mapping
 from typing import Any
 
-import boto3
 import pytest
 from botocore.awsrequest import AWSResponse
 from botocore.exceptions import ReadTimeoutError
 from botocore.stub import Stubber
 
+from fakes.bedrock import Wire, event_message, runtime, streaming
 from stoa import aws, config
 from stoa.aws import Kind
 from stoa.services import model_call
@@ -71,9 +68,9 @@ def test_the_call_counts_admits_and_sends_in_that_order() -> None:
     steps: list[str] = []
 
     class Recording(FakeAdapter):
-        def count_tokens(self, model_id: str, body: Mapping[str, Any]) -> int:
+        def count(self, model_id: str, body: Mapping[str, Any]) -> int:
             steps.append("count")
-            return super().count_tokens(model_id, body)
+            return super().count(model_id, body)
 
         def stream(self, model_id: str, body: Mapping[str, Any]) -> Any:
             steps.append("send")
@@ -348,55 +345,6 @@ def test_without_an_installed_adapter_a_test_cannot_reach_bedrock() -> None:
 # ── The Bedrock adapter, on a real botocore client ──────────────────────────
 
 
-def _runtime() -> Any:
-    return boto3.client(
-        "bedrock-runtime",
-        region_name="eu-central-2",
-        aws_access_key_id="testing",
-        aws_secret_access_key="testing",
-    )
-
-
-def _header(name: str, value: str) -> bytes:
-    encoded_name, encoded_value = name.encode(), value.encode()
-    return (
-        struct.pack("!B", len(encoded_name))
-        + encoded_name
-        + struct.pack("!BH", 7, len(encoded_value))
-        + encoded_value
-    )
-
-
-def _event_message(event: Mapping[str, Any]) -> bytes:
-    """One `chunk` event of InvokeModelWithResponseStream, as it is on the wire."""
-    payload = json.dumps(
-        {"bytes": base64.b64encode(json.dumps(event).encode()).decode()}
-    ).encode()
-    headers = (
-        _header(":event-type", "chunk")
-        + _header(":message-type", "event")
-        + _header(":content-type", "application/json")
-    )
-    prelude = struct.pack("!II", 12 + len(headers) + len(payload) + 4, len(headers))
-    prelude += struct.pack("!I", binascii.crc32(prelude) & 0xFFFFFFFF)
-    message = prelude + headers + payload
-    return message + struct.pack("!I", binascii.crc32(message) & 0xFFFFFFFF)
-
-
-class _Wire:
-    def __init__(self, data: bytes) -> None:
-        self._data = data
-
-    def stream(self, *_args: Any, **_kwargs: Any):
-        yield self._data
-
-    def read(self, *_args: Any, **_kwargs: Any) -> bytes:
-        return self._data
-
-    def close(self) -> None:
-        return None
-
-
 # A forced tool reply as Bedrock streams it.
 _STREAMED = [
     {"type": "message_start", "message": {
@@ -414,26 +362,8 @@ _STREAMED = [
 ]
 
 
-def _streaming(client: Any, events: list[Mapping[str, Any]], sent: list[bytes]) -> None:
-    def send(request: Any, **_kwargs: Any) -> AWSResponse:
-        sent.append(request.body)
-        return AWSResponse(
-            request.url,
-            200,
-            {
-                "x-amzn-RequestId": "req-bdrk-1",
-                "content-type": "application/vnd.amazon.eventstream",
-            },
-            _Wire(b"".join(_event_message(event) for event in events)),
-        )
-
-    client.meta.events.register(
-        "before-send.bedrock-runtime.InvokeModelWithResponseStream", send
-    )
-
-
 def test_the_bedrock_adapter_counts_against_the_foundation_model() -> None:
-    client = _runtime()
+    client = runtime()
     body = {"messages": [{"role": "user", "content": "x"}]}
     profile = config.settings().bedrock_model_id
     with Stubber(client) as stub:
@@ -446,11 +376,57 @@ def test_the_bedrock_adapter_counts_against_the_foundation_model() -> None:
             },
         )
 
-        assert bedrock.BedrockAdapter(client).connect(30).count_tokens(profile, body) == 1450
+        assert bedrock.BedrockAdapter(client).connect(30).count(profile, body) == 1450
+
+
+@pytest.mark.parametrize(
+    ("model_id", "counted_as"),
+    [
+        ("eu.anthropic.claude-sonnet-4-6", "anthropic.claude-sonnet-4-6"),
+        ("global.anthropic.claude-sonnet-4-6", "anthropic.claude-sonnet-4-6"),
+        ("anthropic.claude-sonnet-4-6", "anthropic.claude-sonnet-4-6"),
+        ("eu.", "eu."),
+    ],
+)
+def test_the_bedrock_adapter_counts_an_inference_profile_as_its_foundation_model(
+    model_id: str, counted_as: str
+) -> None:
+    client = runtime()
+    with Stubber(client) as stub:
+        stub.add_response(
+            "count_tokens",
+            {"inputTokens": 7, "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "c-2"}},
+            {"modelId": counted_as, "input": {"invokeModel": {"body": "{}"}}},
+        )
+
+        assert bedrock.BedrockAdapter(client).connect(30).count(model_id, {}) == 7
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"inputTokens": -1, "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "c"}},
+        {"inputTokens": 37, "ResponseMetadata": {"HTTPStatusCode": 403, "RequestId": "c"}},
+        {"inputTokens": 37, "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": " "}},
+    ],
+)
+def test_a_count_reply_that_does_not_hold_together_is_not_a_count(
+    response: dict[str, Any],
+) -> None:
+    client = runtime()
+    with Stubber(client) as stub:
+        stub.add_response("count_tokens", response)
+
+        with pytest.raises(ProviderError) as malformed:
+            bedrock.BedrockAdapter(client).connect(30).count(
+                config.settings().bedrock_model_id, {"messages": []}
+            )
+
+    assert malformed.value.code == "MalformedCountResponse"
 
 
 def test_the_bedrock_adapter_hands_back_what_bedrock_said_on_a_refusal() -> None:
-    client = _runtime()
+    client = runtime()
     with Stubber(client) as stub:
         stub.add_client_error(
             "count_tokens",
@@ -461,7 +437,7 @@ def test_the_bedrock_adapter_hands_back_what_bedrock_said_on_a_refusal() -> None
         )
 
         with pytest.raises(ProviderError) as refused:
-            bedrock.BedrockAdapter(client).connect(30).count_tokens(
+            bedrock.BedrockAdapter(client).connect(30).count(
                 config.settings().bedrock_model_id, {"messages": []}
             )
 
@@ -472,7 +448,7 @@ def test_the_bedrock_adapter_hands_back_what_bedrock_said_on_a_refusal() -> None
 
 
 def test_a_bedrock_refusal_reaches_the_call_as_an_unsent_count() -> None:
-    client = _runtime()
+    client = runtime()
     model_call.install(bedrock.BedrockAdapter(client))
     with Stubber(client) as stub:
         stub.add_client_error(
@@ -485,9 +461,9 @@ def test_a_bedrock_refusal_reaches_the_call_as_an_unsent_count() -> None:
 
 
 def test_the_bedrock_adapter_reads_a_streamed_tool_reply_off_the_wire() -> None:
-    client = _runtime()
+    client = runtime()
     sent: list[bytes] = []
-    _streaming(client, _STREAMED, sent)
+    streaming(client, _STREAMED, sent)
     model_call.install(bedrock.BedrockAdapter(client))
 
     result = _call()
@@ -501,8 +477,8 @@ def test_the_bedrock_adapter_reads_a_streamed_tool_reply_off_the_wire() -> None:
 
 
 def test_the_bedrock_client_makes_one_attempt_with_reads_bounded_by_the_time_left() -> None:
-    client = _runtime()
-    _streaming(client, _STREAMED, [])
+    client = runtime()
+    streaming(client, _STREAMED, [])
     aws.install({Kind.BEDROCK_RUNTIME: client})
     model_call.install(bedrock.BedrockAdapter())
 
@@ -519,9 +495,9 @@ def test_a_stream_that_breaks_off_is_a_provider_error_not_an_answer(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     caplog.set_level(logging.WARNING, logger="stoa.private_telemetry")
-    client = _runtime()
+    client = runtime()
 
-    class BreakingWire(_Wire):
+    class BreakingWire(Wire):
         def stream(self, *_args: Any, **_kwargs: Any):
             yield self._data
             raise ReadTimeoutError(endpoint_url="https://bedrock-runtime.example")
@@ -531,7 +507,7 @@ def test_a_stream_that_breaks_off_is_a_provider_error_not_an_answer(
             request.url,
             200,
             {"x-amzn-RequestId": "req-broken", "content-type": "application/vnd.amazon.eventstream"},
-            BreakingWire(b"".join(_event_message(event) for event in _STREAMED[:3])),
+            BreakingWire(b"".join(event_message(event) for event in _STREAMED[:3])),
         )
 
     client.meta.events.register(
@@ -638,7 +614,7 @@ def test_the_fake_cache_reads_a_prefix_it_was_sent_before_whatever_follows_it() 
 
 
 def test_the_bedrock_adapter_reads_the_cache_counts_off_the_wire() -> None:
-    client = _runtime()
+    client = runtime()
     sent: list[bytes] = []
     start = {"type": "message_start", "message": {
         "id": "msg_bdrk_2", "model": "claude-sonnet-4-6", "usage": {
@@ -647,7 +623,7 @@ def test_the_bedrock_adapter_reads_the_cache_counts_off_the_wire() -> None:
             "cache_read_input_tokens": 1413,
             "output_tokens": 1,
         }}}
-    _streaming(client, [start, *_STREAMED[1:]], sent)
+    streaming(client, [start, *_STREAMED[1:]], sent)
     model_call.install(bedrock.BedrockAdapter(client))
 
     result = _call()

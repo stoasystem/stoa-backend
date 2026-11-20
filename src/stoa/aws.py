@@ -12,10 +12,9 @@ timeouts of, say, the moderation Rekognition are written down once, here.
   own (the Bedrock call whose timeout is the request's remaining time). It is built
   for that call and not kept.
 - `client(kind, region=...)` / `client(kind, endpoint_url=...)`: the few callers whose
-  region or endpoint is only known at the call (token counting in the model's region,
-  the WebSocket management API at the connection's endpoint).
-- `session()`: the shared boto3 `Session`, for the one caller that signs a request
-  itself rather than through a client (`bedrock_token_count_service`).
+  region or endpoint is only known at the call (the WebSocket management API at the
+  connection's endpoint).
+- `session()`: the shared boto3 `Session` every client is built from.
 - `install({kind: double})`: the one place a test puts a double. While anything was
   installed, `client` returns the double for its kind and raises `NotInstalled` for any
   other kind - a test never reaches a real client by accident. `requests()` lists what

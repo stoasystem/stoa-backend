@@ -38,7 +38,6 @@ from stoa.services import (
     star_map_candidates,
 )
 from stoa.services.ai_service import (
-    AIInvocationClass,
     AIInvocationFailure,
     AIProviderResult,
     PromptImage,
@@ -1134,7 +1133,6 @@ def provider_result(
     result: model_call.Result,
     *,
     effect_id: str,
-    invocation_class: AIInvocationClass = AIInvocationClass.USER_ALLOWANCE,
 ) -> AIProviderResult[dict]:
     """The answer a model call gave, parsed and checked, with its usage.
 
@@ -1168,7 +1166,7 @@ def provider_result(
         inference_profile_id=result.usage.inference_profile_id,
         provider_message_id_digest=result.usage.message_id_digest,
         stop_reason=result.stop_reason,
-        invocation_class=invocation_class,
+        invocation_class=result.usage.cost_class,
     )
 
 

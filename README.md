@@ -74,6 +74,28 @@ week's teacher-help requests used and left, the weekly figure and where it comes
 week starts over, and whether a request made now would be taken (with the reasons if not: the
 account status, the usage period or the allowance).
 
+## Model-call probe
+
+Every request to Claude goes through the model call (`src/stoa/services/model_call/`), and only its
+Bedrock adapter talks to Bedrock. The tests run on an in-memory adapter that holds each body to the
+rules measured against Bedrock, but only Bedrock itself has the last word on what it accepts (#430).
+So a PR that changes what a model call sends (a prompt, a tool, a field of the body) is probed once,
+on an SSO session, before it merges (#435, #439):
+
+```bash
+aws sso login --sso-session stoa
+python scripts/probe_bedrock_token_count.py --profile <SSO profile>
+```
+
+It builds the Ask answer's request and the weekly report's request with the production code from
+synthetic inputs, and sends each through the Bedrock adapter: CountTokens on the counted body, then
+InvokeModelWithResponseStream on the sent body with `max_tokens` cut to 1 (well under a cent each).
+It prints one `PASS` or `FAIL` line per step, with the input tokens counted, the stop reason and
+usage Bedrock reported (cache write and read tokens included), or Bedrock's own error text, and
+exits non-zero when anything failed. `--count-only` sends nothing and only counts: the free way to
+measure what a prompt change does to the input tokens. To probe one request alone, with more
+options, use `scripts/probe_ask_answer_request.py` or `scripts/probe_weekly_report_request.py`.
+
 ## Project Structure
 
 ```

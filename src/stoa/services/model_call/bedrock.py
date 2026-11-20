@@ -18,13 +18,16 @@ from botocore.exceptions import ClientError
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.services import bedrock_token_count_service
 from stoa.services.model_call.adapter import MalformedStream, ProviderError, Stream
 
 # Kept back from the time left for the read itself, so a read that times out
 # still leaves the caller time to record the failure.
 _READ_MARGIN_SECONDS = 5
 _CONNECT_TIMEOUT_SECONDS = 5
+
+# The prefixes of the system cross-region inference profiles; the foundation
+# model is what follows.
+_INFERENCE_PROFILE_PREFIXES = ("eu.", "us.", "global.")
 
 
 def runtime_config(remaining_seconds: float) -> Config:
@@ -70,17 +73,17 @@ def _request_id(response: Mapping[str, Any]) -> str:
 
 def _count_model_id(model_id: str) -> str:
     """CountTokens takes the foundation model, not the inference profile it is invoked through."""
-    try:
-        return bedrock_token_count_service.foundation_model_id_for_profile(model_id)
-    except bedrock_token_count_service.ProviderTokenCountUnavailable:
-        return model_id
+    for prefix in _INFERENCE_PROFILE_PREFIXES:
+        if model_id.startswith(prefix) and len(model_id) > len(prefix):
+            return model_id.removeprefix(prefix)
+    return model_id
 
 
 class BedrockConnection:
     def __init__(self, client: Any) -> None:
         self._client = client
 
-    def count_tokens(self, model_id: str, body: Mapping[str, Any]) -> int:
+    def count(self, model_id: str, body: Mapping[str, Any]) -> int:
         try:
             response = self._client.count_tokens(
                 modelId=_count_model_id(model_id),

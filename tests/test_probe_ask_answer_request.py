@@ -54,7 +54,7 @@ def test_count_only_by_default_and_both_checks_pass_on_the_fake() -> None:
 
 def test_a_refusal_is_reported_with_bedrock_s_own_words_and_fails_the_run() -> None:
     class Refusing(FakeAdapter):
-        def count_tokens(self, model_id, body):
+        def count(self, model_id, body):
             raise ProviderError(
                 "ValidationException", http_status=400, message="tools.0.custom.x: Extra inputs"
             )

@@ -298,7 +298,7 @@ class UsageEvidence:
         effect_id: str,
     ) -> UsageEvidence:
         """The evidence of an answer the allowance was charged for."""
-        if provider_result.invocation_class is not ai_service.AIInvocationClass.USER_ALLOWANCE:
+        if provider_result.invocation_class is not model_call.CostClass.USER_ALLOWANCE:
             raise _unavailable()
         return cls._from_usage(provider_result.usage, effect_id=effect_id)
 

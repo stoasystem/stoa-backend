@@ -1,272 +1,180 @@
 #!/usr/bin/env python3
-"""Capture or verify a redacted exact-model Bedrock CountTokens preflight."""
+"""Send Bedrock the two model-call requests production makes, through the Bedrock adapter (#439).
+
+Before a PR that changes what a model call sends (a prompt, a tool, a field of
+the body) merges, an operator runs this once on an SSO session (#435 item 4),
+so a request Bedrock refuses is found before production finds it (#430). For
+the Ask answer and for the weekly report, each in turn:
+
+1. CountTokens on the body production counts (free);
+2. InvokeModelWithResponseStream, the streamed call production makes, on the
+   body production sends with `max_tokens` cut to 1 and nothing else changed.
+   It costs the input tokens and one output token, well under a cent each.
+
+`--count-only` leaves out step 2, so nothing is paid: what is printed is then
+how many input tokens each request costs, to compare a prompt before and
+after a change (#442).
+
+The bodies are the ones the production code builds from synthetic inputs, with
+no real person's data in them (`probe_ask_answer_request.ask_bodies`,
+`probe_weekly_report_request.report_bodies`), and they reach Bedrock through
+`model_call.bedrock.BedrockAdapter`, as every model call does. Printed are the
+counted input tokens, the stop reason and usage Bedrock reports for the sent
+body (cache write and read tokens too, when there are any), and Bedrock's own
+words when it refuses a body. The run fails when either request fails.
+
+    python scripts/probe_bedrock_token_count.py [--profile stoa] [--count-only]
+"""
 
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
-import hashlib
-import json
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
-import subprocess
-from typing import Mapping
+import sys
+from typing import Any
 
-import boto3
+if __package__ in (None, ""):
+    # Run as a file: the sibling probes are imported from the repository root.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from stoa import config
-from stoa.services.bedrock_token_count_service import (
-    ProviderTokenCountUnavailable,
-    RUNTIME_ACTION,
-    TokenCountEndpoint,
-    count_input_tokens_with_evidence,
-    foundation_model_id_for_profile,
+from scripts import probe_ask_answer_request, probe_weekly_report_request  # noqa: E402
+from stoa import config  # noqa: E402
+from stoa.services.model_call.adapter import Adapter, Connection, ProviderError  # noqa: E402
+
+DEFAULT_AWS_ACCOUNT_ID = "562923011260"
+_PROBE_SECONDS = 60
+
+Bodies = Callable[[], tuple[dict[str, Any], dict[str, Any]]]
+
+# The two requests production makes, by name: what builds the counted and the sent body.
+REQUESTS: tuple[tuple[str, Bodies], ...] = (
+    ("ask", probe_ask_answer_request.ask_bodies),
+    ("report", probe_weekly_report_request.report_bodies),
+)
+
+# The usage Bedrock reports for a reply, in the order printed.
+_USAGE_FIELDS = (
+    "input_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "output_tokens",
 )
 
 
-_SCHEMA_VERSION = 1
-_SYNTHETIC_INPUT = "Synthetic STOA Bedrock token-count preflight"
-_ROOT = Path(__file__).resolve().parents[1]
+def _refusal(error: Exception) -> str:
+    if isinstance(error, ProviderError):
+        status = f" HTTP {error.http_status}" if error.http_status is not None else ""
+        return f"{error.code}{status}: {error.message[:300]}"
+    return type(error).__name__
 
 
-class PreflightVerificationError(Exception):
-    """Static public reason for invalid or stale preflight evidence."""
+def _reply(events: Iterable[Any]) -> tuple[object, dict[str, Any]]:
+    """The stop reason and usage of a streamed reply: the usage comes in two parts."""
+    stop_reason: object = None
+    usage: dict[str, Any] = {}
+    for event in events:
+        if not isinstance(event, Mapping):
+            continue
+        if event.get("type") == "message_start":
+            usage.update((event.get("message") or {}).get("usage") or {})
+        elif event.get("type") == "message_delta":
+            usage.update(event.get("usage") or {})
+            stop_reason = (event.get("delta") or {}).get("stop_reason", stop_reason)
+    return stop_reason, usage
 
 
-def _digest(value: str, *, domain: str) -> str:
-    return hashlib.sha256(f"stoa:{domain}:v1:{value}".encode()).hexdigest()
-
-
-def _git_source_sha() -> str:
-    completed = subprocess.run(
-        [
-            "git",
-            "log",
-            "-1",
-            "--format=%H",
-            "--",
-            "src/stoa/services/bedrock_token_count_service.py",
-            "src/stoa/services/ai_service.py",
-            "scripts/probe_bedrock_token_count.py",
-        ],
-        cwd=_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    source_sha = completed.stdout.strip()
-    if len(source_sha) != 40 or any(character not in "0123456789abcdef" for character in source_sha):
-        raise PreflightVerificationError("source_sha_unavailable")
-    return source_sha
-
-
-def _configuration_values() -> tuple[str, str, str, str]:
-    inference_profile_id = config.settings().bedrock_model_id.strip()
-    model_id = foundation_model_id_for_profile(inference_profile_id)
-    region = config.settings().aws_region.strip()
-    environment = config.settings().environment.strip()
-    if not region or not environment:
-        raise PreflightVerificationError("configuration_unavailable")
-    return environment, region, model_id, inference_profile_id
-
-
-def _environment_digest(environment: str, region: str) -> str:
-    return _digest(f"{environment}:{region}", domain="bedrock-preflight-environment")
-
-
-def _synthetic_body() -> str:
-    return json.dumps(
-        {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 1,
-            "temperature": 0,
-            "messages": [{"role": "user", "content": _SYNTHETIC_INPUT}],
-        },
-        separators=(",", ":"),
-    )
-
-
-def _identity_digest(identity: Mapping[str, object]) -> str:
-    account = identity.get("Account")
-    arn = identity.get("Arn")
-    user_id = identity.get("UserId")
-    metadata = identity.get("ResponseMetadata")
-    if (
-        not isinstance(account, str)
-        or not account
-        or not isinstance(arn, str)
-        or not arn
-        or not isinstance(user_id, str)
-        or not user_id
-        or not isinstance(metadata, Mapping)
-        or metadata.get("HTTPStatusCode") != 200
-    ):
-        raise PreflightVerificationError("identity_unavailable")
-    return _digest(f"{account}:{arn}:{user_id}", domain="bedrock-preflight-identity")
-
-
-def capture_preflight(
-    results: Path,
-    *,
-    sts_client: object | None = None,
-    runtime_client: object | None = None,
-    fixture: bool = False,
-    captured_at: datetime | None = None,
-) -> dict[str, object]:
-    """Run only identity and CountTokens checks, then write redacted evidence."""
-    environment, region, model_id, inference_profile_id = _configuration_values()
-    if not fixture and (sts_client is not None or runtime_client is not None):
-        raise PreflightVerificationError("mock_dependency_rejected")
-    sts = sts_client or boto3.client("sts", region_name=region)
-    get_caller_identity = getattr(sts, "get_caller_identity", None)
-    if not callable(get_caller_identity):
-        raise PreflightVerificationError("identity_unavailable")
+def probe_request(
+    connection: Connection, *, name: str, bodies: Bodies, model_id: str, invoke: bool
+) -> list[str]:
+    """Count one request and, with `invoke`, send it; one line per step, PASS or FAIL."""
+    counted, sent = bodies()
+    lines: list[str] = []
     try:
-        identity = get_caller_identity()
-        if not isinstance(identity, Mapping):
-            raise PreflightVerificationError("identity_unavailable")
-        count_result = count_input_tokens_with_evidence(
-            _synthetic_body(),
-            model_id=model_id,
-            inference_profile_id=inference_profile_id,
-            region=region,
-            count_endpoint=TokenCountEndpoint.RUNTIME,
-            runtime_client=runtime_client,
+        tokens = connection.count(model_id, counted)
+    except Exception as error:
+        lines.append(f"FAIL {name} count: {_refusal(error)}")
+    else:
+        lines.append(f"PASS {name} count: CountTokens took the body, input_tokens={tokens}")
+    if not invoke:
+        return lines
+    try:
+        stream = connection.stream(model_id, {**sent, "max_tokens": 1})
+        stop_reason, usage = _reply(stream.events)
+    except Exception as error:
+        lines.append(f"FAIL {name} invoke: {_refusal(error)}")
+    else:
+        reported = "".join(
+            f" {field}={usage[field]}" for field in _USAGE_FIELDS if field in usage
         )
-    except (ProviderTokenCountUnavailable, PreflightVerificationError):
-        raise
-    except Exception:
-        raise PreflightVerificationError("provider_token_count_unavailable") from None
-    if count_result.action != RUNTIME_ACTION:
-        raise PreflightVerificationError("endpoint_mismatch")
-
-    captured = captured_at or datetime.now(timezone.utc)
-    if captured.tzinfo is None:
-        raise PreflightVerificationError("captured_at_invalid")
-    receipt: dict[str, object] = {
-        "schemaVersion": _SCHEMA_VERSION,
-        "status": "fixture_only" if fixture else "passing",
-        "mocked": fixture,
-        "sourceSha": _git_source_sha(),
-        "environmentDigest": _environment_digest(environment, region),
-        "modelDigest": _digest(model_id, domain="bedrock-preflight-model"),
-        "inferenceProfileDigest": _digest(
-            inference_profile_id,
-            domain="bedrock-preflight-profile",
-        ),
-        "identityDigest": _identity_digest(identity),
-        "action": RUNTIME_ACTION,
-        "syntheticInputTokens": count_result.input_tokens,
-        "responseShape": "valid_exact_integer",
-        "correlationDigest": _digest(
-            count_result.request_id,
-            domain="bedrock-preflight-correlation",
-        ),
-        "capturedAt": captured.astimezone(timezone.utc).isoformat(),
-    }
-    rendered = json.dumps(receipt, indent=2, sort_keys=True) + "\n"
-    for private_value in (
-        _SYNTHETIC_INPUT,
-        model_id,
-        inference_profile_id,
-        str(identity.get("Account", "")),
-        str(identity.get("Arn", "")),
-        str(identity.get("UserId", "")),
-        count_result.request_id,
-    ):
-        if private_value and private_value in rendered:
-            raise PreflightVerificationError("redaction_failed")
-    results.parent.mkdir(parents=True, exist_ok=True)
-    results.write_text(rendered)
-    return receipt
+        lines.append(
+            f"PASS {name} invoke: InvokeModelWithResponseStream took the body (max_tokens 1), "
+            f"stop_reason={stop_reason}{reported}"
+        )
+    return lines
 
 
-def _exact_count(value: object) -> int:
-    if type(value) is not int or value < 0:
-        raise PreflightVerificationError("malformed_count")
-    return value
+def probe(adapter: Adapter, *, model_id: str, invoke: bool = True) -> list[str]:
+    """Both requests, the Ask answer first, on one connection."""
+    connection = adapter.connect(_PROBE_SECONDS)
+    lines: list[str] = []
+    for name, bodies in REQUESTS:
+        lines += probe_request(
+            connection, name=name, bodies=bodies, model_id=model_id, invoke=invoke
+        )
+    return lines
 
 
-def _required_digest(receipt: Mapping[str, object], field: str) -> str:
-    value = receipt.get(field)
-    if (
-        not isinstance(value, str)
-        or len(value) != 64
-        or any(character not in "0123456789abcdef" for character in value)
-    ):
-        raise PreflightVerificationError(f"malformed_{field}")
-    return value
-
-
-def verify_preflight(results: Path) -> dict[str, object]:
-    """Verify the receipt is passing, non-mocked, current, and redacted."""
-    try:
-        raw = results.read_text()
-        receipt = json.loads(raw)
-    except (OSError, json.JSONDecodeError):
-        raise PreflightVerificationError("receipt_unavailable") from None
-    if not isinstance(receipt, dict):
-        raise PreflightVerificationError("receipt_malformed")
-    if receipt.get("schemaVersion") != _SCHEMA_VERSION:
-        raise PreflightVerificationError("schema_mismatch")
-    if receipt.get("status") != "passing" or receipt.get("mocked") is not False:
-        raise PreflightVerificationError("nonpassing_or_mocked")
-    if receipt.get("sourceSha") != _git_source_sha():
-        raise PreflightVerificationError("source_drift")
-
-    environment, region, model_id, inference_profile_id = _configuration_values()
-    expected = {
-        "environmentDigest": _environment_digest(environment, region),
-        "modelDigest": _digest(model_id, domain="bedrock-preflight-model"),
-        "inferenceProfileDigest": _digest(
-            inference_profile_id,
-            domain="bedrock-preflight-profile",
-        ),
-    }
-    for field, expected_value in expected.items():
-        if _required_digest(receipt, field) != expected_value:
-            raise PreflightVerificationError("configuration_drift")
-    _required_digest(receipt, "identityDigest")
-    _required_digest(receipt, "correlationDigest")
-    _exact_count(receipt.get("syntheticInputTokens"))
-    if receipt.get("action") != RUNTIME_ACTION:
-        raise PreflightVerificationError("action_mismatch")
-    if receipt.get("responseShape") != "valid_exact_integer":
-        raise PreflightVerificationError("response_shape_mismatch")
-    forbidden = (
-        _SYNTHETIC_INPUT,
-        model_id,
-        inference_profile_id,
-        "aws_access_key_id",
-        "aws_secret_access_key",
-        "aws_session_token",
+def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
+    parser.add_argument("--profile", default="stoa", help="AWS IAM Identity Center profile.")
+    parser.add_argument("--region", default="eu-central-2")
+    parser.add_argument("--account-id", default=DEFAULT_AWS_ACCOUNT_ID)
+    parser.add_argument(
+        "--model-id",
+        default=None,
+        help="Inference profile to probe; the configured one (bedrock_model_id) by default.",
     )
-    if any(value.lower() in raw.lower() for value in forbidden):
-        raise PreflightVerificationError("redaction_failed")
-    return receipt
+    parser.add_argument(
+        "--count-only",
+        action="store_true",
+        help="Only count the input tokens of each request; send nothing, pay nothing.",
+    )
+    return parser.parse_args(argv)
 
 
-def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="command", required=True)
-    for command in ("capture", "verify"):
-        subparser = subparsers.add_parser(command)
-        subparser.add_argument("--results", required=True, type=Path)
-    return parser.parse_args()
+def main(argv: Sequence[str] | None = None, *, adapter: Adapter | None = None) -> int:
+    args = _parse_args(argv)
+    model_id = args.model_id or config.settings().bedrock_model_id
+    if adapter is None:
+        from botocore.exceptions import BotoCoreError
 
+        from stoa.security.aws_operator_identity import (
+            SSO_LOGIN_HINT,
+            AwsOperatorIdentityError,
+            require_sso_operator_session,
+        )
+        from stoa.services.model_call.bedrock import BedrockAdapter
 
-def main() -> int:
-    args = _parse_args()
-    try:
-        if args.command == "capture":
-            capture_preflight(args.results)
-        else:
-            verify_preflight(args.results)
-    except (ProviderTokenCountUnavailable, PreflightVerificationError) as error:
-        print(f"FAIL: {error}")
-        return 1
-    print(f"PASS: {args.command} Bedrock CountTokens preflight")
-    return 0
+        try:
+            session = require_sso_operator_session(
+                profile_name=args.profile,
+                region_name=args.region,
+                expected_account_id=args.account_id,
+            )
+        except AwsOperatorIdentityError as error:
+            print(f"FAIL sso: {error}")
+            return 2
+        except BotoCoreError as error:
+            print(f"FAIL sso: {error}; {SSO_LOGIN_HINT}")
+            return 2
+        adapter = BedrockAdapter(session.client("bedrock-runtime", region_name=args.region))
+    print(f"Probing the model-call requests on {model_id} in {args.region}")
+    lines = probe(adapter, model_id=model_id, invoke=not args.count_only)
+    for line in lines:
+        print(line)
+    return 1 if any(line.startswith("FAIL") for line in lines) else 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

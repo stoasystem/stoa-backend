@@ -95,7 +95,7 @@ def probe(adapter: Adapter, *, model_id: str, invoke: bool, exact: bool = False)
     connection = adapter.connect(_PROBE_SECONDS)
     lines: list[str] = []
     try:
-        tokens = connection.count_tokens(model_id, counted)
+        tokens = connection.count(model_id, counted)
     except Exception as error:
         lines.append(f"FAIL count: {_refusal(error)}")
     else:
