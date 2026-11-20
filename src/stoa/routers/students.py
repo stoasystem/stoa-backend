@@ -918,9 +918,9 @@ _RECORDING_TYPES = sorted(
         "requestBody": {
             "required": True,
             "description": (
-                "The recording itself, as the browser's MediaRecorder made it: WebM or Ogg "
-                f"(Opus), or MP4 (AAC). At most {voice_transcription.MAX_BYTES} bytes and "
-                f"{voice_transcription.MAX_SECONDS} seconds."
+                "The recording itself, as a WAV file: plain PCM, 16 kHz, one channel, 16-bit "
+                "samples (the model takes no WebM, Ogg or MP4). At most "
+                f"{voice_transcription.MAX_BYTES} bytes and {voice_transcription.MAX_SECONDS} seconds."
             ),
             "content": {
                 name: {"schema": {"type": "string", "format": "binary"}}
