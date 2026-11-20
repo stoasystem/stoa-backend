@@ -3,7 +3,9 @@ from fastapi.testclient import TestClient
 
 from stoa.routers import teachers
 from stoa.services import ai_teacher_tools_service
+from stoa.services.ai_teacher_tools_errors import AiTeacherToolsErrorCode
 from actor_helpers import install_actor_overrides
+from rule_violation_helpers import assert_violation
 
 
 def _app(user: dict) -> TestClient:
@@ -71,6 +73,60 @@ def _serve_requests(monkeypatch, **overrides):
     )
 
 
+def _exercise(challenge_id, *, difficulty="practice", topic_id="gleichungen", lesson_id="lesson-gl-1", **fields):
+    """A published bank exercise row, as stored."""
+    return {
+        "challenge_id": challenge_id,
+        "lesson_id": lesson_id,
+        "subject_id": "math",
+        "topic_id": topic_id,
+        "type": "short_answer",
+        "prompt": f"Löse {challenge_id}: 3x + 4 = 10",
+        "correct_answer": "x = 2",
+        "explanation": "Subtrahiere 4, dann teile durch 3.",
+        "difficulty": difficulty,
+        **fields,
+    }
+
+
+def _install_bank(monkeypatch, exercises, *, units=(), lessons=(), locale="de"):
+    """The question bank: exercises on topic shelves, stars (units) and their lessons."""
+    from stoa.services.ai_teacher_tools_service import practice_repo, user_repo
+
+    def topic_challenges(topic_id, *, page_size=None):
+        return iter([row for row in exercises if row["topic_id"] == topic_id])
+
+    def get_challenges(lesson_id):
+        return [row for row in exercises if row["lesson_id"] == lesson_id]
+
+    def get_lessons(topic_id=None, unit_id=None):
+        return [
+            row
+            for row in lessons
+            if (topic_id is None or row["topic_id"] == topic_id)
+            and (unit_id is None or row["unit_id"] == unit_id)
+        ]
+
+    lesson_rows = {row["lesson_id"]: row for row in lessons}
+    monkeypatch.setattr(practice_repo, "topic_challenges", topic_challenges)
+    monkeypatch.setattr(practice_repo, "get_challenges", get_challenges)
+    monkeypatch.setattr(practice_repo, "get_lessons", get_lessons)
+    monkeypatch.setattr(practice_repo, "get_all_units", lambda: [dict(row) for row in units])
+    monkeypatch.setattr(practice_repo, "get_lesson", lambda lesson_id: lesson_rows.get(lesson_id))
+    monkeypatch.setattr(
+        user_repo, "get_user", lambda user_id: {"user_id": user_id, "preferred_locale": locale}
+    )
+
+
+_EXERCISE_DRAFT = {
+    "studentId": "student-1",
+    "subject": "math",
+    "difficulty": "standard",
+    "exerciseCount": 2,
+    "questionId": "question-1",
+}
+
+
 def test_teacher_can_create_summary_draft_for_visible_question(monkeypatch):
     drafts = _install_draft_repo(monkeypatch)
     _serve_requests(monkeypatch)
@@ -106,16 +162,33 @@ def test_summary_draft_requires_visible_question(monkeypatch):
 
 
 def test_teacher_can_create_bounded_exercise_draft_from_visible_student_context(monkeypatch):
-    _install_draft_repo(monkeypatch)
+    drafts = _install_draft_repo(monkeypatch)
     _serve_requests(monkeypatch, student_id="student-1")
+    _install_bank(
+        monkeypatch,
+        [
+            _exercise("ex-1"),
+            _exercise("ex-2"),
+            _exercise("ex-3"),
+            _exercise("ex-other", subject_id="physics"),
+        ],
+        lessons=[
+            {
+                "lesson_id": "lesson-gl-1",
+                "topic_id": "gleichungen",
+                "unit_id": "gl-u1",
+                "title": "Lineare Gleichungen",
+            }
+        ],
+    )
 
     response = _app({"sub": "teacher-1", "role": "teacher"}).post(
         "/teachers/ai-tools/exercise-drafts",
         json={
             "studentId": "student-1",
             "subject": "math",
-            "topicIds": ["Linear equations"],
-            "difficulty": "medium",
+            "topicIds": ["Gleichungen"],
+            "difficulty": "standard",
             "exerciseCount": 3,
             "questionId": "question-2",
         },
@@ -124,11 +197,163 @@ def test_teacher_can_create_bounded_exercise_draft_from_visible_student_context(
     assert response.status_code == 200
     body = response.json()
     assert body["draftType"] == "practice_exercise"
-    assert body["topicIds"] == ["linear-equations"]
-    assert len(body["items"]) == 3
-    assert len(body["answerKey"]) == 3
+    assert body["difficulty"] == "standard"
+    assert body["topicIds"] == ["gleichungen"]
+    assert body["title"] == "Lineare Gleichungen"
+    # The bank's own exercises, answers and explanations: nothing written in their place (#519).
+    assert [item["itemId"] for item in body["items"]] == ["ex-1", "ex-2", "ex-3"]
+    assert body["items"][0]["prompt"] == "Löse ex-1: 3x + 4 = 10"
+    assert body["items"][0]["lessonId"] == "lesson-gl-1"
+    assert all("correct_answer" not in item and "answer" not in item for item in body["items"])
+    assert body["answerKey"] == [{"itemId": f"ex-{n}", "answer": "x = 2"} for n in (1, 2, 3)]
+    assert body["explanations"][0] == {
+        "itemId": "ex-1",
+        "explanation": "Subtrahiere 4, dann teile durch 3.",
+    }
+    assert "placeholder" not in str(body).lower()
     assert body["studentDeliveryStatus"] == "not_delivered"
     assert body["sourceContext"]["evidenceQuestionIds"] == ["question-2"]
+    stored = drafts[body["draftId"]]
+    assert stored["exercise_source"] == "stoa_question_bank_v1"
+    assert stored["lesson_id"] == "lesson-gl-1"
+
+
+def test_the_difficulty_a_teacher_asks_for_is_the_frontends_enum(monkeypatch):
+    _install_draft_repo(monkeypatch)
+    _serve_requests(monkeypatch)
+    _install_bank(monkeypatch, [_exercise("ex-1")])
+    client = _app({"sub": "teacher-1", "role": "teacher"})
+
+    for difficulty in ("targeted", "standard", "stretch"):
+        response = client.post(
+            "/teachers/ai-tools/exercise-drafts",
+            json={**_EXERCISE_DRAFT, "topicIds": ["gleichungen"], "difficulty": difficulty},
+        )
+        assert response.status_code == 200, difficulty
+        assert response.json()["difficulty"] == difficulty
+    for retired in ("easy", "medium", "hard", "Targeted"):
+        response = client.post(
+            "/teachers/ai-tools/exercise-drafts",
+            json={**_EXERCISE_DRAFT, "topicIds": ["gleichungen"], "difficulty": retired},
+        )
+        assert response.status_code == 422, retired
+
+
+def test_the_openapi_contract_names_the_difficulties_and_delivery_states():
+    from stoa.main import app
+
+    schemas = app.openapi()["components"]["schemas"]
+    request = schemas["ExerciseDraftRequest"]["properties"]
+    assert request["difficulty"]["enum"] == ["targeted", "standard", "stretch"]
+    assert "starIds" in request
+    delivery = schemas["AiTeacherDraftResponse"]["properties"]["studentDeliveryStatus"]
+    assert delivery["enum"] == ["not_delivered", "delivered"]
+
+
+def test_exercises_closest_to_the_asked_difficulty_come_first(monkeypatch):
+    _install_draft_repo(monkeypatch)
+    _serve_requests(monkeypatch)
+    _install_bank(
+        monkeypatch,
+        [
+            _exercise("ex-beyond", difficulty="beyond"),
+            _exercise("ex-practice", difficulty="practice"),
+            _exercise("ex-intro", difficulty="intro"),
+            _exercise("ex-review", difficulty="review"),
+        ],
+    )
+    client = _app({"sub": "teacher-1", "role": "teacher"})
+
+    def picked(difficulty):
+        response = client.post(
+            "/teachers/ai-tools/exercise-drafts",
+            json={
+                **_EXERCISE_DRAFT,
+                "topicIds": ["gleichungen"],
+                "difficulty": difficulty,
+                "exerciseCount": 3,
+            },
+        )
+        return [item["itemId"] for item in response.json()["items"]]
+
+    assert picked("targeted") == ["ex-intro", "ex-review", "ex-practice"]
+    assert picked("standard") == ["ex-practice", "ex-beyond", "ex-intro"]
+    assert picked("stretch") == ["ex-beyond", "ex-practice", "ex-intro"]
+
+
+def test_a_stars_exercises_are_those_of_its_published_lessons(monkeypatch):
+    _install_draft_repo(monkeypatch)
+    _serve_requests(monkeypatch)
+    _install_bank(
+        monkeypatch,
+        [
+            _exercise("ex-a2", lesson_id="lesson-a2"),
+            _exercise("ex-a1", lesson_id="lesson-a1"),
+            _exercise("ex-draft-lesson", lesson_id="lesson-a3"),
+            _exercise("ex-b1", lesson_id="lesson-b1"),
+            _exercise("ex-archived", lesson_id="lesson-a1", status="archived"),
+        ],
+        units=[
+            {"unit_id": "gl-u1", "topic_id": "gleichungen"},
+            {"unit_id": "gl-u2", "topic_id": "gleichungen"},
+        ],
+        lessons=[
+            {"lesson_id": "lesson-a2", "topic_id": "gleichungen", "unit_id": "gl-u1", "order": 2, "title": "Zwei"},
+            {"lesson_id": "lesson-a1", "topic_id": "gleichungen", "unit_id": "gl-u1", "order": 1, "title": "Eins"},
+            {"lesson_id": "lesson-a3", "topic_id": "gleichungen", "unit_id": "gl-u1", "order": 3, "status": "draft"},
+            {"lesson_id": "lesson-b1", "topic_id": "gleichungen", "unit_id": "gl-u2", "order": 1},
+        ],
+    )
+
+    response = _app({"sub": "teacher-1", "role": "teacher"}).post(
+        "/teachers/ai-tools/exercise-drafts",
+        json={**_EXERCISE_DRAFT, "starIds": ["gl-u1"], "exerciseCount": 5},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["itemId"] for item in body["items"]] == ["ex-a1", "ex-a2"]
+    assert body["starIds"] == ["gl-u1"]
+    assert body["topicIds"] == ["gleichungen"]
+    assert body["exerciseCount"] == 2
+    assert body["title"] == "Eins"
+
+
+def test_without_bank_exercises_nothing_is_written_in_their_place(monkeypatch):
+    drafts = _install_draft_repo(monkeypatch)
+    _serve_requests(monkeypatch)
+    _install_bank(monkeypatch, [_exercise("ex-physics", subject_id="physics")])
+    client = _app({"sub": "teacher-1", "role": "teacher"})
+
+    empty_topic = client.post(
+        "/teachers/ai-tools/exercise-drafts", json={**_EXERCISE_DRAFT, "topicIds": ["gleichungen"]}
+    )
+    unknown_star = client.post(
+        "/teachers/ai-tools/exercise-drafts", json={**_EXERCISE_DRAFT, "starIds": ["no-such-star"]}
+    )
+    nothing_named = client.post("/teachers/ai-tools/exercise-drafts", json=_EXERCISE_DRAFT)
+
+    assert_violation(empty_topic, AiTeacherToolsErrorCode.NO_BANK_EXERCISES)
+    assert_violation(unknown_star, AiTeacherToolsErrorCode.NO_BANK_EXERCISES)
+    assert_violation(nothing_named, AiTeacherToolsErrorCode.TOPIC_REQUIRED)
+    assert drafts == {}
+
+
+def test_regenerating_gives_the_banks_next_exercises_first(monkeypatch):
+    _install_draft_repo(monkeypatch)
+    _serve_requests(monkeypatch)
+    _install_bank(monkeypatch, [_exercise(f"ex-{n}") for n in (1, 2, 3)])
+    client = _app({"sub": "teacher-1", "role": "teacher"})
+    created = client.post(
+        "/teachers/ai-tools/exercise-drafts", json={**_EXERCISE_DRAFT, "topicIds": ["gleichungen"]}
+    ).json()
+
+    regenerated = client.post(f"/teachers/ai-tools/drafts/{created['draftId']}/regenerate").json()
+
+    assert [item["itemId"] for item in created["items"]] == ["ex-1", "ex-2"]
+    assert [item["itemId"] for item in regenerated["items"]] == ["ex-3", "ex-1"]
+    assert regenerated["previousDraftId"] == created["draftId"]
+    assert regenerated["difficulty"] == "standard"
 
 
 def test_exercise_draft_rejects_out_of_bounds_count(monkeypatch):
@@ -148,7 +373,7 @@ def test_exercise_draft_rejects_out_of_bounds_count(monkeypatch):
             "studentId": "student-1",
             "subject": "math",
             "topicIds": ["fractions"],
-            "difficulty": "easy",
+            "difficulty": "targeted",
             "exerciseCount": 8,
             "questionId": "question-1",
         },
@@ -370,12 +595,18 @@ def test_a_help_requests_summary_seed_and_drafts_are_stored_as_before(monkeypatc
         dict(_PINNED_RECORD),
     )
 
+    _install_bank(
+        monkeypatch,
+        [_exercise(f"frac-{n}", topic_id="fractions", lesson_id="lesson-frac", difficulty="intro") for n in (1, 2)],
+        lessons=[{"lesson_id": "lesson-frac", "topic_id": "fractions", "unit_id": "frac-u1", "title": "Brüche"}],
+    )
+
     assistance.build_summary_seed(authorized, actor)
     ai_teacher_tools_service.create_summary_draft(authorized, actor)
     for question_id in ("conv-1", None):
         ai_teacher_tools_service.create_exercise_draft(
             student_id="student-1", subject="math", topic_ids=["fractions"],
-            difficulty="easy", exercise_count=2, actor=actor,
+            difficulty="targeted", exercise_count=2, actor=actor,
             authorized_context=authorized, question_id=question_id,
         )
 
@@ -444,29 +675,40 @@ def test_a_help_requests_summary_seed_and_drafts_are_stored_as_before(monkeypatc
             "sourceCount": 1,
         },
     }
+    # Since #519 an exercise draft holds the bank's exercises, not placeholders.
     exercise = {
         **reviewed_blank,
         "draft_type": "practice_exercise",
         "topic_ids": ["fractions"],
-        "difficulty": "easy",
+        "requested_topic_ids": ["fractions"],
+        "star_ids": [],
+        "difficulty": "targeted",
+        "requested_count": 2,
         "exercise_count": 2,
+        "lesson_id": "lesson-frac",
+        "title": "Brüche",
+        "exercise_source": "stoa_question_bank_v1",
         "items": [
             {
-                "itemId": f"item-{index}",
-                "prompt": f"Math practice {index}: solve a easy problem about fractions.",
-                "subject": "math",
-                "topicIds": ["fractions"],
-                "difficulty": "easy",
+                "itemId": f"frac-{index}",
+                "id": f"frac-{index}",
+                "lessonId": "lesson-frac",
+                "subjectId": "math",
+                "topicId": "fractions",
+                "type": "short_answer",
+                "prompt": f"Löse frac-{index}: 3x + 4 = 10",
+                "difficulty": "intro",
+                "estimatedMinutes": 5,
+                "skills": [],
+                "rolloutState": "active",
+                "source": "practice_backfill",
                 "reviewState": "draft",
             }
             for index in (1, 2)
         ],
-        "answer_key": [
-            {"itemId": f"item-{index}", "answer": f"Teacher-reviewed answer placeholder {index}"}
-            for index in (1, 2)
-        ],
+        "answer_key": [{"itemId": f"frac-{index}", "answer": "x = 2"} for index in (1, 2)],
         "explanations": [
-            {"itemId": f"item-{index}", "explanation": "Explain the reasoning around fractions step by step."}
+            {"itemId": f"frac-{index}", "explanation": "Subtrahiere 4, dann teile durch 3."}
             for index in (1, 2)
         ],
     }

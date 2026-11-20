@@ -1979,6 +1979,19 @@
         "retryable": false
       }
     },
+    "no_bank_exercises": {
+      "action": "correct_input",
+      "domain": "ai_teacher_tools",
+      "http_status": 400,
+      "message_key": "error.no_bank_exercises",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "no_teacher_reply_to_report": {
       "action": null,
       "domain": "moderation",
