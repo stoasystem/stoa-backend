@@ -400,7 +400,7 @@ def test_the_prompt_asks_for_quick_replies_with_the_limits_the_checks_keep() -> 
     assert f"at most {ask_answer.QUICK_REPLY_PROMPT_CHARS} characters" in system
     assert f"Never more than {ask_answer.QUICK_REPLY_COUNT}," in system
     # Its subject is filled in like the rest of the prompt.
-    assert "reject a question outside math." in system
+    assert f"reject a question outside {ask_answer.SUBJECT_IN_PROMPT}." in system
 
 
 @pytest.mark.parametrize(
@@ -542,7 +542,7 @@ def test_the_prompt_asks_for_common_mistakes_with_the_limits_the_checks_keep() -
     # The categories are named as the vocabulary has them, every one of them.
     for category in error_causes.CATEGORIES:
         assert f'"{category}"' in system
-    assert "reject a question outside math, and" in system
+    assert f"reject a question outside {ask_answer.SUBJECT_IN_PROMPT}, and" in system
     assert '"recentMistakes"' in system
 
 

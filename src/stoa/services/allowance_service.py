@@ -148,10 +148,16 @@ def record_provider_usage(
     model_id: str,
     input_tokens: int,
     output_tokens: int,
+    cache_write_input_tokens: int = 0,
+    cache_read_input_tokens: int = 0,
     observed_at: datetime | None = None,
     table: object | None = None,
 ) -> allowance_repo.ProviderUsageResult:
-    """Record provider-reported counts without retaining raw provider coordinates."""
+    """Record provider-reported counts without retaining raw provider coordinates.
+
+    `input_tokens` is every input token the reply read; the cache counts are
+    how many of them the provider wrote to and read from its cache (#442).
+    """
     observed = _aware(
         observed_at or datetime.now(timezone.utc),
         "observed_at",
@@ -166,6 +172,10 @@ def record_provider_usage(
         model_id_digest=_provider_digest("model_id", model_id),
         input_tokens=_exact_count(input_tokens, "input_tokens"),
         output_tokens=_exact_count(output_tokens, "output_tokens"),
+        cache_write_input_tokens=_exact_count(
+            cache_write_input_tokens, "cache_write_input_tokens"
+        ),
+        cache_read_input_tokens=_exact_count(cache_read_input_tokens, "cache_read_input_tokens"),
         observed_at=observed,
         table=table,
     )

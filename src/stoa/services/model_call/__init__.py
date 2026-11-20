@@ -6,6 +6,14 @@ output limit and temperature, the deadline, and optionally an admission hook,
 a callback for the partial tool input and a correlation id. The model id is
 read from the configuration.
 
+The system prompt comes in two parts (#442). `system` is what every call of
+its kind shares, word for word; with the tool, which is sent ahead of it, it
+is the prefix the provider caches, so only the first call in a while pays full
+price for it. `system_tail`, when given, is what changes from call to call
+(who is asking, in which subject, in which language), sent after the cache
+point. A prefix shorter than the model's minimum (1024 tokens on Sonnet 4.6)
+is simply not cached: the call is the same, and nothing is written or read.
+
 Inside, the order is fixed:
 
 1. build the request: the body that is sent, and from it the body that is
@@ -71,6 +79,10 @@ INCOMPLETE_OUTPUT = "incomplete_output"
 # Bedrock's error text is cut to about this many characters before it is logged.
 _PROVIDER_MESSAGE_CHARS = 300
 
+# Where the shared prefix ends (#442): the default five-minute cache, renewed
+# by every call that reads it.
+CACHE_POINT = {"type": "ephemeral"}
+
 
 # ── What the caller hands over ────────────────────────────────────────────────
 
@@ -115,7 +127,15 @@ made; anything it raises is the caller's and is not caught here.
 
 @dataclass(frozen=True, slots=True)
 class Usage:
-    """What one paid reply cost, exactly as the provider reported it."""
+    """What one paid reply cost, exactly as the provider reported it.
+
+    `input_tokens` is every input token the reply read, as many as the request
+    is counted at; of them, `cache_write_input_tokens` were written to the
+    provider's prompt cache and `cache_read_input_tokens` read from it (#442).
+    The three are priced differently (a write at about 1.25 times a plain input
+    token, a read at about a tenth); a student's weekly allowance counts them
+    all alike, as `input_tokens`.
+    """
 
     input_tokens: int
     output_tokens: int
@@ -124,6 +144,8 @@ class Usage:
     model: str
     inference_profile_id: str
     observed_at: datetime
+    cache_write_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
 
     @property
     def message_id_digest(self) -> str:
@@ -161,6 +183,8 @@ class Usage:
             modelIdDigest=model_id_digest,
             inputTokens=self.input_tokens,
             outputTokens=self.output_tokens,
+            cacheWriteInputTokens=self.cache_write_input_tokens,
+            cacheReadInputTokens=self.cache_read_input_tokens,
             providerCostRetained=True,
             observedAt=self.observed_at,
         )
@@ -241,6 +265,7 @@ def _adapter() -> Adapter:
 def call(
     *,
     system: str,
+    system_tail: str = "",
     messages: Sequence[Mapping[str, Any]],
     tool: Tool,
     max_tokens: int,
@@ -261,6 +286,7 @@ def call(
     model_id = config.settings().bedrock_model_id
     body = _invoke_body(
         system=system,
+        system_tail=system_tail,
         messages=messages,
         tool=tool,
         max_tokens=max_tokens,
@@ -306,17 +332,25 @@ def call(
 def _invoke_body(
     *,
     system: str,
+    system_tail: str = "",
     messages: Sequence[Mapping[str, Any]],
     tool: Tool,
     max_tokens: int,
     temperature: float,
 ) -> dict[str, Any]:
-    """The body that is sent: the tool forced, its input streamed as it is written."""
+    """The body that is sent: the tool forced, its input streamed as it is written.
+
+    The tool is sent ahead of the system prompt, so the one cache point, at the
+    end of the shared part of the system prompt, covers both.
+    """
     return {
         "anthropic_version": ANTHROPIC_VERSION,
         "max_tokens": max_tokens,
         "temperature": temperature,
-        "system": system,
+        "system": [
+            {"type": "text", "text": system, "cache_control": dict(CACHE_POINT)},
+            *([{"type": "text", "text": system_tail}] if system_tail else []),
+        ],
         "messages": [dict(message) for message in messages],
         "tools": [
             {
@@ -452,9 +486,19 @@ def _usage(
     request_id: str,
     inference_profile_id: str,
 ) -> Usage | None:
-    """The exact usage of the reply, or None when the provider's report does not hold together."""
-    input_tokens = usage.get("input_tokens")
+    """The exact usage of the reply, or None when the provider's report does not hold together.
+
+    The provider's `input_tokens` are only those neither written to nor read
+    from the cache; the reply read all three kinds, so `Usage.input_tokens` is
+    their sum. A cache count the provider leaves out, or sends as null, is none.
+    """
+    uncached_input = usage.get("input_tokens")
     output_tokens = usage.get("output_tokens")
+    cache_write = usage.get("cache_creation_input_tokens") or 0
+    cache_read = usage.get("cache_read_input_tokens") or 0
+    if not all(_exact_count(count) for count in (uncached_input, cache_write, cache_read)):
+        return None
+    input_tokens = uncached_input + cache_write + cache_read
     if (
         not isinstance(message_id, str)
         or not message_id.strip()
@@ -474,6 +518,8 @@ def _usage(
         model=model.strip(),
         inference_profile_id=inference_profile_id.strip(),
         observed_at=datetime.now(timezone.utc),
+        cache_write_input_tokens=cache_write,
+        cache_read_input_tokens=cache_read,
     )
 
 

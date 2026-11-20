@@ -318,15 +318,27 @@ def _system_prompt(
     return model.system()
 
 
-def _base_prompt(language: str = "de") -> str:
-    """The system prompt as it is built without any style: the pre-#314 text."""
-    return ask_answer.SYSTEM_PROMPT.format(
+def _head(language: str = "de") -> str:
+    """The shared rules, then this student's part (#442), up to where a style would go."""
+    shared = ask_answer.SYSTEM_PROMPT.format(
+        subject=ask_answer.SUBJECT_IN_PROMPT, grade=ask_answer.GRADE_IN_PROMPT
+    )
+    return shared + ask_answer.STUDENT_PROMPT.format(
         subject="math",
         subject_context=learning_profile_service.subject_prompt_context("math"),
         grade=ask_answer.grade_for_prompt("grade_7_secondary", language),
         language=language,
         language_name=ask_answer.language_name(language),
     )
+
+
+def _last(language: str = "de") -> str:
+    return ask_answer._LAST_INSTRUCTION.format(language_name=ask_answer.language_name(language))
+
+
+def _base_prompt(language: str = "de") -> str:
+    """The system prompt as it is built without any style: the pre-#314 text."""
+    return _head(language) + _last(language)
 
 
 @pytest.mark.parametrize("language", LOCALES)
@@ -353,7 +365,7 @@ def test_a_style_adds_its_paragraph_after_the_rules_and_changes_nothing_else(sty
     prompt = _system_prompt(language=language, answer_style=style)
     rule = ask_answer.answer_style_rule(style)
 
-    assert prompt == _base_prompt(language) + rule
+    assert prompt == _head(language) + rule.rstrip() + _last(language)
     assert ask_answer.ANSWER_STYLE_RULES[style] in rule
     for other in STYLED:
         if other != style:
@@ -365,9 +377,9 @@ def test_with_weak_topics_the_style_sits_between_the_rules_and_them(style):
     memory = "Known weak topics for this student: fractions."
     unstyled = _system_prompt(memory=memory)
     styled = _system_prompt(memory=memory, answer_style=style)
-    base = _base_prompt()
+    head = _head()
 
-    assert styled == base + ask_answer.answer_style_rule(style) + unstyled[len(base):]
+    assert styled == head + ask_answer.answer_style_rule(style) + unstyled[len(head):]
 
 
 @pytest.mark.parametrize("style", STYLED)

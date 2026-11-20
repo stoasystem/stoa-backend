@@ -26,6 +26,7 @@ from stoa.services.model_call.fake import FakeAdapter, Reply
 from stoa.services.curriculum_service import SUPPORTED_SUBJECTS
 
 import eval_ai_replies as evaluation
+from stoa.services.model_call.fake import system_text
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,11 +75,9 @@ class FakeModel(FakeAdapter):
         )
 
     def content(self, request: dict[str, Any]) -> dict[str, Any]:
-        system = request["system"] if isinstance(request["system"], str) else json.dumps(
-            request["system"]
-        )
+        system = system_text(request)
         language = re.search(r"DEFAULT LANGUAGE: (\w+)", system).group(1)
-        if re.search(r"related to \w+ at .+? level\.", system):
+        if re.search(r"related to .+? at .+? level\.", system):
             return {"steps": [], "answer": REFUSALS[language], "hints": [],
                     "knowledge_points": [], "suggest_teacher": False}
         steps, answer = REPLIES[language]
@@ -516,9 +515,7 @@ class StyleRecordingModel(FakeModel):
         self.leaking_style = leaking_style
 
     def content(self, request: dict[str, Any]) -> dict[str, Any]:
-        system = request["system"] if isinstance(request["system"], str) else json.dumps(
-            request["system"]
-        )
+        system = system_text(request)
         self.systems.append(system)
         content = super().content(request)
         leak = self.leaking_style

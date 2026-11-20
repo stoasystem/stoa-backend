@@ -382,9 +382,12 @@ def _report_fallback(payload: dict[str, Any], failure: str) -> dict[str, Any]:
 def _log_report_usage(usage: model_call.Usage) -> None:
     """What one report cost: provider cost only, charged to no allowance."""
     logger.info(
-        "Weekly report model call paid input_tokens=%s output_tokens=%s",
+        "Weekly report model call paid input_tokens=%s output_tokens=%s "
+        "cache_write_input_tokens=%s cache_read_input_tokens=%s",
         usage.input_tokens,
         usage.output_tokens,
+        usage.cache_write_input_tokens,
+        usage.cache_read_input_tokens,
     )
 
 

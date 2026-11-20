@@ -47,6 +47,7 @@ from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.dynamodb import transaction_canceled, from_wire
 from stoa.jobs import conversation_generation
 from stoa.services import curriculum_service
+from stoa.services.model_call.fake import system_text
 
 
 def _read_back(client) -> list[dict[str, Any]]:
@@ -87,7 +88,7 @@ def test_the_model_is_shown_every_star_on_the_student_s_map(
     assert f"{TITLES['brueche-kuerzen'][locale]} | lit" in turn
     assert f"{TITLES['teiler-vielfache'][locale]} | in_progress" in turn
     # Fenced data in the student's turn, never the system prompt.
-    assert TITLES["kraefte"][locale] not in body["system"]
+    assert TITLES["kraefte"][locale] not in system_text(body)
     # The model answers with the short ref, never with the unit id itself.
     assert "brueche-kuerzen" not in turn
 
@@ -135,7 +136,7 @@ def test_the_model_is_told_to_pick_from_the_map_before_writing_its_own(
 
     _done(_send(_client(), "key-1", language="de"))
 
-    system = bedrock.bodies[0]["system"]
+    system = system_text(bedrock.bodies[0])
     assert "star map" in system
     assert '{"id":"k1","name":"..."}' in system
     assert '{"id":null,"name":"..."}' in system
@@ -498,7 +499,7 @@ def test_without_the_map_nothing_is_taken_for_a_gap(
 
     assert _shown_stars(bedrock.bodies[0]) == {}
     # Nor is the model asked to pick from a map it was not shown.
-    assert "star map" not in bedrock.bodies[0]["system"]
+    assert "star map" not in system_text(bedrock.bodies[0])
     assert done["structured"]["knowledgePoints"] == [{"name": "Brüche kürzen", "unitId": None}]
     # It may well be on the map: the model just could not see it.
     assert _gaps(table) == {}

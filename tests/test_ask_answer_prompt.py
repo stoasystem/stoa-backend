@@ -13,6 +13,7 @@ import pytest
 
 from fakes.model import FakeModel, asking
 from stoa.services import ask_answer, learning_profile_service
+from stoa.services.model_call.fake import system_text
 
 _REPLY = {
     "steps": ["step one"],
@@ -48,7 +49,7 @@ def _invoke(**kwargs) -> dict:
 
 
 def _system_prompt(**kwargs) -> str:
-    return _invoke(**kwargs)["system"]
+    return system_text(_invoke(**kwargs))
 
 
 # ── Memory context actually reaches the wire ─────────────────────────────────
@@ -164,7 +165,9 @@ def test_the_model_answers_in_the_language_the_student_writes_or_asks_for():
 
 def test_the_model_reports_the_language_it_answered_in():
     prompt = _system_prompt(language="fr")
-    assert '{"language":"fr","steps":' in prompt
+    # The shape is the same for every student; the default is named apart (#442).
+    assert '{"language":"...","steps":' in prompt
+    assert "DEFAULT LANGUAGE: French (fr)" in prompt
 
 
 @pytest.mark.parametrize(
@@ -216,9 +219,9 @@ def test_a_question_above_the_grade_is_steered_to_an_explanation(subject, grade,
     named = learning_profile_service.grade_label(grade, "de")
     prompt = _system_prompt(subject=subject, grade=grade, content=content, language="de")
     assert f"ONLY answer questions related to {subject} at {named} level" not in prompt
-    assert f"The student is in {named}" in prompt
+    assert f"Year group: {named}\n" in prompt
     assert _DEPTH_GUIDE in prompt
-    assert f"far above {named}, first give a short accessible explanation" in prompt
+    assert f"far above {ask_answer.GRADE_IN_PROMPT}, first give a short accessible explanation" in prompt
     assert "question is too complex" not in prompt
     # The code is how the row is stored, never how the model is addressed.
     assert grade not in prompt
@@ -234,22 +237,71 @@ def test_a_blank_grade_is_sent_as_unknown_not_as_nothing(grade):
     """
     prompt = _system_prompt(subject="math", grade=grade, content="Was ist eine Ableitung?", language="de")
     unknown = ask_answer.UNKNOWN_GRADE
-    assert f"The student is in {unknown}: use that to choose the depth" in prompt
-    assert f"far above {unknown}, first give a short accessible explanation" in prompt
-    assert "The student is in :" not in prompt
+    assert f"Year group: {unknown}\n" in prompt
+    assert f"far above {ask_answer.GRADE_IN_PROMPT}, first give a short accessible explanation" in prompt
+    assert "Year group: \n" not in prompt
     assert "far above , first" not in prompt
     assert _DEPTH_GUIDE in prompt
 
 
 def test_a_question_within_the_grade_keeps_the_same_scope_and_depth_guide():
     prompt = _system_prompt(subject="math", grade="grade_6_primary", content="how do I add fractions?")
-    assert "You ONLY answer questions related to math." in prompt
+    assert f"You ONLY answer questions related to {ask_answer.SUBJECT_IN_PROMPT}." in prompt
+    assert "Subject: math\n" in prompt
     assert _DEPTH_GUIDE in prompt
     assert "Never give the final answer directly. Always explain step-by-step." in prompt
 
 
 def test_a_question_outside_the_subject_is_still_rejected():
     prompt = _system_prompt(subject="math", grade="grade_6_primary", content="Wer war Napoleon?")
-    assert "You ONLY answer questions related to math." in prompt
+    assert f"You ONLY answer questions related to {ask_answer.SUBJECT_IN_PROMPT}." in prompt
+    assert "Subject: math\n" in prompt
     assert "Stay strictly within the subject scope. Reject unrelated questions politely." in prompt
-    assert "Reject only questions outside math." in prompt
+    assert f"Reject only questions outside {ask_answer.SUBJECT_IN_PROMPT}." in prompt
+
+
+# ── The shared part is the same for every student (#442) ────────────────────
+
+
+def test_every_student_sends_the_same_cached_part_and_their_own_after_it():
+    """What is cached is word for word the same for any two students; who they are follows it."""
+    model = FakeModel(answer=_REPLY)
+    students = [
+        ("math", "grade_6_primary", "de", "Known weak topics: Brüche.", "vivid"),
+        ("physics", "", "it", None, "standard"),
+    ]
+    for subject, grade, language, memory, style in students:
+        ask_answer.answer(
+            ask_answer.Asked(content="how do I add fractions?"),
+            ask_answer.Asker(
+                student_id=f"student-{subject}",
+                subject=subject,
+                grade=grade,
+                locale=language,
+                memory_context=memory,
+                answer_style=style,
+            ),
+            asking(model, effect_id=f"effect-{subject}"),
+            read_star_map=lambda *_a, **_k: None,
+        )
+
+    first, second = model.requests
+    assert model.cached_system(0) == model.cached_system(1)
+    assert first["tools"] == second["tools"]
+    cached = model.cached_system(0)
+    for personal in ("Subject: math", "Brüche", "German (de)", "Mathematics", "ANSWER STYLE"):
+        assert personal not in cached
+    assert "Subject: math\n" in model.system(0)
+    assert "Subject: physics\n" in model.system(1)
+    assert "DEFAULT LANGUAGE: Italian (it)" in model.system(1)
+    assert model.system(1).endswith("Italian only when you cannot tell.")
+
+
+def test_the_star_map_rules_are_shared_too():
+    """With the star map the tool changes too, so its rules are cached alongside it."""
+    shared, student = ask_answer.system_prompts(
+        ask_answer.Asker(student_id="s", subject="math", grade="", locale="de"), star_map=True
+    )
+    assert '"target_unit_id"' in shared
+    assert '"id":"k1"' in shared
+    assert "target_unit_id" not in student

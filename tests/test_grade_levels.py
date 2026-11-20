@@ -218,7 +218,7 @@ def test_the_choice_list_ends_with_upper_secondary_in_the_reader_s_language(
 @pytest.mark.parametrize("language", LOCALES)
 def test_the_model_is_told_the_student_is_in_upper_secondary(language):
     prompt = _system_prompt(grade=UPPER, language=language)
-    assert f"The student is in {message_catalog.TEXT[f'grade.{UPPER}'][language]}:" in prompt
+    assert f"Year group: {message_catalog.TEXT[f'grade.{UPPER}'][language]}\n" in prompt
     assert UPPER not in prompt
     assert ask_answer.UNREADABLE_GRADE not in prompt
 
@@ -448,7 +448,7 @@ def test_text_stored_before_the_dropdown_still_cannot_reach_the_model(stored):
     """The prompt refuses unreadable stored text, whatever wrote it."""
     prompt = _system_prompt(grade=stored)
     assert stored not in prompt
-    assert f"The student is in {ask_answer.UNREADABLE_GRADE}:" in prompt
+    assert f"Year group: {ask_answer.UNREADABLE_GRADE}\n" in prompt
 
 
 @pytest.mark.parametrize("blank", ["", "   "])
@@ -543,7 +543,7 @@ def _system_prompt(*, grade: str, language: str = "de") -> str:
 def test_the_year_group_reaches_the_model_in_the_answer_language(language):
     prompt = _system_prompt(grade="grade_6_primary", language=language)
     named = message_catalog.TEXT["grade.grade_6_primary"][language]
-    assert f"The student is in {named}:" in prompt
+    assert f"Year group: {named}\n" in prompt
     # Negative control: no other language's wording came along, and the stored
     # code itself never appears.
     for other in LOCALES:
@@ -555,7 +555,7 @@ def test_the_year_group_reaches_the_model_in_the_answer_language(language):
 def test_every_code_reaches_the_model_as_words_and_never_as_a_code():
     for code in learning_profile_service.GRADE_LEVEL_CODES:
         prompt = _system_prompt(grade=code, language="de")
-        assert f"The student is in {message_catalog.TEXT[f'grade.{code}']['de']}:" in prompt
+        assert f"Year group: {message_catalog.TEXT[f'grade.{code}']['de']}\n" in prompt
         assert code not in prompt
 
 
@@ -566,29 +566,29 @@ def test_the_sentence_for_a_student_who_said_nothing_is_untouched(blank):
     assert ask_answer.UNKNOWN_GRADE == (
         "an unknown year group (none was given; pitch it at lower secondary school)"
     )
-    assert f"The student is in {ask_answer.UNKNOWN_GRADE}: use that to choose the depth" in prompt
+    assert f"Year group: {ask_answer.UNKNOWN_GRADE}\n" in prompt
     assert (
-        f"far above {ask_answer.UNKNOWN_GRADE}, first give a short accessible explanation"
+        f"far above {ask_answer.GRADE_IN_PROMPT}, first give a short accessible explanation"
         in prompt
     )
-    assert "The student is in :" not in prompt
+    assert "Year group: \n" not in prompt
 
 
 @pytest.mark.parametrize("stored", ["14", "sixth form"])
 def test_a_value_the_platform_cannot_read_never_reaches_the_model(stored):
     """The defect itself: the model was told "The student is in 14"."""
     prompt = _system_prompt(grade=stored)
-    assert f"The student is in {stored}" not in prompt
-    assert f"The student is in {ask_answer.UNREADABLE_GRADE}:" in prompt
+    assert f"Year group: {stored}" not in prompt
+    assert f"Year group: {ask_answer.UNREADABLE_GRADE}\n" in prompt
     # And it is not told the profile is empty, because the profile is not empty.
     assert ask_answer.UNKNOWN_GRADE not in prompt
 
 
 def test_free_text_still_in_the_table_is_named_properly_before_the_backfill_runs():
     prompt = _system_prompt(grade="Sek1", language="de")
-    assert "The student is in Sek1" not in prompt
+    assert "Year group: Sek1" not in prompt
     assert (
-        f"The student is in {message_catalog.TEXT['grade.grade_secondary_i']['de']}:" in prompt
+        f"Year group: {message_catalog.TEXT['grade.grade_secondary_i']['de']}\n" in prompt
     )
 
 

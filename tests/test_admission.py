@@ -397,6 +397,68 @@ def test_regular_and_sse_replay_finalize_one_exact_debit(
     assert len(table.evidence()) == 1
 
 
+def test_a_cached_reply_is_charged_every_input_token_and_says_how_many_were_cached(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#442: the week is charged the tokens as counted; the cache counts ride along."""
+    table = AtomicAllowanceTable()
+    provider = FakeModel(
+        Reply(
+            input=_CONTENT,
+            stop_reason="end_turn",
+            usage={
+                "input_tokens": 10,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 60,
+                "output_tokens": 25,
+            },
+        )
+    )
+    command, evidence = _answered(monkeypatch, table=table, provider=provider)
+
+    assert (
+        evidence.input_tokens,
+        evidence.cache_write_input_tokens,
+        evidence.cache_read_input_tokens,
+    ) == (70, 0, 60)
+    stored = evidence.to_json()
+    assert stored["provider_input_tokens"] == 70
+    assert stored["provider_cache_read_input_tokens"] == 60
+    assert "provider_cache_write_input_tokens" not in stored
+    assert UsageEvidence.from_json(json.loads(json.dumps(stored))) == evidence
+    # A cache count that is no count, or more than was read, is not evidence.
+    for malformed in (Decimal("1.5"), True, -1, 71):
+        assert UsageEvidence.from_json(
+            {**stored, "provider_cache_read_input_tokens": malformed}
+        ) is None
+
+    _admission.meter(command).observe(evidence)
+    response = _response(
+        "1. First durable step\n\nThe durable conversation answer"
+        "\n\n**Hinweis:** The same durable hint"
+    )
+    _answering._result_response(_completed(command, response, evidence))
+
+    counter = table.counter()
+    assert counter["finalized_input_tokens"] == 70
+    assert counter["provider_cost_input_tokens"] == 70
+    [item] = table.evidence()
+    assert item["input_tokens"] == 70
+    assert item["cache_read_input_tokens"] == 60
+    assert "cache_write_input_tokens" not in item
+    effect = _effect(table)
+    [read] = allowance_repo.list_provider_usage_evidence(
+        beneficiary_id=str(effect["beneficiary_id"]),
+        week_identity=str(effect["week_identity"]),
+        table=table,
+    )
+    assert (read.input_tokens, read.cache_write_input_tokens, read.cache_read_input_tokens) == (
+        70,
+        0,
+        60,
+    )
+
+
 def test_finalize_timeout_repairs_from_the_same_durable_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

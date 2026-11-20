@@ -135,14 +135,34 @@ class AllowanceReservation(_AllowanceModel):
 
 
 class ProviderUsageEvidence(_AllowanceModel):
+    """What one paid reply cost (the 用量凭据).
+
+    `input_tokens` is every input token the reply read, the number the weekly
+    allowance is charged; the two cache counts say how many of them the
+    provider wrote to and read from its prompt cache (#442), and are 0 on
+    evidence from before caching.
+    """
+
     evidence_id: OpaqueText = Field(alias="evidenceId")
     effect_id: OpaqueText = Field(alias="effectId")
     provider_request_id_digest: Sha256Digest = Field(alias="providerRequestIdDigest")
     model_id_digest: Sha256Digest = Field(alias="modelIdDigest")
     input_tokens: ExactNonnegativeCount = Field(alias="inputTokens")
     output_tokens: ExactNonnegativeCount = Field(alias="outputTokens")
+    cache_write_input_tokens: ExactNonnegativeCount = Field(
+        default=0, alias="cacheWriteInputTokens"
+    )
+    cache_read_input_tokens: ExactNonnegativeCount = Field(
+        default=0, alias="cacheReadInputTokens"
+    )
     provider_cost_retained: bool = Field(alias="providerCostRetained")
     observed_at: datetime = Field(alias="observedAt")
+
+    @model_validator(mode="after")
+    def validate_cache_counts(self) -> "ProviderUsageEvidence":
+        if self.cache_write_input_tokens + self.cache_read_input_tokens > self.input_tokens:
+            raise ValueError("cached input tokens exceed the input tokens")
+        return self
 
 
 class AllowanceFinalization(_AllowanceModel):

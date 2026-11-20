@@ -275,7 +275,10 @@ class UsageEvidence:
 
     Stored as `to_json()` on the command (`provider_result_json.allowance`,
     `result_json._allowance`) and on the assistant's message row; the stored
-    shape is the one written before this type existed.
+    shape is the one written before this type existed. `input_tokens` is every
+    input token the reply read; of them, the two cache counts were written to
+    and read from the provider's prompt cache (#442). They are stored only when
+    not 0, so a reply that touched no cache is kept as before.
     """
 
     effect_id: str
@@ -284,6 +287,8 @@ class UsageEvidence:
     model_id_digest: str
     input_tokens: int
     output_tokens: int
+    cache_write_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
 
     @classmethod
     def from_provider(
@@ -316,6 +321,9 @@ class UsageEvidence:
                 "provider_model_id_digest": usage.model_id_digest,
                 "provider_input_tokens": usage.input_tokens,
                 "provider_output_tokens": usage.output_tokens,
+                **_cache_counts(
+                    usage.cache_write_input_tokens, usage.cache_read_input_tokens
+                ),
             }
         )
         if evidence is None:
@@ -339,6 +347,8 @@ class UsageEvidence:
         # The table returns stored counts as Decimal.
         input_tokens = stored_int(value["provider_input_tokens"])
         output_tokens = stored_int(value["provider_output_tokens"])
+        cache_write = stored_int(value.get(_CACHE_WRITE_FIELD, 0))
+        cache_read = stored_int(value.get(_CACHE_READ_FIELD, 0))
         evidence_id = value["provider_usage_evidence_id"]
         if (
             not isinstance(evidence_id, str)
@@ -348,6 +358,11 @@ class UsageEvidence:
             or input_tokens < 0
             or output_tokens is None
             or output_tokens < 0
+            or cache_write is None
+            or cache_write < 0
+            or cache_read is None
+            or cache_read < 0
+            or cache_write + cache_read > input_tokens
         ):
             return None
         return cls(
@@ -357,6 +372,8 @@ class UsageEvidence:
             model_id_digest=str(value["provider_model_id_digest"]),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            cache_write_input_tokens=cache_write,
+            cache_read_input_tokens=cache_read,
         )
 
     def to_json(self) -> dict[str, object]:
@@ -368,10 +385,22 @@ class UsageEvidence:
             "provider_model_id_digest": self.model_id_digest,
             "provider_input_tokens": self.input_tokens,
             "provider_output_tokens": self.output_tokens,
+            **_cache_counts(self.cache_write_input_tokens, self.cache_read_input_tokens),
         }
 
 
 _FINALIZATION_STATUS = "durable_result_boundary"
+_CACHE_WRITE_FIELD = "provider_cache_write_input_tokens"
+_CACHE_READ_FIELD = "provider_cache_read_input_tokens"
+
+
+def _cache_counts(cache_write: int, cache_read: int) -> dict[str, int]:
+    """The stored cache counts: each only when not 0."""
+    return {
+        field: count
+        for field, count in ((_CACHE_WRITE_FIELD, cache_write), (_CACHE_READ_FIELD, cache_read))
+        if count
+    }
 _STORED_FIELDS = frozenset(
     {
         "allowance_effect_id",
@@ -418,6 +447,8 @@ class Meter:
             model_id=evidence.model_id_digest,
             input_tokens=evidence.input_tokens,
             output_tokens=evidence.output_tokens,
+            cache_write_input_tokens=evidence.cache_write_input_tokens,
+            cache_read_input_tokens=evidence.cache_read_input_tokens,
         )
         if (
             observed.disposition

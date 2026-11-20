@@ -12,6 +12,7 @@ from stoa.services import ask_answer, learning_profile_service
 from actor_helpers import install_actor_overrides
 from fakes import student_evidence as fake_evidence
 from fakes.model import FakeModel, Reply, asking
+from stoa.services.model_call.fake import system_text
 
 
 def _settings() -> Settings:
@@ -65,8 +66,8 @@ def test_ai_prompt_context_differs_for_language_subject(monkeypatch):
     )
 
     payload = model.requests[-1]
-    assert "language learning" in payload["system"]
-    assert "Subject label: German" in payload["system"]
+    assert "language learning" in system_text(payload)
+    assert "Subject label: German" in system_text(payload)
     assert [point.name for point in answer.structured.knowledgePoints] == ["word order"]
     assert answer.provider is not None
     assert answer.provider.usage.input_tokens == 31
