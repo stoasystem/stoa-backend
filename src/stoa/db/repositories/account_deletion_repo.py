@@ -302,6 +302,14 @@ CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY: Mapping[
         frozenset(),
         frozenset({"owner_id", "student_id", "teacher_id"}),
     ),
+    # A student's weekly AI token and teacher-help allowance rows name the
+    # student only as `beneficiary_id` (#534). The paying parent, where there
+    # is one, is `parent_id` and deliberately absent: a parent's deletion
+    # leaves the child's allowance as it is, as it leaves the child's other rows.
+    "allowance_counter": (frozenset({"beneficiary_id"}), frozenset(), frozenset()),
+    "allowance_effect": (frozenset({"beneficiary_id"}), frozenset(), frozenset()),
+    "provider_usage_evidence": (frozenset({"beneficiary_id"}), frozenset(), frozenset()),
+    "teacher_support_admission": (frozenset({"beneficiary_id"}), frozenset(), frozenset()),
 }
 
 
