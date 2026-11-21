@@ -22,6 +22,7 @@ from stoa.db.repositories import (
 from stoa.services import (
     current_relationship,
     email_layout,
+    knowledge_mastery_service,
     learning_session,
     locale_service,
     message_catalog,
@@ -112,7 +113,7 @@ REPORT_TOOL = model_call.Tool(
 _REPORT_SYSTEM_PROMPT = f"""You write weekly parent reports for STOA.
 
 Use only the structured report input provided by the user. Do not invent activity.
-Write warm, concise parent-facing English.
+Write warm, concise parent-facing text in the language `language` names: de German, en English, fr French, it Italian.
 
 Give the whole report as one call of `{REPORT_TOOL_NAME}` and nothing else:
 - summary: 2-3 sentences
@@ -120,6 +121,13 @@ Give the whole report as one call of `{REPORT_TOOL_NAME}` and nothing else:
 - weakTopics: each a topic name and a short note; empty when there are none
 - recommendations: short actions, at least one
 - teacherNote: an optional short note, or null
+
+What the student did on their own and with help from the AI:
+- answeredRight counts the exercises answered right for the first time this week: onOwn without asking the AI about them, afterAskingAi only after asking it.
+- starsLit is the stars lit this week: onOwn counts those lit mostly on the student's own; mostlyAfterAskingAi names those lit mostly with help from the AI.
+- Say in the summary how many exercises the student solved on their own and how many with help from the AI, and how many stars lit. Name every star in mostlyAfterAskingAi and recommend practising it again without asking the AI.
+- When afterAskingAi is 0 and mostlyAfterAskingAi is empty, do not mention the AI or help from it anywhere.
+- When nothing was solved and no star lit, say nothing about either.
 
 Do not mention providers, model names, prompts, systems, or implementation details."""
 
@@ -174,8 +182,11 @@ def build_weekly_learning_payload(
     parent = user_repo.get_user(parent_id) or {"user_id": parent_id}
     student = _get_linked_student_profile(parent_id, student_id)
 
+    # Written for the parent, so in the language the parent stored (#450), as
+    # the email frame around it is (#278); star titles too.
+    locale = locale_service.stored_locale(parent_id)
     questions = _list_all_questions(student_id)
-    evidence = student_evidence.for_student(student_id)
+    evidence = student_evidence.for_student(student_id, locale=locale)
     conversations = _list_conversations_for_student(student_id)
     # What Ask questions named that week (#143), read from its first day on.
     weekly_asked = [
@@ -193,6 +204,7 @@ def build_weekly_learning_payload(
     )
     weekly_progress = evidence.completions_between(*window)
     weekly_mistakes = list(evidence.mistakes_between(*window))
+    answered_right = evidence.right_answers_between(*window)
     weekly_conversations = [
         item
         for item in conversations
@@ -218,6 +230,7 @@ def build_weekly_learning_payload(
     )
 
     return {
+        "locale": locale,
         "parent": {
             "id": parent.get("user_id", parent_id),
             "email": parent.get("email", ""),
@@ -240,6 +253,13 @@ def build_weekly_learning_payload(
             "practiceLessonsCompleted": len(weekly_progress),
             "mistakesLogged": len(weekly_mistakes),
         },
+        # This week's newly solved exercises and lit stars, on the student's own
+        # and with help from Ask (#450).
+        "answeredRight": {
+            "onOwn": answered_right.independent,
+            "afterAskingAi": answered_right.asked_ai,
+        },
+        "starsLit": _stars_lit(evidence, *window),
         "weakTopics": weak_topics,
         "activities": activities,
         "sourceCounts": {
@@ -248,6 +268,33 @@ def build_weekly_learning_payload(
             "mistakes": len(weekly_mistakes),
             "conversations": len(weekly_conversations),
         },
+    }
+
+
+def _stars_lit(
+    evidence: student_evidence.StudentEvidence, start: datetime, end: datetime
+) -> dict[str, Any]:
+    """The stars lit in `[start, end)`: how many mostly on the student's own, and the rest by name (#450).
+
+    "Mostly after asking AI" is `knowledge_mastery_service.mostly_with_ai`, on
+    every right answer the star has, as the teacher sees it (#451). A report
+    without its stars still goes out, so a failed read leaves them out.
+    """
+    try:
+        lit = knowledge_mastery_service.lit_between(evidence, start, end)
+        counts = evidence.right_answers_by_unit
+        titles = {str(unit.get("id") or ""): unit.get("title") for unit in evidence.content.units}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Weekly report stars lit unavailable error_class=%s", type(exc).__name__)
+        return {"onOwn": 0, "mostlyAfterAskingAi": []}
+    with_ai = [
+        unit_id
+        for unit_id in lit
+        if knowledge_mastery_service.mostly_with_ai(counts.get(unit_id, student_evidence.RightAnswers()))
+    ]
+    return {
+        "onOwn": len(lit) - len(with_ai),
+        "mostlyAfterAskingAi": [str(titles.get(unit_id) or unit_id) for unit_id in with_ai],
     }
 
 
@@ -277,7 +324,10 @@ def build_bedrock_report_input(payload: dict[str, Any]) -> dict[str, Any]:
         for activity in payload.get("activities", [])[:_MAX_REPORT_ACTIVITIES]
     ]
 
+    answered = payload.get("answeredRight") or {}
+    stars = payload.get("starsLit") or {}
     return {
+        "language": _report_locale(payload),
         "student": {
             "name": student.get("name") or "Student",
             "grade": student.get("grade"),
@@ -300,8 +350,31 @@ def build_bedrock_report_input(payload: dict[str, Any]) -> dict[str, Any]:
             "mistakes": int(source_counts.get("mistakes", 0) or 0),
             "conversations": int(source_counts.get("conversations", 0) or 0),
         },
+        "answeredRight": {
+            "onOwn": _count(answered, "onOwn"),
+            "afterAskingAi": _count(answered, "afterAskingAi"),
+        },
+        "starsLit": {
+            "onOwn": _count(stars, "onOwn"),
+            "mostlyAfterAskingAi": _star_titles(stars),
+        },
         "activities": activities,
     }
+
+
+def _report_locale(payload: Mapping[str, Any]) -> str:
+    """The language a report is written in: the parent's, as the payload says (#450)."""
+    locale = payload.get("locale")
+    return locale if locale in locale_service.SUPPORTED_LOCALES else locale_service.DEFAULT_LOCALE
+
+
+def _count(values: Mapping[str, Any], key: str) -> int:
+    return int(values.get(key, 0) or 0)
+
+
+def _star_titles(stars: Mapping[str, Any]) -> list[str]:
+    """The stars lit mostly after asking AI, by name; all of them, they are few."""
+    return [str(title) for title in stars.get("mostlyAfterAskingAi") or [] if title]
 
 
 def parse_generated_report_json(raw_text: str) -> dict[str, Any]:
@@ -393,14 +466,27 @@ def _log_report_usage(usage: model_call.Usage) -> None:
 
 
 def build_deterministic_report_fallback(payload: dict[str, Any]) -> dict[str, Any]:
-    """Create truthful parent-facing report content without model output."""
+    """Create truthful parent-facing report content without model output.
+
+    In the parent's language, as the model is asked to write (#450). Help from
+    the AI is mentioned only for a week that had some.
+    """
+    locale = _report_locale(payload)
+
+    def copy(key: str, **values: Any) -> str:
+        return message_catalog.text(f"weekly_report.{key}", locale, **values)
+
     student = payload.get("student", {})
-    week = payload.get("week", {})
     metrics = payload.get("metrics", {})
-    name = student.get("name") or "your child"
-    week_range = _week_range_label(week)
-    total_activity = sum(
-        int(metrics.get(key, 0) or 0)
+    name = student.get("name") or message_catalog.text("email.weekly_report.student_fallback", locale)
+    week_range = _week_range_text(payload.get("week", {}), locale)
+    answered = payload.get("answeredRight") or {}
+    on_own, with_ai = _count(answered, "onOwn"), _count(answered, "afterAskingAi")
+    stars = payload.get("starsLit") or {}
+    stars_with_ai = _star_titles(stars)
+    stars_lit = _count(stars, "onOwn") + len(stars_with_ai)
+    total_activity = on_own + with_ai + stars_lit + sum(
+        _count(metrics, key)
         for key in (
             "questionsAsked",
             "practiceLessonsCompleted",
@@ -410,29 +496,53 @@ def build_deterministic_report_fallback(payload: dict[str, Any]) -> dict[str, An
     )
 
     if total_activity == 0:
-        summary = f"No weekly learning activity was recorded for {name} during {week_range}."
-        strengths = ["No specific strengths were recorded from this week's activity."]
-        recommendations = ["Encourage one short practice session before the next weekly report."]
+        summary = copy("summary.no_activity", student=name, week=week_range)
+        strengths = [copy("strength.none")]
+        recommendations = [copy("recommendation.start_practising", student=name)]
     else:
-        summary = (
-            f"During {week_range}, {name} asked {int(metrics.get('questionsAsked', 0) or 0)} "
-            f"question(s), completed {int(metrics.get('practiceLessonsCompleted', 0) or 0)} "
-            f"practice lesson(s), and logged {int(metrics.get('mistakesLogged', 0) or 0)} mistake(s)."
+        sentences = [
+            copy(
+                "summary.activity",
+                week=week_range,
+                student=name,
+                questions=_count(metrics, "questionsAsked"),
+                lessons=_count(metrics, "practiceLessonsCompleted"),
+                mistakes=_count(metrics, "mistakesLogged"),
+            )
+        ]
+        if with_ai:
+            sentences.append(
+                copy(
+                    "summary.solved_split",
+                    student=name,
+                    total=on_own + with_ai,
+                    on_own=on_own,
+                    with_ai=with_ai,
+                )
+            )
+        elif on_own:
+            sentences.append(copy("summary.solved_on_own", student=name, on_own=on_own))
+        if stars_lit:
+            sentences.append(copy("summary.stars_lit", count=stars_lit))
+        if stars_with_ai:
+            sentences.append(copy("summary.stars_mostly_with_ai", stars=", ".join(stars_with_ai)))
+        summary = " ".join(sentences)
+        strengths = _fallback_strengths(metrics, copy)
+        recommendations = _fallback_recommendations(
+            payload, copy, name=name, stars_with_ai=stars_with_ai
         )
-        strengths = _fallback_strengths(metrics)
-        recommendations = _fallback_recommendations(payload)
 
     weak_topics = [
         {
             "topic": str(topic.get("topic", "")),
-            "note": f"Seen in {int(topic.get('count', 0) or 0)} weekly signal(s).",
+            "note": copy("weak_topic.note", count=_count(topic, "count")),
         }
         for topic in payload.get("weakTopics", [])[:_MAX_REPORT_WEAK_TOPICS]
         if topic.get("topic")
     ]
     teacher_note = None
-    if int(metrics.get("teacherHelpRequests", 0) or 0) > 0:
-        teacher_note = "Teacher help was requested this week; review any follow-up from the teacher team."
+    if _count(metrics, "teacherHelpRequests") > 0:
+        teacher_note = copy("teacher_note")
 
     return {
         "summary": summary,
@@ -1083,31 +1193,37 @@ def _validate_parent_safe_content(content: dict[str, Any]) -> None:
         raise ValueError("generated report contains internal terms")
 
 
-def _week_range_label(week: dict[str, Any]) -> str:
-    start = week.get("start") or "the selected week"
-    end = week.get("end")
-    return f"{start} to {end}" if end else str(start)
-
-
-def _fallback_strengths(metrics: dict[str, Any]) -> list[str]:
+def _fallback_strengths(metrics: dict[str, Any], copy: Callable[..., str]) -> list[str]:
     strengths: list[str] = []
-    if int(metrics.get("aiResolved", 0) or 0) > 0:
-        strengths.append("Independent question practice was recorded this week.")
-    if int(metrics.get("practiceLessonsCompleted", 0) or 0) > 0:
-        strengths.append("Practice lessons were completed this week.")
-    if int(metrics.get("teacherHelpRequests", 0) or 0) > 0:
-        strengths.append("Support was requested when additional help was needed.")
-    return strengths or ["Learning activity was recorded this week."]
+    if _count(metrics, "aiResolved") > 0:
+        strengths.append(copy("strength.questions"))
+    if _count(metrics, "practiceLessonsCompleted") > 0:
+        strengths.append(copy("strength.practice"))
+    if _count(metrics, "teacherHelpRequests") > 0:
+        strengths.append(copy("strength.support"))
+    return strengths or [copy("strength.activity")]
 
 
-def _fallback_recommendations(payload: dict[str, Any]) -> list[str]:
+def _fallback_recommendations(
+    payload: dict[str, Any],
+    copy: Callable[..., str],
+    *,
+    name: str,
+    stars_with_ai: list[str],
+) -> list[str]:
     metrics = payload.get("metrics", {})
     topics = [topic.get("topic") for topic in payload.get("weakTopics", [])[:2] if topic.get("topic")]
     recommendations: list[str] = []
     if topics:
-        recommendations.append(f"Review {', '.join(str(topic) for topic in topics)} in the next practice session.")
-    if int(metrics.get("teacherHelpRequests", 0) or 0) > 0:
-        recommendations.append("Check whether any teacher follow-up needs attention.")
-    if int(metrics.get("practiceLessonsCompleted", 0) or 0) == 0:
-        recommendations.append("Schedule one short practice lesson to keep momentum.")
-    return recommendations or ["Continue with the next planned practice activity."]
+        recommendations.append(
+            copy("recommendation.review_topics", topics=", ".join(str(topic) for topic in topics))
+        )
+    if stars_with_ai:
+        recommendations.append(
+            copy("recommendation.retry_without_ai", student=name, stars=", ".join(stars_with_ai))
+        )
+    if _count(metrics, "teacherHelpRequests") > 0:
+        recommendations.append(copy("recommendation.teacher_follow_up"))
+    if _count(metrics, "practiceLessonsCompleted") == 0:
+        recommendations.append(copy("recommendation.schedule_practice"))
+    return recommendations or [copy("recommendation.continue")]

@@ -578,6 +578,31 @@ class StudentEvidence:
 
         return self._once("right_answers_by_unit", build)
 
+    def right_answers_between(self, start: datetime, end: datetime) -> RightAnswers:
+        """The exercises first answered right in `[start, end)`, split as `right_answers_by_unit` (#450).
+
+        A week's newly solved exercises, say: one answered right before `start`
+        is not new, and an answer after `end` does not count yet. Independent
+        when one of its right answers in the window came without asking first.
+        An answer whose moment cannot be read is not placed in any window.
+        """
+        before: set[str] = set()
+        alone: set[str] = set()
+        asked: set[str] = set()
+        for attempt in self._rows("attempts"):
+            exercise = _attempt_exercise(attempt)
+            if attempt.get("correct") is not True or not _judged(attempt) or not exercise:
+                continue
+            moment = _moment(attempt.get("created_at") or attempt.get("createdAt"))
+            if moment is None or moment >= end:
+                continue
+            if moment < start:
+                before.add(exercise)
+            else:
+                (asked if attempt.get("asked_ai") is True else alone).add(exercise)
+        alone -= before
+        return RightAnswers(independent=len(alone), asked_ai=len(asked - before - alone))
+
     @property
     def mistakes(self) -> tuple[dict[str, Any], ...]:
         """Every wrong answer, newest first.

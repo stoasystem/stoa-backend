@@ -14,7 +14,8 @@ one language each is in `emails.py` (#278). So are the codes of two reports a cl
 translates: the curriculum validation report (`curriculum_issue.<code>`,
 #112) and the usage reconciliation (`reconciliation.<code>`, #114), and the
 misconception a rule-inferred error cause records (`error_cause.<rule>`, #453), and
-the practice automation's reasons (`assignment_automation.<kind>.<code>`, #495). What is
+the practice automation's reasons (`assignment_automation.<kind>.<code>`, #495), and the
+weekly report STOA writes when the model gives none (`weekly_report.*`, #450). What is
 **not** here, on purpose:
 
 * **Internal error details**: what a log line or an `internal_detail` says.
@@ -41,6 +42,7 @@ from stoa.services.message_catalog.emails import TEXT as _EMAIL_TEXT
 from stoa.services.message_catalog.error_causes import TEXT as _ERROR_CAUSE_TEXT
 from stoa.services.message_catalog.errors import TEXT as _ERROR_TEXT
 from stoa.services.message_catalog.usage_reconciliation import TEXT as _RECONCILIATION_TEXT
+from stoa.services.message_catalog.weekly_report import TEXT as _WEEKLY_REPORT_TEXT
 
 _COPY: dict[str, dict[str, str]] = {
     # ── notifications ────────────────────────────────────────────────────
@@ -700,6 +702,7 @@ TEXT: dict[str, dict[str, str]] = _merged(
     _ERROR_TEXT,
     _ISSUE_TEXT,
     _RECONCILIATION_TEXT,
+    _WEEKLY_REPORT_TEXT,
 )
 
 

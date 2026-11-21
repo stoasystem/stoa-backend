@@ -331,6 +331,7 @@ def test_unlinked_student_raises(monkeypatch):
 
 def sample_report_payload():
     return {
+        "locale": "en",
         "parent": {"id": "parent-1", "email": "parent@example.com", "name": "Parent"},
         "student": {"id": "student-1", "email": "student@example.com", "name": "Student", "grade": "6"},
         "week": {"start": "2026-06-01", "end": "2026-06-07"},
@@ -486,7 +487,7 @@ def _model(*outcomes):
 
 def _assert_fallback(content):
     assert content == report_service.build_deterministic_report_fallback(sample_report_payload())
-    assert content["summary"].startswith("During 2026-06-01 to 2026-06-07")
+    assert content["summary"].startswith("This week (1 June 2026 to 7 June 2026), Student asked 3")
 
 
 def test_generate_weekly_report_content_asks_for_the_report_through_the_forced_tool():
@@ -632,10 +633,12 @@ def test_an_empty_week_falls_back_to_the_no_activity_report():
     content = report_service.generate_weekly_report_content(payload)
 
     assert content == {
-        "summary": "No weekly learning activity was recorded for Student during 2026-06-01 to 2026-06-07.",
+        "summary": "No learning activity was recorded for Student this week (1 June 2026 to 7 June 2026).",
         "strengths": ["No specific strengths were recorded from this week's activity."],
         "weakTopics": [],
-        "recommendations": ["Encourage one short practice session before the next weekly report."],
+        "recommendations": [
+            "Encourage Student to do one short practice session before the next weekly report."
+        ],
         "teacherNote": None,
     }
 

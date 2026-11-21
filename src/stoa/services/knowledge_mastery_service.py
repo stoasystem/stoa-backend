@@ -40,6 +40,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence, Set as AbstractSet
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -503,6 +504,33 @@ def mostly_with_ai(right: RightAnswers) -> bool:
     either. The one place this threshold is decided.
     """
     return right.asked_ai * 2 > right.independent + right.asked_ai
+
+
+def lit_between(evidence: StudentEvidence, start: datetime, end: datetime) -> tuple[str, ...]:
+    """The stars whose lighting was recorded in `[start, end)`, in the catalog's order (#450).
+
+    A lighting is recorded the next time the star map is drawn (#71), so one
+    earned at the very end of a week can land in the next. A `backfilled`
+    lighting is history rather than an event: its moment is when the ledger
+    opened, so it is in no window.
+    """
+    facts = evidence.lit_facts
+    return tuple(
+        unit_id
+        for unit in evidence.content.units
+        if (fact := facts.get(unit_id := str(unit.get("id") or ""))) is not None
+        and fact.source is not LitSource.BACKFILLED
+        and (moment := _lit_moment(fact.lit_at)) is not None
+        and start <= moment < end
+    )
+
+
+def _lit_moment(raw: str) -> datetime | None:
+    try:
+        moment = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
 def lit_mostly_with_ai(evidence: StudentEvidence) -> tuple[str, ...]:
