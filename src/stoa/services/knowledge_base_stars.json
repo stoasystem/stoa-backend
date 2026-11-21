@@ -3402,6 +3402,746 @@
     "gleichungen-exponential-und-logarithmusfunktionen",
     "zahlen-folgen-rekursion-und-induktion"
    ]
+  },
+  "deutsch-woerter-nomen": {
+   "topic_id": "deutsch-woerter",
+   "subject_id": "german",
+   "titles": {
+    "de": "Nomen: Geschlecht und Zahl",
+    "en": "Nouns: gender and number",
+    "fr": "Le nom : genre et nombre",
+    "it": "Il nome: genere e numero"
+   },
+   "description": "Nomen erkennen, ihr Geschlecht bestimmen und Singular und Plural bilden.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "deutsch-woerter-verb": {
+   "topic_id": "deutsch-woerter",
+   "subject_id": "german",
+   "titles": {
+    "de": "Verb: Grundform und Personalform",
+    "en": "Verbs: infinitive and finite form",
+    "fr": "Le verbe : infinitif et forme conjuguée",
+    "it": "Il verbo: infinito e forma personale"
+   },
+   "description": "Verben erkennen, Grundform und Personalform unterscheiden und die Personalform nach Person und Zahl bilden.",
+   "order": 2,
+   "prerequisites": []
+  },
+  "deutsch-woerter-adjektiv": {
+   "topic_id": "deutsch-woerter",
+   "subject_id": "german",
+   "titles": {
+    "de": "Adjektiv und Vergleichsformen",
+    "en": "Adjectives and comparison",
+    "fr": "L'adjectif et ses degrés",
+    "it": "L'aggettivo e i gradi di comparazione"
+   },
+   "description": "Adjektive erkennen und Positiv, Komparativ und Superlativ bilden.",
+   "order": 3,
+   "prerequisites": []
+  },
+  "deutsch-woerter-pronomen": {
+   "topic_id": "deutsch-woerter",
+   "subject_id": "german",
+   "titles": {
+    "de": "Pronomen und Artikel",
+    "en": "Pronouns and articles",
+    "fr": "Pronoms et articles",
+    "it": "Pronomi e articoli"
+   },
+   "description": "Pronomen erkennen und Personalpronomen sowie bestimmte und unbestimmte Artikel als Pronomen bestimmen.",
+   "order": 4,
+   "prerequisites": [
+    "deutsch-woerter-nomen"
+   ]
+  },
+  "deutsch-woerter-partikel": {
+   "topic_id": "deutsch-woerter",
+   "subject_id": "german",
+   "titles": {
+    "de": "Partikeln: Präposition, Konjunktion und weitere",
+    "en": "Particles: prepositions, conjunctions and others",
+    "fr": "Mots invariables : prépositions, conjonctions et autres",
+    "it": "Parole invariabili: preposizioni, congiunzioni e altre"
+   },
+   "description": "Unveränderliche Wörter erkennen und Präpositionen, Konjunktionen und übrige Partikeln unterscheiden.",
+   "order": 5,
+   "prerequisites": [
+    "deutsch-woerter-adjektiv",
+    "deutsch-woerter-nomen",
+    "deutsch-woerter-verb"
+   ]
+  },
+  "deutsch-woerter-wortbausteine": {
+   "topic_id": "deutsch-woerter",
+   "subject_id": "german",
+   "titles": {
+    "de": "Wortstamm, Vor- und Nachsilben",
+    "en": "Word stems, prefixes and suffixes",
+    "fr": "Radical, préfixes et suffixes",
+    "it": "Radice, prefissi e suffissi"
+   },
+   "description": "Wortstamm, Vor- und Nachsilben erkennen, Wörter einer Wortfamilie finden und zusammengesetzte Nomen zerlegen.",
+   "order": 6,
+   "prerequisites": []
+  },
+  "deutsch-formen-praesens-praeteritum-perfekt": {
+   "topic_id": "deutsch-formen",
+   "subject_id": "german",
+   "titles": {
+    "de": "Präsens, Präteritum und Perfekt",
+    "en": "Present, simple past and present perfect",
+    "fr": "Présent, prétérit et passé composé",
+    "it": "Presente, preterito e passato prossimo"
+   },
+   "description": "Präsens, Präteritum und Perfekt bilden und bestimmen, starke und schwache Verben unterscheiden und das Perfekt mit haben oder sein bilden.",
+   "order": 1,
+   "prerequisites": [
+    "deutsch-woerter-verb"
+   ]
+  },
+  "deutsch-formen-plusquamperfekt-futur": {
+   "topic_id": "deutsch-formen",
+   "subject_id": "german",
+   "titles": {
+    "de": "Plusquamperfekt und Futur",
+    "en": "Past perfect and future",
+    "fr": "Plus-que-parfait et futur",
+    "it": "Trapassato prossimo e futuro"
+   },
+   "description": "Plusquamperfekt, Futur I und Futur II bilden und bestimmen.",
+   "order": 2,
+   "prerequisites": [
+    "deutsch-formen-praesens-praeteritum-perfekt"
+   ]
+  },
+  "deutsch-formen-faelle": {
+   "topic_id": "deutsch-formen",
+   "subject_id": "german",
+   "titles": {
+    "de": "Die vier Fälle",
+    "en": "The four cases",
+    "fr": "Les quatre cas",
+    "it": "I quattro casi"
+   },
+   "description": "Nomen, Pronomen und Adjektive im richtigen Fall verwenden und Nominativ, Akkusativ, Dativ und Genitiv bestimmen.",
+   "order": 3,
+   "prerequisites": [
+    "deutsch-woerter-nomen",
+    "deutsch-woerter-pronomen"
+   ]
+  },
+  "deutsch-formen-modus": {
+   "topic_id": "deutsch-formen",
+   "subject_id": "german",
+   "titles": {
+    "de": "Indikativ, Imperativ und Konjunktiv",
+    "en": "Indicative, imperative and subjunctive",
+    "fr": "Indicatif, impératif et subjonctif",
+    "it": "Indicativo, imperativo e congiuntivo"
+   },
+   "description": "Indikativ, Imperativ, Konjunktiv I und II bestimmen, den Imperativ bilden und den Konjunktiv für indirekte Rede und Nichtwirkliches verwenden.",
+   "order": 4,
+   "prerequisites": [
+    "deutsch-formen-praesens-praeteritum-perfekt"
+   ]
+  },
+  "deutsch-formen-aktiv-passiv": {
+   "topic_id": "deutsch-formen",
+   "subject_id": "german",
+   "titles": {
+    "de": "Aktiv und Passiv",
+    "en": "Active and passive",
+    "fr": "Actif et passif",
+    "it": "Attivo e passivo"
+   },
+   "description": "Aktiv und Passiv bestimmen und Sätze vom Aktiv ins Passiv umformen.",
+   "order": 5,
+   "prerequisites": [
+    "deutsch-formen-plusquamperfekt-futur"
+   ]
+  },
+  "deutsch-saetze-satzarten": {
+   "topic_id": "deutsch-saetze",
+   "subject_id": "german",
+   "titles": {
+    "de": "Satzarten und Satzschlusszeichen",
+    "en": "Sentence types and end punctuation",
+    "fr": "Types de phrases et ponctuation finale",
+    "it": "Tipi di frase e punteggiatura finale"
+   },
+   "description": "Aussage-, Frage- und Aufforderungssätze unterscheiden und Punkt, Fragezeichen und Ausrufezeichen richtig setzen.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "deutsch-saetze-verbale-teile": {
+   "topic_id": "deutsch-saetze",
+   "subject_id": "german",
+   "titles": {
+    "de": "Verbale Teile im Satz",
+    "en": "Verb parts in a sentence",
+    "fr": "Les parties verbales de la phrase",
+    "it": "Le parti verbali della frase"
+   },
+   "description": "Personalform, Infinitiv, Partizip II und Verbzusatz im Satz finden.",
+   "order": 2,
+   "prerequisites": [
+    "deutsch-formen-praesens-praeteritum-perfekt",
+    "deutsch-woerter-verb"
+   ]
+  },
+  "deutsch-saetze-satzglieder-proben": {
+   "topic_id": "deutsch-saetze",
+   "subject_id": "german",
+   "titles": {
+    "de": "Satzglieder und Proben",
+    "en": "Sentence parts and tests",
+    "fr": "Groupes de la phrase et manipulations",
+    "it": "Componenti della frase e prove"
+   },
+   "description": "Mit Verschiebe-, Ersatz- und Weglassprobe die Satzglieder eines Satzes abgrenzen.",
+   "order": 3,
+   "prerequisites": [
+    "deutsch-woerter-verb"
+   ]
+  },
+  "deutsch-saetze-subjekt-objekte": {
+   "topic_id": "deutsch-saetze",
+   "subject_id": "german",
+   "titles": {
+    "de": "Subjekt und Objekte",
+    "en": "Subject and objects",
+    "fr": "Sujet et compléments d'objet",
+    "it": "Soggetto e complementi oggetto"
+   },
+   "description": "Subjekt und Objekt unterscheiden und Akkusativ-, Dativ- und Genitivobjekte bestimmen.",
+   "order": 4,
+   "prerequisites": [
+    "deutsch-formen-faelle",
+    "deutsch-saetze-satzglieder-proben"
+   ]
+  },
+  "deutsch-saetze-praepositionalgruppen": {
+   "topic_id": "deutsch-saetze",
+   "subject_id": "german",
+   "titles": {
+    "de": "Präpositionalgruppen",
+    "en": "Prepositional phrases",
+    "fr": "Groupes prépositionnels",
+    "it": "Gruppi preposizionali"
+   },
+   "description": "Präpositionalgruppen erkennen und von Objekten unterscheiden.",
+   "order": 5,
+   "prerequisites": [
+    "deutsch-saetze-subjekt-objekte",
+    "deutsch-woerter-partikel"
+   ]
+  },
+  "deutsch-saetze-haupt-nebensatz": {
+   "topic_id": "deutsch-saetze",
+   "subject_id": "german",
+   "titles": {
+    "de": "Hauptsatz und Nebensatz",
+    "en": "Main and subordinate clauses",
+    "fr": "Proposition principale et subordonnée",
+    "it": "Proposizione principale e subordinata"
+   },
+   "description": "Haupt- und Nebensätze an der Stellung des Verbs erkennen, Nebensätze mit Konjunktion oder Relativpronomen bilden und Sätze umformen.",
+   "order": 6,
+   "prerequisites": [
+    "deutsch-saetze-verbale-teile",
+    "deutsch-woerter-partikel",
+    "deutsch-woerter-pronomen"
+   ]
+  },
+  "deutsch-saetze-komma": {
+   "topic_id": "deutsch-saetze",
+   "subject_id": "german",
+   "titles": {
+    "de": "Kommaregeln",
+    "en": "Comma rules",
+    "fr": "Règles de la virgule",
+    "it": "Regole della virgola"
+   },
+   "description": "Kommas bei Aufzählungen, zwischen Teilsätzen, bei Infinitivgruppen, Einschüben und Relativsätzen richtig setzen.",
+   "order": 7,
+   "prerequisites": [
+    "deutsch-saetze-satzarten",
+    "deutsch-woerter-verb"
+   ]
+  },
+  "deutsch-saetze-direkte-rede": {
+   "topic_id": "deutsch-saetze",
+   "subject_id": "german",
+   "titles": {
+    "de": "Direkte und indirekte Rede",
+    "en": "Direct and reported speech",
+    "fr": "Discours direct et indirect",
+    "it": "Discorso diretto e indiretto"
+   },
+   "description": "Direkte Rede mit Anführungszeichen, Begleitsatz und Satzzeichen schreiben und Aussagen in indirekter Rede wiedergeben.",
+   "order": 8,
+   "prerequisites": [
+    "deutsch-saetze-satzarten"
+   ]
+  },
+  "deutsch-rechtschreibung-buchstaben-abc": {
+   "topic_id": "deutsch-rechtschreibung",
+   "subject_id": "german",
+   "titles": {
+    "de": "Buchstaben und Alphabet",
+    "en": "Letters and the alphabet",
+    "fr": "Les lettres et l'alphabet",
+    "it": "Le lettere e l'alfabeto"
+   },
+   "description": "Gross- und Kleinbuchstaben kennen, das Alphabet kennen und Wörter alphabetisch ordnen.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "deutsch-rechtschreibung-silben": {
+   "topic_id": "deutsch-rechtschreibung",
+   "subject_id": "german",
+   "titles": {
+    "de": "Silben, Reime und Worttrennung",
+    "en": "Syllables, rhymes and hyphenation",
+    "fr": "Syllabes, rimes et coupure des mots",
+    "it": "Sillabe, rime e divisione delle parole"
+   },
+   "description": "Silben zählen, Reimwörter finden und Wörter am Zeilenende richtig trennen.",
+   "order": 2,
+   "prerequisites": []
+  },
+  "deutsch-rechtschreibung-gross-klein": {
+   "topic_id": "deutsch-rechtschreibung",
+   "subject_id": "german",
+   "titles": {
+    "de": "Gross- und Kleinschreibung",
+    "en": "Capital and small letters",
+    "fr": "Majuscules et minuscules",
+    "it": "Maiuscole e minuscole"
+   },
+   "description": "Nomen und Nominalisierungen, Satzanfänge und Höflichkeitsformen gross schreiben, alles andere klein.",
+   "order": 3,
+   "prerequisites": [
+    "deutsch-woerter-nomen"
+   ]
+  },
+  "deutsch-rechtschreibung-lange-kurze-vokale": {
+   "topic_id": "deutsch-rechtschreibung",
+   "subject_id": "german",
+   "titles": {
+    "de": "Lange und kurze Vokale",
+    "en": "Long and short vowels",
+    "fr": "Voyelles longues et brèves",
+    "it": "Vocali lunghe e brevi"
+   },
+   "description": "Lange Vokale mit ie, Dehnungs-h und Doppelvokal, kurze Vokale mit Doppelkonsonant, ck und tz schreiben.",
+   "order": 4,
+   "prerequisites": []
+  },
+  "deutsch-rechtschreibung-s-ss": {
+   "topic_id": "deutsch-rechtschreibung",
+   "subject_id": "german",
+   "titles": {
+    "de": "s oder ss",
+    "en": "s or ss",
+    "fr": "s ou ss",
+    "it": "s o ss"
+   },
+   "description": "Entscheiden, ob ein Wort mit s oder ss geschrieben wird; die Schweizer Schreibung kennt kein Eszett.",
+   "order": 5,
+   "prerequisites": [
+    "deutsch-rechtschreibung-lange-kurze-vokale"
+   ]
+  },
+  "deutsch-rechtschreibung-aehnliche-laute": {
+   "topic_id": "deutsch-rechtschreibung",
+   "subject_id": "german",
+   "titles": {
+    "de": "Ähnlich klingende Laute",
+    "en": "Similar-sounding letters",
+    "fr": "Sons qui se ressemblent",
+    "it": "Suoni simili"
+   },
+   "description": "sp und st am Wortanfang, ä oder e, äu oder eu, f oder v, b, d und g am Wortende sowie end-/ent- und wider/wieder richtig schreiben.",
+   "order": 6,
+   "prerequisites": []
+  },
+  "deutsch-rechtschreibung-das-dass": {
+   "topic_id": "deutsch-rechtschreibung",
+   "subject_id": "german",
+   "titles": {
+    "de": "das oder dass",
+    "en": "das or dass",
+    "fr": "das ou dass",
+    "it": "das o dass"
+   },
+   "description": "Den Artikel und das Pronomen das von der Konjunktion dass unterscheiden.",
+   "order": 7,
+   "prerequisites": [
+    "deutsch-woerter-pronomen"
+   ]
+  },
+  "deutsch-rechtschreibung-getrennt-zusammen": {
+   "topic_id": "deutsch-rechtschreibung",
+   "subject_id": "german",
+   "titles": {
+    "de": "Getrennt- und Zusammenschreibung",
+    "en": "Writing words separately or together",
+    "fr": "Mots soudés ou séparés",
+    "it": "Parole unite o separate"
+   },
+   "description": "Entscheiden, ob Wortverbindungen getrennt, zusammen oder mit Bindestrich geschrieben werden.",
+   "order": 8,
+   "prerequisites": []
+  },
+  "deutsch-wortschatz-wortfelder": {
+   "topic_id": "deutsch-wortschatz",
+   "subject_id": "german",
+   "titles": {
+    "de": "Wortfelder und treffende Wörter",
+    "en": "Word fields and the right word",
+    "fr": "Champs lexicaux et mot juste",
+    "it": "Campi semantici e parola giusta"
+   },
+   "description": "Wörter eines Wortfelds ordnen, Synonyme und Gegensätze finden und das treffendste Wort wählen.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "deutsch-wortschatz-ober-unterbegriffe": {
+   "topic_id": "deutsch-wortschatz",
+   "subject_id": "german",
+   "titles": {
+    "de": "Ober- und Unterbegriffe",
+    "en": "General and specific terms",
+    "fr": "Termes génériques et spécifiques",
+    "it": "Iperonimi e iponimi"
+   },
+   "description": "Begriffe nach Ober- und Unterbegriffen ordnen.",
+   "order": 2,
+   "prerequisites": [
+    "deutsch-wortschatz-wortfelder"
+   ]
+  },
+  "deutsch-wortschatz-redewendungen": {
+   "topic_id": "deutsch-wortschatz",
+   "subject_id": "german",
+   "titles": {
+    "de": "Redewendungen und bildhafte Ausdrücke",
+    "en": "Idioms and figurative expressions",
+    "fr": "Expressions idiomatiques et imagées",
+    "it": "Modi di dire ed espressioni figurate"
+   },
+   "description": "Die Bedeutung von Redewendungen und bildhaften Ausdrücken verstehen und wörtliche von übertragener Bedeutung unterscheiden.",
+   "order": 3,
+   "prerequisites": []
+  },
+  "deutsch-wortschatz-fremdwoerter": {
+   "topic_id": "deutsch-wortschatz",
+   "subject_id": "german",
+   "titles": {
+    "de": "Fremdwörter und Fachbegriffe",
+    "en": "Loanwords and technical terms",
+    "fr": "Mots étrangers et termes techniques",
+    "it": "Parole straniere e termini tecnici"
+   },
+   "description": "Bedeutung und Schreibung gebräuchlicher Fremdwörter und Fachbegriffe kennen.",
+   "order": 4,
+   "prerequisites": []
+  },
+  "deutsch-texte-woerter-saetze-lesen": {
+   "topic_id": "deutsch-texte",
+   "subject_id": "german",
+   "titles": {
+    "de": "Wörter und Sätze lesen",
+    "en": "Reading words and sentences",
+    "fr": "Lire des mots et des phrases",
+    "it": "Leggere parole e frasi"
+   },
+   "description": "Einzelne Wörter und kurze Sätze lesen und verstehen.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "deutsch-texte-informationen": {
+   "topic_id": "deutsch-texte",
+   "subject_id": "german",
+   "titles": {
+    "de": "Informationen entnehmen",
+    "en": "Finding information",
+    "fr": "Trouver des informations",
+    "it": "Trovare informazioni"
+   },
+   "description": "Aus literarischen Texten und Sachtexten Informationen genau entnehmen.",
+   "order": 2,
+   "prerequisites": []
+  },
+  "deutsch-texte-kernaussage": {
+   "topic_id": "deutsch-texte",
+   "subject_id": "german",
+   "titles": {
+    "de": "Absicht, Pointe und Kernaussage",
+    "en": "Purpose, punchline and main message",
+    "fr": "Intention, chute et message principal",
+    "it": "Intenzione, battuta finale e messaggio centrale"
+   },
+   "description": "Die Absicht eines Textes, seine Pointe und seine Kernaussage erkennen.",
+   "order": 3,
+   "prerequisites": [
+    "deutsch-texte-informationen"
+   ]
+  },
+  "deutsch-texte-textsorten": {
+   "topic_id": "deutsch-texte",
+   "subject_id": "german",
+   "titles": {
+    "de": "Textsorten, Realität und Fiktion",
+    "en": "Text types, fact and fiction",
+    "fr": "Types de textes, réalité et fiction",
+    "it": "Tipi di testo, realtà e finzione"
+   },
+   "description": "Textsorten an ihren Merkmalen erkennen und Wirklichkeit von Erfundenem unterscheiden.",
+   "order": 4,
+   "prerequisites": [
+    "deutsch-texte-informationen"
+   ]
+  },
+  "deutsch-texte-deuten": {
+   "topic_id": "deutsch-texte",
+   "subject_id": "german",
+   "titles": {
+    "de": "Zwischen den Zeilen lesen",
+    "en": "Reading between the lines",
+    "fr": "Lire entre les lignes",
+    "it": "Leggere tra le righe"
+   },
+   "description": "Gedanken von Figuren und Unausgesprochenes erschliessen und den Inhalt eines Textes beurteilen.",
+   "order": 5,
+   "prerequisites": [
+    "deutsch-texte-kernaussage"
+   ]
+  },
+  "deutsch-texte-argumentation": {
+   "topic_id": "deutsch-texte",
+   "subject_id": "german",
+   "titles": {
+    "de": "Argumentation untersuchen",
+    "en": "Analysing arguments",
+    "fr": "Analyser une argumentation",
+    "it": "Analizzare un'argomentazione"
+   },
+   "description": "These, Argument und Beleg unterscheiden, Argumenttypen erkennen und Überreden von Überzeugen sowie manipulative Argumente unterscheiden.",
+   "order": 6,
+   "prerequisites": [
+    "deutsch-texte-kernaussage"
+   ]
+  },
+  "deutsch-literatur-erzaehlende-texte": {
+   "topic_id": "deutsch-literatur",
+   "subject_id": "german",
+   "titles": {
+    "de": "Märchen, Fabel, Sage und Kurzgeschichte",
+    "en": "Fairy tales, fables, legends and short stories",
+    "fr": "Conte, fable, légende et nouvelle",
+    "it": "Fiaba, favola, leggenda e racconto breve"
+   },
+   "description": "Erzählende Textsorten an ihren Merkmalen erkennen.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "deutsch-literatur-erzaehler": {
+   "topic_id": "deutsch-literatur",
+   "subject_id": "german",
+   "titles": {
+    "de": "Erzähler und Erzählperspektive",
+    "en": "Narrator and point of view",
+    "fr": "Narrateur et point de vue",
+    "it": "Narratore e punto di vista"
+   },
+   "description": "Ich- und Er-Erzähler unterscheiden und die Erzählperspektive bestimmen.",
+   "order": 2,
+   "prerequisites": [
+    "deutsch-literatur-erzaehlende-texte"
+   ]
+  },
+  "deutsch-literatur-erzaehltechnik": {
+   "topic_id": "deutsch-literatur",
+   "subject_id": "german",
+   "titles": {
+    "de": "Erzähltechnik",
+    "en": "Narrative technique",
+    "fr": "Techniques narratives",
+    "it": "Tecniche narrative"
+   },
+   "description": "Erzählzeit und erzählte Zeit, erlebte Rede und inneren Monolog erkennen.",
+   "order": 3,
+   "prerequisites": [
+    "deutsch-literatur-erzaehler"
+   ]
+  },
+  "deutsch-literatur-stilmittel": {
+   "topic_id": "deutsch-literatur",
+   "subject_id": "german",
+   "titles": {
+    "de": "Bildhafte Sprache und Stilmittel",
+    "en": "Figurative language and stylistic devices",
+    "fr": "Langage imagé et figures de style",
+    "it": "Linguaggio figurato e mezzi stilistici"
+   },
+   "description": "Vergleich, Metapher, Personifikation, Wiederholung und andere einfache Stilmittel erkennen.",
+   "order": 4,
+   "prerequisites": [
+    "deutsch-wortschatz-redewendungen"
+   ]
+  },
+  "deutsch-literatur-rhetorik": {
+   "topic_id": "deutsch-literatur",
+   "subject_id": "german",
+   "titles": {
+    "de": "Rhetorische Figuren",
+    "en": "Rhetorical figures",
+    "fr": "Figures de rhétorique",
+    "it": "Figure retoriche"
+   },
+   "description": "Anapher, Klimax, Chiasmus, Oxymoron, Ironie und weitere rhetorische Figuren und ihre Wirkung erkennen.",
+   "order": 5,
+   "prerequisites": [
+    "deutsch-literatur-stilmittel"
+   ]
+  },
+  "deutsch-literatur-gedichte": {
+   "topic_id": "deutsch-literatur",
+   "subject_id": "german",
+   "titles": {
+    "de": "Gedichte: Vers, Strophe und Reim",
+    "en": "Poems: line, stanza and rhyme",
+    "fr": "Poèmes : vers, strophe et rime",
+    "it": "Poesie: verso, strofa e rima"
+   },
+   "description": "Vers, Strophe und Reimschema bestimmen und Balladen als erzählende Gedichte erkennen.",
+   "order": 6,
+   "prerequisites": []
+  },
+  "deutsch-literatur-lyrik-formen": {
+   "topic_id": "deutsch-literatur",
+   "subject_id": "german",
+   "titles": {
+    "de": "Metrum und Gedichtformen",
+    "en": "Metre and verse forms",
+    "fr": "Mètre et formes poétiques",
+    "it": "Metrica e forme poetiche"
+   },
+   "description": "Jambus, Trochäus und Daktylus bestimmen und Gedichtformen wie das Sonett erkennen.",
+   "order": 7,
+   "prerequisites": [
+    "deutsch-literatur-gedichte"
+   ]
+  },
+  "deutsch-literatur-drama": {
+   "topic_id": "deutsch-literatur",
+   "subject_id": "german",
+   "titles": {
+    "de": "Drama: Aufbau und Formen",
+    "en": "Drama: structure and forms",
+    "fr": "Le théâtre : structure et formes",
+    "it": "Il dramma: struttura e forme"
+   },
+   "description": "Akt, Szene und Dialog, geschlossene und offene Form sowie Tragödie und Komödie unterscheiden.",
+   "order": 8,
+   "prerequisites": [
+    "deutsch-literatur-erzaehlende-texte"
+   ]
+  },
+  "deutsch-literatur-epochen-barock-klassik": {
+   "topic_id": "deutsch-literatur",
+   "subject_id": "german",
+   "titles": {
+    "de": "Literatur des 17. und 18. Jahrhunderts",
+    "en": "Literature of the 17th and 18th centuries",
+    "fr": "La littérature des XVIIe et XVIIIe siècles",
+    "it": "La letteratura del Seicento e del Settecento"
+   },
+   "description": "Barock, Aufklärung, Sturm und Drang und Klassik an ihren Merkmalen, Autorinnen, Autoren und Werken erkennen.",
+   "order": 9,
+   "prerequisites": [
+    "deutsch-literatur-erzaehlende-texte",
+    "deutsch-literatur-gedichte"
+   ]
+  },
+  "deutsch-literatur-epochen-romantik-gegenwart": {
+   "topic_id": "deutsch-literatur",
+   "subject_id": "german",
+   "titles": {
+    "de": "Literatur vom 19. Jahrhundert bis heute",
+    "en": "Literature from the 19th century to today",
+    "fr": "La littérature du XIXe siècle à nos jours",
+    "it": "La letteratura dall'Ottocento a oggi"
+   },
+   "description": "Romantik, Realismus, Naturalismus, Moderne sowie Nachkriegs- und Gegenwartsliteratur, auch aus der Schweiz, an ihren Merkmalen, Autorinnen, Autoren und Werken erkennen.",
+   "order": 10,
+   "prerequisites": [
+    "deutsch-literatur-epochen-barock-klassik"
+   ]
+  },
+  "deutsch-sprache-sprachvarietaeten": {
+   "topic_id": "deutsch-sprache",
+   "subject_id": "german",
+   "titles": {
+    "de": "Standardsprache, Mundart und Sprachvarietäten",
+    "en": "Standard German, dialect and language varieties",
+    "fr": "Allemand standard, dialecte et variétés",
+    "it": "Tedesco standard, dialetto e varietà linguistiche"
+   },
+   "description": "Standardsprache und Mundart je nach Situation, Helvetismen, Umgangs- und Fachsprache sowie Mündlichkeit und Schriftlichkeit unterscheiden.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "deutsch-sprache-kommunikation": {
+   "topic_id": "deutsch-sprache",
+   "subject_id": "german",
+   "titles": {
+    "de": "Kommunikation untersuchen",
+    "en": "Analysing communication",
+    "fr": "Analyser la communication",
+    "it": "Analizzare la comunicazione"
+   },
+   "description": "Kommunikationsmodelle und Sprechakte anwenden, Überreden und Überzeugen unterscheiden und Missverständnisse erklären.",
+   "order": 2,
+   "prerequisites": [
+    "deutsch-sprache-sprachvarietaeten"
+   ]
+  },
+  "deutsch-sprache-sprachwandel": {
+   "topic_id": "deutsch-sprache",
+   "subject_id": "german",
+   "titles": {
+    "de": "Sprachgeschichte und Sprachwandel",
+    "en": "Language history and change",
+    "fr": "Histoire et évolution de la langue",
+    "it": "Storia ed evoluzione della lingua"
+   },
+   "description": "Frühere Sprachstufen des Deutschen unterscheiden und Bedeutungswandel sowie Lehn- und Fremdwörter erklären.",
+   "order": 3,
+   "prerequisites": [
+    "deutsch-sprache-sprachvarietaeten"
+   ]
+  },
+  "deutsch-sprache-sprachsystem": {
+   "topic_id": "deutsch-sprache",
+   "subject_id": "german",
+   "titles": {
+    "de": "Sprache als System",
+    "en": "Language as a system",
+    "fr": "La langue comme système",
+    "it": "La lingua come sistema"
+   },
+   "description": "Sprachliche Zeichen und die Ebenen Laut, Wort, Satz, Bedeutung und Gebrauch mit Grundbegriffen der Sprachwissenschaft beschreiben.",
+   "order": 4,
+   "prerequisites": [
+    "deutsch-saetze-haupt-nebensatz",
+    "deutsch-woerter-wortbausteine"
+   ]
   }
  }
 }

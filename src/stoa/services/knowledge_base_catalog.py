@@ -13,6 +13,10 @@ knowledge base gets stars of its own beside them. English and physics are subjec
 of their own. A language subject is laid out by the situations of life it is used
 in and by its grammar, the same nebulae for every language.
 
+German as a first language (stoa-backend#498) has no upstream: its stars, their
+prerequisites and its exercises are written for STOA, so they come in final
+(AUTHORED_SUBJECTS) and the import does not split them.
+
 This module holds:
 
 - the nebulae and subjects, and the coarse stars the translation files each
@@ -404,6 +408,8 @@ LANGUAGE_GRAMMAR: tuple[tuple[str, dict[str, str], tuple[_Star, ...]], ...] = (
 )
 #: The language subjects and the prefix of their nebula ids. German, French or
 #: Italian learning gets the same nebulae by an entry here once it has content.
+#: German as a first language (`german`, stoa-backend#498) is not one of them:
+#: it has nebulae of its own, below.
 LANGUAGE_SUBJECTS: dict[str, str] = {"english": "englisch"}
 
 
@@ -509,6 +515,32 @@ PHYSICS_UNITS: tuple[dict[str, Any], ...] = (
                     "fächerübergreifende Projekte."},
 )
 
+#: German as a first language, as Swiss schools teach it (Lehrplan 21, the ZAP and
+#: the Gymnasium; stoa-backend#498): nebulae by field of the subject. Its stars are
+#: written by hand rather than split from an upstream, so they are final as they
+#: stand in knowledge_base_stars.json (see AUTHORED_SUBJECTS).
+GERMAN_TOPICS: tuple[tuple[str, dict[str, str]], ...] = (
+    ("deutsch-woerter", _titles("Wörter und Wortarten", "Words and word classes",
+                                "Les mots et leurs classes", "Parole e classi di parole")),
+    ("deutsch-formen", _titles("Formen von Verb und Nomen", "Forms of verbs and nouns",
+                               "Formes du verbe et du nom", "Forme del verbo e del nome")),
+    ("deutsch-saetze", _titles("Sätze untersuchen", "Analysing sentences", "Analyser les phrases",
+                               "Analizzare le frasi")),
+    ("deutsch-rechtschreibung", _titles("Rechtschreibung", "Spelling", "Orthographe", "Ortografia")),
+    ("deutsch-wortschatz", _titles("Wortschatz", "Vocabulary", "Vocabulaire", "Lessico")),
+    ("deutsch-texte", _titles("Texte verstehen", "Understanding texts", "Comprendre des textes",
+                              "Capire i testi")),
+    ("deutsch-literatur", _titles("Literatur und Stil", "Literature and style", "Littérature et style",
+                                  "Letteratura e stile")),
+    ("deutsch-sprache", _titles("Sprache und Kommunikation", "Language and communication",
+                                "Langue et communication", "Lingua e comunicazione")),
+)
+#: Subjects whose stars are written by hand, final, with their prerequisites: the
+#: import takes them as they are instead of splitting coarse stars, keeps every one
+#: of them in the star file whether or not it has practice yet, and numbers a star's
+#: stages by the grade band of its knowledge points.
+AUTHORED_SUBJECTS: frozenset[str] = frozenset({"german"})
+
 SUBJECTS: tuple[dict[str, Any], ...] = (
     {
         "subject_id": "english",
@@ -526,6 +558,14 @@ SUBJECTS: tuple[dict[str, Any], ...] = (
         "accent": "navy",
         "order": 3,
     },
+    {
+        "subject_id": "german",
+        "titles": _titles("Deutsch", "German", "Allemand", "Tedesco"),
+        "description": "Deutsch von der 1. Klasse bis zur Matura: Wortarten und Formen, Sätze, "
+                       "Rechtschreibung, Wortschatz, Texte, Literatur und Sprache.",
+        "accent": "gold",
+        "order": 4,
+    },
 )
 
 #: Grade levels of the imported lessons, the curriculum's grade vocabulary
@@ -540,6 +580,7 @@ UPPER_SECONDARY = "grade_secondary_ii"
 SUBJECT_GRADE_LEVELS: dict[str, tuple[str, ...]] = {
     "english": (*(GRADE_LEVELS[g] for g in range(3, 10)), UPPER_SECONDARY),
     "physics": (GRADE_LEVELS[8], GRADE_LEVELS[9], UPPER_SECONDARY),
+    "german": (*(GRADE_LEVELS[g] for g in range(1, 10)), UPPER_SECONDARY),
 }
 
 
@@ -609,6 +650,24 @@ QUESTION_TYPES: dict[str, tuple[tuple[str, dict[str, str], str], ...]] = {
                               "Diagrammi e grafici"),
          "Graphen, Schaltpläne, Tabellen lesen und deuten."),
     ),
+    "german": (
+        ("bestimmen", _titles("Bestimmen", "Identifying", "Identifier", "Riconoscere"),
+         "Wortart, Form, Fall, Satzglied, Satzart, Stilmittel oder Gattung erkennen und benennen."),
+        ("bilden", _titles("Formen bilden", "Forming and rewriting", "Former et transformer",
+                           "Formare e trasformare"),
+         "Die verlangte Form schreiben oder einen Satz umformen."),
+        ("rechtschreibung", _titles("Richtig schreiben", "Spelling and punctuation",
+                                    "Orthographe et ponctuation", "Ortografia e punteggiatura"),
+         "Die richtige Schreibung oder Zeichensetzung wählen oder ein Wort richtig schreiben."),
+        ("wortschatz", _titles("Wortschatz", "Vocabulary", "Vocabulaire", "Lessico"),
+         "Bedeutung von Wörtern und Wendungen, das passende Wort wählen."),
+        ("lesen", _titles("Leseverstehen", "Reading comprehension", "Compréhension écrite",
+                          "Comprensione del testo"),
+         "Fragen zu einem kurzen Text: Informationen, Absicht, Kernaussage, Deutung."),
+        ("begriffe", _titles("Begriffe und Regeln", "Terms and rules", "Notions et règles",
+                             "Termini e regole"),
+         "Fachbegriffe und Regeln kennen und richtig zuordnen."),
+    ),
 }
 #: At most this many upstream knowledge points go into one star.
 MAX_POINTS_PER_STAR = 12
@@ -618,6 +677,8 @@ EXTENSION_TYPES: dict[str, frozenset[str]] = {
     "mathematics": frozenset({"schliessen"}),
     "physics": frozenset({"experiment", "diagramme"}),
     "english": frozenset({"lesen", "aussprache"}),
+    # German is the language of the subject: reading is core practice, not beside it.
+    "german": frozenset({"begriffe"}),
 }
 
 
@@ -644,6 +705,7 @@ def topics() -> list[dict[str, Any]]:
     return [
         *_language_topics(),
         *_subject_topics("physics", PHYSICS_TOPICS),
+        *_subject_topics("german", GERMAN_TOPICS),
     ]
 
 
@@ -682,11 +744,21 @@ def subject_of_topic(topic_id: str) -> str:
             return subject_id
     if topic_id.startswith("physik-"):
         return "physics"
+    if topic_id.startswith("deutsch-"):
+        return "german"
     return "mathematics"
 
 
 def unit_choices(subject_id: str) -> dict[str, str]:
-    """coarse star id → German title and scope, for filing a knowledge point of the subject."""
+    """coarse star id → German title and scope, for filing a knowledge point of the subject.
+
+    An authored subject has no coarse stars: a knowledge point is filed under its
+    final star, as the star file holds it."""
+    if subject_id in AUTHORED_SUBJECTS:
+        return {
+            u["unit_id"]: f"{u['titles']['de']}: {u['description']}"
+            for u in units() if u["subject_id"] == subject_id
+        }
     if subject_id == "mathematics":
         added = {u["unit_id"]: f"{u['titles']['de']}: {u['description']}" for u in MATH_UNITS}
         return {**ZAP_UNITS, **added}

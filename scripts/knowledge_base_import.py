@@ -33,6 +33,15 @@ not allow commercial use without the author's permission, which the author gave
 in words on 2026-11-09 (recorded in docs/knowledge-base-import.md). Only the star
 file and the vocabulary (names) are committed. The
 operator steps are in docs/knowledge-base-import.md.
+
+German as a first language (stoa-backend#498) has no upstream. Its source.json is
+written for STOA in the same shape, with its stars in it, final (an authored
+subject, knowledge_base_catalog.AUTHORED_SUBJECTS): `structure --authored` takes
+them as they are, and `manifest --subject german` writes that subject's stars,
+small stars and practice sets and leaves every other subject's as it is. Its
+knowledge points carry their stage (the grade band) and the batch that brings
+their practice, so `--batch` puts only that batch's practice sets in the
+manifests.
 """
 
 from __future__ import annotations
@@ -57,6 +66,11 @@ LICENCE = "CC BY-NC 4.0"
 LOCALES = catalog.LOCALES
 
 SUBJECTS = {None: ("mathematics", "m"), "english": ("english", "e"), "physics": ("physics", "p")}
+#: Every subject of the knowledge base, in map order.
+SUBJECT_ORDER = ("mathematics", "english", "physics", "german")
+#: Source id prefix → the letter of the knowledge point ids: the upstream's three,
+#: and `de_` for the German written for STOA.
+POINT_PREFIXES = {"cnm": "m", "cne": "e", "cnp": "p", "de": "d"}
 #: Upstream fields that record the Chinese textbook or curriculum, never carried.
 TEXTBOOK_FIELDS = ("chapter", "semester", "standards", "root_reason", "external", "mathLinks")
 #: Upstream files that are textbook or upstream-process records, never read.
@@ -72,6 +86,9 @@ CJK = re.compile(r"[㐀-鿿！-～　-〿]")
 LETTERS = re.compile(r"[^\W\d_]")
 POINTS_PER_BATCH = 12
 MAX_UNORDERED_PARTS = 3
+#: What an authored subject's knowledge point carries beyond the upstream's: its
+#: stage in the star (the grade band) and the batch that brings its practice.
+AUTHORED_POINT_FIELDS = ("stage", "batch")
 
 
 # ── extract ──────────────────────────────────────────────────────────────────
@@ -79,7 +96,7 @@ MAX_UNORDERED_PARTS = 3
 
 def point_id(source_id: str) -> str:
     prefix, _, rest = source_id.partition("_")
-    letter = {"cnm": "m", "cne": "e", "cnp": "p"}.get(prefix)
+    letter = POINT_PREFIXES.get(prefix)
     if letter is None or not rest:
         raise ValueError(f"unexpected knowledge point id {source_id!r}")
     return f"kb-{letter}-{rest.lower()}"
@@ -214,7 +231,7 @@ def batches(source: Mapping[str, Any], size: int = POINTS_PER_BATCH) -> list[dic
     for exercise in source["exercises"]:
         by_point[exercise["point"]].append(exercise)
     out: list[dict[str, Any]] = []
-    for subject in ("mathematics", "english", "physics"):
+    for subject in SUBJECT_ORDER:
         points = [p for p in source["points"] if p["subject"] == subject]
         for start in range(0, len(points), size):
             chunk = points[start:start + size]
@@ -296,6 +313,9 @@ def merge(source: Mapping[str, Any], filled: Iterable[Mapping[str, Any]]) -> dic
     points = []
     for point in source["points"]:
         done = point_texts.get(point["id"])
+        if point.get("unit") and isinstance(done, Mapping):
+            # An authored point is written under its star; the translator does not file it.
+            done = {**done, "unit": point["unit"]}
         units = catalog.unit_choices(point["subject"])
         found = _check_point(point, done, units)
         if found:
@@ -303,6 +323,7 @@ def merge(source: Mapping[str, Any], filled: Iterable[Mapping[str, Any]]) -> dic
             continue
         points.append({
             **{k: point[k] for k in ("id", "sourceId", "subject", "grade", "kind")},
+            **{k: point[k] for k in AUTHORED_POINT_FIELDS if k in point},
             "unit": done["unit"],
             "text": {locale: dict(done[locale]) for locale in LOCALES},
         })
@@ -320,6 +341,8 @@ def merge(source: Mapping[str, Any], filled: Iterable[Mapping[str, Any]]) -> dic
             dropped.append({"sourceId": exercise["sourceId"], "reason": "its knowledge point was not translated"})
         else:
             item = {k: exercise[k] for k in ("id", "sourceId", "point", "difficulty", "type")}
+            if "questionType" in exercise:
+                item["questionType"] = exercise["questionType"]
             if exercise["type"] == "choice":
                 item["answerIndex"] = exercise["answerIndex"]
             item["text"] = {locale: dict(done[locale]) for locale in LOCALES}
@@ -358,6 +381,12 @@ OPERATOR_NOTE = (
     "Knowledge base adapted from cn-math-taxonomy (CC BY-NC 4.0; the author gave permission "
     "for this use on 2026-11-09). AI-written source, "
     "machine-translated into de/en/fr/it: every lesson is a draft for a teacher's review."
+)
+#: The note of a manifest of an authored subject's practice sets.
+AUTHORED_NOTE = (
+    "Knowledge base written for STOA (German as a first language, stoa-backend#498): original "
+    "exercises, the German material kept in every locale and the instructions translated "
+    "into en/fr/it; every lesson is a draft until its batch passes review."
 )
 
 
@@ -476,7 +505,8 @@ def structure_batches(
         by_point[exercise["point"]].append(exercise)
     titles = {unit["unit_id"]: unit["titles"]["de"] for unit in catalog.grouping_units()}
     out: list[dict[str, Any]] = []
-    for subject in ("mathematics", "english", "physics"):
+    # An authored subject's stars are final: nothing to split (structure --authored).
+    for subject in (s for s in SUBJECT_ORDER if s not in catalog.AUTHORED_SUBJECTS):
         groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for point in sorted(translated["points"], key=lambda p: (p["grade"], p["sourceId"])):
             if point["subject"] == subject:
@@ -644,6 +674,126 @@ def structure(
         "stars": dict(sorted(stars.items(), key=lambda item: (item[1]["topic_id"], item[1].get("order", 0)))),
         "points": point_star,
         "exercises": {e["id"]: types.get(e["id"]) for e in translated["exercises"]},
+        "problems": problems,
+    }
+
+
+#: The grades an authored star may span: 1 to 9, and 10 for upper secondary.
+AUTHORED_GRADES = range(1, 11)
+
+
+def _authored_star_problems(
+    star: Mapping[str, Any], known: Mapping[str, Mapping[str, Any]], topics: Mapping[str, str]
+) -> list[str]:
+    unit_id, topic_id = _text(star.get("unitId")), _text(star.get("topicId"))
+    if topics.get(topic_id) not in catalog.AUTHORED_SUBJECTS:
+        return [f"nebula {topic_id!r} is not one of an authored subject"]
+    slug = unit_id.removeprefix(f"{topic_id}-")
+    if slug == unit_id or len(slug) > MAX_STAR_SLUG:
+        return [f"unit id {unit_id!r} is not its nebula's id, a hyphen and a slug of at most {MAX_STAR_SLUG}"]
+    problems = _star_problems({**star, "slug": slug, "points": []})
+    grades = star.get("grades")
+    if (not isinstance(grades, list) or len(grades) != 2 or not all(g in AUTHORED_GRADES for g in grades)
+            or grades[0] > grades[1]):
+        problems.append(f"grades {grades!r} are not [first, last] within {AUTHORED_GRADES.start}-"
+                        f"{AUTHORED_GRADES.stop - 1}")
+        return problems
+    for required in star.get("prerequisites") or []:
+        before = known.get(required)
+        if before is None or required == unit_id:
+            problems.append(f"prerequisite {required!r} is not another star of the subject")
+        elif topics[before["topicId"]] != topics[topic_id]:
+            problems.append(f"prerequisite {required!r} is a star of another subject")
+        elif before["grades"][0] > grades[0]:
+            problems.append(f"prerequisite {required!r} starts at grade {before['grades'][0]}, "
+                            f"after this star's grade {grades[0]}")
+    offered = catalog.question_types(topics[topic_id])
+    for question_type in star.get("questionTypes") or []:
+        if question_type not in offered:
+            problems.append(f"question type {question_type!r} is not one of {sorted(offered)}")
+    return problems
+
+
+def authored_structure(source: Mapping[str, Any], translated: Mapping[str, Any]) -> dict[str, Any]:
+    """The stars of an authored subject as written in its source.json, checked, with
+    its knowledge points and exercises filed under them - structure.json's shape.
+
+    A star is final as written: its id, titles, description, grades and
+    prerequisites are taken as they are and every one goes in the star file, with
+    practice or without. Its order is its place among its nebula's stars in the
+    source; a prerequisite never starts at a later grade than the star needing it."""
+    topics = {row["topic_id"]: row["subject_id"] for row in catalog.topics()}
+    written = [star for star in source.get("stars") or [] if isinstance(star, Mapping)]
+    known = {_text(star.get("unitId")): star for star in written}
+    problems: list[dict[str, Any]] = []
+    if len(known) != len(written):
+        problems.append({"id": "stars", "problems": ["two stars have the same unit id"]})
+
+    stars: dict[str, dict[str, Any]] = {}
+    places: dict[str, int] = defaultdict(int)
+    for star in written:
+        unit_id = _text(star.get("unitId"))
+        found = _authored_star_problems(star, known, topics)
+        if found:
+            problems.append({"id": unit_id, "problems": found})
+            continue
+        topic_id = star["topicId"]
+        places[topic_id] += 1
+        stars[unit_id] = {
+            "topic_id": topic_id,
+            "subject_id": topics[topic_id],
+            "titles": {locale: _text(star["titles"][locale]) for locale in LOCALES},
+            "description": _text(star["description"]),
+            "points": [],
+            "grades": list(star["grades"]),
+            "order": places[topic_id],
+            "prerequisites": sorted(star.get("prerequisites") or []),
+            "authored": True,
+        }
+    graph = {unit_id: set(star["prerequisites"]) for unit_id, star in stars.items()}
+    for unit_id, star in stars.items():
+        if any(_closes_cycle(graph, unit_id, required) for required in star["prerequisites"]):
+            problems.append({"id": unit_id, "problems": ["its prerequisites lead back to it"]})
+
+    point_star: dict[str, str] = {}
+    authored_points = [p for p in translated["points"] if p["subject"] in catalog.AUTHORED_SUBJECTS]
+    for point in authored_points:
+        star = stars.get(point["unit"])
+        found = []
+        if star is None:
+            found.append(f"star {point['unit']!r} is not one of the written stars")
+        elif not star["grades"][0] <= point["grade"] <= star["grades"][1]:
+            found.append(f"grade {point['grade']} is outside its star's grades {star['grades']}")
+        if not isinstance(point.get("stage"), int) or point["stage"] < 1:
+            found.append("no stage")
+        if not _text(point.get("batch")):
+            found.append("no batch")
+        if found:
+            problems.append({"id": point["id"], "problems": found})
+            continue
+        star["points"].append(point["id"])
+        point_star[point["id"]] = point["unit"]
+    for star in stars.values():
+        if len(star["points"]) > catalog.MAX_POINTS_PER_STAR:
+            problems.append({"id": star["topic_id"], "problems": [
+                f"a star of more than {catalog.MAX_POINTS_PER_STAR} knowledge points"
+            ]})
+
+    types: dict[str, str | None] = {}
+    subject_of = {p["id"]: p["subject"] for p in authored_points}
+    for exercise in translated["exercises"]:
+        if exercise["point"] not in subject_of:
+            continue
+        types[exercise["id"]] = exercise.get("questionType")
+        if exercise.get("questionType") not in catalog.question_types(subject_of[exercise["point"]]):
+            problems.append({"id": exercise["id"], "problems": [
+                f"question type {exercise.get('questionType')!r} is not one of the subject's"
+            ]})
+    return {
+        "schema": STRUCTURE_SCHEMA,
+        "stars": stars,
+        "points": point_star,
+        "exercises": types,
         "problems": problems,
     }
 
@@ -936,6 +1086,7 @@ def manifests(
     built: Mapping[str, Any],
     source_version: str,
     zap: Sequence[Mapping[str, Any]] = (),
+    batch: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Draft practice sets - one per small star and stage of layers, cut in parts - with the
     report, the star file and the skill vocabulary the platform reads.
@@ -943,7 +1094,13 @@ def manifests(
     A set says which knowledge points come before it (`requiresPoints`): the
     star map tells a student which ones are not mastered yet instead of locking
     the set. A set of an extension question type does not count for lighting
-    its star (`extension`)."""
+    its star (`extension`).
+
+    An authored star's stages are its knowledge points' stages, numbered by grade
+    band and never joined, and every set says its stage: a later batch that brings
+    another band adds sets beside the published ones and changes none of them.
+    With `batch`, the manifests hold only the sets of that batch's knowledge
+    points; the star file and the vocabulary still hold every one."""
     points = {p["id"]: p for p in translated["points"]}
     requires = _requires(translated["prerequisites"])
     skipped = list(translated["skipped"])
@@ -962,7 +1119,11 @@ def manifests(
     report_exercises: list[dict[str, Any]] = []
     for unit_id, star in built["stars"].items():
         subject = star["subject_id"]
-        layer_of = point_layers(star["points"], translated["prerequisites"])
+        authored = subject in catalog.AUTHORED_SUBJECTS
+        if authored:
+            layer_of = {pid: points[pid]["stage"] for pid in star["points"]}
+        else:
+            layer_of = point_layers(star["points"], translated["prerequisites"])
         for type_index, (slug, _titles, _scope) in enumerate(catalog.QUESTION_TYPES[subject]):
             exercises = sorted(by_set.get((unit_id, slug), []), key=_exercise_order(points))
             if not exercises:
@@ -975,7 +1136,10 @@ def manifests(
             by_layer: dict[int, list[dict[str, Any]]] = defaultdict(list)
             for exercise in exercises:
                 by_layer[layer_of[exercise["point"]]].append(exercise)
-            staged = stages(by_layer)
+            if authored:
+                staged = [(layer, layer, list(held)) for layer, held in sorted(by_layer.items())]
+            else:
+                staged = stages(by_layer)
             for layer, last_layer, layered in staged:
                 cut = parts(layered)
                 for part_index, part in enumerate(cut, start=1):
@@ -983,13 +1147,15 @@ def manifests(
                     titles = {}
                     for locale in LOCALES:
                         title = type_titles[locale]
-                        if len(staged) > 1:
+                        if len(staged) > 1 or authored:
                             span = f"{layer}" if layer == last_layer else f"{layer}–{last_layer}"
                             title = f"{title} · {STAGE[locale]} {span}"
                         if len(cut) > 1:
                             title = f"{title} · {PART[locale]} {part_index}"
                         titles[locale] = title
                     practice_sets[lesson_id] = titles
+                    if batch is not None and {points[e["point"]].get("batch") for e in part} != {batch}:
+                        continue
                     grade = min(points[e["point"]]["grade"] for e in part)
                     covered = {e["point"] for e in part}
                     needed = sorted(set().union(*(requires.get(pid, set()) for pid in covered)) - covered)
@@ -1080,13 +1246,17 @@ def manifests(
                 for e in part
             )
 
-    trained = {skill["unit"] for skill in skills.values()}
+    # An upstream star is drawn once it has practice; an authored one is final as
+    # written, so it and all its prerequisites are drawn before its practice comes.
+    drawn = {skill["unit"] for skill in skills.values()} | {
+        unit_id for unit_id, star in built["stars"].items() if star["subject_id"] in catalog.AUTHORED_SUBJECTS
+    }
     stars_file = {
         "source": {"repository": UPSTREAM, "licence": LICENCE},
         "stars": {
             unit_id: {key: star[key] for key in ("topic_id", "subject_id", "titles", "description", "order")}
-            | {"prerequisites": [u for u in star["prerequisites"] if u in trained]}
-            for unit_id, star in built["stars"].items() if unit_id in trained
+            | {"prerequisites": [u for u in star["prerequisites"] if u in drawn]}
+            for unit_id, star in built["stars"].items() if unit_id in drawn
         },
     }
     vocabulary = {
@@ -1097,10 +1267,12 @@ def manifests(
     out = [
         {
             "source": {"sourceId": SOURCE_ID, "sourceVersion": source_version, "sourceType": "knowledge_base"},
-            "operatorNote": OPERATOR_NOTE,
-            "lessons": rows[start:start + LESSONS_PER_MANIFEST],
+            "operatorNote": AUTHORED_NOTE if all(
+                row["lesson"]["subjectId"] in catalog.AUTHORED_SUBJECTS for row in chunk
+            ) else OPERATOR_NOTE,
+            "lessons": chunk,
         }
-        for start in range(0, len(rows), LESSONS_PER_MANIFEST)
+        for chunk in (rows[start:start + LESSONS_PER_MANIFEST] for start in range(0, len(rows), LESSONS_PER_MANIFEST))
     ]
     report = {
         "upstream": translated["upstream"],
@@ -1127,6 +1299,57 @@ def manifests(
         "skipped": skipped,
     }
     return out, report, stars_file, vocabulary
+
+
+def _skill_of_practice_set(lesson_id: str) -> str:
+    """`<unit>--<type>--<stage>[-<part>]` → `<unit>--<type>`."""
+    return "--".join(lesson_id.split("--")[:2])
+
+
+def with_other_subjects(
+    old_stars: Mapping[str, Any],
+    old_vocabulary: Mapping[str, Any],
+    stars_file: Mapping[str, Any],
+    vocabulary: Mapping[str, Any],
+    subject: str | None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The star file and vocabulary to write: what this run made, and every other
+    subject's entries as they already are, byte for byte.
+
+    With `subject` (`manifest --subject`), only that subject is written: every
+    other subject's entries keep their place and the subject's come after them.
+    Without, the run writes the subjects it built, as before, and an authored
+    subject it did not build is kept after them, so a run over the upstream's
+    subjects leaves the German stars alone."""
+    old_skills = dict(old_vocabulary.get("skills") or {})
+    old_subjects = {star["subject_id"] for star in (old_stars.get("stars") or {}).values()} | {
+        skill["subject"] for skill in old_skills.values()
+    }
+    if subject is None:
+        written = {star["subject_id"] for star in stars_file["stars"].values()} | {
+            skill["subject"] for skill in vocabulary["skills"].values()
+        }
+        kept = (old_subjects & catalog.AUTHORED_SUBJECTS) - written
+    else:
+        kept = old_subjects - {subject}
+    kept_stars = {u: s for u, s in (old_stars.get("stars") or {}).items() if s["subject_id"] in kept}
+    kept_skills = {k: s for k, s in old_skills.items() if s["subject"] in kept}
+    kept_sets = {
+        lesson_id: titles for lesson_id, titles in (old_vocabulary.get("practiceSets") or {}).items()
+        if _skill_of_practice_set(lesson_id) in kept_skills
+    }
+    if subject is None:
+        stars = {**stars_file["stars"], **kept_stars}
+        skills = {**vocabulary["skills"], **kept_skills}
+        sets = {**vocabulary["practiceSets"], **kept_sets}
+    else:
+        stars = {**kept_stars, **stars_file["stars"]}
+        skills = {**kept_skills, **vocabulary["skills"]}
+        sets = {**kept_sets, **vocabulary["practiceSets"]}
+    return (
+        {**stars_file, "stars": stars},
+        {**vocabulary, "skills": skills, "practiceSets": sets},
+    )
 
 
 # ── command line ─────────────────────────────────────────────────────────────
@@ -1162,8 +1385,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--out-dir", type=Path, required=True)
     p = commands.add_parser("structure")
     p.add_argument("translated", type=Path)
-    p.add_argument("filled_dir", type=Path)
+    p.add_argument("filled_dir", type=Path, nargs="?", help="filled structuring batches (not with --authored)")
     p.add_argument("--merges", type=Path, help="filled merge batches to apply")
+    p.add_argument("--authored", type=Path, help="an authored subject's source.json: its stars, final")
     p.add_argument("--out", type=Path, required=True)
     p = commands.add_parser("merge-batches")
     p.add_argument("translated", type=Path)
@@ -1179,6 +1403,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                    help="ZAP staging files; their filled batches lie next to them")
     p.add_argument("--figures", type=Path, help="the figure staging file; its filled batches lie next to it")
     p.add_argument("--source-version", required=True, help="the upstream commit translated")
+    p.add_argument("--subject", choices=SUBJECT_ORDER,
+                   help="write only this subject's stars, small stars and practice sets; keep the others'")
+    p.add_argument("--batch", help="only the practice sets of this batch's knowledge points (e.g. B1)")
     args = parser.parse_args(argv)
 
     if args.command == "extract":
@@ -1204,9 +1431,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             _write(args.out_dir / f"{batch['batch']}.json", batch)
         print(f"{len(made)} structuring batches in {args.out_dir}")
     elif args.command == "structure":
-        filled = [_read(path) for path in sorted(args.filled_dir.glob("*.out.json"))]
-        merges = [_read(path) for path in sorted(args.merges.glob("*.out.json"))] if args.merges else []
-        built = structure(_read(args.translated), filled, merges)
+        if args.authored:
+            built = authored_structure(_read(args.authored), _read(args.translated))
+        elif args.filled_dir is None:
+            parser.error("structure needs the filled batches, or --authored")
+        else:
+            filled = [_read(path) for path in sorted(args.filled_dir.glob("*.out.json"))]
+            merges = [_read(path) for path in sorted(args.merges.glob("*.out.json"))] if args.merges else []
+            built = structure(_read(args.translated), filled, merges)
         _write(args.out, built)
         print(f"{len(built['stars'])} stars, {len(built['problems'])} records with problems")
         return 1 if built["problems"] else 0
@@ -1240,7 +1472,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"{len(zap_problems)} ZAP exercises still have problems: {zap_problems[:3]}")
                 return 1
             translated = {**translated, "skipped": [*translated["skipped"], *zap_dropped]}
-        made, report, stars_file, vocabulary = manifests(translated, built, args.source_version, zap)
+        if args.subject:
+            others = sorted({s["subject_id"] for s in built["stars"].values()} - {args.subject})
+            if others:
+                print(f"--subject {args.subject}, but structure.json has stars of {', '.join(others)}")
+                return 1
+        made, report, stars_file, vocabulary = manifests(
+            translated, built, args.source_version, zap, batch=args.batch
+        )
+        stars_file, vocabulary = with_other_subjects(
+            _read(args.stars) if args.stars.exists() else {},
+            _read(args.vocabulary) if args.vocabulary.exists() else {},
+            stars_file, vocabulary, args.subject,
+        )
         for old in args.out_dir.glob("manifest-*.json"):
             old.unlink()
         for index, manifest in enumerate(made, start=1):

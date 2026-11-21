@@ -3,7 +3,9 @@
 The knowledge base adapted from [cn-math-taxonomy](https://github.com/xiaoyang111222/cn-math-taxonomy)
 brings 1821 knowledge points (mathematics from the first year of primary school to
 upper secondary, English, physics), their prerequisite edges and a question bank,
-in German with English, French and Italian translations.
+in German with English, French and Italian translations. German as a first language
+has no upstream; its stars and exercises are written for STOA (see **German as a
+first language** below).
 
 In the star map a nebula is a field of knowledge, a **star is one knowledge point**
 and the **small stars around it are question types**. There are no lessons for the
@@ -150,7 +152,53 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
     `--knowledge-base-live mathematics` writes the mathematics stars active and keeps
     the English and physics nebulae and stars in preview, without their subject rows.
     The seed stamps that run as the mode `live:mathematics`, and the deploy check
-    recomputes the hash in it.
+    recomputes the hash in it. The subjects the flag knows come from
+    `knowledge_base_catalog.SUBJECTS`: once German is in the catalog, the bare
+    `--knowledge-base-live` writes German live too, so until German's own practice is
+    published every run names the others: `--knowledge-base-live mathematics english
+    physics` (see **German as a first language** below).
+
+## German as a first language
+
+German (#498) has no upstream. Its stars - 51 in the eight `deutsch-*` nebulae of
+`knowledge_base_catalog.GERMAN_TOPICS` - are written for STOA, final, with their
+prerequisites; so are its exercises, original ones in German. German is an
+*authored* subject (`AUTHORED_SUBJECTS`): the import takes its stars as they are,
+draws every one of them before its practice comes, and never splits them.
+
+Its data lives in `.scratch/kb-german/` (outside the repository): `source.json` in
+the shape of an extracted source, with a `stars` list. A German knowledge point is
+one grade band of a star and carries its `stage` (1 = grades 1-3, 2 = 4-6, 3 = 7-9,
+4 = upper secondary, written as grade 10) and the `batch` that brings its practice
+(B1 to B4, #546 and #548-#550). An exercise carries its `questionType`.
+
+1. **Batches and translation** as for the upstream (`batches`, translate by the
+   rules for *German as a subject* in `docs/knowledge-base-translation.md`,
+   `merge`), into the German folder.
+2. **Structure** from the written stars, with no structuring batches:
+   `... structure translated.json --authored source.json --out structure.json`
+   checks every star (its nebula, titles, grades, and that no prerequisite starts at
+   a later grade or leads back to it) and files each point and exercise under its
+   star.
+3. **Manifest** for German alone, one batch at a time:
+   `... manifest translated.json structure.json --subject german --batch B1
+   --out-dir manifests-b1/ --source-version <main commit>`. `--subject` writes the
+   German stars, small stars and practice sets into the committed files and leaves
+   every other subject's entries as they are, byte for byte; a run without it over
+   the upstream's subjects keeps the German entries. `--batch` puts only that
+   batch's practice sets in the manifests. A German set's stage is its grade band,
+   so a later batch adds sets beside the published ones (`...--bestimmen--1` beside
+   `...--bestimmen--2`) and changes none of them; every German set's title says its
+   stage.
+4. From there as for the others: commit the two files, deploy, dry run and apply the
+   manifests, review, publish.
+
+The stars went into production before their practice (#545): after the deploy,
+`seed_practice.py --knowledge-base-live mathematics english physics` (with
+`--dry-run` first) writes them in preview beside the three live subjects, and
+`layout_starmap.py --apply` places them. Until that run the deploy check reports the
+table as behind the code - the stamped mode `live` now includes German. German goes
+live once B1 is published (#547): then the bare `--knowledge-base-live` again.
 
 ### Running the seed again
 

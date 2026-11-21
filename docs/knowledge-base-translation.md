@@ -162,3 +162,27 @@ numbers:
 - `check` is a Python expression recomputing the answer from the adapted numbers
   (`F` = Fraction, `gcd`, `lcm`, `math`); the check refuses a task whose expression
   does not give the German answer.
+
+## German as a subject
+
+German as a first language (#498) has no upstream: its exercises are written for
+STOA in German, already Swiss, and the batches of `.scratch/kb-german/` are
+translated from German into English, French and Italian.
+
+- **The German material stays German in every locale**: the words, sentences, texts
+  and options the exercise is about, and the answer with its accepted answers, are
+  the same in `en`, `fr` and `it` as in `de`. Only the instructions and the
+  explanation are translated. Grammatical terms that are the material - `Nomen`,
+  `Akkusativ`, `Präteritum` - stay German; an explanation may add the locale's word
+  in brackets.
+- `de` is the source as written; fix only an obvious slip.
+- Swiss spelling throughout: `ss`, never `ß`. An answer a student may type with `ß`
+  lists that spelling in `accepted` - except in a spelling exercise, where the
+  spelling is what is asked.
+- Case: the judge does not compare capital and small letters, so a task about
+  them is a choice exercise. Punctuation: a choice exercise, or a number ("How
+  many commas are missing?").
+- Swiss words in the prompts (`Velo`, `Trottoir`); a typed answer accepts the
+  German one as well (`Fahrrad`, `Gehsteig`).
+- `unit`: the point's star as written in the source; a German point is filed under
+  its final star, not a coarse one.
