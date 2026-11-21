@@ -41,6 +41,14 @@ def _create(item: dict | None = None) -> dict:
     }
 
 
+@pytest.fixture(autouse=True)
+def pauses(monkeypatch) -> list[float]:
+    """The pauses between attempts, recorded instead of waited."""
+    waited: list[float] = []
+    monkeypatch.setattr(db_table, "_sleep", waited.append)
+    return waited
+
+
 @pytest.fixture
 def table() -> FakeTable:
     double = FakeTable()
@@ -206,12 +214,124 @@ class _Refusing(FakeTable):
         raise transaction_canceled(self.reasons)
 
 
-def test_a_busy_fence_row_does_not_pass_for_the_callers_operations_succeeding():
+def test_a_fence_row_still_busy_after_the_last_attempt_does_not_pass_for_success():
     with pytest.raises(db_table.WriteRefused) as raised:
         db_table.fenced(OWNER, [_create()], table=_Refusing(["TransactionConflict", "None"]))
 
     assert not isinstance(raised.value, account_deletion_repo.AccountDeletionConflict)
     assert raised.value.reasons == ()
+
+
+# -- another write of the same account holds a shared row (#563) ------------------------
+
+
+class _BusyFor(FakeTable):
+    """Cancels the first `times` transactions with `reasons`, then commits as usual."""
+
+    def __init__(self, reasons: list[str], times: int) -> None:
+        super().__init__()
+        self.seed(_fence(OWNER))
+        self.reasons = reasons
+        self.times = times
+        self.attempts: list[list[dict]] = []
+
+    @property
+    def sent(self) -> int:
+        return len(self.attempts)
+
+    def transact_write_items(self, **kwargs):
+        self.attempts.append(kwargs["TransactItems"])
+        if self.sent <= self.times:
+            raise transaction_canceled(self.reasons)
+        return super().transact_write_items(**kwargs)
+
+
+# Fence, the caller's put, the registry row for THING#1.
+_FENCE_BUSY = ["TransactionConflict", "None", "None"]
+_REGISTRY_BUSY = ["None", "None", "TransactionConflict"]
+
+
+@pytest.mark.parametrize("reasons", [_FENCE_BUSY, _REGISTRY_BUSY], ids=["fence", "registry"])
+def test_a_busy_shared_row_is_waited_out_and_the_write_commits(pauses, reasons):
+    busy = _BusyFor(reasons, times=1)
+
+    db_table.fenced(OWNER, [_create()], table=busy)
+
+    assert busy.rows[("THING#1", "META")]["value"] == "v"
+    assert busy.sent == 2
+    assert len(pauses) == 1
+
+
+def test_each_attempt_resends_the_same_transaction():
+    busy = _BusyFor(_FENCE_BUSY, times=2)
+
+    db_table.fenced(OWNER, [_create()], table=busy)
+
+    assert busy.sent == 3
+    assert busy.attempts[0] == busy.attempts[1] == busy.attempts[2]
+    # The fence was read once, before the first attempt, not again for each.
+    assert busy.calls["get_item"] == 1
+
+
+def test_a_shared_row_busy_on_every_attempt_gives_up_after_the_last(pauses):
+    busy = _BusyFor(_FENCE_BUSY, times=db_table.FENCE_CONFLICT_ATTEMPTS)
+
+    with pytest.raises(db_table.WriteRefused) as raised:
+        db_table.fenced(OWNER, [_create()], table=busy)
+
+    assert raised.value.reasons == ()
+    assert busy.sent == db_table.FENCE_CONFLICT_ATTEMPTS
+    assert len(pauses) == db_table.FENCE_CONFLICT_ATTEMPTS - 1
+    assert ("THING#1", "META") not in busy.rows
+
+
+def test_the_pauses_grow_and_stay_short(pauses):
+    busy = _BusyFor(_FENCE_BUSY, times=db_table.FENCE_CONFLICT_ATTEMPTS)
+
+    with pytest.raises(db_table.WriteRefused):
+        db_table.fenced(OWNER, [_create()], table=busy)
+
+    base = db_table.FENCE_CONFLICT_PAUSE_SECONDS
+    for retry, pause in enumerate(pauses, start=1):
+        assert base * 2 ** (retry - 1) / 2 <= pause <= base * 2 ** (retry - 1)
+    assert sum(pauses) < 0.5
+
+
+@pytest.mark.parametrize(
+    "reasons",
+    [
+        # The caller's own operation conflicts: the caller decides what to do.
+        ["None", "TransactionConflict", "None"],
+        # The fence and the caller's own operation both conflict.
+        ["TransactionConflict", "TransactionConflict", "None"],
+        # The caller's own condition does not hold: sending it again changes nothing.
+        ["None", "ConditionalCheckFailed", "None"],
+        # Capacity, or a reason nobody can name.
+        ["ThrottlingError", "None", "None"],
+        ["ValidationError", "None", "None"],
+        # Reasons that cannot be lined up with the operations.
+        ["TransactionConflict"],
+    ],
+    ids=["own-conflict", "fence-and-own", "own-condition", "throttled", "other", "unreadable"],
+)
+def test_anything_but_a_busy_shared_row_is_not_sent_again(pauses, reasons):
+    busy = _BusyFor(reasons, times=1)
+
+    with pytest.raises(db_table.WriteRefused):
+        db_table.fenced(OWNER, [_create()], table=busy)
+
+    assert busy.sent == 1
+    assert pauses == []
+
+
+def test_a_closed_fence_is_not_sent_again(pauses):
+    busy = _BusyFor(["ConditionalCheckFailed", "None", "None"], times=1)
+
+    with pytest.raises(account_deletion_repo.AccountNotWritable):
+        db_table.fenced(OWNER, [_create()], table=busy)
+
+    assert busy.sent == 1
+    assert pauses == []
 
 
 def test_an_unavailable_table_is_reported_as_such():

@@ -159,7 +159,8 @@ def answer_practice(
         )
         result = practice_projection_service.build_attempt_result(receipt)
     except Exception as error:  # noqa: BLE001
-        logger.warning("Practice attempt persistence failed")
+        # The type only: the error's text may quote the answer or the provider.
+        logger.warning("Practice attempt persistence failed error=%s", type(error).__name__)
         raise ReceiptUnavailable from error
 
     curriculum_analytics_service.record_practice_attempt(
