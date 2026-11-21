@@ -157,7 +157,6 @@ REVIEWED: dict[str, str] = {
     "src/stoa/db/repositories/attachment_repo.py::mark_saved_attachment_deletion_pending": "existing_partition",
     "src/stoa/db/repositories/identity_repo.py::record_session_revocation": "existing_partition",
     "src/stoa/db/repositories/public_identity_repo.py::advance_public_identity_command": "existing_partition",
-    "src/stoa/db/repositories/report_repo.py::put_recovery_job_audit_event": "existing_partition",
     "src/stoa/db/repositories/report_repo.py::put_report_audit_event": "existing_partition",
     "src/stoa/db/repositories/report_repo.py::request_recovery_job_cancellation": "existing_partition",
     "src/stoa/db/repositories/report_repo.py::try_claim_recovery_job": "existing_partition",

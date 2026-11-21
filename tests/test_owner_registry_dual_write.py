@@ -328,6 +328,32 @@ def test_a_recovery_job_registers_its_partition_for_each_targeted_student(table)
     assert _registry(table, TEACHER) == {"OWNS#REPORT_RECOVERY_JOB#job-1": "owner"}
 
 
+def test_a_recovery_audit_event_registers_the_parent_and_student_it_names(table):
+    """A target's parent is first named by the event that records the target (#573)."""
+    from stoa.db.repositories import report_repo
+
+    db_table.install(table)
+    try:
+        report_repo.put_recovery_job_audit_event(
+            "job-1",
+            {
+                "event_id": "event-1",
+                "event_at": "2026-11-21T10:00:00+00:00",
+                "job_id": "job-1",
+                "action": "resend_email_target",
+                "result": "success",
+                "metadata": {"target_id": "t1", "parent_id": PARENT, "student_id": STUDENT},
+            },
+        )
+    finally:
+        db_table.install(None)
+
+    assert ("REPORT_RECOVERY_JOB#job-1", "AUDIT#2026-11-21T10:00:00+00:00#event-1") in table.rows
+    assert _registry(table, PARENT) == {"OWNS#REPORT_RECOVERY_JOB#job-1": "owner"}
+    assert _registry(table, STUDENT) == {"OWNS#REPORT_RECOVERY_JOB#job-1": "owner"}
+    assert _registry(table, TEACHER) == {}
+
+
 # -- accounts a row names (#397 audit) ----------------------------------------------------
 
 

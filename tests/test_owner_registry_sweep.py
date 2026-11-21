@@ -25,6 +25,7 @@ SCRIPT = ROOT / "scripts" / "backfill_owner_registry.py"
 STUDENT = "8a1f0c52-0000-4000-8000-000000000001"
 TEACHER = "8a1f0c52-0000-4000-8000-000000000002"
 GONE = "8a1f0c52-0000-4000-8000-000000000003"
+PARENT = "8a1f0c52-0000-4000-8000-000000000004"
 
 
 def _fence(user_id: str, status: str = "active") -> dict:
@@ -159,6 +160,63 @@ def test_a_row_only_one_branchs_own_rule_takes_is_a_missing_registration():
 
     assert report.unregistered == {"REPORT_RECOVERY_JOB/SUMMARY": 1}
     assert not report.mentions
+
+
+def _recovery_target_event(parent: str, student: str) -> dict:
+    return {
+        "event_id": "e1",
+        "event_at": "2026-11-21T10:00:00+00:00",
+        "job_id": "j1",
+        "action": "resend_email_target",
+        "result": "success",
+        "metadata": {"target_id": "t1", "parent_id": parent, "student_id": student},
+    }
+
+
+def test_a_recovery_audit_event_naming_a_parent_needs_its_registration():
+    """The report branch takes the event for the parent its metadata names (#573)."""
+    double = FakeTable()
+    row = {
+        "PK": "REPORT_RECOVERY_JOB#j1",
+        "SK": "AUDIT#2026-11-21T10:00:00+00:00#e1",
+        "entity_type": "REPORT_RECOVERY_JOB_AUDIT_EVENT",
+        **_recovery_target_event(PARENT, STUDENT),
+    }
+    double.seed(
+        _fence(STUDENT),
+        _fence(PARENT),
+        row,
+        owner_registry.registry_item(STUDENT, "REPORT_RECOVERY_JOB#j1"),
+    )
+
+    report = sweep.run(table=double)
+
+    assert report.unregistered == {"REPORT_RECOVERY_JOB/AUDIT": 1}
+    assert report.unregistered_samples == [
+        {"PK": row["PK"], "SK": row["SK"], "account": PARENT, "role": "reference"}
+    ]
+
+
+def test_a_recovery_job_and_its_audit_events_are_complete_without_a_backfill():
+    """A parent named only as a target is registered by the event that names it (#573)."""
+    from stoa.db.repositories import report_repo
+
+    double = FakeTable()
+    double.seed(_fence(STUDENT), _fence(PARENT))
+    db_table.install(double)
+    try:
+        report_repo.put_recovery_job(
+            {"job_id": "j1", "status": "queued", "filters": {"status": "failed"}},
+            [{"target_id": "t1", "student_id": STUDENT, "parent_id": PARENT}],
+        )
+        report_repo.put_recovery_job_audit_event("j1", _recovery_target_event(PARENT, STUDENT))
+    finally:
+        db_table.install(None)
+
+    report = sweep.run(table=double)
+
+    assert report.registry_complete, report.as_dict()
+    assert not report.unregistered
 
 
 def test_a_scan_that_cannot_judge_the_row_counts_as_taking_it(monkeypatch):

@@ -177,6 +177,49 @@ def test_a_registry_path_deletion_completes_without_scanning_the_table(
     # complete, quiescent after two clean passes, stamped `473-36.v2`.
 
 
+def test_a_registry_path_deletion_of_a_parent_scrubs_the_recovery_audit_event_naming_it(
+    small_table: FakeTable, providers: dict[Kind, Any], registry_path
+) -> None:
+    """A parent named only as a recovery target, in an event's metadata (#573).
+
+    No backfill: the event's own write registers the parent, so the sweep
+    vouches for the table and the v2 deletion reads the job's partition.
+    """
+    from stoa.db.repositories import report_repo
+
+    parent = "parent-573"
+    small_table.seed(
+        {"PK": f"USER#{parent}", "SK": "PROFILE", "user_id": parent, "role": "parent",
+         "account_status": "active", "version": 1},
+        {"PK": f"USER#{parent}", "SK": "ACCOUNT_FENCE", "entity_type": "account_fence",
+         "user_id": parent, "status": "active", "generation": 1, "version": 1},
+    )
+    report_repo.put_recovery_job_audit_event(
+        "job-573",
+        {
+            "event_id": "event-1",
+            "event_at": "2026-11-21T10:00:00+00:00",
+            "job_id": "job-573",
+            "action": "resend_email_target",
+            "result": "success",
+            "metadata": {"target_id": "t1", "parent_id": parent, "student_id": "student-small"},
+        },
+    )
+    event_key = ("REPORT_RECOVERY_JOB#job-573", "AUDIT#2026-11-21T10:00:00+00:00#event-1")
+    assert _vouch(small_table).registry_complete
+    command_id = quick._accept(parent)
+    scans_before = small_table.calls["scan"]
+
+    command = _run(command_id, parent, small_table)
+
+    assert command["status"] == "complete", command.get("branch_results")
+    assert command["inventory_sha256"] == sha256(V2.read_bytes()).hexdigest()
+    assert small_table.calls["scan"] == scans_before
+    event = small_table.rows[event_key]
+    assert event["privacy_deleted"] is True
+    assert parent not in json.dumps(event, default=str)
+
+
 def test_without_the_backfill_the_guard_keeps_new_deletions_on_v1(
     table: FakeTable, providers: dict[Kind, Any], registry_path
 ) -> None:

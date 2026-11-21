@@ -704,14 +704,23 @@ def put_report_audit_event(report_id: str, event: ReportItem) -> None:
 def put_recovery_job_audit_event(job_id: str, event: ReportItem) -> None:
     """Append one immutable recovery job audit event."""
     table = db_table.table()
+    partition = f"REPORT_RECOVERY_JOB#{job_id}"
+    item = {
+        "PK": partition,
+        "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
+        "entity_type": "REPORT_RECOVERY_JOB_AUDIT_EVENT",
+        **event,
+    }
+    # Written outside `fenced` (an operator's job, not the account's write), so
+    # every account the event names in its metadata - a target's student and
+    # parent, or the job's filters - is registered here, before the event
+    # (#397, #573). `put_recovery_job` registers only targets' students and the
+    # summary's filters; a parent named only as a target is first named here.
+    for account in sorted(_recovery_job_record_accounts(item)):
+        _put_item(table, Item=owner_registry.registry_item(account, partition))
     _put_item(
         table,
-        Item={
-            "PK": f"REPORT_RECOVERY_JOB#{job_id}",
-            "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
-            "entity_type": "REPORT_RECOVERY_JOB_AUDIT_EVENT",
-            **event,
-        },
+        Item=item,
         ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
     )
 
