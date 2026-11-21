@@ -1155,3 +1155,88 @@ def test_the_committed_stars_and_skills_agree() -> None:
     assert {skill["unit"] for skill in skills.values()} <= stars
     for unit in knowledge_base_catalog.units():
         assert set(unit["prerequisites"]) <= stars
+
+
+#: Edges the upstream import drew from a later school year back to an earlier one,
+#: taken out or turned round by hand (stoa-backend#570): (star, its prerequisite).
+#: A re-run of `structure` / `manifest` for mathematics, English or physics would
+#: draw them again from the upstream edges; this keeps them out.
+YEAR_INVERTED_PREREQUISITES = (
+    ("englisch-saetze-aussagen-aufforderungen-und-ausrufe", "englisch-natur-wetter-und-jahreszeiten"),
+    ("englisch-saetze-ja-nein-fragen-und-question-tags", "englisch-verben-simple-past-und-past-progressive"),
+    ("englisch-freizeit-partys-und-feste", "englisch-saetze-bedingung-gegensatz-und-zweck"),
+    ("englisch-verben-pflicht-erlaubnis-und-vermutung", "englisch-verben-infinitiv-und-gerundium"),
+    ("englisch-kommunizieren-texte-verstehen-und-im-alltag-kommunizieren", "englisch-verben-perfekt-und-zeitformen-unterscheiden"),
+    ("englisch-natur-umweltschutz-und-klima", "englisch-verben-perfekt-und-zeitformen-unterscheiden"),
+    ("englisch-freizeit-feste-und-traditionen", "englisch-saetze-nominalsaetze-und-indirekte-rede"),
+    ("englisch-freizeit-musik-und-auffuehrungen", "englisch-saetze-relativsaetze-und-appositionssaetze"),
+    ("englisch-verben-pflicht-erlaubnis-und-vermutung", "englisch-verben-das-passiv"),
+    ("englisch-verben-infinitiv-und-gerundium", "englisch-verben-partizipien-und-partizipialkonstruktionen"),
+    ("groessen-gewicht-hohlmasse-und-geld", "groessen-laengen-und-flaechen"),
+    ("groessen-gewicht-hohlmasse-und-geld", "zahlen-plus-und-minus-bis-100"),
+    ("geometrie-ebene-figuren-und-vielecke", "geometrie-strecken-geraden-senkrechte-und-parallelen"),
+    ("geometrie-lage-richtung-und-koordinaten", "geometrie-strecken-geraden-senkrechte-und-parallelen"),
+    ("zahlen-muster-und-knobelaufgaben", "geometrie-strecken-geraden-senkrechte-und-parallelen"),
+    ("zahlen-rechengesetze-und-rechenreihenfolge", "zahlen-mehrstellig-multiplizieren-und-dividieren"),
+    ("zahlen-rechengesetze-und-rechenreihenfolge", "zahlen-plus-und-minus-bis-1000"),
+    ("geometrie-verschiebung-und-drehung", "geometrie-achsen-und-punktsymmetrie"),
+    ("geometrie-umfang-und-flaeche-ebener-figuren", "geometrie-dreiecke-und-winkelsummen"),
+    ("zahlen-rechnen-mit-dezimalzahlen", "zahlen-dezimalstellen-runden-und-ueberschlagen"),
+    ("daten-daten-ordnen-und-darstellen", "geometrie-winkel-messen-und-berechnen"),
+    ("geometrie-verschiebung-und-drehung", "geometrie-winkel-messen-und-berechnen"),
+    ("zahlen-muster-und-knobelaufgaben", "gleichungen-terme-aufstellen-und-berechnen"),
+    ("brueche-brueche-und-dezimalzahlen-verstehen", "zahlen-teilbarkeit-primzahlen-ggt-kgv"),
+    ("zahlen-muster-und-knobelaufgaben", "brueche-brueche-multiplizieren-und-dividieren"),
+    ("geometrie-volumen-und-oberflaeche-von-koerpern", "geometrie-koerper-darstellen-projektionen-schraegbilder"),
+    ("daten-daten-ordnen-und-darstellen", "prozentrechnung-prozente-und-prozentrechnung"),
+    ("daten-diagramme-und-histogramme-lesen", "prozentrechnung-prozente-und-prozentrechnung"),
+    ("geometrie-lage-richtung-und-koordinaten", "zahlen-negative-und-rationale-zahlen"),
+    ("daten-mittelwert-median-und-modalwert", "zahlen-negative-und-rationale-zahlen"),
+    ("daten-daten-ordnen-und-darstellen", "daten-statistische-untersuchungen-durchfuehren"),
+    ("daten-diagramme-und-histogramme-lesen", "daten-stichproben-und-stichprobenverfahren"),
+    ("geometrie-verschiebung-und-drehung", "geometrie-winkel-an-parallelen-und-beweise"),
+    ("geometrie-dreiecke-und-winkelsummen", "geometrie-winkel-an-parallelen-und-beweise"),
+    ("gleichungen-lineare-gleichungen-loesen", "gleichungen-rechnen-mit-polynomen"),
+    ("daten-mittelwert-median-und-modalwert", "zahlen-rechnen-mit-rationalen-zahlen"),
+    ("gleichungen-terme-aufstellen-und-berechnen", "zahlen-rechnen-mit-rationalen-zahlen"),
+    ("daten-statistische-untersuchungen-durchfuehren", "daten-streuung-quartile-und-boxplots"),
+    ("geometrie-koerper-ansichten-und-netze", "geometrie-kreis-umfang-flaeche-und-sektor"),
+    ("daten-diagramme-und-histogramme-lesen", "geometrie-kreis-umfang-flaeche-und-sektor"),
+    ("geometrie-volumen-und-oberflaeche-von-koerpern", "geometrie-kreis-umfang-flaeche-und-sektor"),
+    ("gleichungen-sachaufgaben-mit-gleichungen", "gleichungen-bruchterme-und-bruchgleichungen"),
+    ("geometrie-besondere-linien-inkreis-und-umkreis", "geometrie-kreissaetze-sehnen-tangenten-umfangswinkel"),
+    ("geometrie-trigonometrie", "gleichungen-bogenmass-und-einheitskreis"),
+    ("zahlen-mengenoperationen-und-logik", "zahlen-mengen-und-teilmengen"),
+    ("gleichungen-ungleichungen-und-ihre-eigenschaften", "zahlen-mengen-und-teilmengen"),
+    ("daten-ereignisse-und-mehrstufige-zufallsexperimente", "zahlen-mengen-und-teilmengen"),
+    ("physik-elektrizitaet-kraefte-im-magnetfeld-und-elektromotor", "physik-elektrizitaet-coulombsches-gesetz-und-elektrisches-feld"),
+    ("physik-elektrizitaet-elektrische-energie-leistung-und-haushalt", "physik-elektrizitaet-potential-spannung-und-kondensator"),
+    ("physik-elektrizitaet-elektromagnetische-wellen-und-nachrichtentechnik", "physik-elektrizitaet-potential-spannung-und-kondensator"),
+    ("physik-elektrizitaet-schaltungen-und-innenwiderstand-berechnen", "physik-elektrizitaet-potential-spannung-und-kondensator"),
+    ("physik-elektrizitaet-elektromagnetische-wellen-und-nachrichtentechnik", "physik-elektrizitaet-wechselstrom-transformator-und-selbstinduktion"),
+    ("physik-elektrizitaet-kraefte-im-magnetfeld-und-elektromotor", "physik-mechanik-kreisbewegung-und-gravitation"),
+    ("physik-modern-kernphysik-und-energieversorgung", "physik-modern-relativitaet-und-quantenphysik"),
+    ("physik-waerme-thermodynamik-und-waermekraftmaschinen", "physik-waerme-ideales-gas-und-kinetische-gastheorie"),
+)
+
+
+def test_no_star_waits_on_a_later_school_year_again() -> None:
+    """The prerequisites #570 removed stay removed, and the stars' graph has no cycle."""
+    drawn = {unit["unit_id"]: unit["prerequisites"] for unit in knowledge_base_catalog.units()}
+
+    back = [(star, before) for star, before in YEAR_INVERTED_PREREQUISITES if before in drawn[star]]
+    assert back == []
+
+    colour: dict[str, int] = {}
+
+    def visit(unit_id: str) -> None:
+        colour[unit_id] = 1
+        for before in drawn[unit_id]:
+            assert colour.get(before) != 1, f"cycle through {before}"
+            if before not in colour:
+                visit(before)
+        colour[unit_id] = 2
+
+    for unit_id in drawn:
+        if unit_id not in colour:
+            visit(unit_id)

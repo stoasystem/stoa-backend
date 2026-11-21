@@ -100,6 +100,15 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
    `structure/<batch>.out.json`.
 7. **Structure:** `... structure translated.json structure/ --out structure.json` - checks
    every star and every question type, and derives the stars' prerequisites.
+   The upstream edges follow Chinese textbook years, and a star spans several of our
+   school years. A star's year is its earliest published practice set, so an edge that
+   holds only for a star's later sets can put a later-year star before an earlier one.
+   The mathematics, English and physics prerequisites in the committed
+   `knowledge_base_stars.json` were corrected by hand against Lehrplan 21: 55 such edges
+   were removed, reversed or replaced (stoa-backend#570). Re-running `structure` and
+   `manifest` for those subjects draws the upstream edges again;
+   `test_no_star_waits_on_a_later_school_year_again` fails if the removed edges come
+   back, and the hand edits have to be carried over.
 8. **Manifest:** `... manifest translated.json structure.json --out-dir manifests/
    --source-version <commit>` writes `manifest-NNN.json` (40 draft practice sets each),
    `report.json`, and the two committed files.

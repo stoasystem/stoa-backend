@@ -34,8 +34,7 @@
    "order": 4,
    "prerequisites": [
     "groessen-gewicht-hohlmasse-und-geld",
-    "zahlen-einmaleins-und-teilen",
-    "zahlen-teilbarkeit-primzahlen-ggt-kgv"
+    "zahlen-einmaleins-und-teilen"
    ]
   },
   "brueche-brueche-multiplizieren-und-dividieren": {
@@ -67,9 +66,6 @@
    "description": "Daten sortieren, mit Strichlisten und Häufigkeitstabellen erfassen und in passenden, ehrlichen Diagrammen darstellen.",
    "order": 3,
    "prerequisites": [
-    "daten-statistische-untersuchungen-durchfuehren",
-    "geometrie-winkel-messen-und-berechnen",
-    "prozentrechnung-prozente-und-prozentrechnung",
     "zahlen-plus-und-minus-bis-100",
     "zahlen-stellenwerte-und-zahlensysteme",
     "zahlen-zahlenraum-bis-20"
@@ -102,9 +98,7 @@
    "description": "Durchschnitt, gewichtetes Mittel, Median und Modalwert bestimmen und den passenden Lagewert wählen.",
    "order": 5,
    "prerequisites": [
-    "zahlen-mehrstellig-multiplizieren-und-dividieren",
-    "zahlen-negative-und-rationale-zahlen",
-    "zahlen-rechnen-mit-rationalen-zahlen"
+    "zahlen-mehrstellig-multiplizieren-und-dividieren"
    ]
   },
   "daten-diagramme-und-histogramme-lesen": {
@@ -120,10 +114,7 @@
    "order": 6,
    "prerequisites": [
     "daten-daten-ordnen-und-darstellen",
-    "daten-mittelwert-median-und-modalwert",
-    "daten-stichproben-und-stichprobenverfahren",
-    "geometrie-kreis-umfang-flaeche-und-sektor",
-    "prozentrechnung-prozente-und-prozentrechnung"
+    "daten-mittelwert-median-und-modalwert"
    ]
   },
   "daten-zufall-und-wahrscheinlichkeit-einschaetzen": {
@@ -153,9 +144,9 @@
    "description": "Eine statistische Untersuchung planen, Daten erheben und von der Stichprobe auf die Grundgesamtheit schliessen.",
    "order": 8,
    "prerequisites": [
+    "daten-daten-ordnen-und-darstellen",
     "daten-mittelwert-median-und-modalwert",
-    "daten-stichproben-und-stichprobenverfahren",
-    "daten-streuung-quartile-und-boxplots"
+    "daten-stichproben-und-stichprobenverfahren"
    ]
   },
   "daten-stichproben-und-stichprobenverfahren": {
@@ -201,7 +192,6 @@
    "prerequisites": [
     "daten-wahrscheinlichkeiten-berechnen",
     "daten-zufall-und-wahrscheinlichkeit-einschaetzen",
-    "zahlen-mengen-und-teilmengen",
     "zahlen-mengenoperationen-und-logik"
    ]
   },
@@ -520,7 +510,7 @@
    "description": "Wörter rund um Partys, Feste und das Feiern kennen, Einladungen annehmen oder ablehnen und Einladungen lesen.",
    "order": 5,
    "prerequisites": [
-    "englisch-saetze-bedingung-gegensatz-und-zweck"
+    "englisch-verben-present-progressive-und-zukunft"
    ]
   },
   "englisch-freizeit-buecher-filme-und-science-fiction": {
@@ -550,7 +540,7 @@
    "description": "Musikstile und Wörter zum Musizieren kennen, über Lieblingsmusik und Aufführungen sprechen, Texte lesen und Ankündigungen schreiben.",
    "order": 7,
    "prerequisites": [
-    "englisch-saetze-relativsaetze-und-appositionssaetze"
+    "englisch-freizeit-spielsachen-hobbys-und-faehigkeiten"
    ]
   },
   "englisch-freizeit-feste-und-traditionen": {
@@ -565,7 +555,7 @@
    "description": "Über Feste und Traditionen sprechen, Texte darüber lesen und ein Fest oder eine Tradition vorstellen.",
    "order": 8,
    "prerequisites": [
-    "englisch-saetze-nominalsaetze-und-indirekte-rede"
+    "englisch-freizeit-partys-und-feste"
    ]
   },
   "englisch-gesellschaft-regeln-in-schule-und-alltag": {
@@ -810,7 +800,6 @@
    "order": 1,
    "prerequisites": [
     "englisch-saetze-ja-nein-fragen-und-question-tags",
-    "englisch-verben-perfekt-und-zeitformen-unterscheiden",
     "englisch-verben-present-progressive-und-zukunft",
     "englisch-woerter-adjektive-steigerung-und-wortbildung"
    ]
@@ -900,7 +889,9 @@
    },
    "description": "Wetterwörter und Jahreszeiten kennen, über das Wetter und die Lieblingsjahreszeit sprechen und Wetterberichte und kurze Texte lesen.",
    "order": 2,
-   "prerequisites": []
+   "prerequisites": [
+    "englisch-saetze-aussagen-aufforderungen-und-ausrufe"
+   ]
   },
   "englisch-natur-bauernhof-und-landwirtschaft": {
    "topic_id": "englisch-natur",
@@ -940,7 +931,7 @@
    "description": "Wörter zu Energie, Abfall, Klima und Emissionen nutzen, sagen, was man für die Umwelt tun kann, Umweltaufrufe und -texte lesen und einen Kommentar schreiben.",
    "order": 5,
    "prerequisites": [
-    "englisch-verben-perfekt-und-zeitformen-unterscheiden"
+    "englisch-natur-wetter-und-jahreszeiten"
    ]
   },
   "englisch-natur-unwetter-und-naturkatastrophen": {
@@ -988,7 +979,6 @@
    "description": "Mit It is und There is Aussagen machen, mit Let's und dem Imperativ auffordern, den Weg beschreiben und mit What und How Ausrufe bilden.",
    "order": 2,
    "prerequisites": [
-    "englisch-natur-wetter-und-jahreszeiten",
     "englisch-saetze-fragen-mit-fragewoertern",
     "englisch-saetze-ja-nein-fragen-und-question-tags",
     "englisch-verben-be-have-und-simple-present"
@@ -1006,8 +996,7 @@
    "description": "Ja/Nein- und Alternativfragen mit be, do, does, did und there is bilden und einer Aussage eine Rückfrage als Question Tag anhängen.",
    "order": 3,
    "prerequisites": [
-    "englisch-verben-be-have-und-simple-present",
-    "englisch-verben-simple-past-und-past-progressive"
+    "englisch-verben-be-have-und-simple-present"
    ]
   },
   "englisch-saetze-bedingung-gegensatz-und-zweck": {
@@ -1305,9 +1294,7 @@
    "description": "Mit must, have to, can't, be allowed to und be supposed to Pflichten und Erlaubnis ausdrücken und mit Modalverben Vermutungen anstellen.",
    "order": 2,
    "prerequisites": [
-    "englisch-saetze-aussagen-aufforderungen-und-ausrufe",
-    "englisch-verben-das-passiv",
-    "englisch-verben-infinitiv-und-gerundium"
+    "englisch-saetze-aussagen-aufforderungen-und-ausrufe"
    ]
   },
   "englisch-verben-faehigkeiten-bitten-und-ratschlaege": {
@@ -1352,6 +1339,7 @@
    "description": "Mit dem Simple Past, was und were, der Verlaufsform der Vergangenheit und used to über Vergangenes erzählen.",
    "order": 5,
    "prerequisites": [
+    "englisch-saetze-ja-nein-fragen-und-question-tags",
     "englisch-verben-present-progressive-und-zukunft"
    ]
   },
@@ -1368,7 +1356,7 @@
    "order": 6,
    "prerequisites": [
     "englisch-verben-be-have-und-simple-present",
-    "englisch-verben-partizipien-und-partizipialkonstruktionen"
+    "englisch-verben-pflicht-erlaubnis-und-vermutung"
    ]
   },
   "englisch-verben-perfekt-und-zeitformen-unterscheiden": {
@@ -1402,6 +1390,7 @@
     "englisch-verben-be-have-und-simple-present",
     "englisch-verben-infinitiv-und-gerundium",
     "englisch-verben-perfekt-und-zeitformen-unterscheiden",
+    "englisch-verben-pflicht-erlaubnis-und-vermutung",
     "englisch-verben-present-progressive-und-zukunft",
     "englisch-verben-simple-past-und-past-progressive"
    ]
@@ -1417,7 +1406,9 @@
    },
    "description": "Die -ing-Form und das Partizip Perfekt als Attribut und Ergänzung sowie in Partizipialkonstruktionen mit having done verwenden.",
    "order": 9,
-   "prerequisites": []
+   "prerequisites": [
+    "englisch-verben-infinitiv-und-gerundium"
+   ]
   },
   "englisch-woerter-this-these-und-plural-von-nomen": {
    "topic_id": "englisch-woerter",
@@ -1491,8 +1482,6 @@
    "description": "Lagen mit Richtungsangaben, Himmelsrichtungen, Entfernungen und Koordinaten beschreiben.",
    "order": 5,
    "prerequisites": [
-    "geometrie-strecken-geraden-senkrechte-und-parallelen",
-    "zahlen-negative-und-rationale-zahlen",
     "zahlen-zahlenraum-bis-20"
    ]
   },
@@ -1507,9 +1496,7 @@
    },
    "description": "Ebene Figuren und Vielecke erkennen, unterscheiden, zusammensetzen und zu Parkettierungen legen.",
    "order": 6,
-   "prerequisites": [
-    "geometrie-strecken-geraden-senkrechte-und-parallelen"
-   ]
+   "prerequisites": []
   },
   "geometrie-koerper-ansichten-und-netze": {
    "topic_id": "geometrie",
@@ -1524,7 +1511,6 @@
    "order": 7,
    "prerequisites": [
     "geometrie-ebene-figuren-und-vielecke",
-    "geometrie-kreis-umfang-flaeche-und-sektor",
     "zahlen-zahlenraum-bis-20"
    ]
   },
@@ -1540,7 +1526,6 @@
    "description": "Umfang und Flächeninhalt von Rechteck, Quadrat, Parallelogramm, Dreieck, Trapez und zusammengesetzten Figuren berechnen.",
    "order": 8,
    "prerequisites": [
-    "geometrie-dreiecke-und-winkelsummen",
     "geometrie-ebene-figuren-und-vielecke",
     "geometrie-strecken-geraden-senkrechte-und-parallelen",
     "zahlen-mehrstellig-multiplizieren-und-dividieren",
@@ -1559,6 +1544,7 @@
    "description": "Strecke, Gerade und Strahl unterscheiden, Senkrechte und Parallelen erkennen und zeichnen und Abstände bestimmen.",
    "order": 9,
    "prerequisites": [
+    "geometrie-ebene-figuren-und-vielecke",
     "groessen-laengen-und-flaechen"
    ]
   },
@@ -1590,11 +1576,8 @@
    "description": "Bewegungen unterscheiden sowie Figuren verschieben und drehen, ihre Eigenschaften nutzen und konstruieren.",
    "order": 11,
    "prerequisites": [
-    "geometrie-achsen-und-punktsymmetrie",
     "geometrie-ebene-figuren-und-vielecke",
-    "geometrie-lage-richtung-und-koordinaten",
-    "geometrie-winkel-an-parallelen-und-beweise",
-    "geometrie-winkel-messen-und-berechnen"
+    "geometrie-lage-richtung-und-koordinaten"
    ]
   },
   "geometrie-dreiecke-und-winkelsummen": {
@@ -1610,8 +1593,7 @@
    "order": 12,
    "prerequisites": [
     "geometrie-ebene-figuren-und-vielecke",
-    "geometrie-strecken-geraden-senkrechte-und-parallelen",
-    "geometrie-winkel-an-parallelen-und-beweise"
+    "geometrie-strecken-geraden-senkrechte-und-parallelen"
    ]
   },
   "geometrie-achsen-und-punktsymmetrie": {
@@ -1643,8 +1625,6 @@
    "order": 14,
    "prerequisites": [
     "geometrie-koerper-ansichten-und-netze",
-    "geometrie-koerper-darstellen-projektionen-schraegbilder",
-    "geometrie-kreis-umfang-flaeche-und-sektor",
     "geometrie-umfang-und-flaeche-ebener-figuren",
     "groessen-laengen-und-flaechen"
    ]
@@ -1754,7 +1734,6 @@
     "geometrie-achsen-und-punktsymmetrie",
     "geometrie-dreiecke-und-winkelsummen",
     "geometrie-kongruenz-und-gleichschenklige-dreiecke",
-    "geometrie-kreissaetze-sehnen-tangenten-umfangswinkel",
     "geometrie-strecken-geraden-senkrechte-und-parallelen",
     "geometrie-winkel-messen-und-berechnen"
    ]
@@ -1791,6 +1770,7 @@
    "order": 22,
    "prerequisites": [
     "geometrie-achsen-und-punktsymmetrie",
+    "geometrie-besondere-linien-inkreis-und-umkreis",
     "geometrie-dreiecke-und-winkelsummen",
     "geometrie-kongruenz-und-gleichschenklige-dreiecke",
     "geometrie-kreis-umfang-flaeche-und-sektor",
@@ -1827,8 +1807,7 @@
    "order": 24,
    "prerequisites": [
     "geometrie-aehnlichkeit-und-zentrische-streckung",
-    "geometrie-rechtwinklige-dreiecke-und-pythagoras",
-    "gleichungen-bogenmass-und-einheitskreis"
+    "geometrie-rechtwinklige-dreiecke-und-pythagoras"
    ]
   },
   "geometrie-geraden-und-ebenen-im-raum": {
@@ -2008,7 +1987,6 @@
    "description": "Gleichungen und ihre Lösungen erkennen und lineare Gleichungen mit Äquivalenzumformungen lösen, auch mit Klammern und Brüchen.",
    "order": 4,
    "prerequisites": [
-    "gleichungen-rechnen-mit-polynomen",
     "gleichungen-terme-aufstellen-und-berechnen",
     "zahlen-rechnen-mit-dezimalzahlen"
    ]
@@ -2026,8 +2004,8 @@
    "order": 5,
    "prerequisites": [
     "gleichungen-ersetzen-und-groessenbeziehungen",
-    "zahlen-rechengesetze-und-rechenreihenfolge",
-    "zahlen-rechnen-mit-rationalen-zahlen"
+    "zahlen-muster-und-knobelaufgaben",
+    "zahlen-rechengesetze-und-rechenreihenfolge"
    ]
   },
   "gleichungen-sachaufgaben-mit-gleichungen": {
@@ -2042,7 +2020,6 @@
    "description": "Sachaufgaben zu Arbeit, Bewegung, Verkauf und Tarifen als Gleichung aufschreiben, lösen und die Lösung prüfen.",
    "order": 6,
    "prerequisites": [
-    "gleichungen-bruchterme-und-bruchgleichungen",
     "gleichungen-ersetzen-und-groessenbeziehungen",
     "gleichungen-lineare-gleichungen-loesen",
     "gleichungen-terme-aufstellen-und-berechnen",
@@ -2112,7 +2089,6 @@
    "order": 10,
    "prerequisites": [
     "gleichungen-lineare-gleichungen-loesen",
-    "zahlen-mengen-und-teilmengen",
     "zahlen-negative-und-rationale-zahlen",
     "zahlen-rechnen-mit-rationalen-zahlen"
    ]
@@ -2255,6 +2231,7 @@
    "description": "Beliebige Winkel im Grad- und Bogenmass angeben und Sinus und Kosinus am Einheitskreis bestimmen.",
    "order": 18,
    "prerequisites": [
+    "geometrie-trigonometrie",
     "geometrie-winkel-messen-und-berechnen",
     "gleichungen-funktionen-und-funktionsmodelle"
    ]
@@ -2383,8 +2360,7 @@
    "description": "Gramm, Kilogramm und Tonne, Liter und Milliliter sowie Franken und Rappen kennen und umrechnen und Rabatt und Zins eines Geldbetrags berechnen.",
    "order": 4,
    "prerequisites": [
-    "groessen-laengen-und-flaechen",
-    "zahlen-plus-und-minus-bis-100",
+    "zahlen-addition-und-subtraktion-bis-20",
     "zahlen-stellenwerte-und-zahlensysteme"
    ]
   },
@@ -2432,7 +2408,6 @@
    "order": 1,
    "prerequisites": [
     "physik-elektrizitaet-ladung-strom-und-stromkreise",
-    "physik-elektrizitaet-potential-spannung-und-kondensator",
     "physik-elektrizitaet-widerstand-und-ohmsches-gesetz"
    ]
   },
@@ -2478,7 +2453,6 @@
    "prerequisites": [
     "physik-elektrizitaet-elektrische-energie-leistung-und-haushalt",
     "physik-elektrizitaet-ladung-strom-und-stromkreise",
-    "physik-elektrizitaet-potential-spannung-und-kondensator",
     "physik-elektrizitaet-widerstand-und-ohmsches-gesetz"
    ]
   },
@@ -2529,8 +2503,6 @@
    "prerequisites": [
     "physik-elektrizitaet-elektromagnetische-induktion",
     "physik-elektrizitaet-kraefte-im-magnetfeld-und-elektromotor",
-    "physik-elektrizitaet-potential-spannung-und-kondensator",
-    "physik-elektrizitaet-wechselstrom-transformator-und-selbstinduktion",
     "physik-elektrizitaet-widerstand-und-ohmsches-gesetz",
     "physik-optik-akustik-ausbreitung-reflexion-und-brechung-des-lichts"
    ]
@@ -2547,9 +2519,7 @@
    "description": "Die Kraft auf stromdurchflossene Leiter und die Lorentzkraft auf bewegte Ladungen berechnen und den Elektromotor erklären.",
    "order": 8,
    "prerequisites": [
-    "physik-elektrizitaet-coulombsches-gesetz-und-elektrisches-feld",
-    "physik-elektrizitaet-magnetfeld-und-elektromagnet",
-    "physik-mechanik-kreisbewegung-und-gravitation"
+    "physik-elektrizitaet-magnetfeld-und-elektromagnet"
    ]
   },
   "physik-elektrizitaet-coulombsches-gesetz-und-elektrisches-feld": {
@@ -2826,8 +2796,7 @@
    "description": "Atomkern, radioaktiven Zerfall, Halbwertszeit und Strahlenschutz, Kernspaltung und Kernfusion sowie Elementarteilchen beschreiben und Energiequellen nachhaltig beurteilen.",
    "order": 1,
    "prerequisites": [
-    "physik-mechanik-mechanische-energie-und-energieerhaltung",
-    "physik-modern-relativitaet-und-quantenphysik"
+    "physik-mechanik-mechanische-energie-und-energieerhaltung"
    ]
   },
   "physik-modern-relativitaet-und-quantenphysik": {
@@ -2960,7 +2929,6 @@
    "order": 3,
    "prerequisites": [
     "physik-mechanik-mechanische-energie-und-energieerhaltung",
-    "physik-waerme-ideales-gas-und-kinetische-gastheorie",
     "physik-waerme-teilchenmodell-temperatur-und-waerme"
    ]
   },
@@ -3136,7 +3104,8 @@
    "order": 12,
    "prerequisites": [
     "zahlen-einmaleins-und-teilen",
-    "zahlen-plus-und-minus-bis-1000"
+    "zahlen-plus-und-minus-bis-1000",
+    "zahlen-rechengesetze-und-rechenreihenfolge"
    ]
   },
   "zahlen-rechengesetze-und-rechenreihenfolge": {
@@ -3152,9 +3121,7 @@
    "order": 13,
    "prerequisites": [
     "zahlen-einmaleins-und-teilen",
-    "zahlen-mehrstellig-multiplizieren-und-dividieren",
-    "zahlen-plus-und-minus-bis-100",
-    "zahlen-plus-und-minus-bis-1000"
+    "zahlen-plus-und-minus-bis-100"
    ]
   },
   "zahlen-muster-und-knobelaufgaben": {
@@ -3169,9 +3136,6 @@
    "description": "Regeln in Zahlen- und Figurenfolgen erkennen und Knobel- und Sachaufgaben mit geschicktem Zählen und Rechnen lösen.",
    "order": 14,
    "prerequisites": [
-    "brueche-brueche-multiplizieren-und-dividieren",
-    "geometrie-strecken-geraden-senkrechte-und-parallelen",
-    "gleichungen-terme-aufstellen-und-berechnen",
     "zahlen-plus-und-minus-bis-10",
     "zahlen-rechengesetze-und-rechenreihenfolge",
     "zahlen-stellenwerte-und-zahlensysteme"
@@ -3191,7 +3155,6 @@
    "prerequisites": [
     "brueche-brueche-und-dezimalzahlen-verstehen",
     "gleichungen-ersetzen-und-groessenbeziehungen",
-    "zahlen-dezimalstellen-runden-und-ueberschlagen",
     "zahlen-mehrstellig-multiplizieren-und-dividieren",
     "zahlen-plus-und-minus-bis-100",
     "zahlen-rechengesetze-und-rechenreihenfolge"
@@ -3209,7 +3172,6 @@
    "description": "Schnitt, Vereinigung und Komplement bilden, notwendige und hinreichende Bedingungen erkennen und Aussagen mit Quantoren verneinen.",
    "order": 16,
    "prerequisites": [
-    "zahlen-mengen-und-teilmengen",
     "zahlen-plus-und-minus-bis-100"
    ]
   },
