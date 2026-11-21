@@ -3878,6 +3878,19 @@
         "retryable": false
       }
     },
+    "voice_transcription_refused": {
+      "action": null,
+      "domain": "voice_question",
+      "http_status": 502,
+      "message_key": "error.voice_transcription_refused",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "voice_transcription_unavailable": {
       "action": "retry_later",
       "domain": "voice_question",
