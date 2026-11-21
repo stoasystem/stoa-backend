@@ -1,9 +1,7 @@
 name: Deploy Backend to Production
 
-# Direct production delivery for pushes to main. This is deliberately separate
-# from deploy.yml: that workflow is the credential-free formal verification DAG
-# and must stay non-mutating, so deployment lives here instead of being bolted
-# onto it. See docs/security/phase-474-workflow-policy.json.
+# Direct production delivery for pushes to main: the lint and test gate, then
+# the package build and Lambda update.
 
 on:
   push:

@@ -1,8 +1,7 @@
 """Contract for the direct production delivery workflow.
 
-deploy.yml is the credential-free formal verification DAG and stays non-mutating;
-docs/security/phase-474-workflow-policy.json describes that DAG only. Production
-mutation happens in deploy-production.yml, so its gates are pinned here.
+deploy-production.yml is the only workflow, and the only route to production,
+so its gates are pinned here.
 """
 
 from __future__ import annotations
@@ -12,7 +11,8 @@ import re
 import subprocess
 from typing import Any
 
-from test_backend_workflow_contract import WorkflowLoader, reads_secrets
+import pytest
+from workflow_helpers import WorkflowLoader, reads_secrets
 import yaml
 
 
@@ -242,3 +242,15 @@ def test_the_release_record_is_kept_whatever_the_check_found() -> None:
     # A re-run attempt uploads its own record instead of colliding with the first.
     assert "github.run_attempt" in upload["with"]["name"]
     assert upload["with"]["path"] == "${{ runner.temp }}/release-record/"
+
+
+def test_loader_rejects_duplicate_workflow_keys() -> None:
+    with pytest.raises(yaml.constructor.ConstructorError, match="duplicate key: permissions"):
+        yaml.load("permissions: {}\npermissions: {}\n", Loader=WorkflowLoader)
+
+
+def test_secrets_check_ignores_comments_but_not_expressions() -> None:
+    commented = "jobs:\n  a:\n    # Reads two files; no network, no secrets. Runs.\n    steps: []\n"
+    reading = "jobs:\n  a:\n    steps:\n      - run: echo ${{ secrets.TOKEN }}\n"
+    assert not reads_secrets(yaml.load(commented, Loader=WorkflowLoader))
+    assert reads_secrets(yaml.load(reading, Loader=WorkflowLoader))
