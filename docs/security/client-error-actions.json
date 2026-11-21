@@ -1286,6 +1286,19 @@
         "retryable": false
       }
     },
+    "internal_error": {
+      "action": "retry_later",
+      "domain": "server",
+      "http_status": 500,
+      "message_key": "error.internal_error",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "invalid_application_field": {
       "action": "correct_input",
       "domain": "account",
