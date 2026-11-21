@@ -15,7 +15,9 @@ there is one of each:
   `ExpressionAttributeValues` lose their `None` members, always.
 - `fenced(owner, operations)`: the same, behind the owner's account fence - the
   fence read, its condition put in front, a refused fence reported as the account
-  not being writable rather than as the caller's own operations failing.
+  not being writable rather than as the caller's own operations failing. A
+  transaction cancelled only because the fence or a registry row was busy in
+  another of the owner's transactions is sent again, a few times (#563).
 - `pages("query" | "scan", ...)`: a read that goes on past the table's page, page
   by page. Each continuation key is checked once, here, and a read that stops
   moving forward is reported instead of looping. `page_token(scope, position)` and
@@ -37,7 +39,9 @@ import base64
 import binascii
 import json
 import logging
+import random
 import re
+import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -382,6 +386,13 @@ def fenced(
     - `also`: other accounts whose fences must hold in the same transaction,
       each with its generation or `None` to read it.
 
+    Every write of an account checks the same fence row, so two of its writes at
+    the same moment can cancel each other (`TransactionConflict` on the fence or
+    on a registry row). Nothing was written then, and the same transaction is sent
+    again after a short random pause, up to `FENCE_CONFLICT_ATTEMPTS` times in
+    all (#563). A conflict on one of the caller's own operations is the caller's
+    to handle and is not retried here.
+
     The write also registers where it went (#397): for every partition a Put
     or Update touches that is not one of the account's own derived partitions,
     an unconditional Put of `USER#{owner}/OWNS#{partition}` (and of
@@ -396,8 +407,9 @@ def fenced(
     when a fence is missing, not active or not the expected generation - whether
     the read said so or the transaction did. `WriteRefused` when the caller's own
     operations were refused; its `reasons` line up with them, the fence checks
-    taken out, and are empty when they cannot be told apart. `TableUnavailable`
-    as from `transact`.
+    taken out, and are empty when they cannot be told apart - a fence or registry
+    row still busy after the last attempt among them. `TableUnavailable` as from
+    `transact`.
     """
     fences = _account_fences()
     if any_generation and (generation is not None or callable(operations)):
@@ -427,8 +439,11 @@ def fenced(
         # its registry row is the one thing the registry must not allow.
         _register_ahead(conditions, registry, table=table)
         own_and_registry = own
+    own_positions = range(len(conditions), len(conditions) + len(own))
     try:
-        transact([*conditions, *own_and_registry], table=table)
+        _transact_through_shared_conflicts(
+            [*conditions, *own_and_registry], own_positions, table=table
+        )
     except WriteRefused as exc:
         fence_reasons = exc.reasons[: len(conditions)]
         own_reasons = exc.reasons[len(conditions) : len(conditions) + len(own)]
@@ -447,6 +462,55 @@ def fenced(
 # DynamoDB's limit on the items of one transaction.
 TRANSACTION_ITEM_LIMIT = 100
 
+# How many times in all a fenced transaction is sent while only the rows every write
+# of the account shares - its fence, its registry rows - are busy (#563).
+FENCE_CONFLICT_ATTEMPTS = 3
+# The pause before the n-th retry is drawn from [1/2, 1] x this x 2^(n-1) seconds.
+FENCE_CONFLICT_PAUSE_SECONDS = 0.04
+
+
+def _transact_through_shared_conflicts(
+    operations: list[Operation], own_positions: range, *, table: object | None
+) -> None:
+    """`transact`, sent again while the only cause is a busy shared row.
+
+    `own_positions` are the caller's operations; every other position is a fence
+    condition or a registry row that each write of the account touches. The
+    transaction is resent unchanged: a cancelled one wrote nothing, and its
+    conditions are evaluated afresh.
+    """
+    for attempt in range(1, FENCE_CONFLICT_ATTEMPTS + 1):
+        try:
+            transact(operations, table=table)
+            return
+        except WriteRefused as exc:
+            if attempt == FENCE_CONFLICT_ATTEMPTS or not _only_shared_rows_busy(
+                exc.reasons, own_positions
+            ):
+                raise
+            logger.info("fence_conflict_retry attempt=%d", attempt)
+            _sleep(
+                random.uniform(0.5, 1.0) * FENCE_CONFLICT_PAUSE_SECONDS * 2 ** (attempt - 1)
+            )
+
+
+def _only_shared_rows_busy(
+    reasons: Sequence[CancellationReason], own_positions: range
+) -> bool:
+    causes = [
+        (position, reason)
+        for position, reason in enumerate(reasons)
+        if reason.kind is not ReasonKind.NOT_THE_CAUSE
+    ]
+    return bool(causes) and all(
+        reason.kind is ReasonKind.TRANSACTION_CONFLICT and position not in own_positions
+        for position, reason in causes
+    )
+
+
+# A seam for the tests, which do not wait.
+_sleep = time.sleep
+
 
 def _register_ahead(
     conditions: list[Operation], registry: list[Operation], *, table: object | None
@@ -458,7 +522,9 @@ def _register_ahead(
     fences = _account_fences()
     for start in range(0, len(registry), room):
         try:
-            transact([*conditions, *registry[start : start + room]], table=table)
+            _transact_through_shared_conflicts(
+                [*conditions, *registry[start : start + room]], range(0), table=table
+            )
         except WriteRefused as exc:
             if ReasonKind.CONDITION_FAILED in {
                 reason.kind for reason in exc.reasons[: len(conditions)]
