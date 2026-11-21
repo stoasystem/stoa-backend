@@ -778,8 +778,8 @@ def test_an_offer_is_written_through_the_request_only() -> None:
     """A live offer lets its teacher write the request itself, nothing else.
 
     `teacher_may` answers for the request; which resource an offered teacher
-    writes through is the policy's to say. Writes through a question, a
-    conversation or a draft keyed by the request take holding it; reads do not.
+    writes through is the policy's to say. Writes through a question or a
+    conversation keyed by the request take holding it; reads do not.
     """
     from stoa.security.authorization import (
         AuthorizationPurpose,
@@ -796,11 +796,9 @@ def test_an_offer_is_written_through_the_request_only() -> None:
         )
 
     def permits(record: dict, resource_type, action) -> bool:
-        question_id = CONV if resource_type is ResourceType.AI_TEACHER_DRAFT else None
-        resource_id = "draft-1" if question_id else CONV
         return facts(record).permits(
             ME,
-            ResourceRef(resource_type, resource_id, STUDENT, question_id=question_id),
+            ResourceRef(resource_type, CONV, STUDENT),
             action,
             AuthorizationPurpose.TEACHER_HELP,
             MAY_NOW,
@@ -810,11 +808,7 @@ def test_an_offer_is_written_through_the_request_only() -> None:
     held = _request("in_progress", teacher_id=ME, dispatch_status="accepted")
     for action in WRITES:
         assert permits(offered, ResourceType.TEACHER_HELP_REQUEST, action)
-        for resource_type in (
-            ResourceType.QUESTION,
-            ResourceType.CONVERSATION,
-            ResourceType.AI_TEACHER_DRAFT,
-        ):
+        for resource_type in (ResourceType.QUESTION, ResourceType.CONVERSATION):
             assert not permits(offered, resource_type, action)
             assert permits(held, resource_type, action)
     for action in READS:
@@ -822,7 +816,6 @@ def test_an_offer_is_written_through_the_request_only() -> None:
             ResourceType.TEACHER_HELP_REQUEST,
             ResourceType.QUESTION,
             ResourceType.CONVERSATION,
-            ResourceType.AI_TEACHER_DRAFT,
         ):
             assert permits(offered, resource_type, action)
 

@@ -18,6 +18,9 @@ from stoa.db.repositories import account_deletion_repo
 
 
 NOTIFICATION_ENTITY = "notification_event"
+# A teacher assistance summary seed (`ASSISTANCE_SUMMARY#<id>`, `META`). Nothing
+# writes one since #518 retired `GET /teachers/questions/{id}/assistance-summary`;
+# rows stored before are still deleted with the student's account.
 SUMMARY_SEED_ENTITY = "teacher_assistance_summary_seed"
 PREFERENCE_ENTITY = "notification_preference"
 PUSH_TOKEN_ENTITY = "notification_push_token"
@@ -54,7 +57,6 @@ NOTIFICATION_WRITER_REGISTRY = frozenset(
     {
         "put_event",
         "update_event",
-        "put_summary_seed",
         "put_preferences",
         "put_push_token",
         "update_push_token",
@@ -548,10 +550,6 @@ def push_token_pk(user_id: str, token_reference: str) -> str:
     return f"NOTIFICATION_PUSH_TOKEN#{user_id}#{token_reference}"
 
 
-def summary_seed_pk(summary_id: str) -> str:
-    return f"ASSISTANCE_SUMMARY#{summary_id}"
-
-
 def delivery_intent_pk(owner_id: str) -> str:
     return f"NOTIFICATION_DELIVERY#{owner_id}"
 
@@ -894,14 +892,6 @@ def update_push_token(
     if updates:
         _persist_private(existing, mode="update", updates=updates)
     return {**existing, **updates}
-
-
-def put_summary_seed(item: NotificationItem) -> NotificationItem:
-    summary_id = _required_text(
-        item, "summary_id", "notification identity is invalid"
-    )
-    stored = {**item, "PK": summary_seed_pk(summary_id), "SK": "META"}
-    return _persist_private(stored)
 
 
 def get_payment_expiry_reminder(

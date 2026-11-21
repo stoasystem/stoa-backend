@@ -377,19 +377,6 @@
         "retryable": false
       }
     },
-    "ai_draft_not_found": {
-      "action": null,
-      "domain": "ai_teacher_tools",
-      "http_status": 404,
-      "message_key": "error.ai_draft_not_found",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
     "allowance_exhausted": {
       "action": "retry_later",
       "domain": "ask_question",
@@ -981,32 +968,6 @@
         "retryable": false
       }
     },
-    "draft_already_archived": {
-      "action": null,
-      "domain": "ai_teacher_tools",
-      "http_status": 409,
-      "message_key": "error.draft_already_archived",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "draft_already_reviewed": {
-      "action": null,
-      "domain": "ai_teacher_tools",
-      "http_status": 409,
-      "message_key": "error.draft_already_reviewed",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
     "draft_not_editable": {
       "action": null,
       "domain": "curriculum",
@@ -1025,45 +986,6 @@
       "domain": "adaptive_learning",
       "http_status": 400,
       "message_key": "error.draft_of_another_student",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "draft_option_unsupported": {
-      "action": "correct_input",
-      "domain": "ai_teacher_tools",
-      "http_status": 400,
-      "message_key": "error.draft_option_unsupported",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "draft_question_unavailable": {
-      "action": null,
-      "domain": "ai_teacher_tools",
-      "http_status": 409,
-      "message_key": "error.draft_question_unavailable",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "draft_type_unsupported": {
-      "action": "correct_input",
-      "domain": "ai_teacher_tools",
-      "http_status": 400,
-      "message_key": "error.draft_type_unsupported",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -1103,19 +1025,6 @@
       "domain": "security",
       "http_status": 403,
       "message_key": "error.email_verification_required",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "exercise_count_invalid": {
-      "action": "correct_input",
-      "domain": "ai_teacher_tools",
-      "http_status": 400,
-      "message_key": "error.exercise_count_invalid",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -1992,19 +1901,6 @@
         "retryable": false
       }
     },
-    "no_bank_exercises": {
-      "action": "correct_input",
-      "domain": "ai_teacher_tools",
-      "http_status": 400,
-      "message_key": "error.no_bank_exercises",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
     "no_teacher_reply_to_report": {
       "action": null,
       "domain": "moderation",
@@ -2586,19 +2482,6 @@
       "domain": "moderation",
       "http_status": 409,
       "message_key": "error.question_not_writable",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "question_of_another_student": {
-      "action": "correct_input",
-      "domain": "ai_teacher_tools",
-      "http_status": 400,
-      "message_key": "error.question_of_another_student",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -3198,19 +3081,6 @@
         "retryable": false
       }
     },
-    "subject_unsupported": {
-      "action": "correct_input",
-      "domain": "ai_teacher_tools",
-      "http_status": 400,
-      "message_key": "error.subject_unsupported",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
     "teacher_help_already_accepted": {
       "action": null,
       "domain": "help_request",
@@ -3497,19 +3367,6 @@
       "domain": "practice",
       "http_status": 404,
       "message_key": "error.topic_not_found",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "topic_required": {
-      "action": "correct_input",
-      "domain": "ai_teacher_tools",
-      "http_status": 400,
-      "message_key": "error.topic_required",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,

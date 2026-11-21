@@ -392,7 +392,6 @@ _IDENTIFIER_RESOURCE_TYPES: dict[str, frozenset[str]] = {
             ResourceType.TEACHER_ASSIGNMENT.value,
             ResourceType.PARENT_BINDING.value,
             ResourceType.TEACHER_HELP_REQUEST.value,
-            ResourceType.AI_TEACHER_DRAFT.value,
         }
     ),
     "childid": frozenset({ResourceType.STUDENT.value, ResourceType.PARENT_BINDING.value}),
@@ -402,7 +401,6 @@ _IDENTIFIER_RESOURCE_TYPES: dict[str, frozenset[str]] = {
             ResourceType.QUESTION.value,
             ResourceType.CONVERSATION.value,
             ResourceType.TEACHER_HELP_REQUEST.value,
-            ResourceType.AI_TEACHER_DRAFT.value,
         }
     ),
     "conversationid": frozenset(
@@ -421,7 +419,6 @@ _IDENTIFIER_RESOURCE_TYPES: dict[str, frozenset[str]] = {
     ),
     "requestid": frozenset({ResourceType.TEACHER_HELP_REQUEST.value}),
     "reportid": frozenset({ResourceType.REPORT.value}),
-    "draftid": frozenset({ResourceType.AI_TEACHER_DRAFT.value}),
     "notificationid": frozenset({ResourceType.NOTIFICATION_EVENT.value}),
     "eventid": frozenset({ResourceType.NOTIFICATION_EVENT.value}),
     "tokenreference": frozenset({ResourceType.NOTIFICATION_PUSH_TOKEN.value}),

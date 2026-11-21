@@ -39,7 +39,6 @@ from stoa.security.declared_authorization import (
     AuthorizationContext,
     authorize_loaded,
     authorized,
-    by_grant,
     get_authorization_context,
     loaded_declaration,
     path,
@@ -49,9 +48,7 @@ from stoa.security.declared_authorization import (
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.security.request_correlation import get_request_correlation_id
-from stoa.services.ai_teacher_tools_errors import AiTeacherToolsViolation
 from stoa.services import (
-    ai_teacher_tools_service,
     attachment_service,
     classroom,
     help_requests,
@@ -59,7 +56,6 @@ from stoa.services import (
     learning_session,
     locale_service,
     student_evidence,
-    teacher_assistance_service,
     teacher_dispatch_service,
     teacher_help_prep,
     teacher_reply_service,
@@ -131,7 +127,7 @@ def _refuse_unless_held(conv: dict, teacher_id: str) -> None:
         )
 
 
-# Canonical teacher portal, availability, help-request, and AI-tool routes.
+# Canonical teacher portal, availability, and help-request routes.
 
 #: The teacher's own portal record (an admin has one too).
 _PORTAL_SELF = {
@@ -140,13 +136,6 @@ _PORTAL_SELF = {
 }
 #: A help request, and what was sent in it, is read and answered for help.
 _TEACHER_HELP = {CanonicalRole.TEACHER: AuthorizationPurpose.TEACHER_HELP}
-#: The AI teacher tools: under their own purpose only for a holder of the grant.
-_TOOL_PURPOSE = by_grant(
-    "ai_teacher_tools_operator",
-    AuthorizationPurpose.AI_TEACHER_TOOLS,
-    otherwise=AuthorizationPurpose.TEACHER_HELP,
-)
-_TEACHER_TOOLS = {CanonicalRole.TEACHER: _TOOL_PURPOSE, CanonicalRole.ADMIN: _TOOL_PURPOSE}
 
 _portal_read = authorized(
     ResourceType.TEACHER_PORTAL, AuthorizationAction.READ, SELF, _PORTAL_SELF
@@ -161,11 +150,6 @@ def _help_request(action: AuthorizationAction):
     return authorized(
         ResourceType.TEACHER_HELP_REQUEST, action, path("request_id"), _TEACHER_HELP
     )
-
-
-def _ai_teacher_draft(action: AuthorizationAction):
-    """A draft, by the route's `draft_id`, bound to its student and request."""
-    return authorized(ResourceType.AI_TEACHER_DRAFT, action, path("draft_id"), _TEACHER_TOOLS)
 
 
 async def _current_help_requests(
@@ -451,165 +435,12 @@ class TeacherStats(BaseModel):
     averageResponseTimeMinutes: int
 
 
-class AssistanceSummaryResponse(BaseModel):
-    summaryId: str
-    questionId: str
-    studentId: str
-    subject: str
-    studentContextSummary: str
-    questionSummary: str
-    aiAnswerSummary: str
-    weakTopics: list[str]
-    suggestedFocus: str
-    sourceCount: int
-    createdAt: str
-
-
-class CreateSummaryDraftResponse(BaseModel):
-    draftId: str
-    draftType: str
-    status: str
-    studentId: str | None = None
-    questionId: str | None = None
-    subject: str | None = None
-    topicIds: list[str] = Field(default_factory=list)
-    sessionSummary: str | None = None
-    misconceptionSummary: str | None = None
-    suggestedTeachingFocus: str | None = None
-    draftFollowupExplanation: str | None = None
-    sourceContext: dict[str, Any] = Field(default_factory=dict)
-    promptVersion: str | None = None
-    createdBy: str | None = None
-    createdByRole: str | None = None
-    createdAt: str | None = None
-    generatedAt: str | None = None
-    updatedAt: str | None = None
-    reviewedBy: str | None = None
-    reviewedAt: str | None = None
-    reviewNote: str | None = None
-    previousDraftId: str | None = None
-    studentDeliveryStatus: str = "not_delivered"
-
-
-ExerciseDifficulty = Literal["targeted", "standard", "stretch"]
-StudentDeliveryStatus = Literal["not_delivered", "delivered"]
-
-
-class ExerciseDraftRequest(BaseModel):
-    """What an exercise draft is picked for (#519).
-
-    Its exercises come from the question bank: those of `starIds` (stars on
-    the star map, as the request's preparation table names them), then of
-    `topicIds`. At least one of the two names something.
-    """
-
-    studentId: str
-    subject: str
-    topicIds: list[str] = Field(default_factory=list)
-    starIds: list[str] = Field(default_factory=list)
-    difficulty: ExerciseDifficulty
-    exerciseCount: int
-    questionId: str | None = None
-
-
-class ReviewDraftRequest(BaseModel):
-    note: str | None = None
-
-
-class AiTeacherDraftResponse(CreateSummaryDraftResponse):
-    # `easy`/`medium`/`hard` on a draft stored before #519.
-    difficulty: str | None = None
-    exerciseCount: int = 0
-    starIds: list[str] = Field(default_factory=list)
-    # The lesson title of its first exercise, in the student's language.
-    title: str | None = None
-    items: list[dict[str, Any]] = Field(default_factory=list)
-    answerKey: list[dict[str, Any]] = Field(default_factory=list)
-    explanations: list[dict[str, Any]] = Field(default_factory=list)
-    # `delivered` once an accepted exercise draft is set for the student
-    # (`POST /adaptive/assignments`, `sourceType: ai_draft`), with that assignment.
-    studentDeliveryStatus: StudentDeliveryStatus = "not_delivered"
-    deliveredAssignmentId: str | None = None
-    deliveredAt: str | None = None
-
-
-class AiTeacherDraftListResponse(BaseModel):
-    items: list[AiTeacherDraftResponse]
-    count: int
-
-
-async def _authorize_ai_question_context(
-    question_id: str, actor: Actor, context: AuthorizationContext
-) -> AuthorizedResource:
-    """The help request an exercise draft is for, loaded first (a body names it)."""
-    # A question id is a help request's id (#189).
-    question = help_requests.get(question_id)
-    ref = (
-        teacher_task_resource(ResourceType.QUESTION, question).ref
-        if question
-        else ResourceRef(ResourceType.QUESTION, question_id, question_id)
-    )
-    return await authorize_loaded(
-        actor, ref, question, AuthorizationAction.CREATE, _TEACHER_TOOLS, context
-    )
-
-
-_ai_question_context = authorized(
-    ResourceType.QUESTION, AuthorizationAction.CREATE, path("question_id"), _TEACHER_TOOLS
-)
-
-
-@loaded_declaration(ResourceType.AI_TEACHER_DRAFT, AuthorizationAction.CREATE, _TEACHER_TOOLS)
-async def _exercise_context_dependency(
-    body: ExerciseDraftRequest,
-    actor: Actor = Depends(get_actor),
-    context: AuthorizationContext = Depends(get_authorization_context),
-) -> AuthorizedResource:
-    """What an exercise draft is made for: a help request, else one student."""
-    try:
-        if body.questionId:
-            return await _authorize_ai_question_context(body.questionId, actor, context)
-        student = user_repo.get_user(body.studentId)
-        if not student or student.get("role") not in {None, "student"}:
-            student_context = None
-        else:
-            student_context = {
-                "draft_id": f"student-context:{body.studentId}",
-                "student_id": body.studentId,
-                "account_status": student.get("account_status") or student.get("status"),
-            }
-        ref = ResourceRef(
-            ResourceType.AI_TEACHER_DRAFT,
-            f"student-context:{body.studentId}",
-            str(body.studentId or ""),
-        )
-        return await authorize_loaded(
-            actor, ref, student_context, AuthorizationAction.CREATE, _TEACHER_TOOLS, context
-        )
-    except SecurityDecisionError:
-        raise
-    except Exception as exc:
-        raise SecurityDecisionError(
-            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
-            internal_detail=type(exc).__name__,
-        ) from exc
-
-
 @loaded_declaration(ResourceType.TEACHER_HELP_REQUEST, AuthorizationAction.READ, _TEACHER_HELP)
 async def _help_list_actor(
     actor: Actor = Depends(_portal_read),
     context: AuthorizationContext = Depends(get_authorization_context),
 ) -> tuple[Actor, AuthorizationContext]:
     """The teacher's own portal; each listed request is decided in `_current_help_requests`."""
-    return actor, context
-
-
-@loaded_declaration(ResourceType.AI_TEACHER_DRAFT, AuthorizationAction.READ, _TEACHER_TOOLS)
-async def _ai_draft_list_actor(
-    actor: Actor = Depends(_portal_read),
-    context: AuthorizationContext = Depends(get_authorization_context),
-) -> tuple[Actor, AuthorizationContext]:
-    """The teacher's own portal; each listed draft is decided in the route."""
     return actor, context
 
 
@@ -807,172 +638,6 @@ async def get_stats(
         pendingRequests=pending,
         resolvedToday=resolved_today_count,
         averageResponseTimeMinutes=round(sum(response_times) / len(response_times)) if response_times else 0,
-    )
-
-
-@router.get("/questions/{question_id}/assistance-summary", response_model=AssistanceSummaryResponse)
-async def get_question_assistance_summary(
-    question_id: str,
-    authorized: AuthorizedResource = Depends(
-        authorized(
-            ResourceType.QUESTION,
-            AuthorizationAction.READ,
-            path("question_id"),
-            _TEACHER_HELP,
-        )
-    ),
-    actor: Actor = Depends(get_actor),
-):
-    """Build a bounded teacher assistance summary seed for an accessible question."""
-    return teacher_assistance_service.build_summary_seed(authorized, actor)
-
-
-@router.post("/questions/{question_id}/ai-tools/summary-draft", response_model=AiTeacherDraftResponse)
-async def create_question_summary_draft(
-    question_id: str,
-    authorized: AuthorizedResource = Depends(_ai_question_context),
-    actor: Actor = Depends(get_actor),
-):
-    """Create a reviewed AI teacher summary draft for an accessible question."""
-    return ai_teacher_tools_service.create_summary_draft(authorized, actor)
-
-
-@router.post("/ai-tools/exercise-drafts", response_model=AiTeacherDraftResponse)
-async def create_exercise_draft(
-    body: ExerciseDraftRequest,
-    authorized: AuthorizedResource = Depends(_exercise_context_dependency),
-    actor: Actor = Depends(get_actor),
-):
-    """Pick a practice exercise draft from the question bank for the teacher to review."""
-    return ai_teacher_tools_service.create_exercise_draft(
-        student_id=body.studentId,
-        subject=body.subject,
-        topic_ids=body.topicIds,
-        star_ids=body.starIds,
-        difficulty=body.difficulty,
-        exercise_count=body.exerciseCount,
-        question_id=body.questionId,
-        actor=actor,
-        authorized_context=authorized,
-    )
-
-
-@router.get("/ai-tools/drafts", response_model=AiTeacherDraftListResponse)
-async def list_ai_teacher_drafts(
-    student_id: str | None = None,
-    status: str | None = None,
-    draft_type: str | None = None,
-    limit: int = 50,
-    portal: tuple[Actor, AuthorizationContext] = Depends(_ai_draft_list_actor),
-):
-    """List visible reviewed AI teacher tool drafts."""
-    actor, context = portal
-    try:
-        candidates = ai_teacher_tools_service.list_drafts(
-            student_id=student_id,
-            status=status,
-            draft_type=draft_type,
-            limit=limit,
-        )
-    except AiTeacherToolsViolation:
-        raise
-    except Exception as exc:
-        raise SecurityDecisionError(
-            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
-            internal_detail=type(exc).__name__,
-        ) from exc
-    items: list[AiTeacherDraftResponse] = []
-    for candidate in candidates:
-        try:
-            loaded = teacher_task_resource(ResourceType.AI_TEACHER_DRAFT, candidate)
-            authorized = await authorize_loaded(
-                actor,
-                loaded.ref,
-                candidate,
-                AuthorizationAction.READ,
-                _TEACHER_TOOLS,
-                context,
-            )
-        except SecurityDecisionError as error:
-            if error.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE:
-                raise
-            continue
-        items.append(
-            AiTeacherDraftResponse.model_validate(
-                ai_teacher_tools_service.get_draft(authorized)
-            )
-        )
-    return AiTeacherDraftListResponse(items=items, count=len(items))
-
-
-@router.get("/ai-tools/drafts/{draft_id}", response_model=AiTeacherDraftResponse)
-async def get_ai_teacher_draft(
-    draft_id: str,
-    authorized: AuthorizedResource = Depends(_ai_teacher_draft(AuthorizationAction.READ)),
-):
-    """Return one visible reviewed AI teacher tool draft."""
-    return ai_teacher_tools_service.get_draft(authorized)
-
-
-@router.post("/ai-tools/drafts/{draft_id}/regenerate", response_model=AiTeacherDraftResponse)
-async def regenerate_ai_teacher_draft(
-    draft_id: str,
-    authorized: AuthorizedResource = Depends(_ai_teacher_draft(AuthorizationAction.CREATE)),
-    actor: Actor = Depends(get_actor),
-):
-    """Create a new draft version while preserving prior draft metadata."""
-    return ai_teacher_tools_service.regenerate_draft(authorized, actor)
-
-
-@router.post("/ai-tools/drafts/{draft_id}/accept", response_model=AiTeacherDraftResponse)
-async def accept_ai_teacher_draft(
-    draft_id: str,
-    body: ReviewDraftRequest | None = None,
-    authorized: AuthorizedResource = Depends(_ai_teacher_draft(AuthorizationAction.UPDATE)),
-    actor: Actor = Depends(get_actor),
-):
-    """Mark a draft as reviewed and accepted.
-
-    Accepting sends nothing: an accepted exercise draft reaches the student as
-    an assignment (`POST /adaptive/assignments`, `sourceType: ai_draft`).
-    """
-    return ai_teacher_tools_service.review_draft(
-        authorized=authorized,
-        action="accept",
-        actor=actor,
-        note=body.note if body else None,
-    )
-
-
-@router.post("/ai-tools/drafts/{draft_id}/reject", response_model=AiTeacherDraftResponse)
-async def reject_ai_teacher_draft(
-    draft_id: str,
-    body: ReviewDraftRequest | None = None,
-    authorized: AuthorizedResource = Depends(_ai_teacher_draft(AuthorizationAction.UPDATE)),
-    actor: Actor = Depends(get_actor),
-):
-    """Mark a draft as rejected without deleting evidence."""
-    return ai_teacher_tools_service.review_draft(
-        authorized=authorized,
-        action="reject",
-        actor=actor,
-        note=body.note if body else None,
-    )
-
-
-@router.post("/ai-tools/drafts/{draft_id}/archive", response_model=AiTeacherDraftResponse)
-async def archive_ai_teacher_draft(
-    draft_id: str,
-    body: ReviewDraftRequest | None = None,
-    authorized: AuthorizedResource = Depends(_ai_teacher_draft(AuthorizationAction.UPDATE)),
-    actor: Actor = Depends(get_actor),
-):
-    """Archive a draft from the active teacher workflow without deleting evidence."""
-    return ai_teacher_tools_service.review_draft(
-        authorized=authorized,
-        action="archive",
-        actor=actor,
-        note=body.note if body else None,
     )
 
 

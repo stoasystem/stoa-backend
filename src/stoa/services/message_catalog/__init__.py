@@ -364,28 +364,6 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "Demande d'aide à un enseignant envoyée.",
         "it": "Richiesta di aiuto a un insegnante inviata.",
     },
-    # ── the seed a teacher is shown beside a help request ────────────────
-    "assistance.context.without_topics": {
-        "de": (
-            "Die Schülerin oder der Schüler hat eine offene Anfrage in {subject}, "
-            "noch ohne ausreichende Hinweise auf ein Thema."
-        ),
-        "en": "Student has an active {subject} help request without enough topic evidence yet.",
-        "fr": (
-            "L'élève a une demande ouverte en {subject}, "
-            "sans encore assez d'indices sur un thème."
-        ),
-        "it": (
-            "Lo studente ha una richiesta aperta in {subject}, "
-            "ancora senza indizi sufficienti su un argomento."
-        ),
-    },
-    "assistance.focus.default": {
-        "de": "Stell eine diagnostische Frage und erkläre dann den kleinsten nächsten Schritt.",
-        "en": "Ask one diagnostic question, then explain the smallest next step.",
-        "fr": "Pose une question de diagnostic, puis explique la plus petite étape suivante.",
-        "it": "Fai una domanda diagnostica, poi spiega il passo successivo più piccolo.",
-    },
     # ── timeline entries on the student's and the parent's pages ─────────
     "activity.teacher_help_requested": {
         "de": "Anfrage an eine Lehrperson",

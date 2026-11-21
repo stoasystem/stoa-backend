@@ -1997,60 +1997,6 @@
       {
         "action": "read",
         "capability": null,
-        "purpose": "ai_teacher_tools",
-        "resource_type": "ai_teacher_draft"
-      },
-      {
-        "action": "read",
-        "capability": null,
-        "purpose": "teacher_help",
-        "resource_type": "ai_teacher_draft"
-      },
-      {
-        "action": "read",
-        "capability": null,
-        "purpose": "self_service",
-        "resource_type": "teacher_portal"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "student_id"
-    ],
-    "method": "GET",
-    "path": "/teachers/ai-tools/drafts",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": null,
-        "purpose": "ai_teacher_tools",
-        "resource_type": "ai_teacher_draft"
-      },
-      {
-        "action": "read",
-        "capability": null,
-        "purpose": "teacher_help",
-        "resource_type": "ai_teacher_draft"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "draft_id"
-    ],
-    "method": "GET",
-    "path": "/teachers/ai-tools/drafts/{draft_id}",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": null,
         "purpose": "self_service",
         "resource_type": "teacher_portal"
       }
@@ -2163,24 +2109,6 @@
     "identifiers": [],
     "method": "GET",
     "path": "/teachers/me/stats",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": null,
-        "purpose": "teacher_help",
-        "resource_type": "question"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "question_id"
-    ],
-    "method": "GET",
-    "path": "/teachers/questions/{question_id}/assistance-summary",
     "sensitive": true
   },
   {
@@ -4282,127 +4210,6 @@
   {
     "authorization": [
       {
-        "action": "update",
-        "capability": null,
-        "purpose": "ai_teacher_tools",
-        "resource_type": "ai_teacher_draft"
-      },
-      {
-        "action": "update",
-        "capability": null,
-        "purpose": "teacher_help",
-        "resource_type": "ai_teacher_draft"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "draft_id"
-    ],
-    "method": "POST",
-    "path": "/teachers/ai-tools/drafts/{draft_id}/accept",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "update",
-        "capability": null,
-        "purpose": "ai_teacher_tools",
-        "resource_type": "ai_teacher_draft"
-      },
-      {
-        "action": "update",
-        "capability": null,
-        "purpose": "teacher_help",
-        "resource_type": "ai_teacher_draft"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "draft_id"
-    ],
-    "method": "POST",
-    "path": "/teachers/ai-tools/drafts/{draft_id}/archive",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "create",
-        "capability": null,
-        "purpose": "ai_teacher_tools",
-        "resource_type": "ai_teacher_draft"
-      },
-      {
-        "action": "create",
-        "capability": null,
-        "purpose": "teacher_help",
-        "resource_type": "ai_teacher_draft"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "draft_id"
-    ],
-    "method": "POST",
-    "path": "/teachers/ai-tools/drafts/{draft_id}/regenerate",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "update",
-        "capability": null,
-        "purpose": "ai_teacher_tools",
-        "resource_type": "ai_teacher_draft"
-      },
-      {
-        "action": "update",
-        "capability": null,
-        "purpose": "teacher_help",
-        "resource_type": "ai_teacher_draft"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "draft_id"
-    ],
-    "method": "POST",
-    "path": "/teachers/ai-tools/drafts/{draft_id}/reject",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "create",
-        "capability": null,
-        "purpose": "ai_teacher_tools",
-        "resource_type": "ai_teacher_draft"
-      },
-      {
-        "action": "create",
-        "capability": null,
-        "purpose": "teacher_help",
-        "resource_type": "ai_teacher_draft"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "questionId",
-      "studentId"
-    ],
-    "method": "POST",
-    "path": "/teachers/ai-tools/exercise-drafts",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
         "action": "respond",
         "capability": null,
         "purpose": "teacher_help",
@@ -4445,30 +4252,6 @@
     "serviceEnforced": [
       "attachment_service.prepare_reply_images"
     ]
-  },
-  {
-    "authorization": [
-      {
-        "action": "create",
-        "capability": null,
-        "purpose": "ai_teacher_tools",
-        "resource_type": "question"
-      },
-      {
-        "action": "create",
-        "capability": null,
-        "purpose": "teacher_help",
-        "resource_type": "question"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "question_id"
-    ],
-    "method": "POST",
-    "path": "/teachers/questions/{question_id}/ai-tools/summary-draft",
-    "sensitive": true
   },
   {
     "authorization": [],

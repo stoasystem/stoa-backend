@@ -187,42 +187,6 @@ def test_teacher_router_exposes_no_legacy_route():
     assert client.get("/tutors/me/availability").status_code == 404
 
 
-def test_assistance_summary_requires_current_teacher_and_uses_authorized_question(monkeypatch):
-    stored = []
-    # A question id names a help request (#189); the route reads its record (#234).
-    request = {
-        "conversation_id": "question-1",
-        "escalation_request_id": "question-1",
-        "student_id": "student-1",
-        "escalation_status": "in_progress",
-        "teacher_id": "teacher-1",
-        "subject": "math",
-        "escalation_message": "Explain fractions",
-        "private_profile": "must-not-leak",
-    }
-    monkeypatch.setattr(teachers.help_requests, "get", lambda _id, **_kwargs: request)
-    monkeypatch.setattr(
-        teachers.teacher_assistance_service.learning_session, "history", lambda _id: []
-    )
-    monkeypatch.setattr(
-        teachers.teacher_assistance_service.notification_repo,
-        "put_summary_seed",
-        lambda item: stored.append(item),
-    )
-
-    current = _client(
-        teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}
-    ).get("/teachers/questions/question-1/assistance-summary")
-    other = _client(
-        teachers.router, "/teachers", {"sub": "teacher-2", "role": "teacher"}
-    ).get("/teachers/questions/question-1/assistance-summary")
-
-    assert current.status_code == 200
-    assert other.status_code == 404
-    assert "must-not-leak" not in str(current.json())
-    assert len(stored) == 1
-
-
 def _help_record(conversation_id: str, **fields) -> dict:
     """A help request as its own record (#189); its id is its conversation's."""
     return {

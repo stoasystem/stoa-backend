@@ -71,7 +71,6 @@ def test_source_registry_closes_rows_writers_private_fields_and_external_boundar
     assert {
         "put_event",
         "update_event",
-        "put_summary_seed",
         "put_preferences",
         "put_push_token",
         "update_push_token",

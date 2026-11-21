@@ -67,10 +67,11 @@ def _actor(role: CanonicalRole, user_id: str, *grants: CapabilityGrant) -> Actor
 STUDENT = _actor(CanonicalRole.STUDENT, "student-1")
 OTHER_STUDENT = _actor(CanonicalRole.STUDENT, "student-2")
 TEACHER = _actor(CanonicalRole.TEACHER, "teacher-1")
-TOOLS_TEACHER = _actor(
+# No production route chooses a purpose by grant since #518; any capability does here.
+GRANTED_TEACHER = _actor(
     CanonicalRole.TEACHER,
     "teacher-2",
-    CapabilityGrant("ai_teacher_tools_operator", "global", 1),
+    CapabilityGrant("example_operator", "global", 1),
 )
 GLOBAL_REVIEWER = _actor(
     CanonicalRole.ADMIN, "admin-1", CapabilityGrant("teacher_identity_reviewer", "global", 1)
@@ -211,9 +212,9 @@ def test_the_operator_target_is_in_the_inventory_and_checked_by_the_gate():
 # by_grant(...)
 # ---------------------------------------------------------------------------
 
-TOOL_PURPOSE = by_grant(
-    "ai_teacher_tools_operator",
-    AuthorizationPurpose.AI_TEACHER_TOOLS,
+GRANTED_PURPOSE = by_grant(
+    "example_operator",
+    AuthorizationPurpose.SUPPORT,
     otherwise=AuthorizationPurpose.TEACHER_HELP,
 )
 
@@ -238,7 +239,7 @@ def test_a_purpose_chosen_by_a_grant_follows_the_actor_and_lists_both_in_the_inv
                 ResourceType.CONVERSATION,
                 AuthorizationAction.READ,
                 path("thing_id"),
-                {CanonicalRole.TEACHER: TOOL_PURPOSE},
+                {CanonicalRole.TEACHER: GRANTED_PURPOSE},
                 kind=TEST_KIND,
             )
         ),
@@ -246,13 +247,13 @@ def test_a_purpose_chosen_by_a_grant_follows_the_actor_and_lists_both_in_the_inv
         return {}
 
     app.dependency_overrides[declared.get_authorization_policy] = _Policy
-    for actor in (TEACHER, TOOLS_TEACHER):
+    for actor in (TEACHER, GRANTED_TEACHER):
         _client(app, actor, MemoryAuthorizationAuditSink()).get("/things/thing-1")
-    assert seen == ["teacher_help", "ai_teacher_tools"]
+    assert seen == ["teacher_help", "support"]
 
     [item] = inventory_application(app)
     assert sorted(spec.purpose for spec in item.authorization_specs) == [
-        "ai_teacher_tools",
+        "support",
         "teacher_help",
     ]
 
@@ -337,7 +338,6 @@ def test_self_does_not_load_a_type_whose_loader_is_keyed_by_another_id():
         (ResourceType.CONVERSATION, declared.LIVE),
         (ResourceType.QUESTION, None),
         (ResourceType.TEACHER_HELP_REQUEST, None),
-        (ResourceType.AI_TEACHER_DRAFT, None),
         (ResourceType.NOTIFICATION_EVENT, None),
         (ResourceType.NOTIFICATION_PUSH_TOKEN, declared.TOKEN),
         (ResourceType.ATTACHMENT, None),
@@ -479,7 +479,6 @@ def test_service_enforced_checks_are_named_in_the_inventory(
     [
         ("GET", "/teachers/me/help-requests"),
         ("GET", "/teachers/me/stats"),
-        ("GET", "/teachers/ai-tools/drafts"),
     ],
 )
 def test_lists_decided_item_by_item_are_authorized_not_service_enforced(method, route):
