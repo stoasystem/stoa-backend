@@ -370,6 +370,20 @@ def test_a_recovery_audit_event_registers_the_parent_and_student_it_names(table)
              "metadata": {"teacher_id": PARENT}},
             {STUDENT: "owner", TEACHER: "reference", PARENT: "reference"},
         ),
+        # The accounts the notification scan scrubs out of a notification are
+        # registered as references (#574); its `metadata` owners, whose
+        # deletion tombstones it, are named the way the sweep's backfill names
+        # any id inside `metadata`.
+        (
+            {"entity_type": "notification_event", "owner_id": STUDENT,
+             "metadata": {"parent_id": PARENT, "actor_id": TEACHER}},
+            {STUDENT: "owner", TEACHER: "reference", PARENT: "reference"},
+        ),
+        (
+            {"entity_type": "notification_event", "owner_id": PARENT,
+             "metadata": {"student_id": STUDENT, "owner_id": TEACHER}},
+            {PARENT: "owner", STUDENT: "reference", TEACHER: "reference"},
+        ),
         (
             {"entity_type": "help_request", "student_id": STUDENT, "dispatched_teacher_id": TEACHER,
              "previous_dispatch_teacher_ids": [PARENT]},
@@ -399,6 +413,39 @@ def test_a_fenced_put_registers_every_account_its_row_names(table):
     assert [op for op in sent if "ConditionCheck" in op] == [
         account_deletion_repo.active_fence_condition(STUDENT, 3)
     ]
+
+
+@pytest.mark.parametrize("field", ["parent_id", "actor_id"])
+def test_a_notification_registers_the_account_its_metadata_mentions(table, field):
+    """Through the notification write path, a Put and a later Update alike (#574)."""
+    from stoa.db.repositories import notification_repo
+
+    db_table.install(table)
+    try:
+        notification_repo.put_event({
+            "event_id": "e1", "entity_type": "notification_event",
+            "schema_version": "notification-event.v2", "owner_id": STUDENT,
+            "account_fence_generation": 3, "status": "created", "event_version": 1,
+            "metadata": {field: PARENT},
+        })
+        assert _registry(table, PARENT) == {"REFERENCED_IN#NOTIFICATION#e1": "reference"}
+
+        notification_repo.update_event("e1", {"metadata": {field: TEACHER}})
+    finally:
+        db_table.install(None)
+
+    # (The notification write hands `fenced` the mentioned accounts' registry
+    # Puts, which it then counts as writes into their `USER#` partitions; only
+    # the notification's own partition is the point here.)
+    def notification(user_id: str) -> dict[str, str]:
+        return {
+            sk: role for sk, role in _registry(table, user_id).items()
+            if sk.endswith("NOTIFICATION#e1")
+        }
+
+    assert notification(STUDENT) == {"OWNS#NOTIFICATION#e1": "owner"}
+    assert notification(PARENT) == {"REFERENCED_IN#NOTIFICATION#e1": "reference"}
+    assert notification(TEACHER) == {"REFERENCED_IN#NOTIFICATION#e1": "reference"}
 
 
 def test_a_capability_grant_registers_the_student_it_is_scoped_to(table):

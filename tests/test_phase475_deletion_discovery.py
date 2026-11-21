@@ -114,8 +114,20 @@ class _RepeatingCursorTable:
             False,
             id="unregistered-question-payload",
         ),
+        # The accounts the notification family scrubs out of a notification
+        # are taken here as well (#574).
         pytest.param(
             _row("notification_event", owner_id="student-1", metadata={"actor_id": IDENTITY}),
+            True,
+            id="notification-metadata-actor-id",
+        ),
+        pytest.param(
+            _row("notification_event", owner_id="student-1", metadata={"parent_id": IDENTITY}),
+            True,
+            id="notification-metadata-parent-id",
+        ),
+        pytest.param(
+            _row("notification_event", owner_id="student-1", metadata={"recipient_id": IDENTITY}),
             False,
             id="unregistered-notification-metadata",
         ),

@@ -339,3 +339,89 @@ def test_a_v2_rounds_results_carry_the_v2_handler_version_and_registry_cursors(
     cursors = [r["cursor"] for r in results.values() if r.get("cursor")]
     partitions = set(account_deletion_repo.owner_partitions(student))
     assert all(set(c) == {"PK", "SK"} and c["PK"] in partitions for c in cursors)
+
+
+# -- a notification that only mentions the account (#574) ------------------------------
+
+PARENT_574 = "parent-574"
+
+
+def _open_parent(table: FakeTable) -> None:
+    table.seed(
+        {"PK": f"USER#{PARENT_574}", "SK": "PROFILE", "user_id": PARENT_574,
+         "role": "parent", "account_status": "active", "version": 1},
+        {"PK": f"USER#{PARENT_574}", "SK": "ACCOUNT_FENCE", "entity_type": "account_fence",
+         "user_id": PARENT_574, "status": "active", "generation": 1, "version": 1},
+    )
+
+
+def _mentioning_event(field: str) -> dict[str, Any]:
+    return {
+        "event_id": "e-574", "entity_type": "notification_event",
+        "schema_version": "notification-event.v2", "owner_id": "student-small",
+        "account_fence_generation": 1, "status": "created", "event_version": 1,
+        "title": "Ihr Kind hat eine Frage gestellt",
+        "metadata": {field: PARENT_574, "subject": "math"},
+    }
+
+
+@pytest.mark.parametrize("field", ["parent_id", "actor_id"])
+def test_a_registry_path_deletion_scrubs_the_account_out_of_a_notification_it_is_named_in(
+    small_table: FakeTable, providers: dict[Kind, Any], registry_path, field: str
+) -> None:
+    from stoa.db.repositories import notification_repo
+
+    _open_parent(small_table)
+    notification_repo.put_event(_mentioning_event(field))
+    key = ("NOTIFICATION#e-574", "META")
+
+    # The write registered the mentioned account, so the sweep finds nothing
+    # missing and leaves the registry path open.
+    report = _vouch(small_table)
+    assert report.complete and not report.unregistered, report.unregistered_samples
+    assert service.registry_path_ready(table=small_table)
+    command_id = quick._accept(PARENT_574)
+    scans_before = small_table.calls["scan"]
+
+    command = _run(command_id, PARENT_574, small_table)
+
+    assert command["status"] == "complete", command.get("branch_results")
+    assert command["inventory_sha256"] == sha256(V2.read_bytes()).hexdigest()
+    assert small_table.calls["scan"] == scans_before
+    # Scrubbed the way the notification family scrubs a reference: the account
+    # is gone from it, the student's notification stays theirs, nothing else
+    # changed. No other branch tombstoned or deleted it.
+    row = small_table.rows[key]
+    assert row["entity_type"] == "notification_event"
+    assert row["owner_id"] == "student-small"
+    assert row["metadata"] == {"subject": "math"}
+    assert row["title"] == "Ihr Kind hat eine Frage gestellt"
+    assert int(row["event_version"]) == 2
+    assert not account_deletion_repo._targets_user(row, PARENT_574)
+
+
+def test_the_sweep_counts_an_unregistered_mention_and_backfills_what_the_write_registers(
+    small_table: FakeTable,
+) -> None:
+    """A notification stored before #574 lacks the row; the backfill writes the same one."""
+    from stoa.db.repositories import notification_repo
+
+    _open_parent(small_table)
+    stored = {**_mentioning_event("parent_id"), "PK": "NOTIFICATION#e-574", "SK": "META"}
+    small_table.seed(stored)
+
+    report = owner_registry_sweep.run(table=small_table, write=True)
+
+    # Its owner's row is missing too, seeded as it is; the mention is the point.
+    assert {(sample["account"], sample["role"]) for sample in report.unregistered_samples} == {
+        ("student-small", "owner"), (PARENT_574, "reference"),
+    }
+    reference = owner_registry.registry_key(
+        PARENT_574, "NOTIFICATION#e-574", owner_registry.ROLE_REFERENCE
+    )
+    backfilled = small_table.rows.pop((reference["PK"], reference["SK"]))
+    # The write path, given the same event, registers the very same row.
+    small_table.rows.pop(("NOTIFICATION#e-574", "META"))
+    notification_repo.put_event(_mentioning_event("parent_id"))
+    assert small_table.rows[(reference["PK"], reference["SK"])] == backfilled
+    assert not owner_registry_sweep.run(table=small_table).unregistered

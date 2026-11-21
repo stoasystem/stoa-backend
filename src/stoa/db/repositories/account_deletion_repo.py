@@ -259,6 +259,22 @@ SESSION_TOMBSTONE_ALLOWLIST = frozenset(
     }
 )
 
+# Who a notification names besides its owner fields (#574). In `metadata`, the
+# accounts it is about (`owner_id`, `student_id`), whose deletion tombstones it
+# like its recipient's, and the accounts it only mentions, whose deletion
+# scrubs them out of it and leaves the rest; on the row itself, its `actor_id`,
+# a mention too. The notification family's own deletion scan
+# (`notification_repo._targets_owner` / `_targets_identity_reference`) reads
+# these sets, and the `notification_event` entry below is their union, so that
+# scan, this module's matcher and the owner registry (`mentioned_accounts`)
+# take a notification for the same accounts. They once disagreed on `parent_id`
+# and `actor_id` in `metadata`: the notification scan took such a row for the
+# account, but its write never registered the partition, so the registry path
+# could not reach it and the daily sweep closed that path for every deletion.
+NOTIFICATION_OWNER_METADATA_FIELDS = frozenset({"owner_id", "student_id"})
+NOTIFICATION_REFERENCE_METADATA_FIELDS = frozenset({"actor_id", "teacher_id", "parent_id"})
+NOTIFICATION_REFERENCE_SCALAR_FIELDS = frozenset({"actor_id"})
+
 # Cross-account identities are deliberately enumerated by persisted entity and
 # field.  Do not replace this registry with recursive payload inspection: only
 # reviewed relationship, teacher, and notification coordinates may make an
@@ -298,9 +314,9 @@ CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY: Mapping[
     # an administrator, whose deletion must not sweep the invitations they issued.
     "account_invitation": (frozenset({"account_id"}), frozenset(), frozenset()),
     "notification_event": (
-        frozenset({"actor_id"}),
+        NOTIFICATION_REFERENCE_SCALAR_FIELDS,
         frozenset(),
-        frozenset({"owner_id", "student_id", "teacher_id"}),
+        NOTIFICATION_OWNER_METADATA_FIELDS | NOTIFICATION_REFERENCE_METADATA_FIELDS,
     ),
     # A student's weekly AI token and teacher-help allowance rows name the
     # student only as `beneficiary_id` (#534). The paying parent, where there
@@ -2674,6 +2690,12 @@ def mentioned_accounts(item: Mapping[str, Any]) -> dict[str, str]:
                 add(member, owner_registry.ROLE_REFERENCE)
     metadata = item.get("metadata")
     if isinstance(metadata, Mapping):
+        # All of them references, a notification's `metadata` owners too: the
+        # role only names the registry row's key, deletion reads both kinds,
+        # and the daily sweep's backfill files any id inside `metadata` as a
+        # reference, so the write and the backfill put the same row. Whether
+        # the account's deletion tombstones the notification or scrubs it is
+        # the notification family's call (`notification_repo`), not the role's.
         for field in metadata_fields:
             add(metadata.get(field), owner_registry.ROLE_REFERENCE)
     for field in ("children", "child_summaries", "student_summaries"):
