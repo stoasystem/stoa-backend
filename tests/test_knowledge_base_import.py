@@ -1086,7 +1086,7 @@ def test_the_knowledge_base_stars_stay_hidden_until_they_go_live(
     assert subjects == []
     assert {row["rollout_state"] for row in (*topics, *units)} == {"preview"}
     subjects, topics, units = seed_practice.knowledge_base_rows(live=True)
-    assert [s["subject_id"] for s in subjects] == ["english", "physics"]
+    assert [s["subject_id"] for s in subjects] == ["english", "physics", "german"]
     assert {row["rollout_state"] for row in (*topics, *units)} == {"active"}
 
 
@@ -1113,15 +1113,16 @@ def test_a_language_is_laid_out_by_situations_of_life_and_by_grammar(
     nebulae = [t["topic_id"] for t in knowledge_base_catalog.topics() if t["subject_id"] == "english"]
     assert nebulae[0] == "englisch-ich" and nebulae[-1] == "englisch-saetze"
 
-    # Another language gets the same nebulae under its own prefix.
+    # Another language learnt as a foreign one gets the same nebulae under its own
+    # prefix (German as a first language has nebulae of its own, #498).
     monkeypatch.setattr(
-        knowledge_base_catalog, "LANGUAGE_SUBJECTS", {"english": "englisch", "german": "deutsch"}
+        knowledge_base_catalog, "LANGUAGE_SUBJECTS", {"english": "englisch", "french": "franzoesisch"}
     )
-    german = knowledge_base_catalog.unit_choices("german")
-    assert {unit.removeprefix("deutsch-") for unit in german} == {
+    french = knowledge_base_catalog.unit_choices("french")
+    assert {unit.removeprefix("franzoesisch-") for unit in french} == {
         unit.removeprefix("englisch-") for unit in english
     }
-    assert knowledge_base_catalog.subject_of_topic("deutsch-verben") == "german"
+    assert knowledge_base_catalog.subject_of_topic("franzoesisch-verben") == "french"
 
 
 def test_the_coarse_stars_lie_in_an_existing_or_new_nebula() -> None:
@@ -1139,7 +1140,7 @@ def test_the_coarse_stars_lie_in_an_existing_or_new_nebula() -> None:
 
 
 def test_every_subject_has_question_types_in_four_languages() -> None:
-    for subject in ("mathematics", "english", "physics"):
+    for subject in ("mathematics", "english", "physics", "german"):
         types = knowledge_base_catalog.QUESTION_TYPES[subject]
         assert len({slug for slug, _titles, _scope in types}) == len(types)
         for _slug, titles, scope in types:

@@ -55,6 +55,14 @@ out in batches; a structurer - a person or a model - fills one batch and writes
 - In English: a gap to fill with the right form is `grammatik`; choosing which
   sentence is correct is `saetze`; what to say in a situation or reply to an
   utterance is `situationen`; a question about a given text is `lesen`.
+- In German (#498) the stars are written final and are not structured here; each
+  exercise comes with its type in the source. The types: naming what a word, form,
+  case, sentence part, sentence, device or genre is - `bestimmen`; writing the form
+  asked for or rewriting a sentence - `bilden`; choosing or writing the right
+  spelling or punctuation - `rechtschreibung`; what a word or phrase means, the
+  fitting word - `wortschatz`; a question about a given text - `lesen`; knowing a
+  term or a rule as such ("Which rule says ...", "What is a Präposition?") -
+  `begriffe`, the one extension type.
 
 ## Merging stars
 

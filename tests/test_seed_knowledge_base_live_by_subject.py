@@ -17,7 +17,7 @@ from scripts import check_curriculum_seed as check
 from scripts import seed_practice
 from stoa.services import knowledge_base_catalog
 
-ALL = ("mathematics", "english", "physics")
+ALL = ("mathematics", "english", "physics", "german")
 
 
 def _states(topics: list[dict], units: list[dict]) -> dict[str, set[str]]:
@@ -33,7 +33,7 @@ def test_mathematics_goes_live_and_english_and_physics_stay_hidden() -> None:
 
     assert subjects == []
     assert _states(topics, units) == {
-        "mathematics": {"active"}, "english": {"preview"}, "physics": {"preview"},
+        "mathematics": {"active"}, "english": {"preview"}, "physics": {"preview"}, "german": {"preview"},
     }
 
 
@@ -42,7 +42,7 @@ def test_a_language_goes_live_with_its_subject_row_alone() -> None:
 
     assert [s["subject_id"] for s in subjects] == ["english"]
     assert _states(topics, units) == {
-        "mathematics": {"preview"}, "english": {"active"}, "physics": {"preview"},
+        "mathematics": {"preview"}, "english": {"active"}, "physics": {"preview"}, "german": {"preview"},
     }
 
 
@@ -65,7 +65,7 @@ def test_the_seed_writes_the_mode_it_is_given() -> None:
         state == ("active" if subject_of[unit] == "mathematics" else "preview")
         for unit, state in written.items()
     )
-    assert not [row for row in rows if row["SK"] in ("SUBJECT#english", "SUBJECT#physics")]
+    assert not [row for row in rows if row["SK"] in ("SUBJECT#english", "SUBJECT#physics", "SUBJECT#german")]
     hashes = {
         mode: seed_practice.seed_hash(seed_practice.seed_rows(knowledge_base=mode))
         for mode in ("preview", "live", "live:mathematics")
@@ -81,7 +81,8 @@ def test_the_seed_writes_the_mode_it_is_given() -> None:
         (["--knowledge-base-live"], "live"),
         (["--knowledge-base-live", "mathematics"], "live:mathematics"),
         (["--knowledge-base-live", "physics", "mathematics"], "live:mathematics,physics"),
-        (["--knowledge-base-live", "mathematics", "english", "physics"], "live"),
+        (["--knowledge-base-live", "mathematics", "english", "physics"], "live:mathematics,english,physics"),
+        (["--knowledge-base-live", "mathematics", "english", "physics", "german"], "live"),
     ],
 )
 def test_the_command_line_names_the_mode(argv: list[str], mode: str | None) -> None:
