@@ -179,9 +179,13 @@ translated from German into English, French and Italian.
 - Swiss spelling throughout: `ss`, never `ß`. An answer a student may type with `ß`
   lists that spelling in `accepted` - except in a spelling exercise, where the
   spelling is what is asked.
-- Case: the judge does not compare capital and small letters, so a task about
-  them is a choice exercise. Punctuation: a choice exercise, or a number ("How
-  many commas are missing?").
+- The judge compares an answer - a typed one or the chosen option - after
+  lower-casing it, collapsing spaces and dropping a final full stop, and `merge`
+  refuses options that read the same that way. So capitals are never asked by
+  options that differ only in case: print the sentence in small letters and ask
+  which word is written with a capital, or how many are (a number). Punctuation
+  is a choice of fully written sentences that differ in the mark being tested
+  (never only in a final full stop), or a number ("How many commas are missing?").
 - Swiss words in the prompts (`Velo`, `Trottoir`); a typed answer accepts the
   German one as well (`Fahrrad`, `Gehsteig`).
 - `unit`: the point's star as written in the source; a German point is filed under

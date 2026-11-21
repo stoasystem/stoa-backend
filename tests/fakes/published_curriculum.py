@@ -43,7 +43,11 @@ def _template() -> tuple[dict[str, Any], dict[str, Any]]:
 
 def curriculum_rows(scale: float = 1.0) -> list[dict[str, Any]]:
     """Every published curriculum row at `scale` times the production size."""
-    rows = seed_practice.seed_rows(knowledge_base=seed_practice.KNOWLEDGE_BASE_LIVE)
+    # As production is seeded: German's stars are in preview until its practice is
+    # published (#545, #547); the three subjects with practice are live.
+    rows = seed_practice.seed_rows(
+        knowledge_base=seed_practice.knowledge_base_live_mode(tuple(PRODUCTION_SIZE))
+    )
     units_by_subject: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         if row["PK"] == "PRACTICE" and str(row["SK"]).startswith("UNIT#"):
