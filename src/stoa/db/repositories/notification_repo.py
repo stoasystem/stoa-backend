@@ -47,10 +47,14 @@ NOTIFICATION_PRIVATE_ROW_REGISTRY = frozenset(
         PAYMENT_EXPIRY_REMINDER_ENTITY,
     }
 )
+# The accounts a notification names, from the one list the deletion matcher and
+# the owner registry read as well (#574): a notification's owners in `metadata`
+# get its tombstone, the accounts it only mentions are scrubbed out of it.
+NOTIFICATION_OWNER_METADATA_FIELDS = account_deletion_repo.NOTIFICATION_OWNER_METADATA_FIELDS
 NOTIFICATION_IDENTITY_REFERENCE_REGISTRY = {
     NOTIFICATION_ENTITY: {
-        "scalar_fields": frozenset({"actor_id"}),
-        "metadata_fields": frozenset({"actor_id", "teacher_id", "parent_id"}),
+        "scalar_fields": account_deletion_repo.NOTIFICATION_REFERENCE_SCALAR_FIELDS,
+        "metadata_fields": account_deletion_repo.NOTIFICATION_REFERENCE_METADATA_FIELDS,
     }
 }
 NOTIFICATION_WRITER_REGISTRY = frozenset(
@@ -1856,9 +1860,9 @@ def _targets_owner(item: Mapping[str, object], owner_id: str) -> bool:
     if owner_id in {item.get("owner_id"), item.get("student_id"), item.get("user_id")}:
         return True
     metadata = item.get("metadata")
-    return isinstance(metadata, Mapping) and owner_id in {
-        metadata.get("owner_id"), metadata.get("student_id")
-    }
+    return isinstance(metadata, Mapping) and any(
+        metadata.get(field) == owner_id for field in NOTIFICATION_OWNER_METADATA_FIELDS
+    )
 
 
 def _targets_identity_reference(

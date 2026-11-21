@@ -9,9 +9,9 @@ from typing import Any
 import pytest
 
 from stoa.db import table as db_table
-from stoa.db.repositories import notification_repo, websocket_repo
+from stoa.db.repositories import account_deletion_repo, notification_repo, websocket_repo
 from stoa.services import account_deletion_service, notification_service
-from fakes.dynamodb import from_wire
+from fakes.dynamodb import FakeTable, from_wire
 
 
 STUDENT_ID = "student-notification-delete"
@@ -459,3 +459,60 @@ def test_connection_update_keeps_the_generation_the_row_carries(
         assert transactions[0][0]["ConditionCheck"]["ExpressionAttributeValues"][
             ":generation"
         ] == GENERATION + 1
+
+
+# -- one answer to "whom does this notification name" (#574) ------------------------
+
+
+def _notification_scan_takes(item: dict[str, Any], account: str) -> bool:
+    table = FakeTable()
+    table.seed(item)
+    page = notification_repo.scan_notification_private_rows(
+        account, table=table, maximum_pages=1
+    )
+    return bool(page.items)
+
+
+def test_the_deletion_registry_names_exactly_the_accounts_the_notification_scan_takes() -> None:
+    """The shared registry entry and the notification scan read the same fields.
+
+    Declared, then asked of each side: a field one side reads and the other
+    does not fails here, whichever side changed.
+    """
+    scalar, collections, metadata = (
+        account_deletion_repo.CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY["notification_event"]
+    )
+    references = notification_repo.NOTIFICATION_IDENTITY_REFERENCE_REGISTRY[
+        notification_repo.NOTIFICATION_ENTITY
+    ]
+    owners = notification_repo.NOTIFICATION_OWNER_METADATA_FIELDS
+    assert collections == frozenset()
+    assert scalar == references["scalar_fields"]
+    assert metadata == owners | references["metadata_fields"]
+    assert not owners & references["metadata_fields"]
+
+    other = "account-named"
+    candidates = (
+        metadata | owners | references["metadata_fields"] | scalar | references["scalar_fields"]
+        | {"user_id", "child_id", "recipient_id", "created_by", "beneficiary_id", "subject"}
+    )
+    for field in sorted(candidates):
+        row = {
+            "PK": "NOTIFICATION#parity", "SK": "META", "entity_type": "notification_event",
+            "owner_id": STUDENT_ID, "metadata": {field: other},
+        }
+        taken = _notification_scan_takes(row, other)
+        assert taken == account_deletion_repo._targets_user(row, other), field
+        assert taken == (other in account_deletion_repo.mentioned_accounts(row)), field
+        # Owners get the tombstone, everyone else is scrubbed out (the scrub's own rule).
+        assert notification_repo._targets_owner(row, other) == (field in owners), field
+
+    for field in sorted(scalar | references["scalar_fields"]):
+        row = {
+            "PK": "NOTIFICATION#parity", "SK": "META", "entity_type": "notification_event",
+            "owner_id": STUDENT_ID, field: other, "metadata": {},
+        }
+        assert _notification_scan_takes(row, other), field
+        assert notification_repo._targets_identity_reference(row, other), field
+        assert account_deletion_repo._targets_user(row, other), field
+        assert account_deletion_repo.mentioned_accounts(row)[other] == "reference", field
