@@ -21,7 +21,11 @@ It works by `entity_type`, the name every kind of row is written with:
 2. Each type is listed once: in `deleted_by_branch()`, with the branch that
    picks it and one row of that type belonging to the account, keyed the way
    its writer keys it; or in `KEPT`, with why no branch picks it. A type in
-   neither fails; a listed type the code no longer writes fails as stale.
+   neither fails; a listed type the code no longer writes fails as stale,
+   unless it is in `NO_LONGER_WRITTEN`: rows the code stopped writing but that
+   may still be stored, so their branch still has to delete them. Such a type
+   stays in `deleted_by_branch()` with a row keyed as its old writer keyed it,
+   and fails if anything writes it again.
 3. The `deleted_by_branch()` rows are stored and every branch is run over the
    account the way a registry-path deletion runs it, with the branches' row
    operations replaced by a recorder. Each row must reach the branch it is
@@ -339,6 +343,19 @@ KEPT: dict[str, str] = {
 _REASONS = {"deletion_flow", "removed_with", "not_deletion_data", "expires", "no_caller", "gap"}
 
 
+# Types nothing writes any more whose stored rows may still be in the table:
+# their branch keeps deleting them with the account. Each says what retired it.
+NO_LONGER_WRITTEN: dict[str, str] = {
+    # #518 retired the teacher assistance summary
+    # (`GET /teachers/questions/{id}/assistance-summary`), its only writer.
+    "teacher_assistance_summary_seed": "#518",
+    # #518 retired the routes that made and reviewed AI exercise drafts. Drafts
+    # already stored can still be set as an assignment (`sourceType: ai_draft`),
+    # which only updates them (`ai_teacher_tools_service.mark_delivered`).
+    "ai_teacher_draft": "#518",
+}
+
+
 # -- rows the branches pick -----------------------------------------------------------
 
 ACCOUNT = "account-534"
@@ -551,7 +568,8 @@ def deleted_by_branch() -> dict[str, tuple[str, dict[str, Any]]]:
          "SK": notification_repo.delivery_intent_sk("op-1")},
         "notification_delivery_intent", owner_id=ACCOUNT))
     add("notification_device_realtime", _row(
-        {"PK": notification_repo.summary_seed_pk("s1"), "SK": "META"},
+        # Keyed as `put_summary_seed` keyed it before #518.
+        {"PK": "ASSISTANCE_SUMMARY#s1", "SK": "META"},
         "teacher_assistance_summary_seed", **owner))
     add("notification_device_realtime", _row(
         {"PK": notification_repo.payment_expiry_reminder_pk(ACCOUNT),
@@ -701,8 +719,26 @@ def test_every_written_entity_type_is_deleted_by_a_branch_or_kept():
 
 def test_the_lists_name_only_entity_types_the_code_writes():
     found, _ = written_entity_types(ROOT)
-    stale = sorted((deleted_by_branch().keys() | KEPT.keys()) - found.keys())
-    assert not stale, f"no longer written anywhere in src/stoa; remove from the lists: {stale}"
+    listed = deleted_by_branch().keys() | KEPT.keys()
+    stale = sorted(listed - found.keys() - NO_LONGER_WRITTEN.keys())
+    assert not stale, (
+        "no longer written anywhere in src/stoa: remove from the lists, or, if rows of it "
+        f"may still be stored, keep its branch and list it in NO_LONGER_WRITTEN: {stale}"
+    )
+
+
+def test_a_type_no_longer_written_is_not_written_and_is_still_deleted():
+    found, _ = written_entity_types(ROOT)
+    written_again = {
+        entity_type: sorted(found[entity_type])
+        for entity_type in sorted(NO_LONGER_WRITTEN.keys() & found.keys())
+    }
+    assert not written_again, (
+        f"written again: take it out of NO_LONGER_WRITTEN: {written_again}"
+    )
+    assert sorted(NO_LONGER_WRITTEN.keys() - deleted_by_branch().keys()) == [], (
+        "rows that may still be stored need a branch that deletes them"
+    )
 
 
 def test_no_entity_type_is_both_deleted_and_kept_and_every_reason_is_known():

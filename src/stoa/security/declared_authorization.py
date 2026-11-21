@@ -27,9 +27,9 @@ Where the id comes from is one of four sources:
   global operator resource, or on the object a ``path(...)`` target names (a
   grant may be scoped to that one object); the handler receives the `Actor`.
 
-A role's purpose may be chosen by a grant the Actor holds (`by_grant`): the
-AI teacher tools are read under their own purpose only by a teacher who
-holds that grant.
+A role's purpose may be chosen by a grant the Actor holds (`by_grant`). The
+AI teacher tools were its only user, and they went with #518; it is kept as
+the way to declare such a purpose.
 
 A route that loads first and decides after (a list, a batch, an id in a body)
 calls `authorize_loaded` instead (or `authorize_id`, for an id in a body) and
@@ -512,15 +512,14 @@ async def _load_question(question_id: str, _actor: Actor) -> AuthorizedResource 
 def teacher_task_resource(
     resource_type: ResourceType, loaded: Mapping[str, object]
 ) -> AuthorizedResource:
-    """A help request, question or draft a teacher works on, as the policy reads it.
+    """A help request or question a teacher works on, as the policy reads it.
 
     A question id is a help request's id since #189, and a request's id is
-    its conversation's; a draft names its request as ``question_id``.
+    its conversation's.
     """
     id_field = {
         ResourceType.QUESTION: "conversation_id",
         ResourceType.TEACHER_HELP_REQUEST: "conversation_id",
-        ResourceType.AI_TEACHER_DRAFT: "draft_id",
     }.get(resource_type, "resource_id")
     return AuthorizedResource(
         ResourceRef(
@@ -544,13 +543,6 @@ async def _load_help_request(request_id: str, _actor: Actor) -> AuthorizedResour
 
     item = help_requests.get(request_id)
     return teacher_task_resource(ResourceType.TEACHER_HELP_REQUEST, item) if item else None
-
-
-async def _load_ai_teacher_draft(draft_id: str, _actor: Actor) -> AuthorizedResource | None:
-    from stoa.services import ai_teacher_tools_service
-
-    item = ai_teacher_tools_service.ai_teacher_tools_repo.get_draft(draft_id)
-    return teacher_task_resource(ResourceType.AI_TEACHER_DRAFT, item) if item else None
 
 
 def _owned(
@@ -607,7 +599,6 @@ register_resource_loader(ResourceType.CONVERSATION, _load_conversation)
 register_resource_loader(ResourceType.CONVERSATION, _load_live_conversation, kind=LIVE)
 register_resource_loader(ResourceType.QUESTION, _load_question)
 register_resource_loader(ResourceType.TEACHER_HELP_REQUEST, _load_help_request)
-register_resource_loader(ResourceType.AI_TEACHER_DRAFT, _load_ai_teacher_draft)
 register_resource_loader(ResourceType.NOTIFICATION_EVENT, _load_notification_event)
 register_resource_loader(ResourceType.NOTIFICATION_PUSH_TOKEN, _load_push_token, kind=TOKEN)
 register_resource_loader(ResourceType.ATTACHMENT, _attachment_loader(for_reading=True))

@@ -40,7 +40,6 @@ class ResourceType(StrEnum):
     PARENT_BINDING = "parent_binding"
     TEACHER_PORTAL = "teacher_portal"
     TEACHER_HELP_REQUEST = "teacher_help_request"
-    AI_TEACHER_DRAFT = "ai_teacher_draft"
     NOTIFICATION_COLLECTION = "notification_collection"
     NOTIFICATION_EVENT = "notification_event"
     NOTIFICATION_PREFERENCE = "notification_preference"
@@ -72,7 +71,6 @@ class AuthorizationPurpose(StrEnum):
     SELF_SERVICE = "self_service"
     PARENT_OVERSIGHT = "parent_oversight"
     TEACHER_HELP = "teacher_help"
-    AI_TEACHER_TOOLS = "ai_teacher_tools"
     LEARNING_ASSIGNMENT = "learning_assignment"
     ASSIGNMENT_AUTOMATION_PREVIEW = "assignment_automation_preview"
     ASSIGNMENT_AUTOMATION_EXECUTE = "assignment_automation_execute"
@@ -259,7 +257,6 @@ class TeacherAuthorizationFacts:
             ResourceType.QUESTION,
             ResourceType.CONVERSATION,
             ResourceType.TEACHER_HELP_REQUEST,
-            ResourceType.AI_TEACHER_DRAFT,
             ResourceType.ATTACHMENT,
         }:
             return False
@@ -273,8 +270,7 @@ class TeacherAuthorizationFacts:
             return False
         task_link_id = (
             str(resource.question_id or "")
-            if resource.resource_type
-            in {ResourceType.AI_TEACHER_DRAFT, ResourceType.ATTACHMENT}
+            if resource.resource_type is ResourceType.ATTACHMENT
             else resource.resource_id
         )
         if task_link_id not in linked_ids:
@@ -573,17 +569,14 @@ class CurrentAuthorizationFactRepository:
             from stoa.services import help_requests
 
             def task(request_id: str) -> dict | None:
-                # A question id, a draft's and an attachment's, is a help
-                # request's id since #189.
+                # A question id, and the one an attachment names, is a
+                # help request's id since #189.
                 return help_requests.get(request_id)
 
             request = resource_value if resource.resource_type is ResourceType.QUESTION else None
             if resource.resource_type is ResourceType.CONVERSATION and resource.question_id:
                 request = task(resource.question_id)
-            if resource.resource_type in {
-                ResourceType.TEACHER_HELP_REQUEST,
-                ResourceType.AI_TEACHER_DRAFT,
-            }:
+            if resource.resource_type is ResourceType.TEACHER_HELP_REQUEST:
                 request = task(resource.question_id) if resource.question_id else resource_value
             if resource.resource_type is ResourceType.ATTACHMENT:
                 # Read under the help request it was sent in: the resolver
@@ -668,17 +661,6 @@ class AuthorizationPolicy:
                 and actor.role is CanonicalRole.PARENT
             ):
                 allowed = True
-            elif purpose is AuthorizationPurpose.AI_TEACHER_TOOLS:
-                allowed = bool(
-                    _matching_grant(
-                        actor,
-                        "ai_teacher_tools_operator",
-                        resource,
-                        action,
-                        purpose,
-                        allow_global=True,
-                    )
-                )
             elif actor.role is CanonicalRole.STUDENT:
                 allowed = (
                     actor.user_id == resource.student_id
