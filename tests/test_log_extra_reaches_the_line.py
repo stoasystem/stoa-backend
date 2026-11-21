@@ -81,7 +81,7 @@ def test_a_refused_voice_transcription_line_carries_the_code_and_request_id(
 
     with pytest.raises(transcription.TranscriptionFailed):
         transcription.VoxtralTranscriber(model_id="mistral.voxtral-small-2507").transcribe(
-            b"\x1a\x45\xdf\xa3", Container.WEBM
+            b"\x1a\x45\xdf\xa3", Container.WAV
         )
 
     line = _line(lambda_lines, "voice transcription refused")
@@ -91,14 +91,14 @@ def test_a_refused_voice_transcription_line_carries_the_code_and_request_id(
     assert "provider_error_code=ValidationException" in line
     assert "provider_request_id=ValidationException-request" in line
     assert "model_id=mistral.voxtral-small-2507" in line
-    assert "audio_format=webm" in line
+    assert "audio_format=wav" in line
 
 
 def test_a_failed_voice_transcription_line_carries_the_code(lambda_lines: io.StringIO) -> None:
     aws.install({aws.Kind.VOICE_TRANSCRIPTION: FakeConverse(client_error("ThrottlingException"))})
 
     with pytest.raises(transcription.TranscriptionFailed):
-        transcription.VoxtralTranscriber(model_id="m").transcribe(b"\x00", Container.WEBM)
+        transcription.VoxtralTranscriber(model_id="m").transcribe(b"\x00", Container.WAV)
 
     line = _line(lambda_lines, "voice transcription failed")
     assert "event=voice_transcription_failed" in line

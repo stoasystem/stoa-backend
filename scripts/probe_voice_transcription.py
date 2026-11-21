@@ -4,28 +4,27 @@
 Before voice questions go live, Voxtral is retested on real voices: a child's,
 Swiss German, background noise (#469 measured only Polly's synthetic speech).
 This takes every file in a folder, checks it with the endpoint's own
-`check_recording` (container, size, length), sends the ones it takes to the
-same `VoxtralTranscriber` the endpoint uses, in the same region, and prints one
-Markdown table row per file: language, container, length, the format sent,
-milliseconds the model took, outcome, how far what was heard is from what was
-said, what was heard and what was said.
+`check_recording` (format, size, length), sends the ones it takes to the same
+`VoxtralTranscriber` the endpoint uses, in the same region, and prints one
+Markdown table row per file: language, the file's own type, length, the format
+sent, milliseconds the model took, outcome, how far what was heard is from what
+was said, what was heard and what was said.
 
 - What was said is read from `<name>.txt` beside the recording, if there is one.
   Write it as the transcription should read: for Swiss German, the words as
   spoken; for a dictated formula, the form you expect back (`x² + 3x = 0` or
   `x hoch zwei plus drei x`, whichever is wanted).
 - The language is the first part of the file name that is a language code
-  (`gsw-kind-laerm.webm` is Swiss German): de, gsw, fr, it, en, rm.
+  (`gsw-kind-laerm.m4a` is Swiss German): de, gsw, fr, it, en, rm.
 - "Word error" is the share of the words said that would have to change to turn
   what was heard into them, ignoring case and punctuation: 0% is verbatim. A
   translation shows as a word error of 100% or more.
 
-Voxtral takes only mp3 and wav (measured 2026-11-20, #542), so the WebM, Ogg and
-MP4 the endpoint takes today are all refused. `--send-as wav` converts each
-recording the endpoint would take with the local `ffmpeg` (16 kHz mono) before
-sending it, which measures how well the model hears the voice whatever #542
-settles. Without it, each recording is sent exactly as the endpoint sends it.
-Files the endpoint would not take (a `.wav` voice memo, say) are reported with
+The endpoint takes one format, 16 kHz mono 16-bit PCM WAV (`voice_audio`, #542),
+which is what the client records. A phone's voice memo or a browser's WebM is
+not that, so `--send-as wav` first converts each file with the local `ffmpeg` to
+exactly that WAV, the way the client's recording would arrive. Without it each
+file is checked and sent as it is, and anything but that WAV is reported with
 the endpoint's error code and never sent.
 
 It calls Bedrock for real (and is billed for it) on whatever AWS session it is
@@ -43,12 +42,12 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import cast
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
@@ -59,20 +58,15 @@ from stoa.services.voice_transcription import VoiceQuestionViolation, check_reco
 
 # Beside a recording, not one: what was said, and notes.
 _NOT_RECORDINGS = frozenset({".txt", ".md"})
-# What a browser declares for each container; the endpoint requires the two to agree.
-_DECLARED = {
-    voice_audio.Container.WEBM: "audio/webm",
-    voice_audio.Container.OGG: "audio/ogg",
-    voice_audio.Container.MP4: "audio/mp4",
-}
+# What the client declares for each format; the endpoint requires the two to agree.
+_DECLARED = {voice_audio.Container.WAV: "audio/wav"}
 LANGUAGES = ("de", "gsw", "fr", "it", "en", "rm")
 
 
 class SendAs(StrEnum):
-    """A format Voxtral takes, as Bedrock's `AudioBlock.format` names it."""
+    """What `--send-as` converts to: the one format the endpoint takes."""
 
     WAV = "wav"
-    MP3 = "mp3"
 
 
 # The recording at this path, converted to this format.
@@ -83,7 +77,7 @@ Convert = Callable[[Path, SendAs], bytes]
 class Row:
     name: str
     language: str
-    container: str
+    recorded_as: str
     seconds: float | None
     sent_as: str
     elapsed_ms: int | None
@@ -125,44 +119,47 @@ def word_error(heard: str, said: str) -> float | None:
 
 
 def ffmpeg(path: Path, send_as: SendAs) -> bytes:
-    """The recording as 16 kHz mono `send_as`, by the local ffmpeg."""
+    """The recording as the endpoint's WAV (16 kHz, mono, 16-bit PCM), by the local ffmpeg."""
     binary = shutil.which("ffmpeg")
     if binary is None:
         raise SystemExit("--send-as needs ffmpeg on PATH (winget install Gyan.FFmpeg)")
-    codec = ["-c:a", "libmp3lame", "-b:a", "64k"] if send_as is SendAs.MP3 else ["-c:a", "pcm_s16le"]
-    command = [binary, "-nostdin", "-loglevel", "error", "-i", str(path), "-ac", "1", "-ar", "16000"]
-    return subprocess.run(
-        [*command, *codec, "-f", send_as.value, "-"], check=True, capture_output=True
-    ).stdout
+    rate, channels = str(voice_audio.SAMPLE_RATE), str(voice_audio.CHANNELS)
+    command = [binary, "-nostdin", "-loglevel", "error", "-y", "-i", str(path), "-ac", channels, "-ar", rate]
+    # To a file, not a pipe: on a pipe ffmpeg cannot go back to write the chunk
+    # sizes, and the endpoint reads the length from them. `-bitexact` keeps its
+    # LIST chunk out; the endpoint would read past one anyway.
+    with tempfile.TemporaryDirectory() as folder:
+        out = Path(folder) / f"recording.{send_as.value}"
+        subprocess.run(
+            [*command, "-c:a", "pcm_s16le", "-bitexact", "-f", send_as.value, str(out)],
+            check=True,
+            capture_output=True,
+        )
+        return out.read_bytes()
 
 
 def _probe(
     path: Path, transcriber: VoxtralTranscriber, send_as: SendAs | None, convert: Convert
 ) -> Row:
-    audio = path.read_bytes()
     said = _said(path)
     spoken = language(path)
+    recorded_as = path.suffix.lower().lstrip(".")
+    audio = path.read_bytes() if send_as is None else convert(path, send_as)
     container = voice_audio.sniffed_container(audio)
     content_type = _DECLARED[container] if container else "application/octet-stream"
-    seconds: float | None = None
     try:
         recording = check_recording(audio, content_type)
     except VoiceQuestionViolation as exc:
+        seconds: float | None = None
         if container is not None:
             try:
                 seconds = voice_audio.read(audio, content_type).seconds
             except ValueError:
                 pass
-        kept = container.value if container else ""
-        return Row(path.name, spoken, kept, seconds, "", None, exc.code.value, None, "", said)
-    if send_as is None:
-        sent, sent_format = audio, recording.container
-    else:
-        # The transcriber reads only `.value` from it: Bedrock's `AudioBlock.format`.
-        sent, sent_format = convert(path, send_as), cast(voice_audio.Container, send_as)
+        return Row(path.name, spoken, recorded_as, seconds, "", None, exc.code.value, None, "", said)
     started = time.perf_counter()
     try:
-        heard = transcriber.transcribe(sent, sent_format)
+        heard = transcriber.transcribe(audio, recording.container)
         outcome = "transcribed" if heard else "nothing heard"
     except TranscriptionFailed as exc:
         heard = ""
@@ -171,9 +168,9 @@ def _probe(
     return Row(
         path.name,
         spoken,
-        recording.container.value,
+        recorded_as,
         recording.seconds,
-        sent_format.value,
+        recording.container.value,
         elapsed_ms,
         outcome,
         word_error(heard, said) if heard else None,
@@ -206,7 +203,7 @@ def markdown(rows: list[Row], *, model_id: str) -> str:
         f"Model `{model_id}` in `{config.settings().voice_transcription_region}`, "
         f"{len(rows)} recording(s).",
         "",
-        "| File | Language | Container | Seconds | Sent as | Model ms | Outcome | Word error | Heard | Said |",
+        "| File | Language | Recorded as | Seconds | Sent as | Model ms | Outcome | Word error | Heard | Said |",
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
@@ -216,7 +213,7 @@ def markdown(rows: list[Row], *, model_id: str) -> str:
         cells = [
             row.name,
             row.language,
-            row.container,
+            row.recorded_as,
             seconds,
             row.sent_as,
             elapsed,
@@ -237,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         "--send-as",
         type=SendAs,
         choices=list(SendAs),
-        help="convert each recording with ffmpeg and send it in this format (Voxtral takes only these)",
+        help="convert each recording with ffmpeg to the endpoint's WAV before checking and sending it",
     )
     parser.add_argument("--out", type=Path, help="also write the table to this file")
     args = parser.parse_args(argv)
