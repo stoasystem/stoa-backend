@@ -6,7 +6,7 @@ import re
 import subprocess
 from typing import Any
 
-from test_backend_workflow_contract import WorkflowLoader, reads_secrets
+from workflow_helpers import WorkflowLoader, reads_secrets
 from test_frontend_workflow_contract import FRONTEND_ROOT
 import yaml
 
