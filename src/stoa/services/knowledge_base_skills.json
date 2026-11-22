@@ -10223,6 +10223,50 @@
    },
    "extension": false
   },
+  "deutsch-literatur-erzaehlende-texte--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-erzaehlende-texte",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-erzaehlende-texte--lesen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-erzaehlende-texte",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-gedichte--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-gedichte",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-gedichte--lesen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-gedichte",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
   "deutsch-rechtschreibung-aehnliche-laute--begriffe": {
    "subject": "german",
    "unit": "deutsch-rechtschreibung-aehnliche-laute",
@@ -10237,6 +10281,28 @@
   "deutsch-rechtschreibung-aehnliche-laute--rechtschreibung": {
    "subject": "german",
    "unit": "deutsch-rechtschreibung-aehnliche-laute",
+   "titles": {
+    "de": "Richtig schreiben",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation",
+    "it": "Ortografia e punteggiatura"
+   },
+   "extension": false
+  },
+  "deutsch-rechtschreibung-buchstaben-abc--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-buchstaben-abc",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-rechtschreibung-buchstaben-abc--rechtschreibung": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-buchstaben-abc",
    "titles": {
     "de": "Richtig schreiben",
     "en": "Spelling and punctuation",
@@ -10586,6 +10652,28 @@
    },
    "extension": false
   },
+  "deutsch-texte-informationen--lesen": {
+   "subject": "german",
+   "unit": "deutsch-texte-informationen",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
+  "deutsch-texte-woerter-saetze-lesen--lesen": {
+   "subject": "german",
+   "unit": "deutsch-texte-woerter-saetze-lesen",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
   "deutsch-woerter-adjektiv--begriffe": {
    "subject": "german",
    "unit": "deutsch-woerter-adjektiv",
@@ -10759,6 +10847,17 @@
     "en": "Forming and rewriting",
     "fr": "Former et transformer",
     "it": "Formare e trasformare"
+   },
+   "extension": false
+  },
+  "deutsch-wortschatz-wortfelder--wortschatz": {
+   "subject": "german",
+   "unit": "deutsch-wortschatz-wortfelder",
+   "titles": {
+    "de": "Wortschatz",
+    "en": "Vocabulary",
+    "fr": "Vocabulaire",
+    "it": "Lessico"
    },
    "extension": false
   }
@@ -20040,6 +20139,12 @@
    "fr": "Notions et règles · Niveau 2",
    "it": "Termini e regole · Livello 2"
   },
+  "deutsch-formen-praesens-praeteritum-perfekt--bestimmen--1": {
+   "de": "Bestimmen · Stufe 1",
+   "en": "Identifying · Level 1",
+   "fr": "Identifier · Niveau 1",
+   "it": "Riconoscere · Livello 1"
+  },
   "deutsch-formen-praesens-praeteritum-perfekt--bestimmen--2": {
    "de": "Bestimmen · Stufe 2",
    "en": "Identifying · Level 2",
@@ -20051,6 +20156,12 @@
    "en": "Identifying · Level 3",
    "fr": "Identifier · Niveau 3",
    "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-formen-praesens-praeteritum-perfekt--bilden--1": {
+   "de": "Formen bilden · Stufe 1",
+   "en": "Forming and rewriting · Level 1",
+   "fr": "Former et transformer · Niveau 1",
+   "it": "Formare e trasformare · Livello 1"
   },
   "deutsch-formen-praesens-praeteritum-perfekt--bilden--2": {
    "de": "Formen bilden · Stufe 2",
@@ -20064,11 +20175,47 @@
    "fr": "Former et transformer · Niveau 3",
    "it": "Formare e trasformare · Livello 3"
   },
+  "deutsch-literatur-erzaehlende-texte--bestimmen--1": {
+   "de": "Bestimmen · Stufe 1",
+   "en": "Identifying · Level 1",
+   "fr": "Identifier · Niveau 1",
+   "it": "Riconoscere · Livello 1"
+  },
+  "deutsch-literatur-erzaehlende-texte--lesen--1": {
+   "de": "Leseverstehen · Stufe 1",
+   "en": "Reading comprehension · Level 1",
+   "fr": "Compréhension écrite · Niveau 1",
+   "it": "Comprensione del testo · Livello 1"
+  },
+  "deutsch-literatur-gedichte--bestimmen--1": {
+   "de": "Bestimmen · Stufe 1",
+   "en": "Identifying · Level 1",
+   "fr": "Identifier · Niveau 1",
+   "it": "Riconoscere · Livello 1"
+  },
+  "deutsch-literatur-gedichte--lesen--1": {
+   "de": "Leseverstehen · Stufe 1",
+   "en": "Reading comprehension · Level 1",
+   "fr": "Compréhension écrite · Niveau 1",
+   "it": "Comprensione del testo · Livello 1"
+  },
+  "deutsch-rechtschreibung-aehnliche-laute--begriffe--1": {
+   "de": "Begriffe und Regeln · Stufe 1",
+   "en": "Terms and rules · Level 1",
+   "fr": "Notions et règles · Niveau 1",
+   "it": "Termini e regole · Livello 1"
+  },
   "deutsch-rechtschreibung-aehnliche-laute--begriffe--2": {
    "de": "Begriffe und Regeln · Stufe 2",
    "en": "Terms and rules · Level 2",
    "fr": "Notions et règles · Niveau 2",
    "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-rechtschreibung-aehnliche-laute--rechtschreibung--1": {
+   "de": "Richtig schreiben · Stufe 1",
+   "en": "Spelling and punctuation · Level 1",
+   "fr": "Orthographe et ponctuation · Niveau 1",
+   "it": "Ortografia e punteggiatura · Livello 1"
   },
   "deutsch-rechtschreibung-aehnliche-laute--rechtschreibung--2-1": {
    "de": "Richtig schreiben · Stufe 2 · Teil 1",
@@ -20087,6 +20234,24 @@
    "en": "Spelling and punctuation · Level 3",
    "fr": "Orthographe et ponctuation · Niveau 3",
    "it": "Ortografia e punteggiatura · Livello 3"
+  },
+  "deutsch-rechtschreibung-buchstaben-abc--begriffe--1": {
+   "de": "Begriffe und Regeln · Stufe 1",
+   "en": "Terms and rules · Level 1",
+   "fr": "Notions et règles · Niveau 1",
+   "it": "Termini e regole · Livello 1"
+  },
+  "deutsch-rechtschreibung-buchstaben-abc--rechtschreibung--1-1": {
+   "de": "Richtig schreiben · Stufe 1 · Teil 1",
+   "en": "Spelling and punctuation · Level 1 · Part 1",
+   "fr": "Orthographe et ponctuation · Niveau 1 · Partie 1",
+   "it": "Ortografia e punteggiatura · Livello 1 · Parte 1"
+  },
+  "deutsch-rechtschreibung-buchstaben-abc--rechtschreibung--1-2": {
+   "de": "Richtig schreiben · Stufe 1 · Teil 2",
+   "en": "Spelling and punctuation · Level 1 · Part 2",
+   "fr": "Orthographe et ponctuation · Niveau 1 · Partie 2",
+   "it": "Ortografia e punteggiatura · Livello 1 · Parte 2"
   },
   "deutsch-rechtschreibung-das-dass--begriffe--2": {
    "de": "Begriffe und Regeln · Stufe 2",
@@ -20124,11 +20289,23 @@
    "fr": "Orthographe et ponctuation · Niveau 3",
    "it": "Ortografia e punteggiatura · Livello 3"
   },
+  "deutsch-rechtschreibung-gross-klein--begriffe--1": {
+   "de": "Begriffe und Regeln · Stufe 1",
+   "en": "Terms and rules · Level 1",
+   "fr": "Notions et règles · Niveau 1",
+   "it": "Termini e regole · Livello 1"
+  },
   "deutsch-rechtschreibung-gross-klein--begriffe--2": {
    "de": "Begriffe und Regeln · Stufe 2",
    "en": "Terms and rules · Level 2",
    "fr": "Notions et règles · Niveau 2",
    "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-rechtschreibung-gross-klein--rechtschreibung--1": {
+   "de": "Richtig schreiben · Stufe 1",
+   "en": "Spelling and punctuation · Level 1",
+   "fr": "Orthographe et ponctuation · Niveau 1",
+   "it": "Ortografia e punteggiatura · Livello 1"
   },
   "deutsch-rechtschreibung-gross-klein--rechtschreibung--2": {
    "de": "Richtig schreiben · Stufe 2",
@@ -20178,6 +20355,12 @@
    "fr": "Orthographe et ponctuation · Niveau 3",
    "it": "Ortografia e punteggiatura · Livello 3"
   },
+  "deutsch-rechtschreibung-silben--bestimmen--1": {
+   "de": "Bestimmen · Stufe 1",
+   "en": "Identifying · Level 1",
+   "fr": "Identifier · Niveau 1",
+   "it": "Riconoscere · Livello 1"
+  },
   "deutsch-rechtschreibung-silben--bestimmen--2-1": {
    "de": "Bestimmen · Stufe 2 · Teil 1",
    "en": "Identifying · Level 2 · Part 1",
@@ -20190,11 +20373,23 @@
    "fr": "Identifier · Niveau 2 · Partie 2",
    "it": "Riconoscere · Livello 2 · Parte 2"
   },
+  "deutsch-rechtschreibung-silben--rechtschreibung--1": {
+   "de": "Richtig schreiben · Stufe 1",
+   "en": "Spelling and punctuation · Level 1",
+   "fr": "Orthographe et ponctuation · Niveau 1",
+   "it": "Ortografia e punteggiatura · Livello 1"
+  },
   "deutsch-rechtschreibung-silben--rechtschreibung--2": {
    "de": "Richtig schreiben · Stufe 2",
    "en": "Spelling and punctuation · Level 2",
    "fr": "Orthographe et ponctuation · Niveau 2",
    "it": "Ortografia e punteggiatura · Livello 2"
+  },
+  "deutsch-saetze-direkte-rede--begriffe--1": {
+   "de": "Begriffe und Regeln · Stufe 1",
+   "en": "Terms and rules · Level 1",
+   "fr": "Notions et règles · Niveau 1",
+   "it": "Termini e regole · Livello 1"
   },
   "deutsch-saetze-direkte-rede--begriffe--3": {
    "de": "Begriffe und Regeln · Stufe 3",
@@ -20213,6 +20408,12 @@
    "en": "Forming and rewriting · Level 3",
    "fr": "Former et transformer · Niveau 3",
    "it": "Formare e trasformare · Livello 3"
+  },
+  "deutsch-saetze-direkte-rede--rechtschreibung--1": {
+   "de": "Richtig schreiben · Stufe 1",
+   "en": "Spelling and punctuation · Level 1",
+   "fr": "Orthographe et ponctuation · Niveau 1",
+   "it": "Ortografia e punteggiatura · Livello 1"
   },
   "deutsch-saetze-direkte-rede--rechtschreibung--2": {
    "de": "Richtig schreiben · Stufe 2",
@@ -20286,11 +20487,23 @@
    "fr": "Notions et règles · Niveau 2",
    "it": "Termini e regole · Livello 2"
   },
+  "deutsch-saetze-satzarten--bestimmen--1": {
+   "de": "Bestimmen · Stufe 1",
+   "en": "Identifying · Level 1",
+   "fr": "Identifier · Niveau 1",
+   "it": "Riconoscere · Livello 1"
+  },
   "deutsch-saetze-satzarten--bestimmen--2": {
    "de": "Bestimmen · Stufe 2",
    "en": "Identifying · Level 2",
    "fr": "Identifier · Niveau 2",
    "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-saetze-satzarten--rechtschreibung--1": {
+   "de": "Richtig schreiben · Stufe 1",
+   "en": "Spelling and punctuation · Level 1",
+   "fr": "Orthographe et ponctuation · Niveau 1",
+   "it": "Ortografia e punteggiatura · Livello 1"
   },
   "deutsch-saetze-satzarten--rechtschreibung--2": {
    "de": "Richtig schreiben · Stufe 2",
@@ -20352,11 +20565,35 @@
    "fr": "Identifier · Niveau 3",
    "it": "Riconoscere · Livello 3"
   },
+  "deutsch-texte-informationen--lesen--1": {
+   "de": "Leseverstehen · Stufe 1",
+   "en": "Reading comprehension · Level 1",
+   "fr": "Compréhension écrite · Niveau 1",
+   "it": "Comprensione del testo · Livello 1"
+  },
+  "deutsch-texte-woerter-saetze-lesen--lesen--1-1": {
+   "de": "Leseverstehen · Stufe 1 · Teil 1",
+   "en": "Reading comprehension · Level 1 · Part 1",
+   "fr": "Compréhension écrite · Niveau 1 · Partie 1",
+   "it": "Comprensione del testo · Livello 1 · Parte 1"
+  },
+  "deutsch-texte-woerter-saetze-lesen--lesen--1-2": {
+   "de": "Leseverstehen · Stufe 1 · Teil 2",
+   "en": "Reading comprehension · Level 1 · Part 2",
+   "fr": "Compréhension écrite · Niveau 1 · Partie 2",
+   "it": "Comprensione del testo · Livello 1 · Parte 2"
+  },
   "deutsch-woerter-adjektiv--begriffe--2": {
    "de": "Begriffe und Regeln · Stufe 2",
    "en": "Terms and rules · Level 2",
    "fr": "Notions et règles · Niveau 2",
    "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-woerter-adjektiv--bestimmen--1": {
+   "de": "Bestimmen · Stufe 1",
+   "en": "Identifying · Level 1",
+   "fr": "Identifier · Niveau 1",
+   "it": "Riconoscere · Livello 1"
   },
   "deutsch-woerter-adjektiv--bestimmen--2": {
    "de": "Bestimmen · Stufe 2",
@@ -20369,6 +20606,12 @@
    "en": "Identifying · Level 3",
    "fr": "Identifier · Niveau 3",
    "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-woerter-adjektiv--bilden--1": {
+   "de": "Formen bilden · Stufe 1",
+   "en": "Forming and rewriting · Level 1",
+   "fr": "Former et transformer · Niveau 1",
+   "it": "Formare e trasformare · Livello 1"
   },
   "deutsch-woerter-adjektiv--bilden--2": {
    "de": "Formen bilden · Stufe 2",
@@ -20388,11 +20631,23 @@
    "fr": "Notions et règles · Niveau 2",
    "it": "Termini e regole · Livello 2"
   },
+  "deutsch-woerter-nomen--bestimmen--1": {
+   "de": "Bestimmen · Stufe 1",
+   "en": "Identifying · Level 1",
+   "fr": "Identifier · Niveau 1",
+   "it": "Riconoscere · Livello 1"
+  },
   "deutsch-woerter-nomen--bestimmen--2": {
    "de": "Bestimmen · Stufe 2",
    "en": "Identifying · Level 2",
    "fr": "Identifier · Niveau 2",
    "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-woerter-nomen--bilden--1": {
+   "de": "Formen bilden · Stufe 1",
+   "en": "Forming and rewriting · Level 1",
+   "fr": "Former et transformer · Niveau 1",
+   "it": "Formare e trasformare · Livello 1"
   },
   "deutsch-woerter-nomen--bilden--2": {
    "de": "Formen bilden · Stufe 2",
@@ -20442,11 +20697,23 @@
    "fr": "Notions et règles · Niveau 2",
    "it": "Termini e regole · Livello 2"
   },
+  "deutsch-woerter-verb--bestimmen--1": {
+   "de": "Bestimmen · Stufe 1",
+   "en": "Identifying · Level 1",
+   "fr": "Identifier · Niveau 1",
+   "it": "Riconoscere · Livello 1"
+  },
   "deutsch-woerter-verb--bestimmen--2": {
    "de": "Bestimmen · Stufe 2",
    "en": "Identifying · Level 2",
    "fr": "Identifier · Niveau 2",
    "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-woerter-verb--bilden--1": {
+   "de": "Formen bilden · Stufe 1",
+   "en": "Forming and rewriting · Level 1",
+   "fr": "Former et transformer · Niveau 1",
+   "it": "Formare e trasformare · Livello 1"
   },
   "deutsch-woerter-verb--bilden--2": {
    "de": "Formen bilden · Stufe 2",
@@ -20460,6 +20727,12 @@
    "fr": "Notions et règles · Niveau 2",
    "it": "Termini e regole · Livello 2"
   },
+  "deutsch-woerter-wortbausteine--bestimmen--1": {
+   "de": "Bestimmen · Stufe 1",
+   "en": "Identifying · Level 1",
+   "fr": "Identifier · Niveau 1",
+   "it": "Riconoscere · Livello 1"
+  },
   "deutsch-woerter-wortbausteine--bestimmen--2": {
    "de": "Bestimmen · Stufe 2",
    "en": "Identifying · Level 2",
@@ -20472,6 +20745,12 @@
    "fr": "Identifier · Niveau 3",
    "it": "Riconoscere · Livello 3"
   },
+  "deutsch-woerter-wortbausteine--bilden--1": {
+   "de": "Formen bilden · Stufe 1",
+   "en": "Forming and rewriting · Level 1",
+   "fr": "Former et transformer · Niveau 1",
+   "it": "Formare e trasformare · Livello 1"
+  },
   "deutsch-woerter-wortbausteine--bilden--2": {
    "de": "Formen bilden · Stufe 2",
    "en": "Forming and rewriting · Level 2",
@@ -20483,6 +20762,12 @@
    "en": "Forming and rewriting · Level 3",
    "fr": "Former et transformer · Niveau 3",
    "it": "Formare e trasformare · Livello 3"
+  },
+  "deutsch-wortschatz-wortfelder--wortschatz--1": {
+   "de": "Wortschatz · Stufe 1",
+   "en": "Vocabulary · Level 1",
+   "fr": "Vocabulaire · Niveau 1",
+   "it": "Lessico · Livello 1"
   }
  }
 }
