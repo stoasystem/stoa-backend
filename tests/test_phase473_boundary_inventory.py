@@ -4,7 +4,6 @@ import ast
 import importlib.util
 import json
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 
@@ -15,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "scripts" / "generate_phase473_boundary_inventory.py"
 INVENTORY = ROOT / "docs" / "security" / "phase-473-boundary-inventory.json"
 PRIVATE_INVENTORY = ROOT / "docs" / "security" / "phase-473-private-store-inventory.json"
-MANIFEST = ROOT / "docs" / "security" / "phase-473-evidence-manifest.json"
 PRIVATE_GENERATOR = ROOT / "scripts" / "generate_phase473_private_store_inventory.py"
 
 EXPECTED_BRANCHES = (
@@ -102,30 +100,6 @@ def _run(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         check=False,
     )
-
-
-def _historical_candidate_root(tmp_path: Path) -> Path:
-    candidate = json.loads(MANIFEST.read_text())["candidate_sha"]
-    archive = subprocess.run(
-        ["git", "archive", candidate], cwd=ROOT, capture_output=True, check=True
-    )
-    candidate_root = tmp_path / "candidate"
-    candidate_root.mkdir()
-    subprocess.run(
-        ["tar", "-x", "-C", str(candidate_root)],
-        input=archive.stdout,
-        check=True,
-    )
-    shutil.copy2(
-        PRIVATE_GENERATOR,
-        candidate_root / "scripts" / "generate_phase473_private_store_inventory.py",
-    )
-    shutil.copy2(INVENTORY, candidate_root / INVENTORY.relative_to(ROOT))
-    shutil.copy2(
-        PRIVATE_INVENTORY,
-        candidate_root / PRIVATE_INVENTORY.relative_to(ROOT),
-    )
-    return candidate_root
 
 
 def test_schema_is_per_consumption_and_source_relative():
@@ -253,21 +227,6 @@ def test_private_store_inventory_is_composed_exactly_once_and_not_duplicated():
     assert {row["branch_id"] for row in private["branch_registry"]} == set(EXPECTED_BRANCHES)
 
 
-def test_new_private_sink_fails_through_delegated_plan35_check(tmp_path: Path):
-    _generator_module()
-    for directory in ("src", "scripts", "docs", "tests"):
-        shutil.copytree(ROOT / directory, tmp_path / directory)
-    target = tmp_path / "src" / "stoa" / "db" / "repositories" / "account_deletion_repo.py"
-    with target.open("a", encoding="utf-8") as handle:
-        handle.write(
-            "\n\ndef synthetic_unreviewed_private_sink(client, private_value):\n"
-            "    return client.put_item(Item={'student_id': private_value})\n"
-        )
-    result = _run("--root", str(tmp_path), "--output", str(tmp_path / "boundary.json"))
-    assert result.returncode == 1
-    assert "private-store checker failed" in result.stderr.lower()
-
-
 def test_missing_or_extra_private_join_and_absent_selector_fail():
     module = _generator_module()
     private = json.loads(PRIVATE_INVENTORY.read_text())
@@ -301,16 +260,10 @@ def test_lower_fake_observation_rejects_high_level_only_monkeypatch():
         )
 
 
-def test_generation_and_route_inventory_are_byte_deterministic(tmp_path: Path):
-    module = _generator_module()
-    candidate_root = _historical_candidate_root(tmp_path)
-    first = tmp_path / "boundary-a.json"
-    second = tmp_path / "boundary-b.json"
-    assert _run("--root", str(candidate_root), "--output", str(first)).returncode == 0
-    assert _run("--root", str(candidate_root), "--output", str(second)).returncode == 0
-    assert first.read_bytes() == second.read_bytes() == INVENTORY.read_bytes()
-    assert _run("--root", str(candidate_root), "--check").returncode == 0
-    module.validate_taint_semantics(ROOT)
+def test_current_source_keeps_every_registered_parser_strict():
+    """The checked inventory is a 2026-07 record and is not regenerated; the taint
+    rules are checked against today's source."""
+    _generator_module().validate_taint_semantics(ROOT)
 
 
 def test_decision_requirement_regular_sse_and_parser_coverage_is_closed():

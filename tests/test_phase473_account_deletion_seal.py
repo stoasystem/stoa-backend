@@ -250,9 +250,9 @@ def test_checked_inventory_bytes_are_valid_json_and_have_no_private_coordinates(
 def test_封印里的分支契约与生成器的源头逐字一致():
     """The sealed JSON is generated; nothing checks it against its own source table.
 
-    Byte-determinism is checked against the tree at `candidate_sha`, which pins the
-    generator too, so a contract edited here alone reads clean until someone re-pins.
-    This compares the two directly.
+    The sealed bytes are pinned and the seal is no longer regenerated, so a
+    contract edited in the generator alone would read clean. This compares the two
+    directly.
     """
     import importlib.util
     import sys

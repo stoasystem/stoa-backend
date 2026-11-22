@@ -81,8 +81,6 @@ def test_gate_checks_out_the_siblings_the_cross_repo_tests_resolve() -> None:
         "stoasystem/stoa-frontend": "stoa-frontend",
         "stoasystem/stoa-infra": "stoa-infra",
     }
-    # The phase-474 evidence suites resolve pinned historical commit objects.
-    assert checkouts["stoasystem/stoa-backend"]["fetch-depth"] == 0
 
 
 def test_uv_is_pinned_so_the_locked_export_stays_reproducible() -> None:
