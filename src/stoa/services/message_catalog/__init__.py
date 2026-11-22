@@ -435,6 +435,11 @@ _COPY: dict[str, dict[str, str]] = {
     #
     # Only for an exercise that brings no feedback of its own; an exercise's
     # own feedback is content, in `translations` where it has been translated.
+    # A wrong answer is told, in this order: the line of the rule that explains
+    # it (`practice.feedback.<rule>`, one per `error_causes.RULES`), else the
+    # calculation line when the key holds a digit, else the line that fits any
+    # subject - vocabulary, reading and concept questions have no working to
+    # check (#565). `practice_projection_service.answer_feedback` chooses.
     "practice.feedback.correct": {
         "de": "Richtig!",
         "en": "Correct!",
@@ -442,10 +447,34 @@ _COPY: dict[str, dict[str, str]] = {
         "it": "Giusto!",
     },
     "practice.feedback.incorrect": {
+        "de": "Nicht ganz. Schau dir die Aufgabe nochmals an und versuch es nochmal.",
+        "en": "Not quite. Take another look at the question and try again.",
+        "fr": "Pas tout à fait. Relis la consigne et réessaie.",
+        "it": "Non proprio. Rileggi la consegna e riprova.",
+    },
+    "practice.feedback.incorrect_calculation": {
         "de": "Nicht ganz. Prüfe deinen Rechenweg und versuche es nochmal.",
         "en": "Not quite. Check your working and try again.",
         "fr": "Pas tout à fait. Vérifie ton raisonnement et réessaie.",
         "it": "Non proprio. Controlla il tuo procedimento e riprova.",
+    },
+    "practice.feedback.sign": {
+        "de": "Fast – prüfe das Vorzeichen.",
+        "en": "Almost – check the sign.",
+        "fr": "Presque – vérifie le signe.",
+        "it": "Quasi – controlla il segno.",
+    },
+    "practice.feedback.close": {
+        "de": "Knapp daneben – prüfe deine Rechnung und das Runden.",
+        "en": "Very close – check your calculation and your rounding.",
+        "fr": "Tout près – vérifie ton calcul et l’arrondi.",
+        "it": "Ci sei quasi – controlla il calcolo e l’arrotondamento.",
+    },
+    "practice.feedback.unreduced": {
+        "de": "Der Wert stimmt – kürze den Bruch noch vollständig.",
+        "en": "The value is right – now simplify the fraction fully.",
+        "fr": "La valeur est juste – simplifie encore complètement la fraction.",
+        "it": "Il valore è giusto – semplifica ancora del tutto la frazione.",
     },
     # ── year groups, named for the assistant in the answer's language ────
     #

@@ -193,7 +193,7 @@ def test_a_list_answer_has_no_rule() -> None:
     assert error_causes.infer(["5", "3"], ["-5"]) is None
 
 
-@pytest.mark.parametrize("rule", [error_causes.RULE_SIGN, error_causes.RULE_CLOSE])
+@pytest.mark.parametrize("rule", error_causes.RULES)
 def test_each_rule_is_a_deviation_with_one_sentence_per_locale(rule: str) -> None:
     cause = error_causes.rule_cause(rule)
 

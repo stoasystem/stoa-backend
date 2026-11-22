@@ -263,24 +263,44 @@ def build_attempt_result(
     )
 
 
-def answer_feedback(challenge: Mapping[str, Any], locale: str) -> tuple[str, str]:
+def answer_feedback(
+    challenge: Mapping[str, Any], locale: str, *, rule: str | None = None
+) -> tuple[str, str]:
     """The exercise's feedback for a right and for a wrong answer.
 
     Pass the exercise as the reader sees it (`exercise_localization.localized`),
     so feedback written for their language is used. An exercise that brings no
     feedback of its own gets the catalog's default in `locale` (#128); before,
     that default was German for every reader.
+
+    For a wrong answer with no feedback of the exercise's own (#565): `rule`,
+    the `error_causes` rule that explained this answer, gets that rule's line
+    (`48/72` is told to reduce the fraction); otherwise an exercise whose key
+    holds a digit is told to check its working, and any other - vocabulary,
+    reading, a concept question - gets the line that fits every subject.
     """
+    if challenge.get("incorrect_feedback"):
+        incorrect = str(challenge["incorrect_feedback"])
+    elif rule is not None:
+        incorrect = message_catalog.text(f"practice.feedback.{rule}", locale)
+    elif _asks_for_a_number(challenge):
+        incorrect = message_catalog.text("practice.feedback.incorrect_calculation", locale)
+    else:
+        incorrect = message_catalog.text("practice.feedback.incorrect", locale)
     return (
         str(
             challenge.get("correct_feedback")
             or message_catalog.text("practice.feedback.correct", locale)
         ),
-        str(
-            challenge.get("incorrect_feedback")
-            or message_catalog.text("practice.feedback.incorrect", locale)
-        ),
+        incorrect,
     )
+
+
+def _asks_for_a_number(challenge: Mapping[str, Any]) -> bool:
+    """Whether the exercise's key holds a digit: a result to work out, as
+    opposed to a word, a sentence or a statement to pick."""
+    key = challenge.get("correct_answer", challenge.get("answer_key"))
+    return any(character.isdigit() for character in str(key or ""))
 
 
 def build_privileged_answer(challenge: Mapping[str, Any]) -> PrivilegedPracticeAnswer:

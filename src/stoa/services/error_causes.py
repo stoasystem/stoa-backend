@@ -12,8 +12,11 @@ Causes come from authoring or from fixed rules, never from a model:
   that picks a tagged option records that cause on its receipt (#452);
 * a wrong typed answer (any exercise that is not a choice) is compared with
   the key by the rules in `infer` (#453): the same number with the other sign,
-  or a number very close to the key, is a deviation, with the rule's fixed
-  misconception sentence from the message catalog (`error_cause.<rule>`).
+  a number very close to the key, or the key's value as a fraction not reduced
+  (#565), is a deviation, with the rule's fixed misconception sentence from the
+  message catalog (`error_cause.<rule>`). The student is told the rule's own
+  line instead (`practice.feedback.<rule>`, read by `typed_rule`'s callers): the
+  misconception is written about the student, for a teacher.
 
 Every other wrong answer records `unclassified`.
 
@@ -28,6 +31,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from decimal import Decimal
+from fractions import Fraction
+from math import gcd
+import re
 from typing import Any
 
 from stoa.services import answer_judging, message_catalog
@@ -164,8 +170,11 @@ def _valid(cause: object) -> dict[str, Any] | None:
 RULE_SIGN = "sign"
 #: The answer's number is very close to the key's: see `_close`.
 RULE_CLOSE = "close"
+#: The answer is the key's value as a fraction that is not reduced: `48/72`
+#: for `2/3`. See `_unreduced`.
+RULE_UNREDUCED = "unreduced"
 #: In the order they are tried; the first that explains the answer wins.
-RULES: tuple[str, ...] = (RULE_SIGN, RULE_CLOSE)
+RULES: tuple[str, ...] = (RULE_SIGN, RULE_CLOSE, RULE_UNREDUCED)
 
 #: How far, relative to the key, a number may be off and still count as close:
 #: 2 % takes a rounding slip (3.1 for 3.14) or a slip in the last digit of a
@@ -213,27 +222,82 @@ def _matches(rule: str, given: Decimal, expected: Decimal) -> bool:
     return _close(given, expected)
 
 
-def infer(answer: object, keys: Iterable[object]) -> dict[str, Any] | None:
-    """The cause a rule finds for a wrong typed answer, else `None`.
+# A fraction in a normalized answer, its minus kept only where that cannot be
+# an operator, as `answer_judging` reads a signed number.
+_FRACTION = re.compile(r"(?<![\w./])(-?)(\d+)/(\d+)(?![\w./])")
+
+
+def _single_fraction(value: str) -> tuple[str, Fraction, int] | None:
+    """An answer holding one fraction and no other number: the text around it,
+    its value, and the common divisor of its numerator and denominator."""
+    text = answer_judging.normalize_answer(value)
+    found = list(_FRACTION.finditer(text))
+    if len(found) != 1:
+        return None
+    match = found[0]
+    around = f"{text[: match.start()]}#{text[match.end() :]}"
+    numerator, denominator = int(match.group(2)), int(match.group(3))
+    if any(character.isdigit() for character in around) or denominator == 0:
+        return None
+    sign = -1 if match.group(1) else 1
+    return around, Fraction(sign * numerator, denominator), gcd(numerator, denominator)
+
+
+def _reduced_key(key: str) -> tuple[str, Fraction] | None:
+    """A key that is a reduced fraction or a whole number: its text around, its value."""
+    fraction = _single_fraction(key)
+    if fraction is not None:
+        return (fraction[0], fraction[1]) if fraction[2] == 1 else None
+    number = answer_judging.single_number(key)
+    if number is None or not _whole(number[1]):
+        return None
+    return number[0], Fraction(int(number[1]))
+
+
+def _unreduced(answer: str, keys: list[str]) -> bool:
+    """A fraction with the value of a key that is reduced (or whole), itself not
+    reduced, written with the same text around: `x = 4/6` for `x = 2/3`, `6/2`
+    for `3`. A key that is itself not reduced is left alone: the author wanted
+    that form, and "reduce it" would be wrong."""
+    given = _single_fraction(answer)
+    if given is None or given[2] == 1:
+        return False
+    return any(
+        expected is not None and expected == (given[0], given[1])
+        for expected in (_reduced_key(key) for key in keys)
+    )
+
+
+def rule_of(answer: object, keys: Iterable[object]) -> str | None:
+    """The rule that explains a wrong typed answer, else `None`.
 
     The answer and each writing of the key must each hold one number, read the
     way judging reads it (`answer_judging.single_number`), with the same text
     around it: `x = 5` is compared with `x = -5`, never with `-5` or `5 cm`.
+    The fraction rule reads one fraction the same way (`_unreduced`).
     """
     if not isinstance(answer, str):
         return None
+    texts = [key for key in keys if isinstance(key, str)]
     given = answer_judging.single_number(answer)
-    if given is None:
-        return None
-    expected = [
-        found[1]
-        for found in (answer_judging.single_number(key) for key in keys if isinstance(key, str))
-        if found is not None and found[0] == given[0]
-    ]
-    for rule in RULES:
-        if any(_matches(rule, given[1], number) for number in expected):
-            return rule_cause(rule)
+    if given is not None:
+        expected = [
+            found[1]
+            for found in (answer_judging.single_number(key) for key in texts)
+            if found is not None and found[0] == given[0]
+        ]
+        for rule in (RULE_SIGN, RULE_CLOSE):
+            if any(_matches(rule, given[1], number) for number in expected):
+                return rule
+    if _unreduced(answer, texts):
+        return RULE_UNREDUCED
     return None
+
+
+def infer(answer: object, keys: Iterable[object]) -> dict[str, Any] | None:
+    """The cause a rule finds for a wrong typed answer (`rule_of`), else `None`."""
+    rule = rule_of(answer, keys)
+    return None if rule is None else rule_cause(rule)
 
 
 def _keys(*exercises: Mapping[str, Any]) -> list[object]:
@@ -242,6 +306,19 @@ def _keys(*exercises: Mapping[str, Any]) -> list[object]:
         keys.append(exercise.get("correct_answer", exercise.get("answer_key")))
         keys.extend(answer_judging.accepted_answers(exercise))
     return keys
+
+
+def typed_rule(
+    challenge: Mapping[str, Any], shown: Mapping[str, Any], answer: object
+) -> str | None:
+    """The rule that explains a wrong answer to a typed exercise, else `None`.
+
+    A choice exercise has none: its causes are authored on the options. The key
+    is read as the reader saw it and as it is stored, as in `of_wrong_answer`.
+    """
+    if challenge.get("type") == "multiple_choice":
+        return None
+    return rule_of(answer, _keys(shown, challenge))
 
 
 def of_wrong_answer(
@@ -255,7 +332,8 @@ def of_wrong_answer(
     A typed answer is compared by the rules with the key the same two ways.
     """
     if challenge.get("type") != "multiple_choice":
-        return infer(answer, _keys(shown, challenge)) or {"category": UNCLASSIFIED}
+        rule = typed_rule(challenge, shown, answer)
+        return {"category": UNCLASSIFIED} if rule is None else rule_cause(rule)
     causes = challenge.get(FIELD)
     stored = challenge.get("options")
     seen = shown.get("options")
