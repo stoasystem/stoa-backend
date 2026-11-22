@@ -4,31 +4,31 @@
       "finding_id": "CR-01",
       "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
       "observed_assertion": "owner/version/digest/current-lease conditions and advancing claim",
-      "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim"
+      "runtime_selector": "tests/test_account_deletion_claim_race.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim"
     },
     {
       "finding_id": "CR-02",
       "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
       "observed_assertion": "strong canonical load and zero provider calls for invalid scope",
-      "runtime_selector": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation"
+      "runtime_selector": "tests/test_notification_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation"
     },
     {
       "finding_id": "WR-01",
       "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:_valid_lifecycle_timestamp",
       "observed_assertion": "blank naive malformed and non-string lifecycle values rejected",
-      "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps"
+      "runtime_selector": "tests/test_account_deletion_claim_race.py::test_repository_rejects_invalid_lifecycle_timestamps"
     },
     {
       "finding_id": "WR-02",
       "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
       "observed_assertion": "real locale writer and narrow scrub share row-version CAS while exact concurrent preference bytes survive",
-      "runtime_selector": "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes"
+      "runtime_selector": "tests/test_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes"
     },
     {
       "finding_id": "WR-03",
       "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.update_item",
       "observed_assertion": "only expired pre-effect claims are recoverable",
-      "runtime_selector": "tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry"
+      "runtime_selector": "tests/test_notification_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry"
     }
   ],
   "private_store_composition": {
@@ -508,7 +508,7 @@
       ],
       "expected_type": "closed_disposition",
       "lower_fake_target": "src/stoa/routers/conversations.py:attachment_repo.read_message_command_result",
-      "malformed_selector": "tests/test_phase473_message_command.py::test_regular_and_sse_replay_exact_durable_rejection",
+      "malformed_selector": "tests/test_conversation_message_command.py::test_regular_and_sse_replay_exact_durable_rejection",
       "named_parser": "_coerce_command_result",
       "requirement_ids": [
         "V9PRIV-01",
@@ -546,7 +546,7 @@
       ],
       "expected_type": "str",
       "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice_repo.get_attempt_receipt",
-      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_partial_attempt_route_reveals_no_answer",
+      "malformed_selector": "tests/test_practice_receipt_snapshot.py::test_partial_attempt_route_reveals_no_answer",
       "named_parser": "build_attempt_result",
       "requirement_ids": [
         "V9PRIV-01",
@@ -582,7 +582,7 @@
       ],
       "expected_type": "positive_int",
       "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+      "malformed_selector": "tests/test_account_deletion_claim_race.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
       "named_parser": "_positive_int",
       "requirement_ids": [
         "V9PRIV-01",
@@ -618,7 +618,7 @@
       ],
       "expected_type": "positive_int",
       "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+      "malformed_selector": "tests/test_account_deletion_claim_race.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
       "named_parser": "_positive_int",
       "requirement_ids": [
         "V9PRIV-01",
@@ -656,7 +656,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
       "named_parser": "_required_provider_coordinate",
       "requirement_ids": [
         "V9PRIV-01",
@@ -693,7 +693,7 @@
       ],
       "expected_type": "list[str]",
       "lower_fake_target": "src/stoa/services/ai_service.py:bedrock.invoke_model.Body",
-      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
+      "malformed_selector": "tests/test_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
       "named_parser": "_parse_ai_response",
       "requirement_ids": [
         "V9PRIV-01",
@@ -729,7 +729,7 @@
       ],
       "expected_type": "literal",
       "lower_fake_target": "src/stoa/services/account_deletion_service.py:Path.read_bytes",
-      "malformed_selector": "tests/test_phase473_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal",
+      "malformed_selector": "tests/test_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal",
       "named_parser": "load_private_store_seal",
       "requirement_ids": [
         "V9PRIV-01",
@@ -767,7 +767,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
-      "malformed_selector": "tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+      "malformed_selector": "tests/test_upload_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
       "named_parser": "_required_provider_coordinate",
       "requirement_ids": [
         "V9PRIV-01",
@@ -805,7 +805,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
-      "malformed_selector": "tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+      "malformed_selector": "tests/test_upload_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
       "named_parser": "_required_provider_coordinate",
       "requirement_ids": [
         "V9PRIV-01",
@@ -842,7 +842,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
       "named_parser": "_required_provider_coordinate",
       "requirement_ids": [
         "V9PRIV-01",
@@ -879,7 +879,7 @@
       ],
       "expected_type": "positive_int",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
       "named_parser": "_positive_provider_integer",
       "requirement_ids": [
         "V9PRIV-01",
@@ -916,7 +916,7 @@
       ],
       "expected_type": "str",
       "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice authorization dependency",
-      "malformed_selector": "tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
+      "malformed_selector": "tests/test_practice_teacher_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
       "named_parser": "build_privileged_answer",
       "requirement_ids": [
         "V9PRIV-01",
@@ -953,7 +953,7 @@
       ],
       "expected_type": "str",
       "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice_repo.get_attempt_receipt",
-      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_partial_attempt_route_reveals_no_answer",
+      "malformed_selector": "tests/test_practice_receipt_snapshot.py::test_partial_attempt_route_reveals_no_answer",
       "named_parser": "build_attempt_result",
       "requirement_ids": [
         "V9PRIV-01",
@@ -991,7 +991,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
       "named_parser": "_required_provider_coordinate",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1032,7 +1032,7 @@
       ],
       "expected_type": "bounded_byte_stream",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.get_object.Body",
-      "malformed_selector": "tests/test_phase473_document_boundary.py::test_extraction_reasserts_exact_immutable_etag_and_closes_body",
+      "malformed_selector": "tests/test_document_upload_limits.py::test_extraction_reasserts_exact_immutable_etag_and_closes_body",
       "named_parser": "_provider_mapping",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1069,7 +1069,7 @@
       ],
       "expected_type": "str",
       "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice authorization dependency",
-      "malformed_selector": "tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
+      "malformed_selector": "tests/test_practice_teacher_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
       "named_parser": "build_privileged_answer",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1107,7 +1107,7 @@
       ],
       "expected_type": "str_or_none",
       "lower_fake_target": "src/stoa/services/document_parser_worker.py:Connection.recv",
-      "malformed_selector": "tests/test_phase473_document_boundary.py::test_parser_input_and_decoded_output_limits_are_category_only",
+      "malformed_selector": "tests/test_document_upload_limits.py::test_parser_input_and_decoded_output_limits_are_category_only",
       "named_parser": "_validated_payload",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1143,7 +1143,7 @@
       ],
       "expected_type": "positive_int",
       "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item",
-      "malformed_selector": "tests/test_phase473_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
+      "malformed_selector": "tests/test_notification_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
       "named_parser": "_intent_claim",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1181,7 +1181,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
-      "malformed_selector": "tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+      "malformed_selector": "tests/test_upload_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
       "named_parser": "_required_provider_coordinate",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1220,7 +1220,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/db/repositories/attachment_repo.py:dynamodb.batch_get_item",
-      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
+      "malformed_selector": "tests/test_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
       "named_parser": "get_attachments",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1257,7 +1257,7 @@
       ],
       "expected_type": "positive_int",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
       "named_parser": "_positive_provider_integer",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1296,7 +1296,7 @@
       ],
       "expected_type": "mapping",
       "lower_fake_target": "src/stoa/db/repositories/attachment_repo.py:dynamodb.batch_get_item",
-      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
+      "malformed_selector": "tests/test_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
       "named_parser": "get_attachments",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1333,7 +1333,7 @@
       ],
       "expected_type": "bool",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
       "named_parser": "_provider_truncation",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1369,7 +1369,7 @@
       ],
       "expected_type": "utc_iso8601",
       "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
+      "malformed_selector": "tests/test_account_deletion_claim_race.py::test_repository_rejects_invalid_lifecycle_timestamps",
       "named_parser": "_valid_lifecycle_timestamp",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1405,7 +1405,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/db/repositories/report_repo.py:s3.put_object",
-      "malformed_selector": "tests/test_phase473_report_deletion.py::test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_version",
+      "malformed_selector": "tests/test_report_deletion.py::test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_version",
       "named_parser": "parse_report_object_ack",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1442,7 +1442,7 @@
       ],
       "expected_type": "list[str]",
       "lower_fake_target": "src/stoa/services/ai_service.py:bedrock.invoke_model.Body",
-      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
+      "malformed_selector": "tests/test_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
       "named_parser": "_parse_ai_response",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1478,7 +1478,7 @@
       ],
       "expected_type": "exact_list[str]",
       "lower_fake_target": "src/stoa/services/account_deletion_service.py:Path.read_bytes",
-      "malformed_selector": "tests/test_phase473_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal",
+      "malformed_selector": "tests/test_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal",
       "named_parser": "load_private_store_seal",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1517,7 +1517,7 @@
       ],
       "expected_type": "mapping[str,list[object]]",
       "lower_fake_target": "src/stoa/db/repositories/attachment_repo.py:dynamodb.batch_get_item",
-      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
+      "malformed_selector": "tests/test_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
       "named_parser": "get_attachments",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1554,7 +1554,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice_repo.get_attempt_receipt",
-      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_partial_attempt_route_reveals_no_answer",
+      "malformed_selector": "tests/test_practice_receipt_snapshot.py::test_partial_attempt_route_reveals_no_answer",
       "named_parser": "build_attempt_result",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1592,7 +1592,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
       "named_parser": "_required_provider_coordinate",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1630,7 +1630,7 @@
       ],
       "expected_type": "closed_category",
       "lower_fake_target": "src/stoa/services/document_parser_worker.py:Connection.recv",
-      "malformed_selector": "tests/test_phase473_document_boundary.py::test_parser_input_and_decoded_output_limits_are_category_only",
+      "malformed_selector": "tests/test_document_upload_limits.py::test_parser_input_and_decoded_output_limits_are_category_only",
       "named_parser": "_validated_payload",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1666,7 +1666,7 @@
       ],
       "expected_type": "positive_int",
       "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
-      "malformed_selector": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+      "malformed_selector": "tests/test_notification_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
       "named_parser": "resolve_delivery_ownership",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1702,7 +1702,7 @@
       ],
       "expected_type": "list[object]",
       "lower_fake_target": "src/stoa/services/account_deletion_service.py:Path.read_bytes",
-      "malformed_selector": "tests/test_phase473_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal",
+      "malformed_selector": "tests/test_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal",
       "named_parser": "load_private_store_seal",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1738,7 +1738,7 @@
       ],
       "expected_type": "mapping",
       "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
+      "malformed_selector": "tests/test_account_deletion_claim_race.py::test_repository_rejects_invalid_lifecycle_timestamps",
       "named_parser": "branch_results_digest",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1776,7 +1776,7 @@
       ],
       "expected_type": "bool",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
       "named_parser": "_provider_truncation",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1812,7 +1812,7 @@
       ],
       "expected_type": "sha256_hex",
       "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item",
-      "malformed_selector": "tests/test_phase473_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
+      "malformed_selector": "tests/test_notification_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
       "named_parser": "_intent_claim",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1848,7 +1848,7 @@
       ],
       "expected_type": "positive_int",
       "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
-      "malformed_selector": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+      "malformed_selector": "tests/test_notification_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
       "named_parser": "resolve_delivery_ownership",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1884,7 +1884,7 @@
       ],
       "expected_type": "closed_state",
       "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.update_item",
-      "malformed_selector": "tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
+      "malformed_selector": "tests/test_notification_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
       "named_parser": "claim_delivery_intent",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1920,7 +1920,7 @@
       ],
       "expected_type": "closed_literal",
       "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
-      "malformed_selector": "tests/test_phase473_private_delivery_fencing.py::test_global_nonprivate_requires_exact_persisted_contract_digest",
+      "malformed_selector": "tests/test_notification_delivery_fencing.py::test_global_nonprivate_requires_exact_persisted_contract_digest",
       "named_parser": "validate_global_nonprivate_event",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1958,7 +1958,7 @@
       ],
       "expected_type": "bool",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
-      "malformed_selector": "tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+      "malformed_selector": "tests/test_upload_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
       "named_parser": "_provider_truncation",
       "requirement_ids": [
         "V9PRIV-01",
@@ -1995,7 +1995,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice authorization dependency",
-      "malformed_selector": "tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
+      "malformed_selector": "tests/test_practice_teacher_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
       "named_parser": "build_privileged_answer",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2031,7 +2031,7 @@
       ],
       "expected_type": "mapping_or_none",
       "lower_fake_target": "src/stoa/db/repositories/practice_repo.py:dynamodb.query",
-      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_challenge_lists_reject_duplicate_ids_versions_and_stalled_markers",
+      "malformed_selector": "tests/test_practice_receipt_snapshot.py::test_challenge_lists_reject_duplicate_ids_versions_and_stalled_markers",
       "named_parser": "_query_all_challenge_pages",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2067,7 +2067,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/db/repositories/report_repo.py:s3.put_object",
-      "malformed_selector": "tests/test_phase473_report_deletion.py::test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_version",
+      "malformed_selector": "tests/test_report_deletion.py::test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_version",
       "named_parser": "parse_report_object_ack",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2104,7 +2104,7 @@
       ],
       "expected_type": "bool",
       "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice_repo.get_attempt_receipt",
-      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_partial_attempt_route_reveals_no_answer",
+      "malformed_selector": "tests/test_practice_receipt_snapshot.py::test_partial_attempt_route_reveals_no_answer",
       "named_parser": "build_attempt_result",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2141,7 +2141,7 @@
       ],
       "expected_type": "str",
       "lower_fake_target": "src/stoa/services/ai_service.py:bedrock.invoke_model.Body",
-      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
+      "malformed_selector": "tests/test_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
       "named_parser": "_parse_ai_response",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2178,7 +2178,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice_repo.get_attempt_receipt",
-      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_partial_attempt_route_reveals_no_answer",
+      "malformed_selector": "tests/test_practice_receipt_snapshot.py::test_partial_attempt_route_reveals_no_answer",
       "named_parser": "build_attempt_result",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2216,7 +2216,7 @@
       ],
       "expected_type": "list[object]",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
       "named_parser": "_provider_mapping",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2252,7 +2252,7 @@
       ],
       "expected_type": "positive_int",
       "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
-      "malformed_selector": "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
+      "malformed_selector": "tests/test_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
       "named_parser": "_positive_int",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2288,7 +2288,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
-      "malformed_selector": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+      "malformed_selector": "tests/test_notification_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
       "named_parser": "resolve_delivery_ownership",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2325,7 +2325,7 @@
       ],
       "expected_type": "list[object]",
       "lower_fake_target": "src/stoa/services/ai_service.py:bedrock.invoke_model.Body",
-      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
+      "malformed_selector": "tests/test_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
       "named_parser": "_parse_ai_response",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2364,7 +2364,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/db/repositories/attachment_repo.py:dynamodb.batch_get_item",
-      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
+      "malformed_selector": "tests/test_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
       "named_parser": "get_attachments",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2402,7 +2402,7 @@
       ],
       "expected_type": "list[object]",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
       "named_parser": "_provider_mapping",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2439,7 +2439,7 @@
       ],
       "expected_type": "positive_int",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
       "named_parser": "_positive_provider_integer",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2475,7 +2475,7 @@
       ],
       "expected_type": "sha256_hex",
       "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item",
-      "malformed_selector": "tests/test_phase473_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
+      "malformed_selector": "tests/test_notification_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
       "named_parser": "_intent_claim",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2513,7 +2513,7 @@
       ],
       "expected_type": "list[object]",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
-      "malformed_selector": "tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+      "malformed_selector": "tests/test_upload_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
       "named_parser": "_provider_mapping",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2549,7 +2549,7 @@
       ],
       "expected_type": "list[object]",
       "lower_fake_target": "src/stoa/db/repositories/practice_repo.py:dynamodb.query",
-      "malformed_selector": "tests/test_phase473_practice_snapshot.py::test_challenge_lists_reject_duplicate_ids_versions_and_stalled_markers",
+      "malformed_selector": "tests/test_practice_receipt_snapshot.py::test_challenge_lists_reject_duplicate_ids_versions_and_stalled_markers",
       "named_parser": "_query_all_challenge_pages",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2587,7 +2587,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
       "named_parser": "_required_provider_coordinate",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2625,7 +2625,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_object_versions",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
       "named_parser": "_required_provider_coordinate",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2661,7 +2661,7 @@
       ],
       "expected_type": "positive_int",
       "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_claim_compares_stored_expiry_with_distinct_current_epoch",
+      "malformed_selector": "tests/test_account_deletion_claim_race.py::test_claim_compares_stored_expiry_with_distinct_current_epoch",
       "named_parser": "_positive_int",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2699,7 +2699,7 @@
       ],
       "expected_type": "closed_disposition",
       "lower_fake_target": "src/stoa/routers/conversations.py:attachment_repo.read_message_command_result",
-      "malformed_selector": "tests/test_phase473_message_command.py::test_regular_and_sse_replay_exact_durable_rejection",
+      "malformed_selector": "tests/test_conversation_message_command.py::test_regular_and_sse_replay_exact_durable_rejection",
       "named_parser": "_coerce_command_result",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2737,7 +2737,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/practice_projection_service.py:practice authorization dependency",
-      "malformed_selector": "tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
+      "malformed_selector": "tests/test_practice_teacher_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
       "named_parser": "build_privileged_answer",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2774,7 +2774,7 @@
       ],
       "expected_type": "list[object]",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
       "named_parser": "_provider_mapping",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2810,7 +2810,7 @@
       ],
       "expected_type": "positive_int",
       "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item",
-      "malformed_selector": "tests/test_phase473_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
+      "malformed_selector": "tests/test_notification_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
       "named_parser": "_intent_claim",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2846,7 +2846,7 @@
       ],
       "expected_type": "sha256_hex",
       "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+      "malformed_selector": "tests/test_account_deletion_claim_race.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
       "named_parser": "_claim_from_command",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2883,7 +2883,7 @@
       ],
       "expected_type": "canonical_base64_sha256",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_parts",
-      "malformed_selector": "tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+      "malformed_selector": "tests/test_upload_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
       "named_parser": "_provider_sha256",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2919,7 +2919,7 @@
       ],
       "expected_type": "sha256_hex",
       "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
-      "malformed_selector": "tests/test_phase473_private_delivery_fencing.py::test_global_nonprivate_requires_exact_persisted_contract_digest",
+      "malformed_selector": "tests/test_notification_delivery_fencing.py::test_global_nonprivate_requires_exact_persisted_contract_digest",
       "named_parser": "validate_global_nonprivate_event",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2956,7 +2956,7 @@
       ],
       "expected_type": "bool",
       "lower_fake_target": "src/stoa/services/ai_service.py:bedrock.invoke_model.Body",
-      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
+      "malformed_selector": "tests/test_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
       "named_parser": "_parse_ai_response",
       "requirement_ids": [
         "V9PRIV-01",
@@ -2994,7 +2994,7 @@
       ],
       "expected_type": "nonblank_str",
       "lower_fake_target": "src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
-      "malformed_selector": "tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+      "malformed_selector": "tests/test_upload_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
       "named_parser": "_required_provider_coordinate",
       "requirement_ids": [
         "V9PRIV-01",

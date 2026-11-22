@@ -9,6 +9,8 @@ import sys
 
 import pytest
 
+from sealed_test_renames import current_selector
+
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "scripts" / "generate_phase473_boundary_inventory.py"
@@ -55,11 +57,11 @@ REQUIRED_ROW_FIELDS = {
 }
 
 FINDING_SELECTORS = {
-    "CR-01": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
-    "CR-02": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
-    "WR-01": "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
-    "WR-02": "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
-    "WR-03": "tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
+    "CR-01": "tests/test_account_deletion_claim_race.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+    "CR-02": "tests/test_notification_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+    "WR-01": "tests/test_account_deletion_claim_race.py::test_repository_rejects_invalid_lifecycle_timestamps",
+    "WR-02": "tests/test_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
+    "WR-03": "tests/test_notification_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
 }
 
 REQUIRED_AUTHORITY_FIELDS = {
@@ -316,7 +318,7 @@ def test_every_read_selector_executes_and_observes_its_declared_lower_boundary()
 def test_every_plan35_purge_and_no_resurrection_selector_executes():
     private = json.loads(PRIVATE_INVENTORY.read_text())
     selectors = {
-        selector
+        current_selector(selector)
         for row in private["rows"]
         for selector in (row["purge_selector"], row["no_resurrection_selector"])
     }

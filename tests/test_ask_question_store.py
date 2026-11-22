@@ -47,7 +47,7 @@ from stoa.services import learning_session
 from stoa.services.ask_question import _store as ask_question_store
 
 
-# ── from tests/test_phase473_message_command.py: claim, completion, rejection, classification ────
+# ── from tests/test_conversation_message_command.py: claim, completion, rejection, classification ────
 
 
 def _transaction_cancel(codes: list[str]) -> ClientError:
@@ -636,7 +636,7 @@ def test_ai_lease_excludes_active_owner_renews_takes_over_and_terminates() -> No
     assert table.command["status"] == "terminal_failed"
 
 
-# ── from tests/test_phase473_conversation_replay.py: the completion's condition ────
+# ── from tests/test_conversation_replay.py: the completion's condition ────
 
 
 def test_completion_condition_binds_lease_owner_generation_and_unexpired_deadline(
@@ -953,7 +953,7 @@ def test_a_zero_row_still_refuses_a_claim_that_raced_past_it():
     assert _count(table) == 1
 
 
-# ── from tests/test_phase473_conversation_deletion.py: the account fence, the cancel ────
+# ── from tests/test_conversation_deletion_fence.py: the account fence, the cancel ────
 
 
 def test_command_claim_and_text_only_message_commit_share_account_fence() -> None:
@@ -1086,7 +1086,7 @@ def test_progress_is_only_readable_by_the_student_who_asked():
     assert hidden == []
 
 
-# ── from tests/test_phase473_provider_cleanup.py: stored attempts, claim conditions ────
+# ── from tests/test_upload_provider_cleanup.py: stored attempts, claim conditions ────
 
 
 # When the provider cleanup tests run; the claim below expires two days after it.

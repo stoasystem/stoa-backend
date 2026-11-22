@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Generate the source-sealed Phase 473 private-store and evidence inventories."""
+"""Generate the source-sealed Phase 473 private-store and evidence inventories.
+
+The test selectors below are the names the seal was written with (2026-07). The
+tests were renamed in #433 but the seal cannot change, so these stay as sealed;
+`scripts/sealed_test_renames.py` maps each file to where it lives now.
+"""
 
 from __future__ import annotations
 

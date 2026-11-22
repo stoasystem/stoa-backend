@@ -4,11 +4,14 @@ import ast
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
 
 import pytest
+
+from sealed_test_renames import RENAMED_TEST_FILES, current_selector
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +51,7 @@ REQUIRED_ROW_FIELDS = {
     "requirement_ids", "decision_ids",
 }
 
+# As sealed: the 2026-07 test file names. `current_selector` gives today's.
 FINDING_SELECTORS = {
     "CR-01": (
         "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
@@ -168,7 +172,8 @@ def test_runtime_selectors_are_real_collected_lower_boundary_tests():
     payload = json.loads(INVENTORY.read_text())
     selectors = {selector for row in payload["rows"] for selector in (row["purge_selector"], row["no_resurrection_selector"])}
     assert selectors
-    for selector in sorted(selectors):
+    for sealed in sorted(selectors):
+        selector = current_selector(sealed)
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "--collect-only", "-q", selector],
             cwd=ROOT,
@@ -255,3 +260,19 @@ def test_reviewed_semantics_reject_weakening_after_candidate_regeneration(
     target.write_text(source.replace(before, after, 1))
     with pytest.raises(ValueError, match="reviewed private-store semantic"):
         module.validate_private_store_semantics(tmp_path)
+
+
+@pytest.mark.parametrize("seal", [INVENTORY, INVENTORY_V2], ids=["v1", "v2"])
+def test_every_test_file_a_seal_names_resolves_to_a_file_today(seal: Path):
+    """The seals cannot follow a rename, so the rename table has to."""
+    named = {
+        match.split("::")[0]
+        for match in re.findall(r"tests/[A-Za-z0-9_/]+\.py::[A-Za-z0-9_]+", seal.read_text())
+    }
+    assert named
+    for file_name in sorted(named):
+        current = RENAMED_TEST_FILES.get(file_name, file_name)
+        assert (ROOT / current).is_file(), f"{file_name} -> {current}"
+    for old, new in RENAMED_TEST_FILES.items():
+        assert not (ROOT / old).exists(), old
+        assert (ROOT / new).is_file(), new
