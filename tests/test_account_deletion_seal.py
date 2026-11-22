@@ -257,7 +257,7 @@ def test_封印里的分支契约与生成器的源头逐字一致():
     import importlib.util
     import sys
 
-    path = ROOT / "scripts" / "generate_phase473_private_store_inventory.py"
+    path = ROOT / "scripts" / "generate_private_store_inventory.py"
     name = "phase473_inventory_generator"
     spec = importlib.util.spec_from_file_location(name, path)
     generator = importlib.util.module_from_spec(spec)

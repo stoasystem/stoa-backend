@@ -13,10 +13,10 @@ from sealed_test_renames import current_selector
 
 
 ROOT = Path(__file__).resolve().parents[1]
-GENERATOR = ROOT / "scripts" / "generate_phase473_boundary_inventory.py"
-INVENTORY = ROOT / "docs" / "security" / "phase-473-boundary-inventory.json"
+GENERATOR = ROOT / "scripts" / "generate_untrusted_read_inventory.py"
+INVENTORY = ROOT / "docs" / "security" / "untrusted-read-inventory.json"
 PRIVATE_INVENTORY = ROOT / "docs" / "security" / "phase-473-private-store-inventory.json"
-PRIVATE_GENERATOR = ROOT / "scripts" / "generate_phase473_private_store_inventory.py"
+PRIVATE_GENERATOR = ROOT / "scripts" / "generate_private_store_inventory.py"
 
 EXPECTED_BRANCHES = (
     "account_profile",

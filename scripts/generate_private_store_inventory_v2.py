@@ -19,8 +19,8 @@ v1 is never rewritten: commands sealed under it (any in flight when this ships)
 finish on the scan path against those exact bytes.
 
 Usage:
-    python scripts/generate_phase473_private_store_inventory_v2.py           # write
-    python scripts/generate_phase473_private_store_inventory_v2.py --check   # compare
+    python scripts/generate_private_store_inventory_v2.py           # write
+    python scripts/generate_private_store_inventory_v2.py --check   # compare
 """
 
 from __future__ import annotations

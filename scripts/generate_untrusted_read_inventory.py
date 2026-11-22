@@ -701,7 +701,7 @@ def compose_private_store_inventory(root: Path | str, payload: dict[str, Any]) -
 
 
 def _run_private_checker(root: Path) -> None:
-    checker = root / "scripts/generate_phase473_private_store_inventory.py"
+    checker = root / "scripts/generate_private_store_inventory.py"
     inventory = root / "docs/security/phase-473-private-store-inventory.json"
     if not checker.is_file() or not inventory.is_file():
         return
@@ -770,7 +770,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(list(argv) if argv is not None else None)
     root = Path(args.root).resolve()
-    output = Path(args.output) if args.output else root / "docs/security/phase-473-boundary-inventory.json"
+    output = Path(args.output) if args.output else root / "docs/security/untrusted-read-inventory.json"
     try:
         rendered = _render(build_inventory(root))
     except (BoundaryViolation, ValueError, OSError, json.JSONDecodeError, SyntaxError) as exc:

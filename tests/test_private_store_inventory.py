@@ -15,9 +15,9 @@ from sealed_test_renames import RENAMED_TEST_FILES, current_selector
 
 
 ROOT = Path(__file__).resolve().parents[1]
-GENERATOR = ROOT / "scripts" / "generate_phase473_private_store_inventory.py"
+GENERATOR = ROOT / "scripts" / "generate_private_store_inventory.py"
 INVENTORY = ROOT / "docs" / "security" / "phase-473-private-store-inventory.json"
-EVIDENCE = ROOT / "docs" / "security" / "phase-473-retained-evidence-policy.json"
+EVIDENCE = ROOT / "docs" / "security" / "private-store-retained-policy.json"
 INVENTORY_V2 = ROOT / "docs" / "security" / "phase-473-private-store-inventory.v2.json"
 # Every deletion command stores this digest; the bytes may never change (#397).
 SEALED_V2_SHA256 = "dd60cb196b800a272c2b7452829ecb2a4ca0bd5225b478a45d1af877b5d7e888"

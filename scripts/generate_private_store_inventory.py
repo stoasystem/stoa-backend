@@ -789,7 +789,7 @@ def _default_root() -> Path:
 def _paths(root: Path, output: str | None, evidence_output: str | None) -> tuple[Path, Path]:
     return (
         Path(output) if output else root / "docs/security/phase-473-private-store-inventory.json",
-        Path(evidence_output) if evidence_output else root / "docs/security/phase-473-retained-evidence-policy.json",
+        Path(evidence_output) if evidence_output else root / "docs/security/private-store-retained-policy.json",
     )
 
 

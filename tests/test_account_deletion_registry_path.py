@@ -32,7 +32,7 @@ from stoa.services import owner_registry_sweep
 ROOT = Path(__file__).resolve().parents[1]
 V1 = ROOT / "docs" / "security" / "phase-473-private-store-inventory.json"
 V2 = ROOT / "docs" / "security" / "phase-473-private-store-inventory.v2.json"
-GENERATOR = ROOT / "scripts" / "generate_phase473_private_store_inventory_v2.py"
+GENERATOR = ROOT / "scripts" / "generate_private_store_inventory_v2.py"
 
 table = quick.table
 providers = quick.providers

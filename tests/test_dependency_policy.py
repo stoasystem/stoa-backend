@@ -431,7 +431,7 @@ def test_exception_json_schema_is_closed_and_required_fields_match_runtime_valid
 
 def test_committed_ecdsa_exception_is_exact_approved_expiring_and_source_supported():
     policy = _load_policy()
-    ledger = policy.load_json(ROOT / "evidence" / "phase-474" / "dependency-exceptions.json")
+    ledger = policy.load_json(ROOT / "docs" / "security" / "dependency-exceptions.json")
     validated = policy.validate_exception_ledger(ledger, now=NOW)
 
     assert validated == (
@@ -520,7 +520,7 @@ def test_backend_cli_defaults_to_the_committed_exception_ledger():
     policy = _load_policy()
     args = policy._parser().parse_args(["check-backend"])
 
-    assert args.exceptions == ROOT / "evidence" / "phase-474" / "dependency-exceptions.json"
+    assert args.exceptions == ROOT / "docs" / "security" / "dependency-exceptions.json"
 
 
 def test_committed_ecdsa_exception_accepts_only_the_exact_audit_identity():
@@ -548,7 +548,7 @@ def test_committed_ecdsa_exception_accepts_only_the_exact_audit_identity():
         ],
         "fixes": [],
     }
-    ledger = policy.load_json(ROOT / "evidence" / "phase-474" / "dependency-exceptions.json")
+    ledger = policy.load_json(ROOT / "docs" / "security" / "dependency-exceptions.json")
 
     accepted = policy.evaluate_backend(
         audit=audit,
@@ -647,7 +647,7 @@ def test_豁免在到期之前就要求续期而不是到期当天才失败():
 
     root = Path(__file__).resolve().parents[1]
     exceptions = json.loads(
-        (root / "evidence" / "phase-474" / "dependency-exceptions.json").read_text()
+        (root / "docs" / "security" / "dependency-exceptions.json").read_text()
     )["exceptions"]
 
     now = datetime.now(timezone.utc)
