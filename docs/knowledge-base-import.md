@@ -169,9 +169,10 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
 
 ## German as a first language
 
-German (#498) has no upstream. Its stars - 51 in the eight `deutsch-*` nebulae of
-`knowledge_base_catalog.GERMAN_TOPICS` - are written for STOA, final, with their
-prerequisites; so are its exercises, original ones in German. German is an
+German (#498) has no upstream. Its stars - 52 in the eight `deutsch-*` nebulae of
+`knowledge_base_catalog.GERMAN_TOPICS`: the 51 of the star sheet in #498, and
+`deutsch-literatur-antike-mythen`, added when B3 compared two more Gymnasium curricula
+(#549) - are written for STOA, final, with their prerequisites; so are its exercises, original ones in German. German is an
 *authored* subject (`AUTHORED_SUBJECTS`): the import takes its stars as they are,
 draws every one of them before its practice comes, and never splits them.
 

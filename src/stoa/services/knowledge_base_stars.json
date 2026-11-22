@@ -3878,7 +3878,7 @@
     "fr": "Lire entre les lignes",
     "it": "Leggere tra le righe"
    },
-   "description": "Gedanken von Figuren und Unausgesprochenes erschliessen und den Inhalt eines Textes beurteilen.",
+   "description": "Gedanken von Figuren und Unausgesprochenes erschliessen, den Inhalt eines Textes beurteilen und Interpretationsansätze unterscheiden.",
    "order": 5,
    "prerequisites": [
     "deutsch-texte-kernaussage"
@@ -4044,6 +4044,21 @@
    "order": 10,
    "prerequisites": [
     "deutsch-literatur-epochen-barock-klassik"
+   ]
+  },
+  "deutsch-literatur-antike-mythen": {
+   "topic_id": "deutsch-literatur",
+   "subject_id": "german",
+   "titles": {
+    "de": "Antike Mythen und ihre Nachwirkung",
+    "en": "Ancient myths and their legacy",
+    "fr": "Les mythes antiques et leur héritage",
+    "it": "I miti antichi e la loro eredità"
+   },
+   "description": "Die wichtigsten antiken Mythen und Sagen kennen und ihre Nachwirkung in Literatur, Kunst und Redewendungen erkennen.",
+   "order": 11,
+   "prerequisites": [
+    "deutsch-literatur-erzaehlende-texte"
    ]
   },
   "deutsch-sprache-sprachvarietaeten": {

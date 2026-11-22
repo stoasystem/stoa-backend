@@ -235,7 +235,7 @@ def test_the_committed_german_stars_are_the_written_ones() -> None:
     german = [unit for unit in knowledge_base_catalog.units() if unit["subject_id"] == "german"]
     nebulae = {topic for topic, _titles in knowledge_base_catalog.GERMAN_TOPICS}
 
-    assert len(german) == 51
+    assert len(german) == 52
     assert {unit["topic_id"] for unit in german} == nebulae
     by_id = {unit["unit_id"]: unit for unit in german}
     for unit in german:
@@ -257,7 +257,7 @@ def test_german_goes_into_production_in_preview_while_the_others_stay_live() -> 
     assert mode == "live:mathematics,english,physics"
     assert [s["subject_id"] for s in subjects] == ["english", "physics"]
     german = [row for row in (*topics, *units) if row["subject_id"] == "german"]
-    assert len(german) == 8 + 51 and {row["rollout_state"] for row in german} == {"preview"}
+    assert len(german) == 8 + 52 and {row["rollout_state"] for row in german} == {"preview"}
     assert {row["rollout_state"] for row in (*topics, *units) if row["subject_id"] != "german"} == {"active"}
 
 
