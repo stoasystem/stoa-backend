@@ -10057,6 +10057,710 @@
     "it": "Confrontare e ordinare"
    },
    "extension": false
+  },
+  "deutsch-formen-aktiv-passiv--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-formen-aktiv-passiv",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-formen-aktiv-passiv--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-formen-aktiv-passiv",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-formen-aktiv-passiv--bilden": {
+   "subject": "german",
+   "unit": "deutsch-formen-aktiv-passiv",
+   "titles": {
+    "de": "Formen bilden",
+    "en": "Forming and rewriting",
+    "fr": "Former et transformer",
+    "it": "Formare e trasformare"
+   },
+   "extension": false
+  },
+  "deutsch-formen-faelle--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-formen-faelle",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-formen-faelle--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-formen-faelle",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-formen-faelle--bilden": {
+   "subject": "german",
+   "unit": "deutsch-formen-faelle",
+   "titles": {
+    "de": "Formen bilden",
+    "en": "Forming and rewriting",
+    "fr": "Former et transformer",
+    "it": "Formare e trasformare"
+   },
+   "extension": false
+  },
+  "deutsch-formen-modus--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-formen-modus",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-formen-modus--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-formen-modus",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-formen-modus--bilden": {
+   "subject": "german",
+   "unit": "deutsch-formen-modus",
+   "titles": {
+    "de": "Formen bilden",
+    "en": "Forming and rewriting",
+    "fr": "Former et transformer",
+    "it": "Formare e trasformare"
+   },
+   "extension": false
+  },
+  "deutsch-formen-plusquamperfekt-futur--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-formen-plusquamperfekt-futur",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-formen-plusquamperfekt-futur--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-formen-plusquamperfekt-futur",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-formen-plusquamperfekt-futur--bilden": {
+   "subject": "german",
+   "unit": "deutsch-formen-plusquamperfekt-futur",
+   "titles": {
+    "de": "Formen bilden",
+    "en": "Forming and rewriting",
+    "fr": "Former et transformer",
+    "it": "Formare e trasformare"
+   },
+   "extension": false
+  },
+  "deutsch-formen-praesens-praeteritum-perfekt--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-formen-praesens-praeteritum-perfekt",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-formen-praesens-praeteritum-perfekt--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-formen-praesens-praeteritum-perfekt",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-formen-praesens-praeteritum-perfekt--bilden": {
+   "subject": "german",
+   "unit": "deutsch-formen-praesens-praeteritum-perfekt",
+   "titles": {
+    "de": "Formen bilden",
+    "en": "Forming and rewriting",
+    "fr": "Former et transformer",
+    "it": "Formare e trasformare"
+   },
+   "extension": false
+  },
+  "deutsch-rechtschreibung-aehnliche-laute--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-aehnliche-laute",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-rechtschreibung-aehnliche-laute--rechtschreibung": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-aehnliche-laute",
+   "titles": {
+    "de": "Richtig schreiben",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation",
+    "it": "Ortografia e punteggiatura"
+   },
+   "extension": false
+  },
+  "deutsch-rechtschreibung-das-dass--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-das-dass",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-rechtschreibung-das-dass--rechtschreibung": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-das-dass",
+   "titles": {
+    "de": "Richtig schreiben",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation",
+    "it": "Ortografia e punteggiatura"
+   },
+   "extension": false
+  },
+  "deutsch-rechtschreibung-getrennt-zusammen--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-getrennt-zusammen",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-rechtschreibung-getrennt-zusammen--rechtschreibung": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-getrennt-zusammen",
+   "titles": {
+    "de": "Richtig schreiben",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation",
+    "it": "Ortografia e punteggiatura"
+   },
+   "extension": false
+  },
+  "deutsch-rechtschreibung-gross-klein--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-gross-klein",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-rechtschreibung-gross-klein--rechtschreibung": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-gross-klein",
+   "titles": {
+    "de": "Richtig schreiben",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation",
+    "it": "Ortografia e punteggiatura"
+   },
+   "extension": false
+  },
+  "deutsch-rechtschreibung-lange-kurze-vokale--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-lange-kurze-vokale",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-rechtschreibung-lange-kurze-vokale--rechtschreibung": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-lange-kurze-vokale",
+   "titles": {
+    "de": "Richtig schreiben",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation",
+    "it": "Ortografia e punteggiatura"
+   },
+   "extension": false
+  },
+  "deutsch-rechtschreibung-s-ss--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-s-ss",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-rechtschreibung-s-ss--rechtschreibung": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-s-ss",
+   "titles": {
+    "de": "Richtig schreiben",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation",
+    "it": "Ortografia e punteggiatura"
+   },
+   "extension": false
+  },
+  "deutsch-rechtschreibung-silben--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-silben",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-rechtschreibung-silben--rechtschreibung": {
+   "subject": "german",
+   "unit": "deutsch-rechtschreibung-silben",
+   "titles": {
+    "de": "Richtig schreiben",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation",
+    "it": "Ortografia e punteggiatura"
+   },
+   "extension": false
+  },
+  "deutsch-saetze-direkte-rede--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-saetze-direkte-rede",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-saetze-direkte-rede--bilden": {
+   "subject": "german",
+   "unit": "deutsch-saetze-direkte-rede",
+   "titles": {
+    "de": "Formen bilden",
+    "en": "Forming and rewriting",
+    "fr": "Former et transformer",
+    "it": "Formare e trasformare"
+   },
+   "extension": false
+  },
+  "deutsch-saetze-direkte-rede--rechtschreibung": {
+   "subject": "german",
+   "unit": "deutsch-saetze-direkte-rede",
+   "titles": {
+    "de": "Richtig schreiben",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation",
+    "it": "Ortografia e punteggiatura"
+   },
+   "extension": false
+  },
+  "deutsch-saetze-haupt-nebensatz--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-saetze-haupt-nebensatz",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-saetze-haupt-nebensatz--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-saetze-haupt-nebensatz",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-saetze-haupt-nebensatz--bilden": {
+   "subject": "german",
+   "unit": "deutsch-saetze-haupt-nebensatz",
+   "titles": {
+    "de": "Formen bilden",
+    "en": "Forming and rewriting",
+    "fr": "Former et transformer",
+    "it": "Formare e trasformare"
+   },
+   "extension": false
+  },
+  "deutsch-saetze-komma--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-saetze-komma",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-saetze-komma--rechtschreibung": {
+   "subject": "german",
+   "unit": "deutsch-saetze-komma",
+   "titles": {
+    "de": "Richtig schreiben",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation",
+    "it": "Ortografia e punteggiatura"
+   },
+   "extension": false
+  },
+  "deutsch-saetze-praepositionalgruppen--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-saetze-praepositionalgruppen",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-saetze-praepositionalgruppen--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-saetze-praepositionalgruppen",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-saetze-satzarten--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-saetze-satzarten",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-saetze-satzarten--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-saetze-satzarten",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-saetze-satzarten--rechtschreibung": {
+   "subject": "german",
+   "unit": "deutsch-saetze-satzarten",
+   "titles": {
+    "de": "Richtig schreiben",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation",
+    "it": "Ortografia e punteggiatura"
+   },
+   "extension": false
+  },
+  "deutsch-saetze-satzglieder-proben--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-saetze-satzglieder-proben",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-saetze-satzglieder-proben--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-saetze-satzglieder-proben",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-saetze-subjekt-objekte--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-saetze-subjekt-objekte",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-saetze-subjekt-objekte--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-saetze-subjekt-objekte",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-saetze-verbale-teile--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-saetze-verbale-teile",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-saetze-verbale-teile--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-saetze-verbale-teile",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-woerter-adjektiv--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-woerter-adjektiv",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-woerter-adjektiv--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-woerter-adjektiv",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-woerter-adjektiv--bilden": {
+   "subject": "german",
+   "unit": "deutsch-woerter-adjektiv",
+   "titles": {
+    "de": "Formen bilden",
+    "en": "Forming and rewriting",
+    "fr": "Former et transformer",
+    "it": "Formare e trasformare"
+   },
+   "extension": false
+  },
+  "deutsch-woerter-nomen--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-woerter-nomen",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-woerter-nomen--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-woerter-nomen",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-woerter-nomen--bilden": {
+   "subject": "german",
+   "unit": "deutsch-woerter-nomen",
+   "titles": {
+    "de": "Formen bilden",
+    "en": "Forming and rewriting",
+    "fr": "Former et transformer",
+    "it": "Formare e trasformare"
+   },
+   "extension": false
+  },
+  "deutsch-woerter-partikel--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-woerter-partikel",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-woerter-partikel--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-woerter-partikel",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-woerter-pronomen--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-woerter-pronomen",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-woerter-pronomen--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-woerter-pronomen",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-woerter-verb--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-woerter-verb",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-woerter-verb--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-woerter-verb",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-woerter-verb--bilden": {
+   "subject": "german",
+   "unit": "deutsch-woerter-verb",
+   "titles": {
+    "de": "Formen bilden",
+    "en": "Forming and rewriting",
+    "fr": "Former et transformer",
+    "it": "Formare e trasformare"
+   },
+   "extension": false
+  },
+  "deutsch-woerter-wortbausteine--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-woerter-wortbausteine",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-woerter-wortbausteine--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-woerter-wortbausteine",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-woerter-wortbausteine--bilden": {
+   "subject": "german",
+   "unit": "deutsch-woerter-wortbausteine",
+   "titles": {
+    "de": "Formen bilden",
+    "en": "Forming and rewriting",
+    "fr": "Former et transformer",
+    "it": "Formare e trasformare"
+   },
+   "extension": false
   }
  },
  "practiceSets": {
@@ -19239,6 +19943,546 @@
    "en": "Comparing and ordering · Level 3",
    "fr": "Comparer et ordonner · Niveau 3",
    "it": "Confrontare e ordinare · Livello 3"
+  },
+  "deutsch-formen-aktiv-passiv--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-formen-aktiv-passiv--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-formen-aktiv-passiv--bilden--3": {
+   "de": "Formen bilden · Stufe 3",
+   "en": "Forming and rewriting · Level 3",
+   "fr": "Former et transformer · Niveau 3",
+   "it": "Formare e trasformare · Livello 3"
+  },
+  "deutsch-formen-faelle--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-formen-faelle--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-formen-faelle--bilden--2": {
+   "de": "Formen bilden · Stufe 2",
+   "en": "Forming and rewriting · Level 2",
+   "fr": "Former et transformer · Niveau 2",
+   "it": "Formare e trasformare · Livello 2"
+  },
+  "deutsch-formen-faelle--bilden--3": {
+   "de": "Formen bilden · Stufe 3",
+   "en": "Forming and rewriting · Level 3",
+   "fr": "Former et transformer · Niveau 3",
+   "it": "Formare e trasformare · Livello 3"
+  },
+  "deutsch-formen-modus--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-formen-modus--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-formen-modus--bilden--3": {
+   "de": "Formen bilden · Stufe 3",
+   "en": "Forming and rewriting · Level 3",
+   "fr": "Former et transformer · Niveau 3",
+   "it": "Formare e trasformare · Livello 3"
+  },
+  "deutsch-formen-plusquamperfekt-futur--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-formen-plusquamperfekt-futur--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-formen-plusquamperfekt-futur--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-formen-plusquamperfekt-futur--bilden--2": {
+   "de": "Formen bilden · Stufe 2",
+   "en": "Forming and rewriting · Level 2",
+   "fr": "Former et transformer · Niveau 2",
+   "it": "Formare e trasformare · Livello 2"
+  },
+  "deutsch-formen-plusquamperfekt-futur--bilden--3": {
+   "de": "Formen bilden · Stufe 3",
+   "en": "Forming and rewriting · Level 3",
+   "fr": "Former et transformer · Niveau 3",
+   "it": "Formare e trasformare · Livello 3"
+  },
+  "deutsch-formen-praesens-praeteritum-perfekt--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-formen-praesens-praeteritum-perfekt--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-formen-praesens-praeteritum-perfekt--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-formen-praesens-praeteritum-perfekt--bilden--2": {
+   "de": "Formen bilden · Stufe 2",
+   "en": "Forming and rewriting · Level 2",
+   "fr": "Former et transformer · Niveau 2",
+   "it": "Formare e trasformare · Livello 2"
+  },
+  "deutsch-formen-praesens-praeteritum-perfekt--bilden--3": {
+   "de": "Formen bilden · Stufe 3",
+   "en": "Forming and rewriting · Level 3",
+   "fr": "Former et transformer · Niveau 3",
+   "it": "Formare e trasformare · Livello 3"
+  },
+  "deutsch-rechtschreibung-aehnliche-laute--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-rechtschreibung-aehnliche-laute--rechtschreibung--2-1": {
+   "de": "Richtig schreiben · Stufe 2 · Teil 1",
+   "en": "Spelling and punctuation · Level 2 · Part 1",
+   "fr": "Orthographe et ponctuation · Niveau 2 · Partie 1",
+   "it": "Ortografia e punteggiatura · Livello 2 · Parte 1"
+  },
+  "deutsch-rechtschreibung-aehnliche-laute--rechtschreibung--2-2": {
+   "de": "Richtig schreiben · Stufe 2 · Teil 2",
+   "en": "Spelling and punctuation · Level 2 · Part 2",
+   "fr": "Orthographe et ponctuation · Niveau 2 · Partie 2",
+   "it": "Ortografia e punteggiatura · Livello 2 · Parte 2"
+  },
+  "deutsch-rechtschreibung-aehnliche-laute--rechtschreibung--3": {
+   "de": "Richtig schreiben · Stufe 3",
+   "en": "Spelling and punctuation · Level 3",
+   "fr": "Orthographe et ponctuation · Niveau 3",
+   "it": "Ortografia e punteggiatura · Livello 3"
+  },
+  "deutsch-rechtschreibung-das-dass--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-rechtschreibung-das-dass--rechtschreibung--2": {
+   "de": "Richtig schreiben · Stufe 2",
+   "en": "Spelling and punctuation · Level 2",
+   "fr": "Orthographe et ponctuation · Niveau 2",
+   "it": "Ortografia e punteggiatura · Livello 2"
+  },
+  "deutsch-rechtschreibung-das-dass--rechtschreibung--3": {
+   "de": "Richtig schreiben · Stufe 3",
+   "en": "Spelling and punctuation · Level 3",
+   "fr": "Orthographe et ponctuation · Niveau 3",
+   "it": "Ortografia e punteggiatura · Livello 3"
+  },
+  "deutsch-rechtschreibung-getrennt-zusammen--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-rechtschreibung-getrennt-zusammen--rechtschreibung--2": {
+   "de": "Richtig schreiben · Stufe 2",
+   "en": "Spelling and punctuation · Level 2",
+   "fr": "Orthographe et ponctuation · Niveau 2",
+   "it": "Ortografia e punteggiatura · Livello 2"
+  },
+  "deutsch-rechtschreibung-getrennt-zusammen--rechtschreibung--3": {
+   "de": "Richtig schreiben · Stufe 3",
+   "en": "Spelling and punctuation · Level 3",
+   "fr": "Orthographe et ponctuation · Niveau 3",
+   "it": "Ortografia e punteggiatura · Livello 3"
+  },
+  "deutsch-rechtschreibung-gross-klein--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-rechtschreibung-gross-klein--rechtschreibung--2": {
+   "de": "Richtig schreiben · Stufe 2",
+   "en": "Spelling and punctuation · Level 2",
+   "fr": "Orthographe et ponctuation · Niveau 2",
+   "it": "Ortografia e punteggiatura · Livello 2"
+  },
+  "deutsch-rechtschreibung-gross-klein--rechtschreibung--3": {
+   "de": "Richtig schreiben · Stufe 3",
+   "en": "Spelling and punctuation · Level 3",
+   "fr": "Orthographe et ponctuation · Niveau 3",
+   "it": "Ortografia e punteggiatura · Livello 3"
+  },
+  "deutsch-rechtschreibung-lange-kurze-vokale--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-rechtschreibung-lange-kurze-vokale--rechtschreibung--2-1": {
+   "de": "Richtig schreiben · Stufe 2 · Teil 1",
+   "en": "Spelling and punctuation · Level 2 · Part 1",
+   "fr": "Orthographe et ponctuation · Niveau 2 · Partie 1",
+   "it": "Ortografia e punteggiatura · Livello 2 · Parte 1"
+  },
+  "deutsch-rechtschreibung-lange-kurze-vokale--rechtschreibung--2-2": {
+   "de": "Richtig schreiben · Stufe 2 · Teil 2",
+   "en": "Spelling and punctuation · Level 2 · Part 2",
+   "fr": "Orthographe et ponctuation · Niveau 2 · Partie 2",
+   "it": "Ortografia e punteggiatura · Livello 2 · Parte 2"
+  },
+  "deutsch-rechtschreibung-s-ss--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-rechtschreibung-s-ss--rechtschreibung--2": {
+   "de": "Richtig schreiben · Stufe 2",
+   "en": "Spelling and punctuation · Level 2",
+   "fr": "Orthographe et ponctuation · Niveau 2",
+   "it": "Ortografia e punteggiatura · Livello 2"
+  },
+  "deutsch-rechtschreibung-s-ss--rechtschreibung--3": {
+   "de": "Richtig schreiben · Stufe 3",
+   "en": "Spelling and punctuation · Level 3",
+   "fr": "Orthographe et ponctuation · Niveau 3",
+   "it": "Ortografia e punteggiatura · Livello 3"
+  },
+  "deutsch-rechtschreibung-silben--bestimmen--2-1": {
+   "de": "Bestimmen · Stufe 2 · Teil 1",
+   "en": "Identifying · Level 2 · Part 1",
+   "fr": "Identifier · Niveau 2 · Partie 1",
+   "it": "Riconoscere · Livello 2 · Parte 1"
+  },
+  "deutsch-rechtschreibung-silben--bestimmen--2-2": {
+   "de": "Bestimmen · Stufe 2 · Teil 2",
+   "en": "Identifying · Level 2 · Part 2",
+   "fr": "Identifier · Niveau 2 · Partie 2",
+   "it": "Riconoscere · Livello 2 · Parte 2"
+  },
+  "deutsch-rechtschreibung-silben--rechtschreibung--2": {
+   "de": "Richtig schreiben · Stufe 2",
+   "en": "Spelling and punctuation · Level 2",
+   "fr": "Orthographe et ponctuation · Niveau 2",
+   "it": "Ortografia e punteggiatura · Livello 2"
+  },
+  "deutsch-saetze-direkte-rede--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-saetze-direkte-rede--bilden--2": {
+   "de": "Formen bilden · Stufe 2",
+   "en": "Forming and rewriting · Level 2",
+   "fr": "Former et transformer · Niveau 2",
+   "it": "Formare e trasformare · Livello 2"
+  },
+  "deutsch-saetze-direkte-rede--bilden--3": {
+   "de": "Formen bilden · Stufe 3",
+   "en": "Forming and rewriting · Level 3",
+   "fr": "Former et transformer · Niveau 3",
+   "it": "Formare e trasformare · Livello 3"
+  },
+  "deutsch-saetze-direkte-rede--rechtschreibung--2": {
+   "de": "Richtig schreiben · Stufe 2",
+   "en": "Spelling and punctuation · Level 2",
+   "fr": "Orthographe et ponctuation · Niveau 2",
+   "it": "Ortografia e punteggiatura · Livello 2"
+  },
+  "deutsch-saetze-direkte-rede--rechtschreibung--3": {
+   "de": "Richtig schreiben · Stufe 3",
+   "en": "Spelling and punctuation · Level 3",
+   "fr": "Orthographe et ponctuation · Niveau 3",
+   "it": "Ortografia e punteggiatura · Livello 3"
+  },
+  "deutsch-saetze-haupt-nebensatz--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-saetze-haupt-nebensatz--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-saetze-haupt-nebensatz--bilden--3": {
+   "de": "Formen bilden · Stufe 3",
+   "en": "Forming and rewriting · Level 3",
+   "fr": "Former et transformer · Niveau 3",
+   "it": "Formare e trasformare · Livello 3"
+  },
+  "deutsch-saetze-komma--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-saetze-komma--rechtschreibung--2": {
+   "de": "Richtig schreiben · Stufe 2",
+   "en": "Spelling and punctuation · Level 2",
+   "fr": "Orthographe et ponctuation · Niveau 2",
+   "it": "Ortografia e punteggiatura · Livello 2"
+  },
+  "deutsch-saetze-komma--rechtschreibung--3": {
+   "de": "Richtig schreiben · Stufe 3",
+   "en": "Spelling and punctuation · Level 3",
+   "fr": "Orthographe et ponctuation · Niveau 3",
+   "it": "Ortografia e punteggiatura · Livello 3"
+  },
+  "deutsch-saetze-praepositionalgruppen--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-saetze-praepositionalgruppen--bestimmen--3-1": {
+   "de": "Bestimmen · Stufe 3 · Teil 1",
+   "en": "Identifying · Level 3 · Part 1",
+   "fr": "Identifier · Niveau 3 · Partie 1",
+   "it": "Riconoscere · Livello 3 · Parte 1"
+  },
+  "deutsch-saetze-praepositionalgruppen--bestimmen--3-2": {
+   "de": "Bestimmen · Stufe 3 · Teil 2",
+   "en": "Identifying · Level 3 · Part 2",
+   "fr": "Identifier · Niveau 3 · Partie 2",
+   "it": "Riconoscere · Livello 3 · Parte 2"
+  },
+  "deutsch-saetze-satzarten--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-saetze-satzarten--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-saetze-satzarten--rechtschreibung--2": {
+   "de": "Richtig schreiben · Stufe 2",
+   "en": "Spelling and punctuation · Level 2",
+   "fr": "Orthographe et ponctuation · Niveau 2",
+   "it": "Ortografia e punteggiatura · Livello 2"
+  },
+  "deutsch-saetze-satzglieder-proben--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-saetze-satzglieder-proben--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-saetze-satzglieder-proben--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-saetze-subjekt-objekte--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-saetze-subjekt-objekte--bestimmen--3-1": {
+   "de": "Bestimmen · Stufe 3 · Teil 1",
+   "en": "Identifying · Level 3 · Part 1",
+   "fr": "Identifier · Niveau 3 · Partie 1",
+   "it": "Riconoscere · Livello 3 · Parte 1"
+  },
+  "deutsch-saetze-subjekt-objekte--bestimmen--3-2": {
+   "de": "Bestimmen · Stufe 3 · Teil 2",
+   "en": "Identifying · Level 3 · Part 2",
+   "fr": "Identifier · Niveau 3 · Partie 2",
+   "it": "Riconoscere · Livello 3 · Parte 2"
+  },
+  "deutsch-saetze-verbale-teile--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-saetze-verbale-teile--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-saetze-verbale-teile--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-woerter-adjektiv--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-woerter-adjektiv--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-woerter-adjektiv--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-woerter-adjektiv--bilden--2": {
+   "de": "Formen bilden · Stufe 2",
+   "en": "Forming and rewriting · Level 2",
+   "fr": "Former et transformer · Niveau 2",
+   "it": "Formare e trasformare · Livello 2"
+  },
+  "deutsch-woerter-adjektiv--bilden--3": {
+   "de": "Formen bilden · Stufe 3",
+   "en": "Forming and rewriting · Level 3",
+   "fr": "Former et transformer · Niveau 3",
+   "it": "Formare e trasformare · Livello 3"
+  },
+  "deutsch-woerter-nomen--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-woerter-nomen--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-woerter-nomen--bilden--2": {
+   "de": "Formen bilden · Stufe 2",
+   "en": "Forming and rewriting · Level 2",
+   "fr": "Former et transformer · Niveau 2",
+   "it": "Formare e trasformare · Livello 2"
+  },
+  "deutsch-woerter-partikel--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-woerter-partikel--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-woerter-partikel--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-woerter-pronomen--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-woerter-pronomen--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-woerter-pronomen--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-woerter-verb--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-woerter-verb--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-woerter-verb--bilden--2": {
+   "de": "Formen bilden · Stufe 2",
+   "en": "Forming and rewriting · Level 2",
+   "fr": "Former et transformer · Niveau 2",
+   "it": "Formare e trasformare · Livello 2"
+  },
+  "deutsch-woerter-wortbausteine--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-woerter-wortbausteine--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-woerter-wortbausteine--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-woerter-wortbausteine--bilden--2": {
+   "de": "Formen bilden · Stufe 2",
+   "en": "Forming and rewriting · Level 2",
+   "fr": "Former et transformer · Niveau 2",
+   "it": "Formare e trasformare · Livello 2"
+  },
+  "deutsch-woerter-wortbausteine--bilden--3": {
+   "de": "Formen bilden · Stufe 3",
+   "en": "Forming and rewriting · Level 3",
+   "fr": "Former et transformer · Niveau 3",
+   "it": "Formare e trasformare · Livello 3"
   }
  }
 }

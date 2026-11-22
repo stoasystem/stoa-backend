@@ -220,7 +220,11 @@ def test_writing_one_subject_keeps_every_other_subjects_entries() -> None:
     assert "deutsch-woerter-nomen--bestimmen--2" in skills["practiceSets"]
     # A run over the upstream's subjects alone leaves the German stars where they are.
     upstream_only = {**stars_file, "stars": {u: s for u, s in others.items()}}
-    again, _vocabulary = kb.with_other_subjects(stars, skills, upstream_only, old_vocabulary, None)
+    upstream_vocabulary = {
+        **old_vocabulary,
+        "skills": {k: s for k, s in old_vocabulary["skills"].items() if s["subject"] != "german"},
+    }
+    again, _vocabulary = kb.with_other_subjects(stars, skills, upstream_only, upstream_vocabulary, None)
     assert list(again["stars"])[-2:] == ["deutsch-woerter-nomen", "deutsch-woerter-pronomen"]
 
 
