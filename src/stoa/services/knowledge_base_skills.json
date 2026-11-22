@@ -10223,6 +10223,138 @@
    },
    "extension": false
   },
+  "deutsch-literatur-antike-mythen--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-literatur-antike-mythen",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-literatur-antike-mythen--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-antike-mythen",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-antike-mythen--lesen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-antike-mythen",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-drama--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-literatur-drama",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-literatur-drama--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-drama",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-drama--lesen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-drama",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-epochen-barock-klassik--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-literatur-epochen-barock-klassik",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-literatur-epochen-barock-klassik--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-epochen-barock-klassik",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-epochen-barock-klassik--lesen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-epochen-barock-klassik",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-epochen-romantik-gegenwart--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-literatur-epochen-romantik-gegenwart",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-literatur-epochen-romantik-gegenwart--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-epochen-romantik-gegenwart",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-epochen-romantik-gegenwart--lesen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-epochen-romantik-gegenwart",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
   "deutsch-literatur-erzaehlende-texte--begriffe": {
    "subject": "german",
    "unit": "deutsch-literatur-erzaehlende-texte",
@@ -10289,6 +10421,39 @@
    },
    "extension": false
   },
+  "deutsch-literatur-erzaehltechnik--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-literatur-erzaehltechnik",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-literatur-erzaehltechnik--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-erzaehltechnik",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-erzaehltechnik--lesen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-erzaehltechnik",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
   "deutsch-literatur-gedichte--begriffe": {
    "subject": "german",
    "unit": "deutsch-literatur-gedichte",
@@ -10319,6 +10484,50 @@
     "en": "Reading comprehension",
     "fr": "Compréhension écrite",
     "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-lyrik-formen--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-literatur-lyrik-formen",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-literatur-lyrik-formen--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-lyrik-formen",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-rhetorik--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-literatur-rhetorik",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-literatur-rhetorik--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-rhetorik",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
    },
    "extension": false
   },
@@ -10728,6 +10937,149 @@
     "it": "Riconoscere"
    },
    "extension": false
+  },
+  "deutsch-sprache-kommunikation--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-sprache-kommunikation",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-sprache-kommunikation--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-sprache-kommunikation",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-sprache-sprachsystem--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-sprache-sprachsystem",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-sprache-sprachsystem--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-sprache-sprachsystem",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-sprache-sprachvarietaeten--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-sprache-sprachvarietaeten",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-sprache-sprachvarietaeten--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-sprache-sprachvarietaeten",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-sprache-sprachvarietaeten--wortschatz": {
+   "subject": "german",
+   "unit": "deutsch-sprache-sprachvarietaeten",
+   "titles": {
+    "de": "Wortschatz",
+    "en": "Vocabulary",
+    "fr": "Vocabulaire",
+    "it": "Lessico"
+   },
+   "extension": false
+  },
+  "deutsch-sprache-sprachwandel--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-sprache-sprachwandel",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-sprache-sprachwandel--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-sprache-sprachwandel",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-texte-argumentation--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-texte-argumentation",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-texte-argumentation--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-texte-argumentation",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-texte-argumentation--lesen": {
+   "subject": "german",
+   "unit": "deutsch-texte-argumentation",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
+  "deutsch-texte-deuten--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-texte-deuten",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
   },
   "deutsch-texte-deuten--lesen": {
    "subject": "german",
@@ -20273,11 +20625,23 @@
    "fr": "Identifier · Niveau 3",
    "it": "Riconoscere · Livello 3"
   },
+  "deutsch-formen-modus--bestimmen--4": {
+   "de": "Bestimmen · Stufe 4",
+   "en": "Identifying · Level 4",
+   "fr": "Identifier · Niveau 4",
+   "it": "Riconoscere · Livello 4"
+  },
   "deutsch-formen-modus--bilden--3": {
    "de": "Formen bilden · Stufe 3",
    "en": "Forming and rewriting · Level 3",
    "fr": "Former et transformer · Niveau 3",
    "it": "Formare e trasformare · Livello 3"
+  },
+  "deutsch-formen-modus--bilden--4": {
+   "de": "Formen bilden · Stufe 4",
+   "en": "Forming and rewriting · Level 4",
+   "fr": "Former et transformer · Niveau 4",
+   "it": "Formare e trasformare · Livello 4"
   },
   "deutsch-formen-plusquamperfekt-futur--begriffe--3": {
    "de": "Begriffe und Regeln · Stufe 3",
@@ -20351,6 +20715,114 @@
    "fr": "Former et transformer · Niveau 3",
    "it": "Formare e trasformare · Livello 3"
   },
+  "deutsch-literatur-antike-mythen--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-literatur-antike-mythen--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
+  "deutsch-literatur-antike-mythen--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-literatur-antike-mythen--bestimmen--4": {
+   "de": "Bestimmen · Stufe 4",
+   "en": "Identifying · Level 4",
+   "fr": "Identifier · Niveau 4",
+   "it": "Riconoscere · Livello 4"
+  },
+  "deutsch-literatur-antike-mythen--lesen--3": {
+   "de": "Leseverstehen · Stufe 3",
+   "en": "Reading comprehension · Level 3",
+   "fr": "Compréhension écrite · Niveau 3",
+   "it": "Comprensione del testo · Livello 3"
+  },
+  "deutsch-literatur-antike-mythen--lesen--4": {
+   "de": "Leseverstehen · Stufe 4",
+   "en": "Reading comprehension · Level 4",
+   "fr": "Compréhension écrite · Niveau 4",
+   "it": "Comprensione del testo · Livello 4"
+  },
+  "deutsch-literatur-drama--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-literatur-drama--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
+  "deutsch-literatur-drama--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-literatur-drama--bestimmen--4": {
+   "de": "Bestimmen · Stufe 4",
+   "en": "Identifying · Level 4",
+   "fr": "Identifier · Niveau 4",
+   "it": "Riconoscere · Livello 4"
+  },
+  "deutsch-literatur-drama--lesen--3": {
+   "de": "Leseverstehen · Stufe 3",
+   "en": "Reading comprehension · Level 3",
+   "fr": "Compréhension écrite · Niveau 3",
+   "it": "Comprensione del testo · Livello 3"
+  },
+  "deutsch-literatur-drama--lesen--4": {
+   "de": "Leseverstehen · Stufe 4",
+   "en": "Reading comprehension · Level 4",
+   "fr": "Compréhension écrite · Niveau 4",
+   "it": "Comprensione del testo · Livello 4"
+  },
+  "deutsch-literatur-epochen-barock-klassik--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
+  "deutsch-literatur-epochen-barock-klassik--bestimmen--4": {
+   "de": "Bestimmen · Stufe 4",
+   "en": "Identifying · Level 4",
+   "fr": "Identifier · Niveau 4",
+   "it": "Riconoscere · Livello 4"
+  },
+  "deutsch-literatur-epochen-barock-klassik--lesen--4": {
+   "de": "Leseverstehen · Stufe 4",
+   "en": "Reading comprehension · Level 4",
+   "fr": "Compréhension écrite · Niveau 4",
+   "it": "Comprensione del testo · Livello 4"
+  },
+  "deutsch-literatur-epochen-romantik-gegenwart--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
+  "deutsch-literatur-epochen-romantik-gegenwart--bestimmen--4": {
+   "de": "Bestimmen · Stufe 4",
+   "en": "Identifying · Level 4",
+   "fr": "Identifier · Niveau 4",
+   "it": "Riconoscere · Livello 4"
+  },
+  "deutsch-literatur-epochen-romantik-gegenwart--lesen--4": {
+   "de": "Leseverstehen · Stufe 4",
+   "en": "Reading comprehension · Level 4",
+   "fr": "Compréhension écrite · Niveau 4",
+   "it": "Comprensione del testo · Livello 4"
+  },
   "deutsch-literatur-erzaehlende-texte--begriffe--2": {
    "de": "Begriffe und Regeln · Stufe 2",
    "en": "Terms and rules · Level 2",
@@ -20417,6 +20889,24 @@
    "fr": "Compréhension écrite · Niveau 3",
    "it": "Comprensione del testo · Livello 3"
   },
+  "deutsch-literatur-erzaehltechnik--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
+  "deutsch-literatur-erzaehltechnik--bestimmen--4": {
+   "de": "Bestimmen · Stufe 4",
+   "en": "Identifying · Level 4",
+   "fr": "Identifier · Niveau 4",
+   "it": "Riconoscere · Livello 4"
+  },
+  "deutsch-literatur-erzaehltechnik--lesen--4": {
+   "de": "Leseverstehen · Stufe 4",
+   "en": "Reading comprehension · Level 4",
+   "fr": "Compréhension écrite · Niveau 4",
+   "it": "Comprensione del testo · Livello 4"
+  },
   "deutsch-literatur-gedichte--begriffe--2": {
    "de": "Begriffe und Regeln · Stufe 2",
    "en": "Terms and rules · Level 2",
@@ -20464,6 +20954,42 @@
    "en": "Reading comprehension · Level 3",
    "fr": "Compréhension écrite · Niveau 3",
    "it": "Comprensione del testo · Livello 3"
+  },
+  "deutsch-literatur-lyrik-formen--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
+  "deutsch-literatur-lyrik-formen--bestimmen--4-1": {
+   "de": "Bestimmen · Stufe 4 · Teil 1",
+   "en": "Identifying · Level 4 · Part 1",
+   "fr": "Identifier · Niveau 4 · Partie 1",
+   "it": "Riconoscere · Livello 4 · Parte 1"
+  },
+  "deutsch-literatur-lyrik-formen--bestimmen--4-2": {
+   "de": "Bestimmen · Stufe 4 · Teil 2",
+   "en": "Identifying · Level 4 · Part 2",
+   "fr": "Identifier · Niveau 4 · Partie 2",
+   "it": "Riconoscere · Livello 4 · Parte 2"
+  },
+  "deutsch-literatur-rhetorik--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
+  "deutsch-literatur-rhetorik--bestimmen--4-1": {
+   "de": "Bestimmen · Stufe 4 · Teil 1",
+   "en": "Identifying · Level 4 · Part 1",
+   "fr": "Identifier · Niveau 4 · Partie 1",
+   "it": "Riconoscere · Livello 4 · Parte 1"
+  },
+  "deutsch-literatur-rhetorik--bestimmen--4-2": {
+   "de": "Bestimmen · Stufe 4 · Teil 2",
+   "en": "Identifying · Level 4 · Part 2",
+   "fr": "Identifier · Niveau 4 · Partie 2",
+   "it": "Riconoscere · Livello 4 · Parte 2"
   },
   "deutsch-literatur-stilmittel--begriffe--2": {
    "de": "Begriffe und Regeln · Stufe 2",
@@ -20729,17 +21255,35 @@
    "fr": "Identifier · Niveau 3",
    "it": "Riconoscere · Livello 3"
   },
+  "deutsch-saetze-haupt-nebensatz--bestimmen--4": {
+   "de": "Bestimmen · Stufe 4",
+   "en": "Identifying · Level 4",
+   "fr": "Identifier · Niveau 4",
+   "it": "Riconoscere · Livello 4"
+  },
   "deutsch-saetze-haupt-nebensatz--bilden--3": {
    "de": "Formen bilden · Stufe 3",
    "en": "Forming and rewriting · Level 3",
    "fr": "Former et transformer · Niveau 3",
    "it": "Formare e trasformare · Livello 3"
   },
+  "deutsch-saetze-haupt-nebensatz--bilden--4": {
+   "de": "Formen bilden · Stufe 4",
+   "en": "Forming and rewriting · Level 4",
+   "fr": "Former et transformer · Niveau 4",
+   "it": "Formare e trasformare · Livello 4"
+  },
   "deutsch-saetze-komma--begriffe--3": {
    "de": "Begriffe und Regeln · Stufe 3",
    "en": "Terms and rules · Level 3",
    "fr": "Notions et règles · Niveau 3",
    "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-saetze-komma--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
   },
   "deutsch-saetze-komma--rechtschreibung--2": {
    "de": "Richtig schreiben · Stufe 2",
@@ -20752,6 +21296,12 @@
    "en": "Spelling and punctuation · Level 3",
    "fr": "Orthographe et ponctuation · Niveau 3",
    "it": "Ortografia e punteggiatura · Livello 3"
+  },
+  "deutsch-saetze-komma--rechtschreibung--4": {
+   "de": "Richtig schreiben · Stufe 4",
+   "en": "Spelling and punctuation · Level 4",
+   "fr": "Orthographe et ponctuation · Niveau 4",
+   "it": "Ortografia e punteggiatura · Livello 4"
   },
   "deutsch-saetze-praepositionalgruppen--begriffe--3": {
    "de": "Begriffe und Regeln · Stufe 3",
@@ -20855,6 +21405,156 @@
    "fr": "Identifier · Niveau 3",
    "it": "Riconoscere · Livello 3"
   },
+  "deutsch-sprache-kommunikation--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
+  "deutsch-sprache-kommunikation--bestimmen--4-1": {
+   "de": "Bestimmen · Stufe 4 · Teil 1",
+   "en": "Identifying · Level 4 · Part 1",
+   "fr": "Identifier · Niveau 4 · Partie 1",
+   "it": "Riconoscere · Livello 4 · Parte 1"
+  },
+  "deutsch-sprache-kommunikation--bestimmen--4-2": {
+   "de": "Bestimmen · Stufe 4 · Teil 2",
+   "en": "Identifying · Level 4 · Part 2",
+   "fr": "Identifier · Niveau 4 · Partie 2",
+   "it": "Riconoscere · Livello 4 · Parte 2"
+  },
+  "deutsch-sprache-sprachsystem--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
+  "deutsch-sprache-sprachsystem--bestimmen--4-1": {
+   "de": "Bestimmen · Stufe 4 · Teil 1",
+   "en": "Identifying · Level 4 · Part 1",
+   "fr": "Identifier · Niveau 4 · Partie 1",
+   "it": "Riconoscere · Livello 4 · Parte 1"
+  },
+  "deutsch-sprache-sprachsystem--bestimmen--4-2": {
+   "de": "Bestimmen · Stufe 4 · Teil 2",
+   "en": "Identifying · Level 4 · Part 2",
+   "fr": "Identifier · Niveau 4 · Partie 2",
+   "it": "Riconoscere · Livello 4 · Parte 2"
+  },
+  "deutsch-sprache-sprachvarietaeten--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-sprache-sprachvarietaeten--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
+  "deutsch-sprache-sprachvarietaeten--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-sprache-sprachvarietaeten--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-sprache-sprachvarietaeten--bestimmen--4": {
+   "de": "Bestimmen · Stufe 4",
+   "en": "Identifying · Level 4",
+   "fr": "Identifier · Niveau 4",
+   "it": "Riconoscere · Livello 4"
+  },
+  "deutsch-sprache-sprachvarietaeten--wortschatz--2": {
+   "de": "Wortschatz · Stufe 2",
+   "en": "Vocabulary · Level 2",
+   "fr": "Vocabulaire · Niveau 2",
+   "it": "Lessico · Livello 2"
+  },
+  "deutsch-sprache-sprachvarietaeten--wortschatz--3": {
+   "de": "Wortschatz · Stufe 3",
+   "en": "Vocabulary · Level 3",
+   "fr": "Vocabulaire · Niveau 3",
+   "it": "Lessico · Livello 3"
+  },
+  "deutsch-sprache-sprachvarietaeten--wortschatz--4": {
+   "de": "Wortschatz · Stufe 4",
+   "en": "Vocabulary · Level 4",
+   "fr": "Vocabulaire · Niveau 4",
+   "it": "Lessico · Livello 4"
+  },
+  "deutsch-sprache-sprachwandel--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-sprache-sprachwandel--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
+  "deutsch-sprache-sprachwandel--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-sprache-sprachwandel--bestimmen--4": {
+   "de": "Bestimmen · Stufe 4",
+   "en": "Identifying · Level 4",
+   "fr": "Identifier · Niveau 4",
+   "it": "Riconoscere · Livello 4"
+  },
+  "deutsch-texte-argumentation--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-texte-argumentation--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
+  "deutsch-texte-argumentation--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-texte-argumentation--bestimmen--4": {
+   "de": "Bestimmen · Stufe 4",
+   "en": "Identifying · Level 4",
+   "fr": "Identifier · Niveau 4",
+   "it": "Riconoscere · Livello 4"
+  },
+  "deutsch-texte-argumentation--lesen--3": {
+   "de": "Leseverstehen · Stufe 3",
+   "en": "Reading comprehension · Level 3",
+   "fr": "Compréhension écrite · Niveau 3",
+   "it": "Comprensione del testo · Livello 3"
+  },
+  "deutsch-texte-argumentation--lesen--4": {
+   "de": "Leseverstehen · Stufe 4",
+   "en": "Reading comprehension · Level 4",
+   "fr": "Compréhension écrite · Niveau 4",
+   "it": "Comprensione del testo · Livello 4"
+  },
+  "deutsch-texte-deuten--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
   "deutsch-texte-deuten--lesen--3-1": {
    "de": "Leseverstehen · Stufe 3 · Teil 1",
    "en": "Reading comprehension · Level 3 · Part 1",
@@ -20866,6 +21566,12 @@
    "en": "Reading comprehension · Level 3 · Part 2",
    "fr": "Compréhension écrite · Niveau 3 · Partie 2",
    "it": "Comprensione del testo · Livello 3 · Parte 2"
+  },
+  "deutsch-texte-deuten--lesen--4": {
+   "de": "Leseverstehen · Stufe 4",
+   "en": "Reading comprehension · Level 4",
+   "fr": "Compréhension écrite · Niveau 4",
+   "it": "Comprensione del testo · Livello 4"
   },
   "deutsch-texte-informationen--lesen--1": {
    "de": "Leseverstehen · Stufe 1",
@@ -20897,6 +21603,12 @@
    "fr": "Compréhension écrite · Niveau 3",
    "it": "Comprensione del testo · Livello 3"
   },
+  "deutsch-texte-kernaussage--lesen--4": {
+   "de": "Leseverstehen · Stufe 4",
+   "en": "Reading comprehension · Level 4",
+   "fr": "Compréhension écrite · Niveau 4",
+   "it": "Comprensione del testo · Livello 4"
+  },
   "deutsch-texte-textsorten--begriffe--2": {
    "de": "Begriffe und Regeln · Stufe 2",
    "en": "Terms and rules · Level 2",
@@ -20909,6 +21621,12 @@
    "fr": "Notions et règles · Niveau 3",
    "it": "Termini e regole · Livello 3"
   },
+  "deutsch-texte-textsorten--begriffe--4": {
+   "de": "Begriffe und Regeln · Stufe 4",
+   "en": "Terms and rules · Level 4",
+   "fr": "Notions et règles · Niveau 4",
+   "it": "Termini e regole · Livello 4"
+  },
   "deutsch-texte-textsorten--lesen--2": {
    "de": "Leseverstehen · Stufe 2",
    "en": "Reading comprehension · Level 2",
@@ -20920,6 +21638,12 @@
    "en": "Reading comprehension · Level 3",
    "fr": "Compréhension écrite · Niveau 3",
    "it": "Comprensione del testo · Livello 3"
+  },
+  "deutsch-texte-textsorten--lesen--4": {
+   "de": "Leseverstehen · Stufe 4",
+   "en": "Reading comprehension · Level 4",
+   "fr": "Compréhension écrite · Niveau 4",
+   "it": "Comprensione del testo · Livello 4"
   },
   "deutsch-texte-woerter-saetze-lesen--lesen--1-1": {
    "de": "Leseverstehen · Stufe 1 · Teil 1",
@@ -21119,11 +21843,23 @@
    "fr": "Orthographe et ponctuation · Niveau 3",
    "it": "Ortografia e punteggiatura · Livello 3"
   },
+  "deutsch-wortschatz-fremdwoerter--rechtschreibung--4": {
+   "de": "Richtig schreiben · Stufe 4",
+   "en": "Spelling and punctuation · Level 4",
+   "fr": "Orthographe et ponctuation · Niveau 4",
+   "it": "Ortografia e punteggiatura · Livello 4"
+  },
   "deutsch-wortschatz-fremdwoerter--wortschatz--3": {
    "de": "Wortschatz · Stufe 3",
    "en": "Vocabulary · Level 3",
    "fr": "Vocabulaire · Niveau 3",
    "it": "Lessico · Livello 3"
+  },
+  "deutsch-wortschatz-fremdwoerter--wortschatz--4": {
+   "de": "Wortschatz · Stufe 4",
+   "en": "Vocabulary · Level 4",
+   "fr": "Vocabulaire · Niveau 4",
+   "it": "Lessico · Livello 4"
   },
   "deutsch-wortschatz-ober-unterbegriffe--begriffe--2": {
    "de": "Begriffe und Regeln · Stufe 2",
