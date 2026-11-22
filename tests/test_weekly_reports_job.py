@@ -271,6 +271,7 @@ def test_run_weekly_report_job_skips_existing_reports(monkeypatch, status):
         "skipped_existing": 1,
         "email_sent": 0,
         "failed": 0,
+        "skipped_allowance": 0,
     }
 
 
@@ -357,17 +358,14 @@ def test_run_weekly_report_job_processes_successful_pair(monkeypatch):
         calls.append(("payload", parent_id, student_id, week_start))
         return {"payload": True}
 
-    def generate(payload):
-        calls.append(("generate", payload))
-        return {"summary": "ok"}
-
-    def store(payload, generated):
-        calls.append(("store", payload, generated))
+    def generate_and_send(payload):
+        calls.append(("generate_and_send", payload))
         return {"status": "email_sent", "email_status": "sent"}
 
     monkeypatch.setattr(weekly_reports.report_service, "build_weekly_learning_payload", build_payload)
-    monkeypatch.setattr(weekly_reports.report_service, "generate_weekly_report_content", generate)
-    monkeypatch.setattr(weekly_reports.report_service, "store_and_send_weekly_report", store)
+    monkeypatch.setattr(
+        weekly_reports.report_service, "generate_and_send_weekly_report", generate_and_send
+    )
 
     result = weekly_reports.run_weekly_report_job({"week_start": "2026-06-01"})
 
@@ -378,8 +376,7 @@ def test_run_weekly_report_job_processes_successful_pair(monkeypatch):
     assert calls == [
         ("claim", "parent-1-student-1-2026-06-01"),
         ("payload", "parent-1", "student-1", "2026-06-01"),
-        ("generate", {"payload": True}),
-        ("store", {"payload": True}, {"summary": "ok"}),
+        ("generate_and_send", {"payload": True}),
     ]
 
 
@@ -411,11 +408,10 @@ def test_run_weekly_report_job_counts_pair_failure_and_continues(monkeypatch):
         return {"payload": student_id}
 
     monkeypatch.setattr(weekly_reports.report_service, "build_weekly_learning_payload", build_payload)
-    monkeypatch.setattr(weekly_reports.report_service, "generate_weekly_report_content", lambda payload: {"summary": "ok"})
     monkeypatch.setattr(
         weekly_reports.report_service,
-        "store_and_send_weekly_report",
-        lambda payload, generated: {"status": "email_failed", "email_status": "failed"},
+        "generate_and_send_weekly_report",
+        lambda payload: {"status": "email_failed", "email_status": "failed"},
     )
 
     result = weekly_reports.run_weekly_report_job({"week_start": "2026-06-01"})
@@ -428,6 +424,7 @@ def test_run_weekly_report_job_counts_pair_failure_and_continues(monkeypatch):
         "skipped_existing": 0,
         "email_sent": 0,
         "failed": 2,
+        "skipped_allowance": 0,
     }
     assert status_updates == [
         (
@@ -460,6 +457,7 @@ def test_handler_accepts_eventbridge_scheduled_event(monkeypatch):
         "skipped_existing": 0,
         "email_sent": 0,
         "failed": 0,
+        "skipped_allowance": 0,
     }
 
 

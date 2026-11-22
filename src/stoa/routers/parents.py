@@ -51,6 +51,7 @@ from stoa.services import (
     locale_service,
     message_catalog,
     parent_link_service,
+    report_service,
     student_evidence,
     subscription_service,
     teacher_support_allowance_service,
@@ -871,7 +872,7 @@ def _latest_report_for_child(parent_user_id: str, child_id: str) -> dict[str, An
     while True:
         result = report_repo.list_reports_for_parent(parent_user_id, last_key=last_key)
         for report in _response_items(result):
-            if report.get("student_id") == child_id:
+            if report.get("student_id") == child_id and _is_parent_visible(report):
                 return report
         last_key = _report_cursor(result.get("LastEvaluatedKey"))
         if not last_key:
@@ -1057,7 +1058,7 @@ def _report_history_events(parent_user_id: str, child_id: str) -> list[ParentChi
     while True:
         result = report_repo.list_reports_for_parent(parent_user_id, last_key=last_key)
         for report in _response_items(result):
-            if report.get("student_id") != child_id:
+            if report.get("student_id") != child_id or not _is_parent_visible(report):
                 continue
             activity = _report_activity(report)
             if activity:
@@ -1141,7 +1142,19 @@ def _pending_report_state(report: dict[str, Any]) -> ParentChildReportState:
     )
 
 
+def _is_parent_visible(report: dict[str, Any]) -> bool:
+    """Whether the parent sees this report row at all.
+
+    A week the student's allowance could not hold has no report (#557), and the
+    parent is told nothing about it: it reads as a week without one
+    (2026-11-22 decision).
+    """
+    return report.get("status") != report_service.STATUS_SKIPPED_ALLOWANCE
+
+
 def _report_state_from_item(report: dict[str, Any]) -> ParentChildReportState:
+    if not _is_parent_visible(report):
+        return _missing_report_state()
     if report.get("status") == "generation_claimed":
         return _pending_report_state(report)
     if report.get("status") == "generation_failed":

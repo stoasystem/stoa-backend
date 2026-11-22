@@ -17,7 +17,14 @@ from stoa.services import (
 logger = logging.getLogger(__name__)
 
 ZURICH_TZ = ZoneInfo("Europe/Zurich")
-SKIPPED_STATUSES = {"generated", "email_sent", "email_failed"}
+# A week the student's allowance could not hold has no report, and the job does
+# not try it again (#557).
+SKIPPED_STATUSES = {
+    "generated",
+    "email_sent",
+    "email_failed",
+    report_service.STATUS_SKIPPED_ALLOWANCE,
+}
 
 
 def _increment_count(counts: dict[str, object], field: str) -> None:
@@ -66,6 +73,8 @@ def run_weekly_report_job(event: dict[str, Any] | None = None, *, now: datetime 
         "skipped_existing": 0,
         "email_sent": 0,
         "failed": 0,
+        # The student's week could not hold the report's model call (#557): not a failure.
+        "skipped_allowance": 0,
     }
 
     for pair in pairs:
@@ -88,13 +97,21 @@ def run_weekly_report_job(event: dict[str, Any] | None = None, *, now: datetime 
         _increment_count(counts, "attempted")
         try:
             payload = report_service.build_weekly_learning_payload(parent_id, student_id, week_start)
-            generated_content = report_service.generate_weekly_report_content(payload)
-            stored_report = report_service.store_and_send_weekly_report(payload, generated_content)
+            stored_report = report_service.generate_and_send_weekly_report(payload)
             _increment_count(counts, "generated")
             if stored_report.get("email_status") == "sent" or stored_report.get("status") == "email_sent":
                 _increment_count(counts, "email_sent")
             if stored_report.get("status") == "email_failed":
                 _increment_count(counts, "failed")
+        except report_service.AllowanceExhausted:
+            _increment_count(counts, "skipped_allowance")
+            _mark_skipped_allowance(claim["report_id"])
+            logger.info(
+                "Weekly report skipped, allowance exhausted parent_id=%s student_id=%s week_start=%s",
+                parent_id,
+                student_id,
+                week_start,
+            )
         except Exception as exc:
             _increment_count(counts, "failed")
             failed_at = datetime.now(timezone.utc).isoformat()
@@ -118,6 +135,17 @@ def run_weekly_report_job(event: dict[str, Any] | None = None, *, now: datetime 
             )
 
     return counts
+
+
+def _mark_skipped_allowance(report_id: str) -> None:
+    """Record that this week has no report: the student's allowance could not hold it (#557)."""
+    skipped_at = datetime.now(timezone.utc).isoformat()
+    report_repo.update_report_status(
+        report_id,
+        report_service.STATUS_SKIPPED_ALLOWANCE,
+        allowance_skipped_at=skipped_at,
+        updated_at=skipped_at,
+    )
 
 
 def target_week_start_from_event(event: dict[str, Any], *, now: datetime | None = None) -> str:

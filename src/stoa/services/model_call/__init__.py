@@ -32,9 +32,9 @@ The result is one of three, closed:
   tried again.
 
 Who pays follows from the admission hook (`CostClass`): a call made with
-one is charged to the allowance the hook reserved from, one made without is
-the provider's cost to STOA alone (the weekly report). The usage of every
-paid reply carries it.
+one is charged to the allowance the hook reserved from (an Ask answer, a
+weekly report, #557), one made without is the provider's cost to STOA alone
+(the probes). The usage of every paid reply carries it.
 
 The call does not know what the tool's input means: whether an answer is good
 is the caller's to judge. Failure categories are the strings the rest of the

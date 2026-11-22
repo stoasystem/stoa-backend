@@ -241,10 +241,20 @@ def retry_report_generation(
         )
     try:
         payload = report_service.build_weekly_learning_payload(parent_id, student_id, week_start)
-        generated_content = report_service.generate_weekly_report_content(payload)
-        stored_report = report_service.store_and_send_weekly_report(payload, generated_content)
+        # Charged to the student's allowance as the weekly job's report is (#557).
+        stored_report = report_service.generate_and_send_weekly_report(payload)
         if stored_report.get("report_id") != report.get("report_id"):
             raise ValueError("Retry generated a mismatched report id")
+    except report_service.AllowanceExhausted:
+        return _skipped_for_allowance(
+            report,
+            operator=operator,
+            reason=reason,
+            source=source,
+            before=before,
+            attempted_at=attempted_at,
+            correlation_id=correlation_id,
+        )
     except Exception as exc:
         failed_at = _now_iso()
         fields: dict[str, object] = {
@@ -316,6 +326,55 @@ def retry_report_generation(
             "json_available": bool(stored_report.get("json_s3_key")),
             "html_available": bool(stored_report.get("html_s3_key") or stored_report.get("s3_key")),
         },
+    )
+
+
+def _skipped_for_allowance(
+    report: dict,
+    *,
+    operator: str,
+    reason: str,
+    source: str,
+    before: dict,
+    attempted_at: str,
+    correlation_id: str | None,
+) -> ReportRecoveryResult:
+    """The retry found the student's week cannot hold the report: none this week (#557).
+
+    Not a failure, and nothing recovery would retry: the report leaves
+    `generation_failed` for `skipped_allowance`.
+    """
+    skipped_at = _now_iso()
+    status = report_service.STATUS_SKIPPED_ALLOWANCE
+    fields: dict[str, object] = {
+        "allowance_skipped_at": skipped_at,
+        "generation_retry_attempted_at": attempted_at,
+        "last_operation": "retry_generation",
+        "last_operation_at": skipped_at,
+        "last_operation_by": operator,
+        "last_operation_result": "skipped",
+        "updated_at": skipped_at,
+    }
+    report_repo.update_report_status(report["report_id"], status, **fields)
+    _write_report_audit(
+        report,
+        action="retry_generation",
+        actor=operator,
+        reason=reason,
+        source=source,
+        result="skipped",
+        before=before,
+        after={**before, "status": status, **fields},
+        event_at=skipped_at,
+        correlation_id=correlation_id,
+    )
+    return ReportRecoveryResult(
+        report_id=report["report_id"],
+        status=status,
+        email_status=report.get("email_status"),
+        operation="retry_generation",
+        operation_result="skipped",
+        updated_at=skipped_at,
     )
 
 

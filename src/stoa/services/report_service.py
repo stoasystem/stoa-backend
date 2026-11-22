@@ -2,9 +2,11 @@
 
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
+import hashlib
 import json
 import logging
 import re
+import uuid
 from collections.abc import Callable, Mapping
 from time import monotonic
 from typing import Any, Protocol, runtime_checkable
@@ -14,14 +16,17 @@ from stoa import config
 from stoa.db import table as db_table
 from stoa.db.repositories import (
     account_deletion_repo,
+    allowance_repo,
     asked_knowledge_repo,
     question_repo,
     report_repo,
     user_repo,
 )
 from stoa.services import (
+    allowance_service,
     current_relationship,
     email_layout,
+    entitlement_service,
     knowledge_mastery_service,
     learning_session,
     locale_service,
@@ -414,37 +419,64 @@ def weekly_report_request(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+class AllowanceExhausted(Exception):
+    """The student's week cannot hold the report's model call: no report this week (#557)."""
+
+
+class AllowanceUnavailable(RuntimeError):
+    """The student's allowance could not be read or reserved: the report failed, and may be retried."""
+
+
 def generate_weekly_report_content(
     payload: dict[str, Any],
     *,
+    admission: model_call.AdmissionHook | None = None,
     clock: Callable[[], float] = monotonic,
 ) -> dict[str, Any]:
     """Generate parent-facing weekly report content with deterministic fallback.
 
-    One model call (#438), without an admission hook: the report is paid by
-    STOA, not from anyone's allowance. Whatever keeps it from giving a report
-    the parser accepts (not sent, paid but unusable, a tool input the parser
-    refuses, anything raised) ends in the deterministic report instead.
+    One model call (#438). A production report is asked with the admission hook
+    of the student's allowance (`generate_and_send_weekly_report`, #557); the
+    probe asks without one. Raises `AllowanceExhausted` when the hook finds the
+    week cannot hold the call, `AllowanceUnavailable` when it cannot tell.
+    Whatever else keeps it from giving a report the parser accepts (not sent,
+    paid but unusable, a tool input the parser refuses, anything raised) ends
+    in the deterministic report instead.
     """
+    return _generate(payload, admission=admission, clock=clock)[0]
+
+
+def _generate(
+    payload: dict[str, Any],
+    *,
+    admission: model_call.AdmissionHook | None,
+    clock: Callable[[], float],
+) -> tuple[dict[str, Any], model_call.Usage | None]:
+    """The report's content, and what its model call was paid, if it was."""
     try:
         result = model_call.call(
             **weekly_report_request(payload),
             deadline=clock() + REPORT_DEADLINE_SECONDS,
+            admission=admission,
             clock=clock,
         )
     except model_call.NotInstalled:
         raise
     except Exception as exc:
-        return _report_fallback(payload, type(exc).__name__)
+        return _report_fallback(payload, type(exc).__name__), None
     if isinstance(result, model_call.NotSent):
-        return _report_fallback(payload, result.category)
+        if result.category == ALLOWANCE_EXHAUSTED:
+            raise AllowanceExhausted()
+        if result.category == ALLOWANCE_UNAVAILABLE:
+            raise AllowanceUnavailable(result.detail or ALLOWANCE_UNAVAILABLE)
+        return _report_fallback(payload, result.category), None
     _log_report_usage(result.usage)
     if isinstance(result, model_call.PaidUnusable):
-        return _report_fallback(payload, result.category)
+        return _report_fallback(payload, result.category), result.usage
     try:
-        return parse_generated_report_json(result.tool_input)
+        return parse_generated_report_json(result.tool_input), result.usage
     except ValueError as exc:
-        return _report_fallback(payload, type(exc).__name__)
+        return _report_fallback(payload, type(exc).__name__), result.usage
 
 
 def _report_fallback(payload: dict[str, Any], failure: str) -> dict[str, Any]:
@@ -452,8 +484,197 @@ def _report_fallback(payload: dict[str, Any], failure: str) -> dict[str, Any]:
     return build_deterministic_report_fallback(payload)
 
 
+# ── The student's allowance a report is charged to (#557) ─────────────────────
+
+# What the report's admission hook refuses under: the week cannot hold the
+# call, or the allowance could not say.
+ALLOWANCE_EXHAUSTED = "allowance_exhausted"
+ALLOWANCE_UNAVAILABLE = "allowance_unavailable"
+
+# A report's `status` when the student's week could not hold its model call
+# (#557): no report, no email, and nothing for recovery to retry.
+STATUS_SKIPPED_ALLOWANCE = "skipped_allowance"
+
+
+class ReportAllowance:
+    """One report's model call, charged to its student's weekly allowance (#557).
+
+    As an Ask answer is: the admission hook reserves the counted input tokens
+    and the output limit in the week the report is generated in (the new week:
+    the report goes out on Monday for the week before); the reply's usage
+    evidence is observed as soon as it is back, and finalized once the report
+    is stored. The deterministic report a paid but unusable reply ends in is
+    still a stored report, so that reply is charged as well. A reply not stored
+    is given back, its provider cost kept; a call reserved but never paid is
+    released at the reservation's ceiling. Each call is its own effect, so a
+    retried report is charged again, and every parent's report is charged.
+
+    Settling the charge after the report is decided never fails the report: a
+    failure is logged, and the reservation is left for the week to end.
+    """
+
+    def __init__(self, student_id: str, report_id: str, *, observed_at: datetime) -> None:
+        self.student_id = student_id
+        # One effect per model call: a retry, or another parent's report, is a call of its own.
+        self.effect_id = hashlib.sha256(
+            b"stoa.weekly-report.allowance-effect.v1\x00"
+            + f"{report_id}\x00{uuid.uuid4().hex}".encode()
+        ).hexdigest()
+        self._observed_at = observed_at
+        self._paid: model_call.Usage | None = None
+
+    def admission(self, input_tokens: int, max_output_tokens: int) -> model_call.Admit | model_call.Refuse:
+        """The admission hook: reserve the call in the student's week, under the plan they are on now."""
+        try:
+            entitlement = entitlement_service.resolve_student_entitlement(
+                self.student_id, settings=config.settings()
+            )
+            plan_id = str(entitlement.get("effectivePlan") or "free_trial")
+            version = allowance_service.week_allowance_version(
+                beneficiary_id=self.student_id,
+                plan_id=plan_id,
+                observed_at=self._observed_at,
+            )
+            fence = account_deletion_repo.require_active_account_fence(self.student_id)
+            reservation = allowance_service.reserve_token_allowance(
+                beneficiary_id=self.student_id,
+                effect_id=self.effect_id,
+                plan_id=plan_id,
+                allowance_version=version,
+                input_tokens=input_tokens,
+                max_output_tokens=max_output_tokens,
+                observed_at=self._observed_at,
+                account_fence_generation=int(fence["generation"]),
+            )
+        except Exception as exc:  # noqa: BLE001 - an allowance that cannot be read cannot admit
+            return model_call.Refuse(ALLOWANCE_UNAVAILABLE, detail=type(exc).__name__)
+        if reservation.disposition is allowance_repo.ReservationDisposition.LIMIT_EXCEEDED:
+            return model_call.Refuse(ALLOWANCE_EXHAUSTED)
+        if reservation.disposition not in {
+            allowance_repo.ReservationDisposition.ADMITTED,
+            allowance_repo.ReservationDisposition.REPLAYED,
+        }:
+            return model_call.Refuse(
+                ALLOWANCE_UNAVAILABLE, detail=f"reserve:{reservation.disposition.value}"
+            )
+        return model_call.Admit()
+
+    def observe(self, usage: model_call.Usage | None) -> None:
+        """Record what the reply cost; a call not paid for is released at once."""
+        if usage is None:
+            self.release()
+            return
+        evidence = usage.evidence(effect_id=self.effect_id)
+        try:
+            observed = allowance_service.record_provider_usage(
+                beneficiary_id=self.student_id,
+                effect_id=self.effect_id,
+                provider_request_id=evidence.provider_request_id_digest,
+                model_id=evidence.model_id_digest,
+                input_tokens=evidence.input_tokens,
+                output_tokens=evidence.output_tokens,
+                cache_write_input_tokens=evidence.cache_write_input_tokens,
+                cache_read_input_tokens=evidence.cache_read_input_tokens,
+            )
+            disposition = observed.disposition
+        except Exception as exc:  # noqa: BLE001 - the report is not lost over its charge
+            disposition = type(exc).__name__
+        if disposition in {
+            allowance_repo.ProviderUsageDisposition.RECORDED,
+            allowance_repo.ProviderUsageDisposition.REPLAYED,
+        }:
+            self._paid = usage
+            return
+        self._log_unsettled("observe", disposition)
+        # The cost could not be recorded: give the reservation back at its ceiling.
+        self.release()
+
+    def finalize(self) -> None:
+        """Charge what was observed, once the report is stored."""
+        if self._paid is None:
+            return
+        try:
+            finalized = allowance_service.finalize_token_allowance(
+                beneficiary_id=self.student_id,
+                effect_id=self.effect_id,
+                technical_validation_passed=True,
+                safety_check_passed=True,
+                durable_result_stored=True,
+                stable_replay_readable=True,
+            )
+            disposition = finalized.disposition
+        except Exception as exc:  # noqa: BLE001
+            disposition = type(exc).__name__
+        if disposition not in {
+            allowance_repo.FinalizationDisposition.FINALIZED,
+            allowance_repo.FinalizationDisposition.REPLAYED,
+        }:
+            self._log_unsettled("finalize", disposition)
+
+    def release(self) -> None:
+        """Give back what this call reserved, when no report was stored on it.
+
+        A reply already observed keeps its provider cost; a call never paid has
+        its cost recorded at the reservation's ceiling. Nothing reserved is
+        nothing to give back.
+        """
+        try:
+            released = allowance_service.release_unknown_cost_allowance(
+                beneficiary_id=self.student_id, effect_id=self.effect_id
+            )
+            disposition = released.disposition
+        except Exception as exc:  # noqa: BLE001
+            disposition = type(exc).__name__
+        if disposition not in {
+            allowance_repo.ReleaseDisposition.RELEASED,
+            allowance_repo.ReleaseDisposition.NOTHING_RESERVED,
+            allowance_repo.ReleaseDisposition.ALREADY_SETTLED,
+        }:
+            self._log_unsettled("release", disposition)
+
+    def _log_unsettled(self, stage: str, disposition: object) -> None:
+        logger.warning(
+            "Weekly report allowance not settled stage=%s disposition=%s student_id=%s",
+            stage,
+            getattr(disposition, "value", disposition),
+            self.student_id,
+        )
+
+
+def generate_and_send_weekly_report(
+    payload: dict[str, Any],
+    *,
+    now: datetime | None = None,
+    clock: Callable[[], float] = monotonic,
+) -> dict[str, Any]:
+    """Generate one report on the student's allowance, then store and send it (#557).
+
+    Raises `AllowanceExhausted` when the student's week cannot hold the model
+    call: no model call, no deterministic report, nothing stored. Raises
+    `AllowanceUnavailable`, or whatever storing raised, when the report failed.
+    """
+    student_id = str((payload.get("student") or {}).get("id") or "")
+    report_id = _report_id(
+        str((payload.get("parent") or {}).get("id") or ""),
+        student_id,
+        str((payload.get("week") or {}).get("start") or ""),
+    )
+    allowance = ReportAllowance(
+        student_id, report_id, observed_at=now or datetime.now(timezone.utc)
+    )
+    content, usage = _generate(payload, admission=allowance.admission, clock=clock)
+    allowance.observe(usage)
+    try:
+        stored = store_and_send_weekly_report(payload, content, now=now)
+    except Exception:
+        allowance.release()
+        raise
+    allowance.finalize()
+    return stored
+
+
 def _log_report_usage(usage: model_call.Usage) -> None:
-    """What one report cost: provider cost only, charged to no allowance."""
+    """What one report's model call was paid, and who pays it (`cost_class`)."""
     logger.info(
         "Weekly report model call paid input_tokens=%s output_tokens=%s "
         "cache_write_input_tokens=%s cache_read_input_tokens=%s cost_class=%s",
