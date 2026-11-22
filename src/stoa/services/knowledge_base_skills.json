@@ -10223,6 +10223,17 @@
    },
    "extension": false
   },
+  "deutsch-literatur-erzaehlende-texte--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-literatur-erzaehlende-texte",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
   "deutsch-literatur-erzaehlende-texte--bestimmen": {
    "subject": "german",
    "unit": "deutsch-literatur-erzaehlende-texte",
@@ -10245,6 +10256,50 @@
    },
    "extension": false
   },
+  "deutsch-literatur-erzaehler--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-literatur-erzaehler",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-literatur-erzaehler--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-erzaehler",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-erzaehler--lesen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-erzaehler",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-gedichte--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-literatur-gedichte",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
   "deutsch-literatur-gedichte--bestimmen": {
    "subject": "german",
    "unit": "deutsch-literatur-gedichte",
@@ -10264,6 +10319,28 @@
     "en": "Reading comprehension",
     "fr": "Compréhension écrite",
     "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
+  "deutsch-literatur-stilmittel--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-literatur-stilmittel",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-literatur-stilmittel--bestimmen": {
+   "subject": "german",
+   "unit": "deutsch-literatur-stilmittel",
+   "titles": {
+    "de": "Bestimmen",
+    "en": "Identifying",
+    "fr": "Identifier",
+    "it": "Riconoscere"
    },
    "extension": false
   },
@@ -10652,9 +10729,53 @@
    },
    "extension": false
   },
+  "deutsch-texte-deuten--lesen": {
+   "subject": "german",
+   "unit": "deutsch-texte-deuten",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
   "deutsch-texte-informationen--lesen": {
    "subject": "german",
    "unit": "deutsch-texte-informationen",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
+  "deutsch-texte-kernaussage--lesen": {
+   "subject": "german",
+   "unit": "deutsch-texte-kernaussage",
+   "titles": {
+    "de": "Leseverstehen",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite",
+    "it": "Comprensione del testo"
+   },
+   "extension": false
+  },
+  "deutsch-texte-textsorten--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-texte-textsorten",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-texte-textsorten--lesen": {
+   "subject": "german",
+   "unit": "deutsch-texte-textsorten",
    "titles": {
     "de": "Leseverstehen",
     "en": "Reading comprehension",
@@ -10847,6 +10968,61 @@
     "en": "Forming and rewriting",
     "fr": "Former et transformer",
     "it": "Formare e trasformare"
+   },
+   "extension": false
+  },
+  "deutsch-wortschatz-fremdwoerter--rechtschreibung": {
+   "subject": "german",
+   "unit": "deutsch-wortschatz-fremdwoerter",
+   "titles": {
+    "de": "Richtig schreiben",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation",
+    "it": "Ortografia e punteggiatura"
+   },
+   "extension": false
+  },
+  "deutsch-wortschatz-fremdwoerter--wortschatz": {
+   "subject": "german",
+   "unit": "deutsch-wortschatz-fremdwoerter",
+   "titles": {
+    "de": "Wortschatz",
+    "en": "Vocabulary",
+    "fr": "Vocabulaire",
+    "it": "Lessico"
+   },
+   "extension": false
+  },
+  "deutsch-wortschatz-ober-unterbegriffe--begriffe": {
+   "subject": "german",
+   "unit": "deutsch-wortschatz-ober-unterbegriffe",
+   "titles": {
+    "de": "Begriffe und Regeln",
+    "en": "Terms and rules",
+    "fr": "Notions et règles",
+    "it": "Termini e regole"
+   },
+   "extension": true
+  },
+  "deutsch-wortschatz-ober-unterbegriffe--wortschatz": {
+   "subject": "german",
+   "unit": "deutsch-wortschatz-ober-unterbegriffe",
+   "titles": {
+    "de": "Wortschatz",
+    "en": "Vocabulary",
+    "fr": "Vocabulaire",
+    "it": "Lessico"
+   },
+   "extension": false
+  },
+  "deutsch-wortschatz-redewendungen--wortschatz": {
+   "subject": "german",
+   "unit": "deutsch-wortschatz-redewendungen",
+   "titles": {
+    "de": "Wortschatz",
+    "en": "Vocabulary",
+    "fr": "Vocabulaire",
+    "it": "Lessico"
    },
    "extension": false
   },
@@ -20175,11 +20351,35 @@
    "fr": "Former et transformer · Niveau 3",
    "it": "Formare e trasformare · Livello 3"
   },
+  "deutsch-literatur-erzaehlende-texte--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-literatur-erzaehlende-texte--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
   "deutsch-literatur-erzaehlende-texte--bestimmen--1": {
    "de": "Bestimmen · Stufe 1",
    "en": "Identifying · Level 1",
    "fr": "Identifier · Niveau 1",
    "it": "Riconoscere · Livello 1"
+  },
+  "deutsch-literatur-erzaehlende-texte--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-literatur-erzaehlende-texte--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
   },
   "deutsch-literatur-erzaehlende-texte--lesen--1": {
    "de": "Leseverstehen · Stufe 1",
@@ -20187,17 +20387,107 @@
    "fr": "Compréhension écrite · Niveau 1",
    "it": "Comprensione del testo · Livello 1"
   },
+  "deutsch-literatur-erzaehlende-texte--lesen--2": {
+   "de": "Leseverstehen · Stufe 2",
+   "en": "Reading comprehension · Level 2",
+   "fr": "Compréhension écrite · Niveau 2",
+   "it": "Comprensione del testo · Livello 2"
+  },
+  "deutsch-literatur-erzaehlende-texte--lesen--3": {
+   "de": "Leseverstehen · Stufe 3",
+   "en": "Reading comprehension · Level 3",
+   "fr": "Compréhension écrite · Niveau 3",
+   "it": "Comprensione del testo · Livello 3"
+  },
+  "deutsch-literatur-erzaehler--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-literatur-erzaehler--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
+  "deutsch-literatur-erzaehler--lesen--3": {
+   "de": "Leseverstehen · Stufe 3",
+   "en": "Reading comprehension · Level 3",
+   "fr": "Compréhension écrite · Niveau 3",
+   "it": "Comprensione del testo · Livello 3"
+  },
+  "deutsch-literatur-gedichte--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-literatur-gedichte--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
   "deutsch-literatur-gedichte--bestimmen--1": {
    "de": "Bestimmen · Stufe 1",
    "en": "Identifying · Level 1",
    "fr": "Identifier · Niveau 1",
    "it": "Riconoscere · Livello 1"
   },
+  "deutsch-literatur-gedichte--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-literatur-gedichte--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
+  },
   "deutsch-literatur-gedichte--lesen--1": {
    "de": "Leseverstehen · Stufe 1",
    "en": "Reading comprehension · Level 1",
    "fr": "Compréhension écrite · Niveau 1",
    "it": "Comprensione del testo · Livello 1"
+  },
+  "deutsch-literatur-gedichte--lesen--2": {
+   "de": "Leseverstehen · Stufe 2",
+   "en": "Reading comprehension · Level 2",
+   "fr": "Compréhension écrite · Niveau 2",
+   "it": "Comprensione del testo · Livello 2"
+  },
+  "deutsch-literatur-gedichte--lesen--3": {
+   "de": "Leseverstehen · Stufe 3",
+   "en": "Reading comprehension · Level 3",
+   "fr": "Compréhension écrite · Niveau 3",
+   "it": "Comprensione del testo · Livello 3"
+  },
+  "deutsch-literatur-stilmittel--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-literatur-stilmittel--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-literatur-stilmittel--bestimmen--2": {
+   "de": "Bestimmen · Stufe 2",
+   "en": "Identifying · Level 2",
+   "fr": "Identifier · Niveau 2",
+   "it": "Riconoscere · Livello 2"
+  },
+  "deutsch-literatur-stilmittel--bestimmen--3": {
+   "de": "Bestimmen · Stufe 3",
+   "en": "Identifying · Level 3",
+   "fr": "Identifier · Niveau 3",
+   "it": "Riconoscere · Livello 3"
   },
   "deutsch-rechtschreibung-aehnliche-laute--begriffe--1": {
    "de": "Begriffe und Regeln · Stufe 1",
@@ -20565,11 +20855,71 @@
    "fr": "Identifier · Niveau 3",
    "it": "Riconoscere · Livello 3"
   },
+  "deutsch-texte-deuten--lesen--3-1": {
+   "de": "Leseverstehen · Stufe 3 · Teil 1",
+   "en": "Reading comprehension · Level 3 · Part 1",
+   "fr": "Compréhension écrite · Niveau 3 · Partie 1",
+   "it": "Comprensione del testo · Livello 3 · Parte 1"
+  },
+  "deutsch-texte-deuten--lesen--3-2": {
+   "de": "Leseverstehen · Stufe 3 · Teil 2",
+   "en": "Reading comprehension · Level 3 · Part 2",
+   "fr": "Compréhension écrite · Niveau 3 · Partie 2",
+   "it": "Comprensione del testo · Livello 3 · Parte 2"
+  },
   "deutsch-texte-informationen--lesen--1": {
    "de": "Leseverstehen · Stufe 1",
    "en": "Reading comprehension · Level 1",
    "fr": "Compréhension écrite · Niveau 1",
    "it": "Comprensione del testo · Livello 1"
+  },
+  "deutsch-texte-informationen--lesen--2": {
+   "de": "Leseverstehen · Stufe 2",
+   "en": "Reading comprehension · Level 2",
+   "fr": "Compréhension écrite · Niveau 2",
+   "it": "Comprensione del testo · Livello 2"
+  },
+  "deutsch-texte-informationen--lesen--3": {
+   "de": "Leseverstehen · Stufe 3",
+   "en": "Reading comprehension · Level 3",
+   "fr": "Compréhension écrite · Niveau 3",
+   "it": "Comprensione del testo · Livello 3"
+  },
+  "deutsch-texte-kernaussage--lesen--2": {
+   "de": "Leseverstehen · Stufe 2",
+   "en": "Reading comprehension · Level 2",
+   "fr": "Compréhension écrite · Niveau 2",
+   "it": "Comprensione del testo · Livello 2"
+  },
+  "deutsch-texte-kernaussage--lesen--3": {
+   "de": "Leseverstehen · Stufe 3",
+   "en": "Reading comprehension · Level 3",
+   "fr": "Compréhension écrite · Niveau 3",
+   "it": "Comprensione del testo · Livello 3"
+  },
+  "deutsch-texte-textsorten--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-texte-textsorten--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-texte-textsorten--lesen--2": {
+   "de": "Leseverstehen · Stufe 2",
+   "en": "Reading comprehension · Level 2",
+   "fr": "Compréhension écrite · Niveau 2",
+   "it": "Comprensione del testo · Livello 2"
+  },
+  "deutsch-texte-textsorten--lesen--3": {
+   "de": "Leseverstehen · Stufe 3",
+   "en": "Reading comprehension · Level 3",
+   "fr": "Compréhension écrite · Niveau 3",
+   "it": "Comprensione del testo · Livello 3"
   },
   "deutsch-texte-woerter-saetze-lesen--lesen--1-1": {
    "de": "Leseverstehen · Stufe 1 · Teil 1",
@@ -20763,11 +21113,71 @@
    "fr": "Former et transformer · Niveau 3",
    "it": "Formare e trasformare · Livello 3"
   },
+  "deutsch-wortschatz-fremdwoerter--rechtschreibung--3": {
+   "de": "Richtig schreiben · Stufe 3",
+   "en": "Spelling and punctuation · Level 3",
+   "fr": "Orthographe et ponctuation · Niveau 3",
+   "it": "Ortografia e punteggiatura · Livello 3"
+  },
+  "deutsch-wortschatz-fremdwoerter--wortschatz--3": {
+   "de": "Wortschatz · Stufe 3",
+   "en": "Vocabulary · Level 3",
+   "fr": "Vocabulaire · Niveau 3",
+   "it": "Lessico · Livello 3"
+  },
+  "deutsch-wortschatz-ober-unterbegriffe--begriffe--2": {
+   "de": "Begriffe und Regeln · Stufe 2",
+   "en": "Terms and rules · Level 2",
+   "fr": "Notions et règles · Niveau 2",
+   "it": "Termini e regole · Livello 2"
+  },
+  "deutsch-wortschatz-ober-unterbegriffe--begriffe--3": {
+   "de": "Begriffe und Regeln · Stufe 3",
+   "en": "Terms and rules · Level 3",
+   "fr": "Notions et règles · Niveau 3",
+   "it": "Termini e regole · Livello 3"
+  },
+  "deutsch-wortschatz-ober-unterbegriffe--wortschatz--2": {
+   "de": "Wortschatz · Stufe 2",
+   "en": "Vocabulary · Level 2",
+   "fr": "Vocabulaire · Niveau 2",
+   "it": "Lessico · Livello 2"
+  },
+  "deutsch-wortschatz-ober-unterbegriffe--wortschatz--3": {
+   "de": "Wortschatz · Stufe 3",
+   "en": "Vocabulary · Level 3",
+   "fr": "Vocabulaire · Niveau 3",
+   "it": "Lessico · Livello 3"
+  },
+  "deutsch-wortschatz-redewendungen--wortschatz--2": {
+   "de": "Wortschatz · Stufe 2",
+   "en": "Vocabulary · Level 2",
+   "fr": "Vocabulaire · Niveau 2",
+   "it": "Lessico · Livello 2"
+  },
+  "deutsch-wortschatz-redewendungen--wortschatz--3": {
+   "de": "Wortschatz · Stufe 3",
+   "en": "Vocabulary · Level 3",
+   "fr": "Vocabulaire · Niveau 3",
+   "it": "Lessico · Livello 3"
+  },
   "deutsch-wortschatz-wortfelder--wortschatz--1": {
    "de": "Wortschatz · Stufe 1",
    "en": "Vocabulary · Level 1",
    "fr": "Vocabulaire · Niveau 1",
    "it": "Lessico · Livello 1"
+  },
+  "deutsch-wortschatz-wortfelder--wortschatz--2": {
+   "de": "Wortschatz · Stufe 2",
+   "en": "Vocabulary · Level 2",
+   "fr": "Vocabulaire · Niveau 2",
+   "it": "Lessico · Livello 2"
+  },
+  "deutsch-wortschatz-wortfelder--wortschatz--3": {
+   "de": "Wortschatz · Stufe 3",
+   "en": "Vocabulary · Level 3",
+   "fr": "Vocabulaire · Niveau 3",
+   "it": "Lessico · Livello 3"
   }
  }
 }
