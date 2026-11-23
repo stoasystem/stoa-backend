@@ -19,4 +19,10 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Arrive presque au résultat mais fait une petite erreur de calcul ou d’arrondi.",
         "it": "Arriva quasi al risultato ma sbaglia di poco un calcolo o un arrotondamento.",
     },
+    "error_cause.unreduced": {
+        "de": "Rechnet richtig, kürzt den Bruch aber nicht vollständig.",
+        "en": "Calculates correctly but does not fully simplify the fraction.",
+        "fr": "Calcule correctement mais ne simplifie pas complètement la fraction.",
+        "it": "Calcola correttamente ma non semplifica del tutto la frazione.",
+    },
 }

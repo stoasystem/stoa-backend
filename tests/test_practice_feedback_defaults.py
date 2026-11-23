@@ -88,7 +88,7 @@ CHALLENGE = {
     ("answer", "expected"),
     [
         ("1", message_catalog.text("practice.feedback.correct", "de")),
-        ("2", message_catalog.text("practice.feedback.incorrect", "de")),
+        ("2", message_catalog.text("practice.feedback.incorrect_calculation", "de")),
     ],
 )
 def test_an_exercise_without_feedback_answers_in_german(
@@ -129,7 +129,7 @@ def test_authored_feedback_reaches_the_runtime_row_and_blank_feedback_does_not(
     assert "incorrect_feedback" not in first
     assert practice_projection_service.answer_feedback(first, "de") == (
         "Genau, 4/4 = 1.",
-        message_catalog.text("practice.feedback.incorrect", "de"),
+        message_catalog.text("practice.feedback.incorrect_calculation", "de"),
     )
     assert "correct_feedback" not in second
 
@@ -165,4 +165,4 @@ def test_the_privileged_preview_keeps_the_stored_language() -> None:
     )
 
     assert preview.correct_feedback == message_catalog.text("practice.feedback.correct", "de")
-    assert preview.incorrect_feedback == message_catalog.text("practice.feedback.incorrect", "de")
+    assert preview.incorrect_feedback == message_catalog.text("practice.feedback.incorrect_calculation", "de")

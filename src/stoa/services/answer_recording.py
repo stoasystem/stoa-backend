@@ -86,14 +86,17 @@ def judge(challenge: Mapping[str, Any], raw_answer: object, *, locale: str) -> J
     except ValueError as error:
         raise AnswerInvalid(str(error)) from error
     shown = exercise_localization.localized(challenge, locale)
+    correct = answer_judging.judge_challenge(answer, shown, locale=locale)
+    # A wrong typed answer a rule explains is told what the rule found (#565).
+    rule = None if correct else error_causes.typed_rule(challenge, shown, answer)
     correct_feedback, incorrect_feedback = practice_projection_service.answer_feedback(
-        shown, locale
+        shown, locale, rule=rule
     )
     return Judgement(
         challenge=challenge,
         shown=shown,
         answer=answer,
-        correct=answer_judging.judge_challenge(answer, shown, locale=locale),
+        correct=correct,
         correct_feedback=correct_feedback,
         incorrect_feedback=incorrect_feedback,
     )

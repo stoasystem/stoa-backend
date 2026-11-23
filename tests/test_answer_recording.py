@@ -248,7 +248,7 @@ FRENCH = {
             "Zähler addieren.",
         ),
         (EXERCISE, "1", message_catalog.text("practice.feedback.correct", "fr")),
-        (EXERCISE, "2", message_catalog.text("practice.feedback.incorrect", "fr")),
+        (EXERCISE, "2", message_catalog.text("practice.feedback.incorrect_calculation", "fr")),
     ],
     ids=[
         "translated feedback, right",
