@@ -141,8 +141,12 @@ def test_direct_router_writes_are_forbidden_by_static_writer_gate() -> None:
     assert "learning_session.append(" in answering_source
     # The message row's shape is named only inside the session package (#228).
     # The account-deletion inventory names the entity type to find the rows it
-    # scrubs; it is the one place outside the package allowed to.
-    inventory = {Path("src/stoa/db/repositories/attachment_repo.py")}
+    # scrubs, and the data type catalog lists every type (#587); they are the
+    # places outside the package allowed to.
+    inventory = {
+        Path("src/stoa/db/repositories/attachment_repo.py"),
+        Path("src/stoa/db/data_catalog.py"),
+    }
     for path in sorted(Path("src/stoa").rglob("*.py")):
         if session in path.parents:
             continue
