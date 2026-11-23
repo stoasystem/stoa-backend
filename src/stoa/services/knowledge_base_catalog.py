@@ -593,8 +593,9 @@ def grade_level(grade: int) -> str:
 #: exercises it holds. A knowledge point shows only the types it has exercises of.
 QUESTION_TYPES: dict[str, tuple[tuple[str, dict[str, str], str], ...]] = {
     "mathematics": (
-        ("kopfrechnen", _titles("Kopfrechnen-Trick", "Mental maths tricks", "Astuces de calcul mental",
-                                "Trucchi di calcolo mentale"),
+        # Most of these tasks are short ones solved in the head, not tricks: a title
+        # promising a trick did not match them (stoa-backend#568).
+        ("kopfrechnen", _titles("Kopfrechnen", "Mental maths", "Calcul mental", "Calcolo mentale"),
          "Im Kopf rechnen, Rechentricks, Ergebnisse, die man auswendig weiss (Einmaleins)."),
         ("rechnen", _titles("Rechnen und Umformen", "Calculating and transforming", "Calculer et transformer",
                             "Calcolare e trasformare"),

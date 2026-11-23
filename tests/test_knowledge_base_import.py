@@ -468,8 +468,8 @@ def test_every_practice_set_is_a_draft_of_one_small_star_in_four_languages(tmp_p
     assert vocabulary["skills"]["brueche-brueche-addieren--kopfrechnen"] == {
         "subject": "mathematics",
         "unit": "brueche-brueche-addieren",
-        "titles": {"de": "Kopfrechnen-Trick", "en": "Mental maths tricks",
-                   "fr": "Astuces de calcul mental", "it": "Trucchi di calcolo mentale"},
+        "titles": {"de": "Kopfrechnen", "en": "Mental maths",
+                   "fr": "Calcul mental", "it": "Calcolo mentale"},
         "extension": False,
     }
     assert vocabulary["skills"]["brueche-brueche-addieren--schliessen"]["extension"] is True
@@ -489,7 +489,7 @@ def test_a_large_small_star_is_cut_into_numbered_parts(tmp_path: Path, monkeypat
     assert "brueche-brueche-addieren--kopfrechnen--1-1" in ids
     assert "brueche-brueche-addieren--kopfrechnen--1-2" in ids
     assert vocabulary["practiceSets"]["brueche-brueche-addieren--kopfrechnen--1-2"]["fr"] == (
-        "Astuces de calcul mental · Partie 2"
+        "Calcul mental · Partie 2"
     )
 
 
@@ -525,7 +525,7 @@ def test_layers_become_stages_of_one_small_star_in_order(tmp_path: Path, monkeyp
     assert first["order"] < second["order"]
     assert first["requiresPoints"] == [] and second["requiresPoints"] == ["kb-m-p100"]
     assert vocabulary["practiceSets"]["brueche-brueche-addieren--kopfrechnen--2"]["en"] == (
-        "Mental maths tricks · Level 2"
+        "Mental maths · Level 2"
     )
 
 
@@ -563,7 +563,7 @@ def test_thin_stages_join_into_one_practice_set(tmp_path: Path) -> None:
     assert "brueche-brueche-addieren--kopfrechnen--1" in ids
     assert "brueche-brueche-addieren--kopfrechnen--2" not in ids
     # One stage for the whole small star, so no "Stufe" in its title.
-    assert vocabulary["practiceSets"]["brueche-brueche-addieren--kopfrechnen--1"]["de"] == "Kopfrechnen-Trick"
+    assert vocabulary["practiceSets"]["brueche-brueche-addieren--kopfrechnen--1"]["de"] == "Kopfrechnen"
 
 
 def test_an_exercise_over_the_authoring_limit_is_skipped_not_shortened(tmp_path: Path) -> None:
