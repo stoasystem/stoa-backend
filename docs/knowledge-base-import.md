@@ -156,16 +156,15 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
     version unless `confirmReplacements` does (stoa-backend#426). One publish call moves
     at most 60 lessons and pauses after about 18 seconds; a new dry run goes on.
 13. **Go live:** `seed_practice.py --knowledge-base-live` writes the stars and nebulae
-    active, and the English and physics subjects with them. A subject goes live once
-    its own lessons are published, so the flag can name subjects:
+    active, and the English, physics and German subjects with them. A subject goes
+    live once its own lessons are published, so the flag can name subjects:
     `--knowledge-base-live mathematics` writes the mathematics stars active and keeps
-    the English and physics nebulae and stars in preview, without their subject rows.
+    the other subjects' nebulae and stars in preview, without their subject rows.
     The seed stamps that run as the mode `live:mathematics`, and the deploy check
     recomputes the hash in it. The subjects the flag knows come from
-    `knowledge_base_catalog.SUBJECTS`: once German is in the catalog, the bare
-    `--knowledge-base-live` writes German live too, so until German's own practice is
-    published every run names the others: `--knowledge-base-live mathematics english
-    physics` (see **German as a first language** below).
+    `knowledge_base_catalog.SUBJECTS`. Every subject is live in production now
+    (German since #547), so a run uses the bare `--knowledge-base-live`; naming
+    subjects is only for a new subject whose practice is not published yet.
 
 ## German as a first language
 
@@ -207,8 +206,13 @@ The stars went into production before their practice (#545): after the deploy,
 `seed_practice.py --knowledge-base-live mathematics english physics` (with
 `--dry-run` first) writes them in preview beside the three live subjects, and
 `layout_starmap.py --apply` places them. Until that run the deploy check reports the
-table as behind the code - the stamped mode `live` now includes German. German goes
-live once B1 is published (#547): then the bare `--knowledge-base-live` again.
+table as behind the code - the stamped mode `live` now includes German. German went
+live once B1 was published (#547): every seed run since is the bare
+`--knowledge-base-live`. The German stars are placed on the map
+(`layout_starmap.py --subject german`, a report, then `--apply`) only after that run
+has written `SUBJECT#german` - preview writes no subject row, and the layout reads it. A star without a published
+practice set is not shown to students, so each later batch (B2-B4) appeared as it
+was published, with no further seed run.
 
 ### Running the seed again
 

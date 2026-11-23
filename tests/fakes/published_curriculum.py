@@ -43,8 +43,10 @@ def _template() -> tuple[dict[str, Any], dict[str, Any]]:
 
 def curriculum_rows(scale: float = 1.0) -> list[dict[str, Any]]:
     """Every published curriculum row at `scale` times the production size."""
-    # As production is seeded: German's stars are in preview until its practice is
-    # published (#545, #547); the three subjects with practice are live.
+    # German's stars stay in preview here, as production was seeded on 2026-11-17
+    # with the three subjects of PRODUCTION_SIZE live: the responses recorded in
+    # fixtures/curriculum_reads_496.json were drawn from these rows. Production has
+    # every subject live since #547.
     rows = seed_practice.seed_rows(
         knowledge_base=seed_practice.knowledge_base_live_mode(tuple(PRODUCTION_SIZE))
     )
