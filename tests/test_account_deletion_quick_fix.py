@@ -26,6 +26,7 @@ from fakes.dynamodb import FakeTable
 from fakes.learning_session import seed_message
 from stoa import aws
 from stoa.aws import Kind
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, account_email_claim_repo, identity_repo
 from stoa.jobs import account_deletion as job
@@ -166,7 +167,7 @@ def test_acceptance_registers_the_command_in_the_same_commit(small_table: FakeTa
     assert _registered(small_table) == {f"student-small#{command_id}"}
     row = small_table.rows[(account_deletion_repo.PENDING_REGISTRY_PK, f"student-small#{command_id}")]
     # Named under attributes of its own, so no deletion sweep takes it for the account's row.
-    assert not account_deletion_repo._targets_user(row, "student-small")
+    assert not data_catalog.names(row, "student-small")
 
 
 @pytest.mark.parametrize("budgeted", [False, True])

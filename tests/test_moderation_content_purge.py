@@ -313,7 +313,13 @@ def test_moderation_scrub_removes_all_content_and_private_linkage() -> None:
         assert canary not in serialized
 
 
-def test_moderation_discovery_resolves_legacy_event_owner_and_pages() -> None:
+def test_moderation_discovery_takes_rows_by_their_own_student_confirms_and_pages() -> None:
+    """A moderation row is the account's by its own `student_id` (#586 decision 3, #588).
+
+    An event that names no student is no one's: the scan no longer reads its
+    case for it. One that does is confirmed against the question before it
+    is taken, and gets the question's generation.
+    """
     scan = _require_contract("scan_moderation_private_rows")
     calls: list[dict[str, Any]] = []
     pages: list[dict[str, Any]] = [
@@ -322,7 +328,10 @@ def test_moderation_discovery_resolves_legacy_event_owner_and_pages() -> None:
             "LastEvaluatedKey": {"PK": f"MODERATION#{CASE_ID}", "SK": "SUMMARY"},
         },
         {
-            "Items": [_event("legacy", student_id=None, privacy_generation=None)],
+            "Items": [
+                _event("legacy", privacy_generation=None),
+                _event("unnamed", student_id=None, privacy_generation=None),
+            ],
         },
     ]
 
@@ -345,7 +354,27 @@ def test_moderation_discovery_resolves_legacy_event_owner_and_pages() -> None:
     assert [row["SK"] for row in second.items] == ["EVENT#legacy"]
     assert second.items[0]["student_id"] == STUDENT_ID
     assert second.items[0]["privacy_generation"] == 7
+    assert second.unresolved == 0
     assert all(call.get("ConsistentRead") is True and "IndexName" not in call for call in calls)
+
+
+def test_a_moderation_row_whose_question_names_someone_else_is_unresolved() -> None:
+    """The row's `student_id` picks it; the question must agree before it is taken."""
+    scan = _require_contract("scan_moderation_private_rows")
+
+    class _Table:
+        def scan(self, **_kwargs: Any) -> dict[str, Any]:
+            return {"Items": [_summary(), _event()]}
+
+        def get_item(self, *, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:
+            if Key["PK"].startswith("MODERATION#"):
+                return {"Item": _summary()}
+            return {"Item": _question(student_id="someone-else")}
+
+    page = scan(STUDENT_ID, table=_Table(), maximum_pages=1)
+    assert page.items == ()
+    assert page.unresolved == 2
+    assert scan("someone-else", table=_Table(), maximum_pages=1).items == ()
 
 
 def test_moderation_discovery_rejects_malformed_or_repeating_cursor() -> None:

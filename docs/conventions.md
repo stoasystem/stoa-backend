@@ -52,11 +52,11 @@ Every kind of row the code writes has one entry in the data type catalog, `src/s
 - **The deletion handling**: the `deletion` slot, empty until candidate I fills it (see #586).
 - **The owning module**: where its rows are written.
 
-Nothing else decides which accounts a row names: read it through `data_catalog.mentions` / `names`, not a field list of your own. A row written without an `entity_type` is matched by its key (`UNTYPED`); prefer giving new rows an `entity_type`.
+Nothing else decides which accounts a row names: read it through `data_catalog.mentions` / `names` / `owns` / `role_of`, not a field list of your own. Account deletion does (#588): every deletion scan asks the catalog whose a row is and keeps only its own choice of which kinds it handles and how, so a row the catalog does not know is one no deletion takes. A row written without an `entity_type` is matched by its key (`UNTYPED`); prefer giving new rows an `entity_type`.
 
 What fails if you don't:
 
-- `tests/test_data_catalog.py`: a written `entity_type` with no entry, an entry nothing writes, an entry naming the wrong module, an account-looking attribute a writer writes that the entry neither declares nor lists in `not_pointers`, a writer whose fields the scan cannot read that is not in `FIELDS_READ_BY_HAND`, and any difference from today's deletion and registry rules that is not one of the intended ones (`scripts/compare_data_catalog.py`, `INTENDED` and `ROLE_CHANGES`).
+- `tests/test_data_catalog.py`: a written `entity_type` with no entry, an entry nothing writes, an entry naming the wrong module, an account-looking attribute a writer writes that the entry neither declares nor lists in `not_pointers`, a writer whose fields the scan cannot read that is not in `FIELDS_READ_BY_HAND`, and any difference from the registry's rules, or from the deletion rules as they stood before #588, that is not one of the intended ones (`scripts/compare_data_catalog.py`, `INTENDED` and `ROLE_CHANGES`).
 - `tests/test_account_deletion_branch_coverage.py`: the same `entity_type` with no deletion branch and no `KEPT` reason (#534).
 
 `scripts/compare_data_catalog.py` runs the same comparison read-only over the live table and prints counts only.

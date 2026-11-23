@@ -8,6 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, ConditionBase
 
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -330,6 +331,13 @@ def list_drafts(
     return sorted(items, key=_created_at, reverse=True)
 
 
+def _owned_draft(item: Mapping[str, object], owner_id: str) -> bool:
+    """One of the student's AI drafts, by the data type catalog."""
+    return item.get("entity_type") == DRAFT_ENTITY and data_catalog.owns(
+        item, account_deletion_repo.deletion_account(owner_id)
+    )
+
+
 def scan_ai_draft_private_rows(
     owner_id: str,
     *,
@@ -345,10 +353,7 @@ def scan_ai_draft_private_rows(
     ):
         for raw in page.items:
             item = _mapping(raw)
-            if item.get("entity_type") == DRAFT_ENTITY and owner_id in {
-                item.get("student_id"),
-                item.get("owner_id"),
-            }:
+            if _owned_draft(item, owner_id):
                 found.append(item)
         if page.last_key is None:
             return AIDraftPrivatePage(tuple(found))
@@ -366,7 +371,7 @@ def scrub_ai_draft_private_row(
     now_iso: str,
     table: object | None = None,
 ) -> AIDraftItem:
-    if owner_id not in {item.get("student_id"), item.get("owner_id")}:
+    if not _owned_draft(item, owner_id):
         raise account_deletion_repo.AccountDeletionConflict("AI draft owner changed")
     candidate = {
         "PK": item["PK"],

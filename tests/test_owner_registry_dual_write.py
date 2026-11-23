@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from fakes.dynamodb import FakeTable
-from stoa.db import owner_registry
+from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -78,7 +78,7 @@ def test_a_write_into_a_foreign_partition_registers_it_in_the_same_transaction(t
     row = table.rows[(f"USER#{STUDENT}", "OWNS#CONV#c1")]
     # Bookkeeping only: nothing a deletion predicate would take for the account's data.
     assert not {"user_id", "owner_id", "student_id"} & set(row)
-    assert not account_deletion_repo._targets_user(row, STUDENT)
+    assert not data_catalog.names(row, STUDENT)
 
 
 def test_an_update_registers_its_partition_as_well(table):
@@ -392,10 +392,13 @@ def test_a_recovery_audit_event_registers_the_parent_and_student_it_names(table)
         ({"children": [{"student_id": STUDENT}]}, {STUDENT: "reference"}),
     ],
 )
-def test_mentions_are_exactly_what_the_deletion_matcher_takes(item, expected):
+def test_mentions_are_what_the_registry_files(item, expected):
+    """What registration files a row under, until it reads the catalog (#589).
+
+    Deletion reads the data type catalog since #588; that the catalog and
+    this agree, kind by kind, is `tests/test_data_catalog.py`'s parity gate.
+    """
     assert account_deletion_repo.mentioned_accounts(item) == expected
-    for account in expected:
-        assert account_deletion_repo._targets_user({"SK": "X", **item}, account)
 
 
 def test_a_fenced_put_registers_every_account_its_row_names(table):

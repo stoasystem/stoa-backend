@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, notification_repo, websocket_repo
 from stoa.services import account_deletion_service, notification_service
@@ -473,46 +474,56 @@ def _notification_scan_takes(item: dict[str, Any], account: str) -> bool:
     return bool(page.items)
 
 
-def test_the_deletion_registry_names_exactly_the_accounts_the_notification_scan_takes() -> None:
-    """The shared registry entry and the notification scan read the same fields.
+def _seeded(item: dict[str, Any]) -> FakeTable:
+    table = FakeTable()
+    table.seed(item)
+    return table
 
-    Declared, then asked of each side: a field one side reads and the other
-    does not fails here, whichever side changed.
+
+def test_the_catalog_says_whose_a_notification_is_and_the_registry_agrees() -> None:
+    """Whose a notification is comes from the data type catalog (#574, #588).
+
+    For each field a notification could name an account in, asked of each
+    side: the notification scan takes the row exactly when the catalog names
+    the account, the generic deletion scan likewise, the owner registry
+    (`mentioned_accounts`, until #589) files it for the same accounts, and the
+    family tombstones it for an owner and scrubs a mention out of it.
     """
-    scalar, collections, metadata = (
-        account_deletion_repo.CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY["notification_event"]
-    )
-    references = notification_repo.NOTIFICATION_IDENTITY_REFERENCE_REGISTRY[
-        notification_repo.NOTIFICATION_ENTITY
-    ]
-    owners = notification_repo.NOTIFICATION_OWNER_METADATA_FIELDS
-    assert collections == frozenset()
-    assert scalar == references["scalar_fields"]
-    assert metadata == owners | references["metadata_fields"]
-    assert not owners & references["metadata_fields"]
-
+    owners = {"owner_id", "student_id"}
+    references = {"actor_id", "teacher_id", "parent_id"}
     other = "account-named"
-    candidates = (
-        metadata | owners | references["metadata_fields"] | scalar | references["scalar_fields"]
-        | {"user_id", "child_id", "recipient_id", "created_by", "beneficiary_id", "subject"}
-    )
+    candidates = owners | references | {
+        "user_id", "child_id", "recipient_id", "created_by", "beneficiary_id", "subject"
+    }
     for field in sorted(candidates):
         row = {
             "PK": "NOTIFICATION#parity", "SK": "META", "entity_type": "notification_event",
             "owner_id": STUDENT_ID, "metadata": {field: other},
         }
+        role = data_catalog.role_of(row, other)
+        assert role == (
+            data_catalog.OWNER if field in owners
+            else data_catalog.REFERENCE if field in references
+            else None
+        ), field
         taken = _notification_scan_takes(row, other)
-        assert taken == account_deletion_repo._targets_user(row, other), field
+        assert taken == (role is not None), field
+        assert taken == bool(
+            account_deletion_repo.scan_owned_private_rows(
+                other, table=_seeded(row), maximum_pages=1
+            ).items
+        ), field
         assert taken == (other in account_deletion_repo.mentioned_accounts(row)), field
-        # Owners get the tombstone, everyone else is scrubbed out (the scrub's own rule).
-        assert notification_repo._targets_owner(row, other) == (field in owners), field
+        assert notification_repo._targets_owner(row, other) == (role == data_catalog.OWNER)
+        assert notification_repo._targets_identity_reference(row, other) == (
+            role == data_catalog.REFERENCE
+        ), field
 
-    for field in sorted(scalar | references["scalar_fields"]):
-        row = {
-            "PK": "NOTIFICATION#parity", "SK": "META", "entity_type": "notification_event",
-            "owner_id": STUDENT_ID, field: other, "metadata": {},
-        }
-        assert _notification_scan_takes(row, other), field
-        assert notification_repo._targets_identity_reference(row, other), field
-        assert account_deletion_repo._targets_user(row, other), field
-        assert account_deletion_repo.mentioned_accounts(row)[other] == "reference", field
+    row = {
+        "PK": "NOTIFICATION#parity", "SK": "META", "entity_type": "notification_event",
+        "owner_id": STUDENT_ID, "actor_id": other, "metadata": {},
+    }
+    assert data_catalog.role_of(row, other) == data_catalog.REFERENCE
+    assert _notification_scan_takes(row, other)
+    assert notification_repo._targets_identity_reference(row, other)
+    assert account_deletion_repo.mentioned_accounts(row)[other] == "reference"

@@ -11,6 +11,7 @@ from typing import Any, Protocol, runtime_checkable
 import uuid
 
 from boto3.dynamodb.conditions import Attr, Key
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -1039,24 +1040,27 @@ def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:
         # Its own tombstone keeps the PK, so matching on the PK alone found it
         # again every pass and the branch never finished (#78).
         return False
-    pk = str(item.get("PK") or "")
-    if pk in {
-        f"PROGRESS#{owner_id}",
-        f"ATTEMPTS#{owner_id}",
-        f"REVIEW#{owner_id}",
-        f"ACTIVITY#{owner_id}",
-        f"USAGE#{owner_id}",
-        f"USAGE_LEDGER#{owner_id}",
-        f"QUIZ#{owner_id}",
-    }:
-        return True
-    if owner_id not in {
-        item.get("student_id"),
-        item.get("user_id"),
-        item.get("owner_id"),
-    }:
-        return False
-    return pk.startswith(("PRACTICE#", "PRACTICE_ATTEMPT#", "PRACTICE_PROGRESS#"))
+    # Whose it is comes from the data type catalog (#588): a practice
+    # partition's rows are owned by the partition, the legacy practice rows by
+    # their owner fields. Which of the owner's rows are practice data is this
+    # family's call: its partitions, never the profile.
+    return str(item.get("PK") or "").startswith(_PRACTICE_PARTITIONS) and data_catalog.owns(
+        item, account_deletion_repo.deletion_account(owner_id)
+    )
+
+
+_PRACTICE_PARTITIONS = (
+    "PROGRESS#",
+    "ATTEMPTS#",
+    "REVIEW#",
+    "ACTIVITY#",
+    "USAGE#",
+    "USAGE_LEDGER#",
+    "QUIZ#",
+    "PRACTICE#",
+    "PRACTICE_ATTEMPT#",
+    "PRACTICE_PROGRESS#",
+)
 
 
 STUDY_DAY_PREFIX = "DAY#"

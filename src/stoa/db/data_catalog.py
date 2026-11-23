@@ -44,10 +44,12 @@ account, because a caller walking the whole table (the sweep, a comparison
 script) has to get through rows written before a type had a name; and
 `mentions_strict` raises `UnknownDataType`, for a caller that must not guess.
 
-Nothing in production reads this module yet: account deletion, the owner
-registry and its sweep switch over to it in #588-#590. Until then
-`tests/test_data_catalog.py` holds it to what they do today, difference by
-difference.
+Account deletion reads it (#588): `owns`, `names` and `role_of` are the one
+answer to "whose is this row" for every deletion scan, and each scan keeps
+only its own choice of which kinds it handles and how. The owner registry
+and its sweep switch over in #589-#590; until then
+`tests/test_data_catalog.py` holds the catalog to the registry's rules, and
+to the deletion rules as they stood before #588, difference by difference.
 """
 
 from __future__ import annotations
@@ -926,6 +928,30 @@ UNTYPED: tuple[DataType, ...] = (
         (_owned_by_partition("STORAGE#"),),
         untyped_key=KeyShape("STORAGE#", sk="USAGE"),
     ),
+    # Rows with no `entity_type` that no writer here makes any more, which the
+    # practice deletion branch still takes (#588): any row in a student's
+    # practice partition, owned by the partition as before #588; and practice
+    # rows from before those partitions, owned by their owner fields.
+    *(
+        DataType(
+            f"legacy_untyped_{prefix.lower().removesuffix('#')}",
+            _repo("practice_repo"),
+            (*_owner("student_id", "user_id", "owner_id"), _owned_by_partition(prefix)),
+            lifecycle="legacy",
+            untyped_key=KeyShape(prefix),
+        )
+        for prefix in ("PROGRESS#", "REVIEW#", "ACTIVITY#", "QUIZ#", "USAGE_LEDGER#")
+    ),
+    *(
+        DataType(
+            f"legacy_untyped_{prefix.lower().removesuffix('#')}",
+            _repo("practice_repo"),
+            _owner("student_id", "user_id", "owner_id"),
+            lifecycle="legacy",
+            untyped_key=KeyShape(prefix),
+        )
+        for prefix in ("PRACTICE#", "PRACTICE_ATTEMPT#", "PRACTICE_PROGRESS#")
+    ),
     DataType(
         "report_summary",
         _repo("report_repo"),
@@ -948,6 +974,7 @@ DELETION_TOMBSTONES: Final = DataType(
 )
 
 CATALOG: Final[Mapping[str, DataType]] = {entry.name: entry for entry in _ENTRIES}
+_UNTYPED_BY_NAME: Final[Mapping[str, DataType]] = {entry.name: entry for entry in UNTYPED}
 if len(CATALOG) != len(_ENTRIES):  # pragma: no cover - a duplicate entry is a typo
     raise RuntimeError("an entity_type is listed twice in the data type catalog")
 
@@ -959,6 +986,12 @@ def data_type_of(row: Mapping[str, object]) -> DataType | None:
         found = CATALOG.get(entity_type)
         if found is None and entity_type.endswith(DELETION_TOMBSTONE_SUFFIX):
             return DELETION_TOMBSTONES
+        if found is None:
+            # A row tagged with an untyped kind's own name (`user_profile`) is
+            # that kind, if its key says so too.
+            untyped = _UNTYPED_BY_NAME.get(entity_type)
+            if untyped and untyped.untyped_key and untyped.untyped_key.matches(row):
+                return untyped
         return found
     if entity_type not in (None, ""):
         return None
@@ -995,8 +1028,58 @@ def mentions_strict(row: Mapping[str, object]) -> dict[str, Role]:
     return _mentions(entry, row)
 
 
-def names(row: Mapping[str, object], account: str) -> bool:
-    """Whether `row` points to `account`, in either role. `account` must be an account id."""
+def role_of(row: Mapping[str, object], account: str) -> Role | None:
+    """The role `row` names `account` in, or None. `account` must be an account id."""
     if not is_account_id(account):
         raise ValueError("not an account id")
-    return account in mentions(row)
+    return mentions(row).get(account)
+
+
+def names(row: Mapping[str, object], account: str) -> bool:
+    """Whether `row` points to `account`, in either role. `account` must be an account id."""
+    return role_of(row, account) is not None
+
+
+def owns(row: Mapping[str, object], account: str) -> bool:
+    """Whether `row` is `account`'s own: its deletion removes or tombstones the row."""
+    return role_of(row, account) == OWNER
+
+
+def owning_attributes(row: Mapping[str, object], account: str) -> frozenset[str]:
+    """The attributes through which `row` is `account`'s own (`owner_id`, `PK`, ...).
+
+    For a family whose deletion can only handle some of them: the
+    conversation tombstone is written on condition of `owner_id` /
+    `student_id`, so a usage counter owned only by its `USAGE#{id}` key is the
+    practice family's to tombstone.
+    """
+    if not is_account_id(account):
+        raise ValueError("not an account id")
+    entry = data_type_of(row)
+    if entry is None:
+        return frozenset()
+    return frozenset(
+        pointer.attribute
+        for pointer in entry.accounts
+        if pointer.role == OWNER and any(value == account for value in pointer.values(row))
+    )
+
+
+def referenced_paths(row: Mapping[str, object], account: str) -> tuple[str, ...]:
+    """The `Field` paths where `row` names `account` as a reference, to scrub it out.
+
+    Only plain fields: a reference inside a list, a summary or a key is
+    scrubbed by its family's own code, which knows the shape.
+    """
+    if not is_account_id(account):
+        raise ValueError("not an account id")
+    entry = data_type_of(row)
+    if entry is None:
+        return ()
+    return tuple(
+        pointer.path
+        for pointer in entry.accounts
+        if isinstance(pointer, Field)
+        and pointer.role == REFERENCE
+        and any(value == account for value in pointer.values(row))
+    )

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from fakes.dynamodb import FakeTable
-from stoa.db import owner_registry
+from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.jobs import account_deletion as account_deletion_job
 from stoa.services import owner_registry_sweep as sweep
@@ -65,12 +65,14 @@ def table() -> FakeTable:
         # Already registered.
         {"PK": "REPORT#r1", "SK": "META", "student_id": STUDENT},
         owner_registry.registry_item(STUDENT, "REPORT#r1"),
-        # Ids inside a nested list and a scope string.
-        {"PK": "MODERATION#m1", "SK": "CASE", "scope": f"student:{STUDENT}"},
+        # A student named by a scope string: a teacher's grant for them, in
+        # the teacher's partition.
+        {"PK": f"USER#{TEACHER}", "SK": "CAPABILITY_CURRENT#c#s", "user_id": TEACHER,
+         "entity_type": "capability_grant_current", "scope": f"student:{STUDENT}"},
         # Not owned, whatever it mentions.
         {"PK": "SECURITY_AUDIT#abc", "SK": "EVENT#1", "user_id": STUDENT},
         # A deleted account: a leftover, a tombstone, its kept rows, a registry row.
-        {"PK": "UPLOAD#u9", "SK": "META", "owner_id": GONE},
+        {"PK": "UPLOAD#u9", "SK": "META", "owner_id": GONE, "entity_type": "upload_intent"},
         {"PK": f"USER#{GONE}", "SK": "PROFILE", "user_id": GONE, "status": "deleted",
          "owner_deletion_generation": 2},
         {"PK": f"USER#{GONE}", "SK": "DELETE_COMMAND#x", "user_id": GONE},
@@ -97,13 +99,13 @@ def test_a_dry_run_reports_and_writes_nothing(table):
     assert report.complete and not report.registry_complete
     result = report.as_dict()
     assert result["missing_registrations"] == 4
-    assert result["unregistered_by_family"] == {"CONV/CONV": 1, "MODERATION/CASE": 1,
+    assert result["unregistered_by_family"] == {"CONV/CONV": 1, "USER/CAPABILITY_CURRENT": 1,
                                                 "TEACHER_SUPPORT_CASE/CASE": 2}
     assert {(s["account"], s["PK"], s["role"]) for s in result["unregistered_samples"]} == {
         (STUDENT, "CONV#c1", "owner"),
         (STUDENT, "TEACHER_SUPPORT_CASE#k", "owner"),
         (TEACHER, "TEACHER_SUPPORT_CASE#k", "reference"),
-        (STUDENT, "MODERATION#m1", "reference"),
+        (STUDENT, f"USER#{TEACHER}", "reference"),
     }
     assert table.calls["put_item"] == table.calls["transact_write_items"] == 0
 
@@ -145,16 +147,22 @@ def test_a_mention_alone_leaves_the_registry_complete_and_is_never_backfilled():
     assert _registry(double) == before
 
 
-def test_a_row_only_one_branchs_own_rule_takes_is_a_missing_registration():
-    """The scans are asked, not `_targets_user`: a branch may read what it does not.
+def test_a_row_the_catalog_names_below_the_top_level_is_a_missing_registration():
+    """The scans are asked, and they read the data type catalog (#588).
 
-    A recovery job's summary names the student in its filters, which only the
-    report branch reads.
+    A recovery job's summary names the student only in its filters; the
+    catalog says it is the student's, so deletion takes it and its partition
+    has to be registered.
     """
     double = FakeTable()
-    row = {"PK": "REPORT_RECOVERY_JOB#j1", "SK": "SUMMARY", "filters": {"student_id": STUDENT}}
+    row = {
+        "PK": "REPORT_RECOVERY_JOB#j1",
+        "SK": "SUMMARY",
+        "entity_type": "REPORT_RECOVERY_JOB",
+        "filters": {"student_id": STUDENT},
+    }
     double.seed(_fence(STUDENT), row)
-    assert not sweep.account_deletion_repo._targets_user(row, STUDENT)
+    assert data_catalog.owns(row, STUDENT)
 
     report = sweep.run(table=double)
 
@@ -277,7 +285,7 @@ def test_apply_writes_exactly_the_missing_rows_and_is_idempotent(table):
     assert first.registry_written == 4
     assert (f"USER#{STUDENT}", "OWNS#CONV#c1") in written
     assert (f"USER#{TEACHER}", "REFERENCED_IN#TEACHER_SUPPORT_CASE#k") in written
-    assert (f"USER#{STUDENT}", "REFERENCED_IN#MODERATION#m1") in written
+    assert (f"USER#{STUDENT}", f"REFERENCED_IN#USER#{TEACHER}") in written
 
     second = sweep.run(table=table, write=True)
     assert second.registry_written == 0
@@ -406,27 +414,31 @@ def test_the_daily_job_logs_a_mention_without_raising_a_finding(caplog):
 # -- what the audit added -----------------------------------------------------------------
 
 
-def _legacy_signal(student: str, public_id: str) -> dict:
+def _legacy_signal(digest: str, public_id: str) -> dict:
     from stoa.db.repositories import curriculum_analytics_repo
 
     return {
         "PK": f"CURRICULUM_SIGNAL#{public_id}", "SK": "SIGNAL#2026#s1",
         "entity_type": curriculum_analytics_repo.SIGNAL_ENTITY,
-        "metadata": {"studentHash": curriculum_analytics_repo._legacy_student_hash(student)},
+        "metadata": {"studentHash": digest},
     }
 
 
-def test_legacy_curriculum_signals_are_found_by_their_student_hash():
+def test_a_legacy_curriculum_signal_names_no_one():
+    """Deletion no longer looks a signal up by its `studentHash` (#586 decision 3, #588).
+
+    None were left in production on 2026-11-23. The sweep asks the same
+    scans, so such a signal is neither a missing registration nor a leftover.
+    """
     double = FakeTable()
     double.seed(_fence(STUDENT), _fence(GONE, status="deleted"),
-                _legacy_signal(STUDENT, "p1"), _legacy_signal(GONE, "p2"))
+                _legacy_signal("student:0123456789ab", "p1"),
+                _legacy_signal("student:ba9876543210", "p2"))
 
     report = sweep.run(table=double, write=True)
 
-    assert report.unregistered == {"CURRICULUM_SIGNAL/SIGNAL": 1}
-    assert report.leftovers == {"CURRICULUM_SIGNAL/SIGNAL": 1}
-    assert (f"USER#{STUDENT}", "OWNS#CURRICULUM_SIGNAL#p1") in _registry(double)
-    assert sweep.run(table=double).registry_complete
+    assert not report.unregistered and not report.leftovers
+    assert report.registry_complete
 
 
 def test_teacher_activation_commands_are_a_reviewed_exclusion():

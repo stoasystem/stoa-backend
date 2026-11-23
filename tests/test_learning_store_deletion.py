@@ -220,6 +220,7 @@ def test_private_scans_are_strong_paginated_and_scrubs_are_strict_allowlists() -
             {
                 "PK": "ASSIGNMENT#a",
                 "SK": "META",
+                "entity_type": "learning_assignment",
                 "student_id": STUDENT_ID,
                 "items": [{"prompt": "private-item-canary"}],
                 "answer_key": [{"answer": "private-key-canary"}],
