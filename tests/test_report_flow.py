@@ -43,6 +43,17 @@ def _fenced_report_provider_compat(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _week_holds_the_report(monkeypatch):
+    """The student's week holds every report here; tests/test_weekly_report_allowance.py holds the charge (#557)."""
+    monkeypatch.setattr(
+        report_service.ReportAllowance,
+        "admission",
+        lambda _self, _input_tokens, _max_output_tokens: model_call.Admit(),
+    )
+    monkeypatch.setattr(report_service.ReportAllowance, "release", lambda _self: None)
+
+
 class FakeDataTable:
     """The job's discovery scan and the conversation queries, answered here.
 
@@ -299,6 +310,7 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
         "skipped_existing": 0,
         "email_sent": 1,
         "failed": 0,
+        "skipped_allowance": 0,
     }
     assert question_last_keys == [None, {"PK": "QUESTION#q1"}]
     # One discovery scan, of the link rows. Report generation no longer

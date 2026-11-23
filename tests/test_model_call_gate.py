@@ -131,9 +131,21 @@ def test_an_ask_answer_is_charged_to_the_allowance_only_when_admitted() -> None:
         _admission.UsageEvidence.from_provider(unadmitted, effect_id="effect-unadmitted")
 
 
-def test_the_weekly_report_is_paid_at_provider_cost_only(
+def test_the_weekly_report_is_charged_to_the_students_allowance(
+    monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """The report's call is made with its allowance's admission hook (#557).
+
+    The ledger side is held in tests/test_weekly_report_allowance.py.
+    """
+    allowance = report_service.ReportAllowance
+    monkeypatch.setattr(allowance, "admission", lambda _self, *_counts: _admit(*_counts))
+    monkeypatch.setattr(allowance, "observe", lambda _self, _usage: None)
+    monkeypatch.setattr(allowance, "finalize", lambda _self: None)
+    monkeypatch.setattr(
+        report_service, "store_and_send_weekly_report", lambda _payload, _content, **_kw: {}
+    )
     model_call.install(FakeAdapter({"summary": "Eine ruhige Woche."}))
     payload = {
         "student": {"name": "Synthetic Student", "grade": 5},
@@ -143,6 +155,6 @@ def test_the_weekly_report_is_paid_at_provider_cost_only(
     }
 
     with caplog.at_level(logging.INFO, logger=report_service.logger.name):
-        report_service.generate_weekly_report_content(payload)
+        report_service.generate_and_send_weekly_report(payload)
 
-    assert "cost_class=provider_cost_only" in caplog.text
+    assert "cost_class=user_allowance" in caplog.text

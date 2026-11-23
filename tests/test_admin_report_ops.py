@@ -597,12 +597,8 @@ def test_retry_generation_failed_report_runs_single_report_pipeline_and_audits(m
         calls.append(("payload", parent_id, student_id, week_start))
         return {"parent": {"id": parent_id}, "student": {"id": student_id}, "week": {"start": week_start}}
 
-    def generate(payload):
-        calls.append(("generate", payload["student"]["id"]))
-        return {"summary": "ok"}
-
-    def store(payload, generated_content):
-        calls.append(("store", payload["parent"]["id"], payload["student"]["id"], payload["week"]["start"]))
+    def generate_and_send(payload):
+        calls.append(("generate_and_send", payload["parent"]["id"], payload["student"]["id"], payload["week"]["start"]))
         return {
             **report,
             "status": "email_sent",
@@ -611,8 +607,9 @@ def test_retry_generation_failed_report_runs_single_report_pipeline_and_audits(m
         }
 
     monkeypatch.setattr(report_recovery_service.report_service, "build_weekly_learning_payload", build_payload)
-    monkeypatch.setattr(report_recovery_service.report_service, "generate_weekly_report_content", generate)
-    monkeypatch.setattr(report_recovery_service.report_service, "store_and_send_weekly_report", store)
+    monkeypatch.setattr(
+        report_recovery_service.report_service, "generate_and_send_weekly_report", generate_and_send
+    )
     monkeypatch.setattr(report_repo, "try_start_generation_retry", lambda report_id, **kwargs: True)
     monkeypatch.setattr(
         report_repo,
@@ -626,8 +623,7 @@ def test_retry_generation_failed_report_runs_single_report_pipeline_and_audits(m
     assert response.status_code == 200
     assert calls == [
         ("payload", "parent-1", "student-1", "2026-06-01"),
-        ("generate", "student-1"),
-        ("store", "parent-1", "student-1", "2026-06-01"),
+        ("generate_and_send", "parent-1", "student-1", "2026-06-01"),
     ]
     assert updates[0][0] == report["report_id"]
     assert updates[0][1] == "email_sent"
@@ -775,11 +771,10 @@ def test_retry_generation_failure_redacts_private_artifact_keys(monkeypatch):
             "week": {"start": week_start},
         },
     )
-    monkeypatch.setattr(report_recovery_service.report_service, "generate_weekly_report_content", lambda payload: {"summary": "ok"})
     monkeypatch.setattr(
         report_recovery_service.report_service,
-        "store_and_send_weekly_report",
-        lambda payload, generated: (_ for _ in ()).throw(
+        "generate_and_send_weekly_report",
+        lambda payload: (_ for _ in ()).throw(
             RuntimeError("failed weekly-reports/parent-1/student-1/2026-06-01/report.html json_s3_key")
         ),
     )
