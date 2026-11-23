@@ -399,8 +399,14 @@ def test_rows_that_are_not_this_accounts_never_count_as_unresolved_lineage() -> 
         {"PK": "SUPPORT_HANDOFF_DELIVERY#d-1", "SK": "SUMMARY", "student_id": "student-other"},
         {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "TARGET#00000#t", "student_id": "student-other"},
         {"PK": "SUPPORT_HANDOFF#p-1", "SK": "AUDIT#1#event", "owner_id": "student-other"},
-        # This student's.
-        {"PK": "SUPPORT_HANDOFF_DELIVERY#d-2", "SK": "SUMMARY", "student_id": STUDENT_ID},
+        # This student's: whose a row is, the data type catalog says by its
+        # kind (#588).
+        {
+            "PK": "REPORT_RECOVERY_JOB#job-2",
+            "SK": "TARGET#00000#t",
+            "entity_type": "REPORT_RECOVERY_JOB_TARGET",
+            "student_id": STUDENT_ID,
+        },
     ]
 
     class _Table:
@@ -408,7 +414,7 @@ def test_rows_that_are_not_this_accounts_never_count_as_unresolved_lineage() -> 
             return {"Items": rows}
 
     page = scan(STUDENT_ID, table=_Table(), maximum_pages=1)
-    assert [row["PK"] for row in page.items] == ["SUPPORT_HANDOFF_DELIVERY#d-2"]
+    assert [row["PK"] for row in page.items] == ["REPORT_RECOVERY_JOB#job-2"]
     assert page.unresolved == 0
 
 
@@ -431,19 +437,46 @@ def test_a_support_or_recovery_row_that_names_nobody_is_still_unresolved() -> No
 def test_a_recovery_jobs_own_records_are_never_unresolved_lineage() -> None:
     scan = _contract("scan_report_private_rows")
     other = "student-someone-else"
+    job, event = "REPORT_RECOVERY_JOB", "REPORT_RECOVERY_JOB_AUDIT_EVENT"
     mine = [
-        {"PK": "REPORT_RECOVERY_JOB#job-3", "SK": "SUMMARY", "filters": {"student_id": STUDENT_ID}},
-        {"PK": "REPORT_RECOVERY_JOB#job-4", "SK": "AUDIT#t#1", "metadata": {"student_id": STUDENT_ID}},
+        {
+            "PK": "REPORT_RECOVERY_JOB#job-3",
+            "SK": "SUMMARY",
+            "entity_type": job,
+            "filters": {"student_id": STUDENT_ID},
+        },
+        {
+            "PK": "REPORT_RECOVERY_JOB#job-4",
+            "SK": "AUDIT#t#1",
+            "entity_type": event,
+            "metadata": {"student_id": STUDENT_ID},
+        },
         {
             "PK": "REPORT_RECOVERY_JOB#job-3",
             "SK": "AUDIT#t#2",
+            "entity_type": event,
             "metadata": {"filters": {"student_id": STUDENT_ID}},
         },
     ]
     not_mine = [
-        {"PK": "REPORT_RECOVERY_JOB#job-4", "SK": "SUMMARY", "filters": {"student_id": None}},
-        {"PK": "REPORT_RECOVERY_JOB#job-4", "SK": "AUDIT#t#3", "metadata": {"student_id": other}},
-        {"PK": "REPORT_RECOVERY_JOB#job-4", "SK": "AUDIT#t#4", "metadata": {"job_type": "resend"}},
+        {
+            "PK": "REPORT_RECOVERY_JOB#job-4",
+            "SK": "SUMMARY",
+            "entity_type": job,
+            "filters": {"student_id": None},
+        },
+        {
+            "PK": "REPORT_RECOVERY_JOB#job-4",
+            "SK": "AUDIT#t#3",
+            "entity_type": event,
+            "metadata": {"student_id": other},
+        },
+        {
+            "PK": "REPORT_RECOVERY_JOB#job-4",
+            "SK": "AUDIT#t#4",
+            "entity_type": event,
+            "metadata": {"job_type": "resend"},
+        },
     ]
 
     class _Table:

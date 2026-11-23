@@ -21,9 +21,9 @@ checks two things for every account at once:
      paths agree and nothing is missing from the registry. Counted and
      logged, because a row that keeps a deleted account's id is worth a
      look, but it closes nothing.
-2. **Leftovers of deleted accounts.** A row the deletion's own matcher
-   (`account_deletion_repo._targets_user`) still takes for an account whose
-   fence says `deleted`, other than what deletion keeps on purpose (the fence,
+2. **Leftovers of deleted accounts.** A row the data type catalog still
+   says names an account whose fence says `deleted` (`data_catalog.names`,
+   what deletion reads since #588), other than what deletion keeps on purpose (the fence,
    its commands, its tombstones) - plus any registry row still filed under it.
 
 3. **Stale references into a deleted account.** A registry row another
@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 from itertools import islice
 from typing import Any
 
-from stoa.db import owner_registry
+from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -236,10 +236,6 @@ class Census:
     active: frozenset[str]
     deleted: frozenset[str]
     registry: frozenset[tuple[str, str]]  # (account, registered partition)
-    # Curriculum signals written before the owner manifest name their student
-    # only as `metadata.studentHash`, a hash of the id; deletion matches them
-    # by that hash, so the sweep does too.
-    legacy_hashes: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def accounts(self) -> frozenset[str]:
@@ -269,19 +265,7 @@ def census(rows: Iterable[Mapping[str, Any]]) -> Census:
             if isinstance(partition, str) and partition:
                 registry.add((account, partition))
     deleted -= active
-    hashes = {
-        curriculum_analytics_repo._legacy_student_hash(account): account
-        for account in active | deleted
-    }
-    return Census(frozenset(active), frozenset(deleted), frozenset(registry), hashes)
-
-
-def _legacy_signal_account(item: Mapping[str, Any], seen: Census) -> str | None:
-    if item.get("entity_type") != curriculum_analytics_repo.SIGNAL_ENTITY:
-        return None
-    metadata = item.get("metadata")
-    digest = metadata.get("studentHash") if isinstance(metadata, Mapping) else None
-    return seen.legacy_hashes.get(digest) if isinstance(digest, str) else None
+    return Census(frozenset(active), frozenset(deleted), frozenset(registry))
 
 
 def named_accounts(item: Mapping[str, Any], accounts: frozenset[str]) -> dict[str, str]:
@@ -335,16 +319,11 @@ def check_row(
         return [], False
     missing: list[tuple[str, str]] = []
     named = named_accounts(item, seen.active)
-    legacy = _legacy_signal_account(item, seen)
-    if legacy in seen.active:
-        named[legacy] = owner_registry.ROLE_OWNER
     for account, role in named.items():
         if owner_registry.is_derived_for(pk, account) or (account, pk) in seen.registry:
             continue
         missing.append((account, role))
-    leftover = legacy in seen.deleted or any(
-        _is_leftover(item, account) for account in seen.deleted
-    )
+    leftover = any(_is_leftover(item, account) for account in seen.deleted)
     return missing, leftover
 
 
@@ -356,8 +335,8 @@ def _is_leftover(item: Mapping[str, Any], account: str) -> bool:
     ):
         return False
     try:
-        return account_deletion_repo._targets_user(item, account)
-    except account_deletion_repo.AccountDeletionConflict:
+        return data_catalog.names(item, account)
+    except ValueError:  # not an account id
         return False
 
 

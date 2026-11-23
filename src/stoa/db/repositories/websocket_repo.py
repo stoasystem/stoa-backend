@@ -8,6 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr
 
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -291,7 +292,7 @@ def scan_account_connections(
             dict(item)
             for item in items
             if item.get("entity_type") == CONNECTION_ENTITY
-            and owner_id in {item.get("owner_id"), item.get("user_id")}
+            and data_catalog.owns(item, account_deletion_repo.deletion_account(owner_id))
         )
         if page.last_key is None:
             return ConnectionPrivatePage(tuple(found), None, scanned)

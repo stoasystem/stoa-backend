@@ -1,13 +1,15 @@
 #!/usr/bin/env python
-"""Compare today's account rules with the data type catalog over the live table (#587).
+"""Compare the old account rules with the data type catalog over the live table (#587).
 
 Read-only. Scans the table once and, for every row, compares the accounts
-today's rules take it for with the accounts `stoa.db.data_catalog.mentions`
+the old rules take it for with the accounts `stoa.db.data_catalog.mentions`
 says it points to:
 
-- today: `account_deletion_repo.mentioned_accounts` (the owner registry's
-  roles), every account `account_deletion_repo._targets_user` would take the
-  row for, and the deletion families' own tests that look at one row
+- the old rules: `account_deletion_repo.mentioned_accounts` (the owner
+  registry's roles, what registration reads until #589), and the deletion
+  rules as they stood before #588 put deletion on the catalog, frozen
+  below: every account the generic matcher (`_targets_user`) took the row
+  for, and the deletion families' own tests that look at one row
   (notifications, reports, practice, adaptive learning, AI drafts,
   conversations, attachments, invitations, sign-ins, websockets, curriculum
   owner manifests);
@@ -37,7 +39,7 @@ import json
 import os
 import sys
 from collections import Counter
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -48,9 +50,7 @@ from stoa.db.repositories import (  # noqa: E402
     account_deletion_repo,
     adaptive_learning_repo,
     ai_teacher_tools_repo,
-    attachment_repo,
     notification_repo,
-    practice_repo,
     report_repo,
     websocket_repo,
 )
@@ -62,7 +62,7 @@ _ADAPTIVE_TYPES = frozenset(
     {adaptive_learning_repo.ASSIGNMENT_ENTITY, adaptive_learning_repo.MEMORY_ENTITY}
 )
 
-# -- today's rules ------------------------------------------------------------------------
+# -- the old rules --------------------------------------------------------------------------
 
 
 def candidates(row: Mapping[str, Any]) -> set[str]:
@@ -89,6 +89,98 @@ def candidates(row: Mapping[str, Any]) -> set[str]:
     return found
 
 
+# Deletion's rules as they stood before #588 (main 538719ce), when every
+# deletion scan still had its own: frozen here, because deletion now reads the
+# catalog and these are the old answer this comparison and the parity gate in
+# `tests/test_data_catalog.py` measure it against. They decide nothing in
+# production. Retire them with this script once registration and the sweep
+# read the catalog too (#589, #590).
+
+_OLD_NOTIFICATION_OWNER_METADATA = frozenset({"owner_id", "student_id"})
+_OLD_NOTIFICATION_REFERENCE_METADATA = frozenset({"actor_id", "teacher_id", "parent_id"})
+
+# What `account_deletion_repo.CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY` was.
+OLD_CROSS_ACCOUNT_REFERENCES: Mapping[
+    str, tuple[frozenset[str], frozenset[str], frozenset[str]]
+] = {
+    "parent_student_link": (frozenset({"parent_id"}), frozenset(), frozenset()),
+    "question": (
+        frozenset({"teacher_id", "dispatched_teacher_id"}),
+        frozenset({"previous_dispatch_teacher_ids"}),
+        frozenset(),
+    ),
+    "help_request": (
+        frozenset({"teacher_id", "dispatched_teacher_id"}),
+        frozenset({"previous_dispatch_teacher_ids", "declined_dispatch_teacher_ids"}),
+        frozenset(),
+    ),
+    "teacher_session": (frozenset({"teacher_id"}), frozenset(), frozenset()),
+    "account_invitation": (frozenset({"account_id"}), frozenset(), frozenset()),
+    "notification_event": (
+        frozenset({"actor_id"}),
+        frozenset(),
+        _OLD_NOTIFICATION_OWNER_METADATA | _OLD_NOTIFICATION_REFERENCE_METADATA,
+    ),
+    "allowance_counter": (frozenset({"beneficiary_id"}), frozenset(), frozenset()),
+    "allowance_effect": (frozenset({"beneficiary_id"}), frozenset(), frozenset()),
+    "provider_usage_evidence": (frozenset({"beneficiary_id"}), frozenset(), frozenset()),
+    "teacher_support_admission": (frozenset({"beneficiary_id"}), frozenset(), frozenset()),
+}
+OLD_NOTIFICATION_OWNER_METADATA = _OLD_NOTIFICATION_OWNER_METADATA
+
+
+def old_targets_user(item: Mapping[str, Any], user_id: str) -> bool:
+    """What `account_deletion_repo._targets_user`, the generic deletion matcher, said."""
+    user_id = user_id.strip()
+    if not user_id:
+        return False
+    if user_id in {
+        item.get("owner_id"),
+        item.get("student_id"),
+        item.get("user_id"),
+        item.get("child_id"),
+        item.get("child_user_id"),
+        item.get("target_user_id"),
+    }:
+        return True
+    sk = str(item.get("SK") or "")
+    if sk in {f"CHILD#{user_id}", f"PARENT#{user_id}"}:
+        return True
+    scalar, collection, inside = OLD_CROSS_ACCOUNT_REFERENCES.get(
+        str(item.get("entity_type") or ""), (frozenset(), frozenset(), frozenset())
+    )
+    if any(item.get(name) == user_id for name in scalar):
+        return True
+    if any(
+        isinstance(item.get(name), (list, tuple, set, frozenset)) and user_id in item[name]
+        for name in collection
+    ):
+        return True
+    metadata = item.get("metadata")
+    if isinstance(metadata, Mapping) and any(metadata.get(name) == user_id for name in inside):
+        return True
+    for name in ("children", "child_summaries", "student_summaries"):
+        value = item.get(name)
+        entries: Iterable[object]
+        if isinstance(value, Mapping):
+            if user_id in value:
+                return True
+            entries = value.values()
+        elif isinstance(value, (list, tuple)):
+            entries = value
+        else:
+            continue
+        for entry in entries:
+            if isinstance(entry, Mapping) and user_id in {
+                entry.get("user_id"),
+                entry.get("student_id"),
+                entry.get("child_id"),
+            }:
+                return True
+    scope = str(item.get("scope") or "")
+    return scope in {f"student:{user_id}", f"student/{user_id}", user_id}
+
+
 def _report_takes(row: Mapping[str, Any], account: str) -> bool:
     pk, sk = str(row.get("PK") or ""), str(row.get("SK") or "")
     registered = any(
@@ -104,17 +196,79 @@ def _report_takes(row: Mapping[str, Any], account: str) -> bool:
     )
 
 
-def _family_takes(row: Mapping[str, Any], account: str) -> bool:
-    """Whether a deletion family's own one-row test takes `row` for `account`."""
-    from stoa.services import account_deletion_service
+def _is_tombstone(row: Mapping[str, Any]) -> bool:
+    return str(row.get("entity_type") or "").endswith("_deletion_tombstone")
 
-    entity = row.get("entity_type")
-    if entity in notification_repo.NOTIFICATION_PRIVATE_ROW_REGISTRY and (
-        notification_repo._targets_owner(row, account)
-        or notification_repo._targets_identity_reference(row, account)
-    ):
+
+def _notification_takes(row: Mapping[str, Any], account: str) -> bool:
+    if row.get("entity_type") not in notification_repo.NOTIFICATION_PRIVATE_ROW_REGISTRY:
+        return False
+    if account in {row.get("owner_id"), row.get("student_id"), row.get("user_id")}:
         return True
-    if entity in _ADAPTIVE_TYPES and adaptive_learning_repo._owned(row, account):
+    metadata = row.get("metadata")
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    if any(metadata.get(name) == account for name in _OLD_NOTIFICATION_OWNER_METADATA):
+        return True
+    if row.get("entity_type") != notification_repo.NOTIFICATION_ENTITY:
+        return False
+    return row.get("actor_id") == account or any(
+        metadata.get(name) == account for name in _OLD_NOTIFICATION_REFERENCE_METADATA
+    )
+
+
+_OLD_PRACTICE_PARTITIONS = (
+    "PROGRESS#",
+    "ATTEMPTS#",
+    "REVIEW#",
+    "ACTIVITY#",
+    "USAGE#",
+    "USAGE_LEDGER#",
+    "QUIZ#",
+)
+
+
+def _practice_takes(row: Mapping[str, Any], account: str) -> bool:
+    if _is_tombstone(row):
+        return False
+    pk = str(row.get("PK") or "")
+    if pk in {f"{prefix}{account}" for prefix in _OLD_PRACTICE_PARTITIONS}:
+        return True
+    if account not in {row.get("student_id"), row.get("user_id"), row.get("owner_id")}:
+        return False
+    return pk.startswith(("PRACTICE#", "PRACTICE_ATTEMPT#", "PRACTICE_PROGRESS#"))
+
+
+def _conversation_takes(row: Mapping[str, Any], account: str) -> bool:
+    if _is_tombstone(row) or account not in {row.get("owner_id"), row.get("student_id")}:
+        return False
+    pk, sk = str(row.get("PK") or ""), str(row.get("SK") or "")
+    return pk.startswith(
+        ("CONV#", f"USAGE#{account}", f"USAGE_LEDGER#{account}")
+    ) or sk.startswith("REF#CONVERSATION#")
+
+
+def _attachment_debt_takes(row: Mapping[str, Any], account: str) -> bool:
+    if row.get("PK") == f"STORAGE#{account}" and row.get("SK") == "USAGE":
+        return True
+    if account not in {row.get("student_id"), row.get("owner_id")}:
+        return False
+    return (
+        row.get("entity_type")
+        in {"attachment", "attachment_association", "upload_intent", "upload_code"}
+        or row.get("staging_cleanup_status") == "pending"
+    )
+
+
+def _family_takes(row: Mapping[str, Any], account: str) -> bool:
+    """Whether a deletion family's own one-row test took `row` for `account`."""
+    entity = row.get("entity_type")
+    if _notification_takes(row, account):
+        return True
+    if entity in _ADAPTIVE_TYPES and (
+        account in {row.get("student_id"), row.get("owner_id")}
+        or str(row.get("PK") or "").startswith(f"LEARNING_MEMORY#{account}")
+    ):
         return True
     if entity == ai_teacher_tools_repo.DRAFT_ENTITY and account in {
         row.get("student_id"),
@@ -128,26 +282,25 @@ def _family_takes(row: Mapping[str, Any], account: str) -> bool:
         return True
     return (
         _report_takes(row, account)
-        or practice_repo._practice_owned(row, account)
-        or attachment_repo._is_owned_conversation_private_row(dict(row), account)
-        or account_deletion_service._is_attachment_debt(row, account)
-        or account_deletion_service._is_own_invitation(row, account)
-        or account_deletion_repo.is_sign_in_session(row, account)
+        or _practice_takes(row, account)
+        or _conversation_takes(row, account)
+        or _attachment_debt_takes(row, account)
+        or (entity == "account_invitation" and row.get("account_id") == account)
+        or (
+            row.get("PK") == f"USER#{account}"
+            and str(row.get("SK") or "").startswith("SIGNIN#")
+        )
         or row.get("PK") == f"CURRICULUM_SIGNAL_OWNER#{account}"
     )
 
 
 def old_rule(row: Mapping[str, Any]) -> dict[str, str | None]:
-    """Every account today's rules take `row` for: its registry role, or None if unregistered."""
+    """Every account the old rules take `row` for: its registry role, or None if unregistered."""
     found: dict[str, str | None] = dict(account_deletion_repo.mentioned_accounts(row))
     for account in candidates(row):
-        if account in found:
-            continue
-        try:
-            taken = account_deletion_repo._targets_user(row, account)
-        except account_deletion_repo.AccountDeletionConflict:
-            taken = False
-        if taken or _family_takes(row, account):
+        if account not in found and (
+            old_targets_user(row, account) or _family_takes(row, account)
+        ):
             found[account] = None
     return found
 
@@ -243,7 +396,7 @@ def compare(row: Mapping[str, Any]) -> list[Difference]:
 
 # -- the intended differences ----------------------------------------------------------------
 
-# Attributes today's matcher reads on every row, whatever its type (`_targets_user`):
+# Attributes the old matcher read on every row, whatever its type (`_targets_user`):
 # the catalog reads each only on the types that write it (#586 decision 4).
 GENERIC_FALLBACKS = frozenset(
     {"owner_id", "student_id", "user_id", "child_id", "child_user_id", "target_user_id"}

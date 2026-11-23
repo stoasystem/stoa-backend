@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from boto3.dynamodb.conditions import Attr, ConditionBase
 
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -47,16 +48,6 @@ NOTIFICATION_PRIVATE_ROW_REGISTRY = frozenset(
         PAYMENT_EXPIRY_REMINDER_ENTITY,
     }
 )
-# The accounts a notification names, from the one list the deletion matcher and
-# the owner registry read as well (#574): a notification's owners in `metadata`
-# get its tombstone, the accounts it only mentions are scrubbed out of it.
-NOTIFICATION_OWNER_METADATA_FIELDS = account_deletion_repo.NOTIFICATION_OWNER_METADATA_FIELDS
-NOTIFICATION_IDENTITY_REFERENCE_REGISTRY = {
-    NOTIFICATION_ENTITY: {
-        "scalar_fields": account_deletion_repo.NOTIFICATION_REFERENCE_SCALAR_FIELDS,
-        "metadata_fields": account_deletion_repo.NOTIFICATION_REFERENCE_METADATA_FIELDS,
-    }
-}
 NOTIFICATION_WRITER_REGISTRY = frozenset(
     {
         "put_event",
@@ -1774,14 +1765,25 @@ def scrub_notification_identity_references(
         )
     metadata_snapshot = _dependency_mapping(metadata)
     metadata_digest = _notification_metadata_digest(metadata_snapshot)
-    reference_fields = NOTIFICATION_IDENTITY_REFERENCE_REGISTRY[NOTIFICATION_ENTITY]
-    metadata_fields = reference_fields["metadata_fields"]
+    # Where the catalog says the row mentions the account: fields in
+    # `metadata`, and on the row itself its `actor_id`.
+    paths = data_catalog.referenced_paths(item, owner_id)
+    metadata_fields = {
+        path.removeprefix("metadata.") for path in paths if path.startswith("metadata.")
+    }
+    direct_fields = [path for path in paths if "." not in path]
+    if set(direct_fields) - {"actor_id"} or any(
+        "." in field for field in metadata_fields
+    ):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "notification reference field has no scrub"
+        )
     clean_metadata = {
         key: value
         for key, value in metadata_snapshot.items()
         if not (key in metadata_fields and value == owner_id)
     }
-    direct_match = item.get("actor_id") == owner_id
+    direct_match = "actor_id" in direct_fields
 
     target = table or db_table.table()
     hook = getattr(target, "scrub_notification_identity_references", None)
@@ -1857,27 +1859,20 @@ def _notification_metadata_digest(metadata: Mapping[str, object]) -> str:
 
 
 def _targets_owner(item: Mapping[str, object], owner_id: str) -> bool:
-    if owner_id in {item.get("owner_id"), item.get("student_id"), item.get("user_id")}:
-        return True
-    metadata = item.get("metadata")
-    return isinstance(metadata, Mapping) and any(
-        metadata.get(field) == owner_id for field in NOTIFICATION_OWNER_METADATA_FIELDS
+    """Whether the notification row is `owner_id`'s own, by the data type catalog."""
+    return (
+        item.get("entity_type") in NOTIFICATION_PRIVATE_ROW_REGISTRY
+        and data_catalog.owns(item, account_deletion_repo.deletion_account(owner_id))
     )
 
 
 def _targets_identity_reference(
     item: Mapping[str, object], owner_id: str
 ) -> bool:
-    fields = NOTIFICATION_IDENTITY_REFERENCE_REGISTRY.get(
-        str(item.get("entity_type") or "")
-    )
-    if fields is None:
-        return False
-    if any(item.get(field) == owner_id for field in fields["scalar_fields"]):
-        return True
-    metadata = item.get("metadata")
-    return isinstance(metadata, Mapping) and any(
-        metadata.get(field) == owner_id for field in fields["metadata_fields"]
+    """Whether the notification row only mentions `owner_id` (#574), by the catalog."""
+    return item.get("entity_type") in NOTIFICATION_PRIVATE_ROW_REGISTRY and (
+        data_catalog.role_of(item, account_deletion_repo.deletion_account(owner_id))
+        == data_catalog.REFERENCE
     )
 
 

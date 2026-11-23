@@ -7,6 +7,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -518,7 +519,7 @@ def scrub_adaptive_private_row(
 
 
 def _owned(item: Mapping[str, Any], owner_id: str) -> bool:
-    return owner_id in {
-        item.get("student_id"),
-        item.get("owner_id"),
-    } or str(item.get("PK") or "").startswith(f"LEARNING_MEMORY#{owner_id}")
+    """One of the student's assignments or learning memories, by the data type catalog."""
+    return item.get("entity_type") in {ASSIGNMENT_ENTITY, MEMORY_ENTITY} and data_catalog.owns(
+        item, account_deletion_repo.deletion_account(owner_id)
+    )

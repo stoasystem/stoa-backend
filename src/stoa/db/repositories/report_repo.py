@@ -8,7 +8,7 @@ from hashlib import sha256
 from typing import Literal, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
-from stoa.db import owner_registry
+from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -1991,6 +1991,7 @@ def scan_report_private_rows(
     """Strong base-table scan for report and denormalized support copies."""
     if maximum_pages <= 0 or page_limit <= 0:
         raise account_deletion_repo.AccountDeletionConflict("invalid report scan bound")
+    owner_id = account_deletion_repo.deletion_account(owner_id)
     target = table or db_table.table()
     current = (
         account_deletion_repo.continuation_key(cursor, "report") if cursor is not None else None
@@ -2014,19 +2015,17 @@ def scan_report_private_rows(
             )
             if not registered or item.get("privacy_deleted") is True:
                 continue
-            if item.get("student_id") == owner_id or item.get("owner_id") == owner_id:
+            # Whose it is comes from the data type catalog (#588): a row's
+            # `student_id` / `owner_id`, and for a recovery job's summary and
+            # audit events, which belong to the operator's job and carry no
+            # top-level owner, the accounts its filters or metadata name.
+            if data_catalog.owns(item, owner_id):
                 rows.append(item)
-            elif _names_an_account(item):
+            elif _names_an_account(item) or _is_recovery_job_record(pk, sk):
                 # Someone else's row: not this deletion's, and not in doubt.
+                # A recovery job record that names no one is the operator's
+                # (#397): nothing would ever resolve it.
                 continue
-            elif _is_recovery_job_record(pk, sk):
-                # A recovery job's summary and audit events belong to the
-                # operator's job, not to one student, so they carry no top-level
-                # owner by construction and nothing would ever resolve them
-                # (#397). They can still name an account in the job's filters or
-                # in an event's metadata: then the row is this deletion's.
-                if owner_id in _recovery_job_record_accounts(item):
-                    rows.append(item)
             elif pk.startswith(("SUPPORT_", "REPORT_RECOVERY_JOB#")):
                 # A support row or recovery target that names nobody could be
                 # this account's. Audit-retention rows are not counted (#397):
@@ -2087,7 +2086,7 @@ def scrub_report_private_row(
     now_iso: str,
     table: object | None = None,
 ) -> ReportItem:
-    if item.get("student_id") not in {None, owner_id} and item.get("owner_id") != owner_id:
+    if not data_catalog.owns(item, account_deletion_repo.deletion_account(owner_id)):
         raise account_deletion_repo.AccountDeletionConflict("report owner mismatch")
     tombstone = {
         key: value

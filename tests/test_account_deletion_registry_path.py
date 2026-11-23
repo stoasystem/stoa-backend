@@ -24,7 +24,7 @@ import test_chat_help_request_lifecycle as lifecycle
 from fakes.dynamodb import FakeTable
 from stoa import config
 from stoa.aws import Kind
-from stoa.db import owner_registry
+from stoa.db import data_catalog, owner_registry
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import account_deletion_service as service
 from stoa.services import owner_registry_sweep
@@ -397,7 +397,7 @@ def test_a_registry_path_deletion_scrubs_the_account_out_of_a_notification_it_is
     assert row["metadata"] == {"subject": "math"}
     assert row["title"] == "Ihr Kind hat eine Frage gestellt"
     assert int(row["event_version"]) == 2
-    assert not account_deletion_repo._targets_user(row, PARENT_574)
+    assert not data_catalog.names(row, PARENT_574)
 
 
 def test_the_sweep_counts_an_unregistered_mention_and_backfills_what_the_write_registers(

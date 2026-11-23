@@ -16,6 +16,7 @@ from uuid import uuid4
 
 from stoa import aws
 from stoa.aws import Kind
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa import config
 from stoa.db.dynamodb import stored_int
@@ -758,7 +759,7 @@ def _account_profile_branch(
     now = datetime.now(UTC).isoformat()
 
     def mutate(item: dict[str, Any]) -> None:
-        if item.get("SK") == "PROFILE" and item.get("user_id") == command["user_id"]:
+        if item.get("SK") == "PROFILE" and data_catalog.owns(item, str(command["user_id"])):
             account_deletion_repo.replace_with_deletion_tombstone(
                 item,
                 user_id=str(command["user_id"]),
@@ -830,8 +831,8 @@ def _identity_cross_account_branch(
     provider_revoked = False
 
     def predicate(item: Mapping[str, Any]) -> bool:
-        # Sign-in sessions reach this branch only on the registry path, whose
-        # sweep hands them over (#397); the v1 scan never matched them.
+        # Sign-in sessions carry no owner attribute: the catalog owns them by
+        # their `USER#{id}` partition, so both paths hand them over (#588).
         return item.get("entity_type") in {
             "identity_binding",
             "user_identity_inventory",
@@ -903,10 +904,9 @@ def _identity_cross_account_branch(
 
 
 def _is_own_invitation(item: Mapping[str, Any], user_id: str) -> bool:
-    """The invitation that opened, or was to open, this account."""
-    return (
-        item.get("entity_type") == account_invitation_repo.ENTITY_TYPE
-        and item.get("account_id") == user_id
+    """The invitation that opened, or was to open, this account (its `account_id`)."""
+    return item.get("entity_type") == account_invitation_repo.ENTITY_TYPE and data_catalog.owns(
+        item, account_deletion_repo.deletion_account(user_id)
     )
 
 
@@ -1051,9 +1051,8 @@ def _question_ocr_session_branch(
                 now=now,
                 table=db_table.table(),
             )
-        elif (
-            item.get("entity_type") == "question"
-            and item.get("student_id") != deleting_user_id
+        elif item.get("entity_type") == "question" and (
+            data_catalog.role_of(item, deleting_user_id) == data_catalog.REFERENCE
         ):
             account_deletion_repo.scrub_teacher_question_reference(
                 item,
@@ -1084,9 +1083,11 @@ def _question_ocr_session_branch(
         predicate=lambda item: item.get("entity_type")
         in {"question", "teacher_session", "teacher_escalation_intent"}
         or str(item.get("PK") or "").startswith(("QUESTION#", "SESSION#"))
+        # A request this account only mentions (its teacher); the student's
+        # own request goes with the conversation.
         or (
             item.get("entity_type") == help_requests.ENTITY_TYPE
-            and item.get("student_id") != command["user_id"]
+            and data_catalog.role_of(item, str(command["user_id"])) == data_catalog.REFERENCE
         ),
         mutate=mutate,
     )
@@ -1100,19 +1101,21 @@ _ATTACHMENT_DEBT_ENTITIES = frozenset(
         "attachment_association",
         "upload_intent",
         upload_code_repo.ENTITY_TYPE,
+        # The quota row (`STORAGE#{id}/USAGE`), which the purge deletes last.
+        "attachment_storage_usage",
     }
 )
 
 
 def _is_attachment_debt(item: Mapping[str, Any], owner_id: str) -> bool:
-    if item.get("PK") == f"STORAGE#{owner_id}" and item.get("SK") == "USAGE":
-        return True  # the quota row the purge deletes last
-    if item.get("student_id") != owner_id and item.get("owner_id") != owner_id:
-        return False
-    return (
-        item.get("entity_type") in _ATTACHMENT_DEBT_ENTITIES
+    """One of the owner's rows the attachment purge removes; whose, by the catalog (#588)."""
+    kind = data_catalog.data_type_of(item)
+    if kind is None or not (
+        kind.name in _ATTACHMENT_DEBT_ENTITIES
         or item.get("staging_cleanup_status") == "pending"
-    )
+    ):
+        return False
+    return data_catalog.owns(item, account_deletion_repo.deletion_account(owner_id))
 
 
 def _attachments_branch(

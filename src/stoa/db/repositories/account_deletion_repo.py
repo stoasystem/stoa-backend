@@ -18,7 +18,7 @@ from itertools import islice
 from typing import Any, Iterable, Mapping, Protocol, runtime_checkable
 
 
-from stoa.db import owner_registry
+from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_email_claim_repo
@@ -259,69 +259,32 @@ SESSION_TOMBSTONE_ALLOWLIST = frozenset(
     }
 )
 
-# Who a notification names besides its owner fields (#574). In `metadata`, the
-# accounts it is about (`owner_id`, `student_id`), whose deletion tombstones it
-# like its recipient's, and the accounts it only mentions, whose deletion
-# scrubs them out of it and leaves the rest; on the row itself, its `actor_id`,
-# a mention too. The notification family's own deletion scan
-# (`notification_repo._targets_owner` / `_targets_identity_reference`) reads
-# these sets, and the `notification_event` entry below is their union, so that
-# scan, this module's matcher and the owner registry (`mentioned_accounts`)
-# take a notification for the same accounts. They once disagreed on `parent_id`
-# and `actor_id` in `metadata`: the notification scan took such a row for the
-# account, but its write never registered the partition, so the registry path
-# could not reach it and the daily sweep closed that path for every deletion.
-NOTIFICATION_OWNER_METADATA_FIELDS = frozenset({"owner_id", "student_id"})
-NOTIFICATION_REFERENCE_METADATA_FIELDS = frozenset({"actor_id", "teacher_id", "parent_id"})
-NOTIFICATION_REFERENCE_SCALAR_FIELDS = frozenset({"actor_id"})
-
-# Cross-account identities are deliberately enumerated by persisted entity and
-# field.  Do not replace this registry with recursive payload inspection: only
-# reviewed relationship, teacher, and notification coordinates may make an
-# otherwise foreign-owned row part of an account-deletion scan.
-CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY: Mapping[
+# The reviewed cross-account fields the owner registry files a row under
+# (`mentioned_accounts`), by entity type: scalar fields, collections of ids,
+# and fields inside `metadata`. Registration only: deletion takes a row by the
+# data type catalog (`stoa.db.data_catalog`, #588), whose entries declare every
+# one of these, and the registry moves onto the catalog in #589.
+_REGISTERED_REFERENCES: Mapping[
     str, tuple[frozenset[str], frozenset[str], frozenset[str]]
 ] = {
-    # The forward link row is PK=PARENT#<parent> / SK=CHILD#<student>, so the
-    # student is found by student_id and the SK, but the parent is found by
-    # neither. Without this the row survives its own parent's deletion while
-    # the reverse row is tombstoned, leaving the half link the pairing exists
-    # to prevent. created_by is deliberately absent: it is usually an admin,
-    # and their deletion must not sweep links they merely issued.
-    "parent_student_link": (
-        frozenset({"parent_id"}),
-        frozenset(),
-        frozenset(),
-    ),
+    "parent_student_link": (frozenset({"parent_id"}), frozenset(), frozenset()),
     "question": (
         frozenset({"teacher_id", "dispatched_teacher_id"}),
         frozenset({"previous_dispatch_teacher_ids"}),
         frozenset(),
     ),
-    # A student's request for a teacher names the teacher it is with, the one
-    # it is offered to, the ones who let it lapse (#189) and the ones who
-    # declined it (#391).
     "help_request": (
         frozenset({"teacher_id", "dispatched_teacher_id"}),
         frozenset({"previous_dispatch_teacher_ids", "declined_dispatch_teacher_ids"}),
         frozenset(),
     ),
     "teacher_session": (frozenset({"teacher_id"}), frozenset(), frozenset()),
-    # An invitation carries the invited person's address and full name and names
-    # the account by `account_id`, which no owner field covers: it outlived the
-    # account on both deletion paths until 2026-11-12. `invited_by` is
-    # deliberately absent, like `created_by` on a link: the inviter is usually
-    # an administrator, whose deletion must not sweep the invitations they issued.
     "account_invitation": (frozenset({"account_id"}), frozenset(), frozenset()),
     "notification_event": (
-        NOTIFICATION_REFERENCE_SCALAR_FIELDS,
+        frozenset({"actor_id"}),
         frozenset(),
-        NOTIFICATION_OWNER_METADATA_FIELDS | NOTIFICATION_REFERENCE_METADATA_FIELDS,
+        frozenset({"owner_id", "student_id", "actor_id", "teacher_id", "parent_id"}),
     ),
-    # A student's weekly AI token and teacher-help allowance rows name the
-    # student only as `beneficiary_id` (#534). The paying parent, where there
-    # is one, is `parent_id` and deliberately absent: a parent's deletion
-    # leaves the child's allowance as it is, as it leaves the child's other rows.
     "allowance_counter": (frozenset({"beneficiary_id"}), frozenset(), frozenset()),
     "allowance_effect": (frozenset({"beneficiary_id"}), frozenset(), frozenset()),
     "provider_usage_evidence": (frozenset({"beneficiary_id"}), frozenset(), frozenset()),
@@ -776,9 +739,16 @@ def scan_owned_private_rows(
     maximum_pages: int = 20,
     page_limit: int = 100,
 ) -> OwnedPrivatePage:
-    """Strong base-table discovery; GSIs never establish deletion completeness."""
+    """Strong base-table discovery of every row that names the account (#588).
+
+    Whose a row is comes from the data type catalog alone
+    (`data_catalog.names`): the account's own rows and the rows that only
+    mention it, which the branches tombstone, delete or scrub. GSIs never
+    establish deletion completeness.
+    """
     if maximum_pages <= 0 or page_limit <= 0:
         raise AccountDeletionConflict("invalid private row scan bound")
+    user_id = deletion_account(user_id)
     target = table or db_table.table()
     current = continuation_key(cursor, "private row") if cursor is not None else None
     seen_rows: set[tuple[str, str]] = set()
@@ -794,9 +764,7 @@ def scan_owned_private_rows(
         maximum_pages=maximum_pages,
     ):
         for item in page.items:
-            if not _targets_user(item, user_id) and not (
-                _REGISTRY_SCOPE.get() is not None and is_sign_in_session(item, user_id)
-            ):
+            if not data_catalog.names(item, user_id):
                 continue
             identity = (str(item.get("PK") or ""), str(item.get("SK") or ""))
             if not all(identity):
@@ -1002,12 +970,16 @@ def _partition_query(pk: str, request: Mapping[str, object]) -> dict[str, object
 def is_sign_in_session(item: Mapping[str, Any], user_id: str) -> bool:
     """A `USER#{id}/SIGNIN#...` refresh-token custody row of this account.
 
-    It carries no owner attribute, so the v1 scan never matched it and only its
-    TTL removed it. The v2 path deletes it with the identity rows.
+    It carries no owner attribute: the catalog owns it by its partition
+    (`auth_sign_in_session`), so both deletion paths find it and the identity
+    branch deletes it. Before #588 only the v2 path did; on v1 its TTL did.
     """
-    return item.get("PK") == f"USER#{user_id}" and str(item.get("SK") or "").startswith(
-        "SIGNIN#"
+    return item.get("entity_type") == SIGN_IN_SESSION_ENTITY and data_catalog.owns(
+        item, deletion_account(user_id)
     )
+
+
+SIGN_IN_SESSION_ENTITY = "auth_sign_in_session"
 
 
 def delete_owner_registry(user_id: str, *, table: Any | None = None) -> int:
@@ -2585,59 +2557,17 @@ def _required(value: Any, name: str) -> str:
     return value.strip()
 
 
-def _targets_user(item: Mapping[str, Any], user_id: str) -> bool:
-    user_id = _required(user_id, "user_id")
-    if user_id in {
-        item.get("owner_id"),
-        item.get("student_id"),
-        item.get("user_id"),
-        item.get("child_id"),
-        item.get("child_user_id"),
-        item.get("target_user_id"),
-    }:
-        return True
-    sk = str(item.get("SK") or "")
-    if sk in {f"CHILD#{user_id}", f"PARENT#{user_id}"}:
-        return True
-    scalar_fields, collection_fields, metadata_fields = (
-        CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY.get(
-            str(item.get("entity_type") or ""),
-            (frozenset(), frozenset(), frozenset()),
-        )
-    )
-    if any(item.get(field) == user_id for field in scalar_fields):
-        return True
-    if any(
-        isinstance(item.get(field), (list, tuple, set, frozenset))
-        and user_id in item[field]
-        for field in collection_fields
-    ):
-        return True
-    metadata = item.get("metadata")
-    if isinstance(metadata, Mapping) and any(
-        metadata.get(field) == user_id for field in metadata_fields
-    ):
-        return True
-    for field in ("children", "child_summaries", "student_summaries"):
-        value = item.get(field)
-        entries: Iterable[object]
-        if isinstance(value, Mapping):
-            if user_id in value:
-                return True
-            entries = value.values()
-        elif isinstance(value, (list, tuple)):
-            entries = value
-        else:
-            continue
-        for entry in entries:
-            if isinstance(entry, Mapping) and user_id in {
-                entry.get("user_id"),
-                entry.get("student_id"),
-                entry.get("child_id"),
-            }:
-                return True
-    scope = str(item.get("scope") or "")
-    return scope in {f"student:{user_id}", f"student/{user_id}", user_id}
+def deletion_account(user_id: object) -> str:
+    """The account a deletion scan is for, as its command and fence keys hold it.
+
+    Stripped like every other key part here (`_required`); the data type
+    catalog then compares it with each row's ids exactly as stored. Never a
+    value holding a key separator, which no account id does.
+    """
+    account = _required(user_id, "user_id")
+    if not data_catalog.is_account_id(account):
+        raise AccountDeletionConflict("user_id is not an account id")
+    return account
 
 
 # -- who a row names, for the owner registry (#397) ------------------------------------
@@ -2653,13 +2583,13 @@ _OWNER_FIELDS = (
 
 
 def mentioned_accounts(item: Mapping[str, Any]) -> dict[str, str]:
-    """Every account `_targets_user` would take this row for, with its registry role.
+    """Every account the owner registry files this row under, with its registry role.
 
-    The inverse of `_targets_user`, field for field: the direct owner fields
-    are the `owner` role, everything else (link SKs, the reviewed cross-account
-    references, child summaries, a `student:` scope) is a `reference`. A bare
-    `scope` equal to an id is not read back: any scope string would pass for
-    an account. Kept next to `_targets_user` so the two change together.
+    The direct owner fields are the `owner` role, everything else (link SKs,
+    the reviewed cross-account references, child summaries, a `student:`
+    scope) is a `reference`. Deletion no longer reads this (#588: it asks the
+    data type catalog); registration moves onto the catalog in #589, and until
+    then `tests/test_data_catalog.py` holds the two to the listed differences.
     """
     found: dict[str, str] = {}
 
@@ -2676,7 +2606,7 @@ def mentioned_accounts(item: Mapping[str, Any]) -> dict[str, str]:
         if sk.startswith(prefix):
             add(sk[len(prefix) :], owner_registry.ROLE_REFERENCE)
     scalar_fields, collection_fields, metadata_fields = (
-        CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY.get(
+        _REGISTERED_REFERENCES.get(
             str(item.get("entity_type") or ""),
             (frozenset(), frozenset(), frozenset()),
         )

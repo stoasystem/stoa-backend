@@ -12,9 +12,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.repositories import (
-    account_deletion_repo,
     parent_link_repo,
     user_repo,
 )
@@ -448,7 +448,7 @@ def _link_rows():
 
 
 def test_注销任一方都能扫到链接的两行():
-    """删除扫描靠 _targets_user 一个谓词，而复核用的是同一个谓词。
+    """删除扫描问数据类型总账（data_catalog.names），而复核问的是同一份总账。
 
     正向行的 PK 才带家长，SK 和字段都只指向学生，所以家长不在注册表里时
     这一行会活过它自己家长的注销，留下反向已墓碑、正向仍 active 的半截链接。
@@ -458,7 +458,7 @@ def test_注销任一方都能扫到链接的两行():
 
     for row_name, row in (("forward", forward), ("reverse", reverse)):
         for user in ("parent-a", "student-b"):
-            assert account_deletion_repo._targets_user(row, user), f"{row_name} 漏掉了 {user}"
+            assert data_catalog.names(row, user), f"{row_name} 漏掉了 {user}"
 
 
 def test_注销管理员不会扫走他签发的链接():
@@ -466,7 +466,7 @@ def test_注销管理员不会扫走他签发的链接():
 
     forward, _ = _link_rows()
 
-    assert not account_deletion_repo._targets_user(forward, "admin-1")
+    assert not data_catalog.names(forward, "admin-1")
 
 
 def test_只有单侧行时可见性不成立(table: FakeLinkTable, quiet_learning_reads: None) -> None:

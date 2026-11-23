@@ -1,8 +1,8 @@
-"""The data type catalog is complete, and says what today's rules say (#587).
+"""The data type catalog is complete, and says what the old rules said (#587).
 
 `stoa.db.data_catalog` lists every kind of row and the accounts it points to.
-Nothing reads it in production yet (#588-#590 switch deletion, the owner
-registry and the sweep over to it), so three gates hold it in place:
+Account deletion reads it since #588; the owner registry and the sweep switch
+over in #589-#590. Three gates hold it in place:
 
 1. **Closed world.** Every `entity_type` the code writes
    (`entity_type_scan.written_entity_types`) has an entry, and every entry is a
@@ -17,10 +17,11 @@ registry and the sweep over to it), so three gates hold it in place:
    `FIELDS_READ_BY_HAND` with where the fields come from; its entry was
    declared by reading the code.
 3. **Parity.** For every entry, synthetic rows put an id in each declared
-   pointer and in each field today's rules read on any row; and every row the
-   deletion branch gate builds (`deleted_by_branch`) is compared too. Today's
-   answer (`compare_data_catalog.old_rule`: `mentioned_accounts`,
-   `_targets_user` and the families' own one-row tests) and the catalog's
+   pointer and in each field the old rules read on any row; and every row the
+   deletion branch gate builds (`deleted_by_branch`) is compared too. The old
+   answer (`compare_data_catalog.old_rule`: `mentioned_accounts`, which
+   registration still reads, and the deletion rules as they stood before #588,
+   frozen in that script) and the catalog's
    (`mentions`) must agree, except for the intended differences in
    `compare_data_catalog.INTENDED` - each one a decision in #586 - and the
    role changes in `compare_data_catalog.ROLE_CHANGES`.
@@ -52,7 +53,7 @@ from stoa.db.data_catalog import (
     ScopeId,
     Summaries,
 )
-from stoa.db.repositories import account_deletion_repo, notification_repo
+from stoa.db.repositories import notification_repo
 
 PROBE = "probe-587"
 OTHER = "other-587"
@@ -136,6 +137,10 @@ def test_untyped_kinds_are_recognized_by_key_and_never_shadow_a_type():
     row = {"PK": "USER#a", "SK": "PROFILE", "entity_type": "somebody_elses_type"}
     assert data_catalog.data_type_of(row) is None
     assert data_catalog.data_type_of({"PK": "USER#a", "SK": "PROFILE"}).name == "user_profile"
+    # A row tagged with an untyped kind's own name is that kind, if its key agrees.
+    tagged = {"PK": "USER#a", "SK": "PROFILE", "entity_type": "user_profile"}
+    assert data_catalog.data_type_of(tagged).name == "user_profile"
+    assert data_catalog.data_type_of({**tagged, "SK": "OTHER"}) is None
 
 
 def test_every_deletion_slot_is_still_empty():
@@ -466,6 +471,14 @@ SAMPLE_KEYS: Mapping[str, tuple[str, str]] = {
     "usage_counter": ("USAGE#{a}", "QUESTION#2026-11-01"),
     "attachment_storage_usage": ("STORAGE#{a}", "USAGE"),
     "report_summary": ("REPORT#r", "SUMMARY"),
+    "legacy_untyped_progress": ("PROGRESS#{a}", "TOPIC#t"),
+    "legacy_untyped_review": ("REVIEW#{a}", "CARD#c"),
+    "legacy_untyped_activity": ("ACTIVITY#{a}", "DAY#2026-11-01"),
+    "legacy_untyped_quiz": ("QUIZ#{a}", "QUIZ#q"),
+    "legacy_untyped_usage_ledger": ("USAGE_LEDGER#{a}", "EVENT#e"),
+    "legacy_untyped_practice": ("PRACTICE#p", "META"),
+    "legacy_untyped_practice_attempt": ("PRACTICE_ATTEMPT#p", "META"),
+    "legacy_untyped_practice_progress": ("PRACTICE_PROGRESS#p", "META"),
 }
 
 KEY_ACCOUNT = "keyed-587"
@@ -540,7 +553,7 @@ def _rule_probes(entry: DataType) -> list[tuple[str, dict[str, Any]]]:
     probe("bare scope", scope=PROBE)
     # Read on some kinds only.
     scalar, collection, metadata = (
-        account_deletion_repo.CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY.get(
+        compare.OLD_CROSS_ACCOUNT_REFERENCES.get(
             entry.name, (frozenset(), frozenset(), frozenset())
         )
     )
@@ -550,7 +563,7 @@ def _rule_probes(entry: DataType) -> list[tuple[str, dict[str, Any]]]:
         probe(field, **{field: [PROBE]})
     inside = set(metadata)
     if entry.name in notification_repo.NOTIFICATION_PRIVATE_ROW_REGISTRY:
-        inside |= notification_repo.NOTIFICATION_OWNER_METADATA_FIELDS  # `_targets_owner`
+        inside |= compare.OLD_NOTIFICATION_OWNER_METADATA  # the old `_targets_owner`
     for field in sorted(inside):
         probe(f"metadata.{field}", **{f"metadata__{field}": PROBE})
     for field in ("student_id", "parent_id"):  # `_recovery_job_record_accounts`

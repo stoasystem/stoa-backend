@@ -7,6 +7,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -205,11 +206,12 @@ def scan_moderation_private_rows(
     maximum_pages: int = 1,
     page_limit: int = 100,
 ) -> ModerationPrivatePage:
-    """Strongly discover owner-bound summaries and legacy events from base pages."""
+    """Strongly discover the account's moderation summaries and events from base pages."""
     if maximum_pages <= 0 or page_limit <= 0:
         raise account_deletion_repo.AccountDeletionConflict(
             "invalid moderation scan bound"
         )
+    user_id = account_deletion_repo.deletion_account(user_id)
     target: object = table if table is not None else db_table.table()
     current = (
         account_deletion_repo.continuation_key(cursor, "moderation continuation")
@@ -237,22 +239,19 @@ def scan_moderation_private_rows(
                 continue
             if raw.get("privacy_deleted") is True:
                 continue
+            # Whose it is: the row's own `student_id`, read by the data type
+            # catalog like every other row (#586 decision 3, #588).
+            if not data_catalog.owns(raw, user_id):
+                continue
+            # Before taking it, confirm that against the question (or the
+            # refused image's case) it was written for. A row whose owner the
+            # check cannot confirm is left in place and counted as unresolved,
+            # which keeps the branch from sealing.
             owner = _resolve_private_owner(target, raw)
-            if owner is None:
-                claimed_owner = raw.get("student_id")
-                if sk.startswith("EVENT#"):
-                    case_id = str(raw.get("case_id") or pk[len("MODERATION#") :])
-                    summary = _strong_item(
-                        target, pk=f"MODERATION#{case_id}", sk="SUMMARY"
-                    )
-                    if summary:
-                        claimed_owner = summary.get("student_id")
-                if claimed_owner == user_id:
-                    unresolved += 1
+            if owner is None or owner[0] != user_id:
+                unresolved += 1
                 continue
             student_id, generation = owner
-            if student_id != user_id:
-                continue
             normalized = dict(raw)
             normalized["student_id"] = student_id
             normalized["privacy_generation"] = generation

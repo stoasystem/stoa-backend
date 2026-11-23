@@ -15,6 +15,7 @@ from typing import Protocol, runtime_checkable
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -440,7 +441,15 @@ def _is_owned_conversation_private_row(item: dict[str, object], owner_id: str) -
     # with a conversation could never be deleted (stoasystem/stoa-backend#78).
     if account_deletion_repo.is_deletion_tombstone(item):
         return False
-    if item.get("owner_id") == owner_id or item.get("student_id") == owner_id:
+    # Whose it is comes from the data type catalog (#588); which of the
+    # owner's rows are the conversation family's is this family's call. Its
+    # tombstone is written on condition of `owner_id` / `student_id`, so it
+    # takes only rows owned through those: a usage counter owned by its
+    # `USAGE#{id}` key alone is the practice family's.
+    owned_through = data_catalog.owning_attributes(
+        item, account_deletion_repo.deletion_account(owner_id)
+    )
+    if owned_through & {"owner_id", "student_id"}:
         pk, sk = str(item.get("PK") or ""), str(item.get("SK") or "")
         return (
             pk.startswith(("CONV#", f"USAGE#{owner_id}", f"USAGE_LEDGER#{owner_id}"))
@@ -1153,7 +1162,7 @@ def list_owner_attachment_items(
     with it, an account deletion's attachment branch included (#397). A caller that
     wants a bound still passes one; a repeating or malformed cursor still fails.
     """
-    if not isinstance(owner_id, str) or not owner_id.strip():
+    if not isinstance(owner_id, str) or not data_catalog.is_account_id(owner_id):
         raise AttachmentRepositoryConflict("conditional_conflict")
     seen_cursors: set[tuple[str, str]] = set()
     seen_keys: set[tuple[str, str]] = set()
@@ -1181,7 +1190,7 @@ def list_owner_attachment_items(
             raise AttachmentRepositoryConflict("dependency_failure") from None
         for raw_item in page.items:
             item = _mapping(raw_item)
-            if item.get("student_id") != owner_id and item.get("owner_id") != owner_id:
+            if not data_catalog.owns(item, owner_id):
                 continue
             if entity_types is not None and item.get("entity_type") not in entity_types:
                 continue

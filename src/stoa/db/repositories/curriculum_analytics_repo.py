@@ -8,6 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, ConditionBase
 
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -322,25 +323,26 @@ def scan_curriculum_signal_manifests(
     maximum_pages: int = 1,
     table: object | None = None,
 ) -> CurriculumSignalPage:
-    """Strongly scan owner manifests plus legacy deterministic-hash signals."""
+    """Strongly scan the student's signal owner manifests.
+
+    Whose a manifest is comes from the data type catalog (#588): its
+    `CURRICULUM_SIGNAL_OWNER#{id}` partition. Signals written before the
+    manifests named their student only as `metadata.studentHash`; deletion no
+    longer looks them up by it (#586 decision 3: none were left in production
+    on 2026-11-23).
+    """
+    owner_id = account_deletion_repo.deletion_account(owner_id)
     target = table or db_table.table()
     marker = dict(cursor) if cursor is not None else None
-    legacy_hash = _legacy_student_hash(owner_id)
     found: list[CurriculumSignalItem] = []
     for page in account_deletion_repo.sweep_pages(
         "curriculum signal deletion", table=target, cursor=cursor, maximum_pages=maximum_pages
     ):
         for item in _items(page.items):
-            if item.get("PK") == f"CURRICULUM_SIGNAL_OWNER#{owner_id}":
-                found.append(item)
-                continue
-            metadata = item.get("metadata")
-            if (
-                item.get("entity_type") == SIGNAL_ENTITY
-                and isinstance(metadata, Mapping)
-                and metadata.get("studentHash") == legacy_hash
+            if item.get("entity_type") == OWNER_MANIFEST_ENTITY and data_catalog.owns(
+                item, owner_id
             ):
-                found.append(_legacy_manifest(item, owner_id))
+                found.append(item)
         if page.last_key is None:
             return CurriculumSignalPage(tuple(found))
         if page.last_key == marker:
@@ -436,29 +438,3 @@ def reconcile_curriculum_signal(
                 return "reconciled"
         raise
     return "reconciled"
-
-
-def _legacy_manifest(item: Mapping[str, object], owner_id: str) -> CurriculumSignalItem:
-    signal_id = str(item.get("signal_id") or "")
-    content_type = str(item.get("content_type") or "unknown")
-    public_id = str(item.get("public_id") or "unknown")
-    version_id = str(item.get("version_id") or "unknown")
-    return {
-        "PK": f"CURRICULUM_SIGNAL_OWNER#{owner_id}",
-        "SK": f"SIGNAL#{signal_id}",
-        "entity_type": OWNER_MANIFEST_ENTITY,
-        "signal_id": signal_id,
-        "signal_pk": item["PK"],
-        "signal_sk": item["SK"],
-        "metric_pk": f"CURRICULUM_METRIC#{content_type}#{public_id}",
-        "metric_sk": f"VERSION#{version_id}",
-        "signal_type": item["signal_type"],
-        "source_type": item["source_type"],
-        "legacy": True,
-    }
-
-
-def _legacy_student_hash(owner_id: str) -> str:
-    from hashlib import sha256
-
-    return f"student:{sha256(owner_id.encode('utf-8')).hexdigest()[:12]}"
