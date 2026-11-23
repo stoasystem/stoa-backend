@@ -248,17 +248,19 @@ def test_the_committed_german_stars_are_the_written_ones() -> None:
     assert knowledge_base_catalog.title_translations()["deutsch-rechtschreibung"]["it"] == "Ortografia"
 
 
-def test_german_goes_into_production_in_preview_while_the_others_stay_live() -> None:
-    mode = seed_practice.parse_args(["--knowledge-base-live", "mathematics", "english", "physics"]).knowledge_base
+def test_the_bare_live_flag_writes_german_live_with_its_subject_row() -> None:
+    """#547: once B1 was published, German went live with the others, so a seed run
+    no longer names `mathematics english physics` to keep it in preview."""
+    mode = seed_practice.parse_args(["--knowledge-base-live"]).knowledge_base
     subjects, topics, units = seed_practice.knowledge_base_rows(
         live=seed_practice.knowledge_base_live_subjects(mode)
     )
 
-    assert mode == "live:mathematics,english,physics"
-    assert [s["subject_id"] for s in subjects] == ["english", "physics"]
+    assert mode == "live"
+    assert [s["subject_id"] for s in subjects] == ["english", "physics", "german"]
     german = [row for row in (*topics, *units) if row["subject_id"] == "german"]
-    assert len(german) == 8 + 52 and {row["rollout_state"] for row in german} == {"preview"}
-    assert {row["rollout_state"] for row in (*topics, *units) if row["subject_id"] != "german"} == {"active"}
+    assert len(german) == 8 + 52 and {row["rollout_state"] for row in german} == {"active"}
+    assert {row["rollout_state"] for row in (*topics, *units)} == {"active"}
 
 
 # ── through the curriculum workflow ──────────────────────────────────────────
