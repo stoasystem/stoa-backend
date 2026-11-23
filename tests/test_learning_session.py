@@ -425,7 +425,7 @@ def test_history_refuses_a_malformed_row(table):
     assert raised.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
 
 
-# ── anchored_history (moved from test_phase473_conversation_replay.py) ───────
+# ── anchored_history (moved from test_conversation_replay.py) ───────
 
 
 def _two_messages_and_their_fingerprint(table) -> str:

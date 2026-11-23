@@ -13,6 +13,8 @@ import subprocess
 import sys
 from typing import Any, Iterable
 
+from sealed_test_renames import current_selector
+
 
 SCHEMA_VERSION = "phase-473-boundary-inventory.v1"
 PRIVATE_SCHEMA_VERSION = "phase-473-private-store-inventory.v1"
@@ -115,7 +117,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("NextPartNumberMarker", "positive_int", "_positive_provider_integer", "type_is_int_not_bool"),
         ),
         fake="src/stoa/services/attachment_service.py:s3.list_parts",
-        selector="tests/test_phase473_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
+        selector="tests/test_upload_provider_state_machine.py::test_reconcile_provider_part_list_parts_rejects_malformed_success_scalars",
         decisions=("D-05", "D-08", "D-16", "D-17"),
     )
     + _flows(
@@ -133,7 +135,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("NextUploadIdMarker", "nonblank_str", "_required_provider_coordinate", "type_is_str_nonblank"),
         ),
         fake="src/stoa/services/attachment_service.py:s3.list_multipart_uploads",
-        selector="tests/test_phase473_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
+        selector="tests/test_upload_provider_cleanup.py::test_malformed_or_repeating_pagination_is_incomplete_and_redacted",
         decisions=("D-06", "D-08", "D-09", "D-15", "D-17"),
     )
     + _flows(
@@ -151,7 +153,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("NextVersionIdMarker", "nonblank_str", "_required_provider_coordinate", "type_is_str_nonblank"),
         ),
         fake="src/stoa/services/attachment_service.py:s3.list_object_versions",
-        selector="tests/test_phase473_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
+        selector="tests/test_upload_provider_state_machine.py::test_object_versions_rejects_malformed_marker_pair",
         decisions=("D-07", "D-09", "D-10", "D-12", "D-17"),
     )
     + [
@@ -167,7 +169,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             parser="_provider_mapping",
             validator="bounded_stream_with_best_effort_close",
             lower_fake="src/stoa/services/attachment_service.py:s3.get_object.Body",
-            malformed_selector="tests/test_phase473_document_boundary.py::test_extraction_reasserts_exact_immutable_etag_and_closes_body",
+            malformed_selector="tests/test_document_upload_limits.py::test_extraction_reasserts_exact_immutable_etag_and_closes_body",
             decisions=("D-01", "D-02", "D-03", "D-04", "D-05", "D-11", "D-13", "D-17"),
         )
     ]
@@ -182,7 +184,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("UnprocessedKeys", "mapping", "get_attachments", "bounded_exact_retry_set"),
         ),
         fake="src/stoa/db/repositories/attachment_repo.py:dynamodb.batch_get_item",
-        selector="tests/test_phase473_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
+        selector="tests/test_conversation_replay.py::test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape",
         decisions=("D-07", "D-10", "D-12", "D-13", "D-14", "D-17"),
     )
     + _flows(
@@ -194,7 +196,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("LastEvaluatedKey", "mapping_or_none", "_query_all_challenge_pages", "progressing_exact_cursor"),
         ),
         fake="src/stoa/db/repositories/practice_repo.py:dynamodb.query",
-        selector="tests/test_phase473_practice_snapshot.py::test_challenge_lists_reject_duplicate_ids_versions_and_stalled_markers",
+        selector="tests/test_practice_receipt_snapshot.py::test_challenge_lists_reject_duplicate_ids_versions_and_stalled_markers",
         decisions=("D-18", "D-19", "D-20"),
     )
     + _flows(
@@ -206,7 +208,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("category", "closed_category", "_validated_payload", "closed_category_or_none"),
         ),
         fake="src/stoa/services/document_parser_worker.py:Connection.recv",
-        selector="tests/test_phase473_document_boundary.py::test_parser_input_and_decoded_output_limits_are_category_only",
+        selector="tests/test_document_upload_limits.py::test_parser_input_and_decoded_output_limits_are_category_only",
         decisions=("D-03", "D-04", "D-05", "D-16", "D-17"),
     )
     + _flows(
@@ -218,7 +220,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("ETag", "nonblank_str", "parse_report_object_ack", "_required_private_string"),
         ),
         fake="src/stoa/db/repositories/report_repo.py:s3.put_object",
-        selector="tests/test_phase473_report_deletion.py::test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_version",
+        selector="tests/test_report_deletion.py::test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_version",
         decisions=("D-10", "D-13", "D-17"),
     )
     + _flows(
@@ -231,7 +233,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("branch_registry", "list[object]", "load_private_store_seal", "closed_branch_contract"),
         ),
         fake="src/stoa/services/account_deletion_service.py:Path.read_bytes",
-        selector="tests/test_phase473_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal",
+        selector="tests/test_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal",
         decisions=("D-10", "D-13", "D-17"),
     )
     + _flows(
@@ -246,7 +248,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("explanation", "str", "build_attempt_result", "snapshot_only_projection"),
         ),
         fake="src/stoa/services/practice_projection_service.py:practice_repo.get_attempt_receipt",
-        selector="tests/test_phase473_practice_snapshot.py::test_partial_attempt_route_reveals_no_answer",
+        selector="tests/test_practice_receipt_snapshot.py::test_partial_attempt_route_reveals_no_answer",
         decisions=("D-18", "D-19", "D-20", "D-22"),
     )
     + _flows(
@@ -260,7 +262,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("explanation", "str", "build_privileged_answer", "privileged_read_projection"),
         ),
         fake="src/stoa/services/practice_projection_service.py:practice authorization dependency",
-        selector="tests/test_phase473_practice_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
+        selector="tests/test_practice_teacher_authorization.py::test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load",
         decisions=("D-18", "D-20", "D-21", "D-22"),
     )
     + _flows(
@@ -279,7 +281,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("common_mistakes", "list[object]", "_parse_ai_response", "closed_ai_projection"),
         ),
         fake="src/stoa/services/ai_service.py:bedrock.invoke_model.Body",
-        selector="tests/test_phase473_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
+        selector="tests/test_conversation_replay.py::test_terminal_parser_failure_is_closed_and_never_embedded_in_context",
         decisions=("D-03", "D-05", "D-10", "D-17"),
         # The Ask reply's checks moved beside the prompt (#437).
         successor=("src/stoa/services/ask_answer.py", "_parse_ai_response"),
@@ -290,7 +292,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         call="attachment_repo.read_message_command_result",
         fields=(("status", "closed_disposition", "_coerce_command_result", "typed_command_state"),),
         fake="src/stoa/routers/conversations.py:attachment_repo.read_message_command_result",
-        selector="tests/test_phase473_message_command.py::test_regular_and_sse_replay_exact_durable_rejection",
+        selector="tests/test_conversation_message_command.py::test_regular_and_sse_replay_exact_durable_rejection",
         decisions=("D-07", "D-08", "D-10", "D-13", "D-17"),
         transport="regular",
     )
@@ -300,7 +302,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         call="attachment_repo.read_message_command_result",
         fields=(("status", "closed_disposition", "_coerce_command_result", "typed_command_state"),),
         fake="src/stoa/routers/conversations.py:attachment_repo.read_message_command_result",
-        selector="tests/test_phase473_message_command.py::test_regular_and_sse_replay_exact_durable_rejection",
+        selector="tests/test_conversation_message_command.py::test_regular_and_sse_replay_exact_durable_rejection",
         decisions=("D-07", "D-08", "D-10", "D-13", "D-17"),
         transport="sse",
     )
@@ -314,7 +316,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("branch_results_digest", "sha256_hex", "_claim_from_command", "exact_64_hex_digest"),
         ),
         fake="src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-        selector="tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+        selector="tests/test_account_deletion_claim_race.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
         decisions=("D-10", "D-16", "D-17"),
     )
     + _flows(
@@ -323,7 +325,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         call="scheduler explicit clock",
         fields=(("now_epoch", "positive_int", "_positive_int", "type_is_int_not_bool_positive"),),
         fake="src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-        selector="tests/test_phase473_account_deletion_claim_fencing.py::test_claim_compares_stored_expiry_with_distinct_current_epoch",
+        selector="tests/test_account_deletion_claim_race.py::test_claim_compares_stored_expiry_with_distinct_current_epoch",
         decisions=("D-10", "D-16", "D-17"),
     )
     + _flows(
@@ -335,7 +337,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("updated_at", "utc_iso8601", "_valid_lifecycle_timestamp", "nonblank_timezone_aware_utc"),
         ),
         fake="src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-        selector="tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
+        selector="tests/test_account_deletion_claim_race.py::test_repository_rejects_invalid_lifecycle_timestamps",
         decisions=("D-10", "D-16", "D-17"),
     )
     + _flows(
@@ -344,7 +346,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         call="dynamodb strong parent profile",
         fields=(("version", "positive_int", "_positive_int", "type_is_int_not_bool_positive"),),
         fake="src/stoa/db/repositories/account_deletion_repo.py:table.transact",
-        selector="tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
+        selector="tests/test_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
         decisions=("D-10", "D-16", "D-17"),
     )
     + _flows(
@@ -358,7 +360,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("payload_digest", "sha256_hex", "_intent_claim", "exact_64_hex_digest"),
         ),
         fake="src/stoa/db/repositories/notification_repo.py:table.get_item",
-        selector="tests/test_phase473_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
+        selector="tests/test_notification_delivery_intent_recovery.py::test_stale_claim_version_cannot_begin_complete_cancel_or_recover",
         decisions=("D-10", "D-16", "D-17"),
     )
     + _flows(
@@ -367,7 +369,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         call="dynamodb delivery intent row",
         fields=(("effect_state", "closed_state", "claim_delivery_intent", "registered_or_expired_pre_effect_only"),),
         fake="src/stoa/db/repositories/notification_repo.py:table.update_item",
-        selector="tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
+        selector="tests/test_notification_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
         decisions=("D-10", "D-16", "D-17"),
     )
     + _flows(
@@ -380,7 +382,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("event_version", "positive_int", "resolve_delivery_ownership", "type_is_int_not_bool_positive"),
         ),
         fake="src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
-        selector="tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+        selector="tests/test_notification_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
         decisions=("D-10", "D-16", "D-17"),
     )
     + _flows(
@@ -392,7 +394,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("classification_digest", "sha256_hex", "validate_global_nonprivate_event", "exact_content_seal"),
         ),
         fake="src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
-        selector="tests/test_phase473_private_delivery_fencing.py::test_global_nonprivate_requires_exact_persisted_contract_digest",
+        selector="tests/test_notification_delivery_fencing.py::test_global_nonprivate_requires_exact_persisted_contract_digest",
         decisions=("D-10", "D-16", "D-17"),
     )
 )
@@ -402,31 +404,31 @@ FINDING_REGISTRY = (
     {
         "finding_id": "CR-01",
         "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-        "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+        "runtime_selector": "tests/test_account_deletion_claim_race.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
         "observed_assertion": "owner/version/digest/current-lease conditions and advancing claim",
     },
     {
         "finding_id": "CR-02",
         "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
-        "runtime_selector": "tests/test_phase473_private_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
+        "runtime_selector": "tests/test_notification_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
         "observed_assertion": "strong canonical load and zero provider calls for invalid scope",
     },
     {
         "finding_id": "WR-01",
         "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:_valid_lifecycle_timestamp",
-        "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
+        "runtime_selector": "tests/test_account_deletion_claim_race.py::test_repository_rejects_invalid_lifecycle_timestamps",
         "observed_assertion": "blank naive malformed and non-string lifecycle values rejected",
     },
     {
         "finding_id": "WR-02",
         "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
-        "runtime_selector": "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
+        "runtime_selector": "tests/test_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
         "observed_assertion": "real locale writer and narrow scrub share row-version CAS while exact concurrent preference bytes survive",
     },
     {
         "finding_id": "WR-03",
         "lower_fake_target": "src/stoa/db/repositories/notification_repo.py:table.update_item",
-        "runtime_selector": "tests/test_phase473_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
+        "runtime_selector": "tests/test_notification_delivery_intent_recovery.py::test_repository_claim_uses_explicit_current_time_not_proposed_expiry",
         "observed_assertion": "only expired pre-effect claims are recoverable",
     },
 )
@@ -672,7 +674,8 @@ def compose_private_store_inventory(root: Path | str, payload: dict[str, Any]) -
         if row.get("classification") == "private_store" and not row.get("branch_id"):
             raise ValueError("private-store join missing branch_id")
         for selector_key in ("purge_selector", "no_resurrection_selector"):
-            if not _selector_exists(root, row[selector_key]):
+            # The seal keeps its 2026-07 test file names; resolve today's.
+            if not _selector_exists(root, current_selector(row[selector_key])):
                 raise ValueError(f"private-store selector missing: {row[selector_key]}")
     registry = payload.get("branch_registry")
     if not isinstance(registry, list) or [row.get("branch_id") for row in registry] != list(EXPECTED_BRANCHES):
@@ -698,7 +701,7 @@ def compose_private_store_inventory(root: Path | str, payload: dict[str, Any]) -
 
 
 def _run_private_checker(root: Path) -> None:
-    checker = root / "scripts/generate_phase473_private_store_inventory.py"
+    checker = root / "scripts/generate_private_store_inventory.py"
     inventory = root / "docs/security/phase-473-private-store-inventory.json"
     if not checker.is_file() or not inventory.is_file():
         return
@@ -767,7 +770,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args(list(argv) if argv is not None else None)
     root = Path(args.root).resolve()
-    output = Path(args.output) if args.output else root / "docs/security/phase-473-boundary-inventory.json"
+    output = Path(args.output) if args.output else root / "docs/security/untrusted-read-inventory.json"
     try:
         rendered = _render(build_inventory(root))
     except (BoundaryViolation, ValueError, OSError, json.JSONDecodeError, SyntaxError) as exc:

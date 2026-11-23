@@ -174,7 +174,7 @@ class BranchResult:
 
 INVENTORY_FILENAME = "phase-473-private-store-inventory.json"
 # The owner registry path's inventory (#397). Derived from v1 by
-# `scripts/generate_phase473_private_store_inventory_v2.py`; v1 stays as it is,
+# `scripts/generate_private_store_inventory_v2.py`; v1 stays as it is,
 # byte for byte, for the commands sealed under it.
 INVENTORY_V2_FILENAME = "phase-473-private-store-inventory.v2.json"
 _SCHEMA_V1 = "phase-473-private-store-inventory.v1"

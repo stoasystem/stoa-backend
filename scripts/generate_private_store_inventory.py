@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Generate the source-sealed Phase 473 private-store and evidence inventories."""
+"""Generate the source-sealed Phase 473 private-store and evidence inventories.
+
+The test selectors below are the names the seal was written with (2026-07). The
+tests were renamed in #433 but the seal cannot change, so these stay as sealed;
+`scripts/sealed_test_renames.py` maps each file to where it lives now.
+"""
 
 from __future__ import annotations
 
@@ -784,7 +789,7 @@ def _default_root() -> Path:
 def _paths(root: Path, output: str | None, evidence_output: str | None) -> tuple[Path, Path]:
     return (
         Path(output) if output else root / "docs/security/phase-473-private-store-inventory.json",
-        Path(evidence_output) if evidence_output else root / "docs/security/phase-473-retained-evidence-policy.json",
+        Path(evidence_output) if evidence_output else root / "docs/security/private-store-retained-policy.json",
     )
 
 

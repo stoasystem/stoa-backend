@@ -17,7 +17,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_EXCEPTIONS = ROOT / "evidence" / "phase-474" / "dependency-exceptions.json"
+DEFAULT_EXCEPTIONS = ROOT / "docs" / "security" / "dependency-exceptions.json"
 SCHEMA_VERSION = "stoa.release.dependency-exceptions.v1"
 POLICY_RESULT_SCHEMA = "stoa.release.dependency-policy-result.v1"
 POLICY_EXIT = 2

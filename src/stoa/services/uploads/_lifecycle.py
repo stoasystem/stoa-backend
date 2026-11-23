@@ -2,7 +2,7 @@
 
 The S3 answers are read through `attachment_service`'s strict parsers
 (`_gateway_call`, `_provider_mapping` and the coordinate checks), which the
-phase-473 boundary inventory registers there.
+untrusted-read inventory (`docs/security/untrusted-read-inventory.json`) registers there.
 """
 
 from __future__ import annotations

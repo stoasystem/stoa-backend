@@ -368,13 +368,6 @@ def test_completed_deletion_replays_stored_receipt_without_new_effects(
         assert not any(fragment.lower() in rendered for fragment in forbidden_fragments)
 
 
-def test_real_endpoint_replays_stored_terminal_receipt_with_zero_new_effects(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Keep the Phase 475 checked-evidence selector bound to the stronger proof."""
-    test_completed_deletion_replays_stored_receipt_without_new_effects(monkeypatch)
-
-
 @pytest.mark.parametrize(
     "mutate",
     [

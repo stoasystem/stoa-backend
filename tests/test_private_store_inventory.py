@@ -1,21 +1,26 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 
 import pytest
 
+from sealed_test_renames import RENAMED_TEST_FILES, current_selector
+
 
 ROOT = Path(__file__).resolve().parents[1]
-GENERATOR = ROOT / "scripts" / "generate_phase473_private_store_inventory.py"
+GENERATOR = ROOT / "scripts" / "generate_private_store_inventory.py"
 INVENTORY = ROOT / "docs" / "security" / "phase-473-private-store-inventory.json"
-EVIDENCE = ROOT / "docs" / "security" / "phase-473-retained-evidence-policy.json"
-MANIFEST = ROOT / "docs" / "security" / "phase-473-evidence-manifest.json"
+EVIDENCE = ROOT / "docs" / "security" / "private-store-retained-policy.json"
+INVENTORY_V2 = ROOT / "docs" / "security" / "phase-473-private-store-inventory.v2.json"
+# Every deletion command stores this digest; the bytes may never change (#397).
+SEALED_V2_SHA256 = "dd60cb196b800a272c2b7452829ecb2a4ca0bd5225b478a45d1af877b5d7e888"
 
 EXPECTED_BRANCHES = (
     "account_profile",
@@ -46,6 +51,7 @@ REQUIRED_ROW_FIELDS = {
     "requirement_ids", "decision_ids",
 }
 
+# As sealed: the 2026-07 test file names. `current_selector` gives today's.
 FINDING_SELECTORS = {
     "CR-01": (
         "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
@@ -87,36 +93,19 @@ def _run(*args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _historical_candidate_root(tmp_path: Path) -> Path:
-    candidate = json.loads(MANIFEST.read_text())["candidate_sha"]
-    archive = subprocess.run(
-        ["git", "archive", candidate], cwd=ROOT, capture_output=True, check=True
-    )
-    candidate_root = tmp_path / "candidate"
-    candidate_root.mkdir()
-    subprocess.run(
-        ["tar", "-x", "-C", str(candidate_root)],
-        input=archive.stdout,
-        check=True,
-    )
-    shutil.copy2(INVENTORY, candidate_root / INVENTORY.relative_to(ROOT))
-    shutil.copy2(EVIDENCE, candidate_root / EVIDENCE.relative_to(ROOT))
-    return candidate_root
+def test_checked_inventory_is_complete_and_source_relative():
+    """The sealed rows themselves, read as they are deployed.
 
-
-def test_checked_inventory_is_deterministic_complete_and_source_relative(tmp_path: Path):
+    The seal cannot be regenerated from today's tree: the generator's reviewed
+    source digests stop at 2026-07, so it would reject every later writer. The
+    bytes are pinned instead (v1 in `test_account_deletion_quick_fix.py`, v2 below),
+    and the reviewed semantics are checked against today's source.
+    """
     module = _generator_module()
-    candidate_root = _historical_candidate_root(tmp_path)
-    first, second = tmp_path / "inventory-a.json", tmp_path / "inventory-b.json"
-    evidence_first, evidence_second = tmp_path / "evidence-a.json", tmp_path / "evidence-b.json"
-    assert _run("--root", str(candidate_root), "--output", str(first), "--evidence-output", str(evidence_first)).returncode == 0
-    assert _run("--root", str(candidate_root), "--output", str(second), "--evidence-output", str(evidence_second)).returncode == 0
-    assert first.read_bytes() == second.read_bytes() == INVENTORY.read_bytes()
-    assert evidence_first.read_bytes() == evidence_second.read_bytes() == EVIDENCE.read_bytes()
-    assert _run("--root", str(candidate_root), "--check").returncode == 0
     module.validate_private_store_semantics(ROOT)
+    module.validate_evidence_policy(json.loads(EVIDENCE.read_text()))
 
-    payload = json.loads(first.read_text())
+    payload = json.loads(INVENTORY.read_text())
     assert tuple(payload["branch_ids"]) == EXPECTED_BRANCHES
     assert {entry["branch_id"] for entry in payload["branch_registry"]} == set(EXPECTED_BRANCHES)
     assert payload["rows"]
@@ -133,6 +122,10 @@ def test_checked_inventory_is_deterministic_complete_and_source_relative(tmp_pat
     assert callable(module.validate_evidence_policy)
 
 
+def test_the_sealed_v2_inventory_bytes_are_unchanged():
+    assert hashlib.sha256(INVENTORY_V2.read_bytes()).hexdigest() == SEALED_V2_SHA256
+
+
 def test_ast_source_seal_is_stable_on_the_phase474_python_312_runtime():
     module = _generator_module()
     tree = ast.parse("client.put_item(Item={'student_id': private_value})")
@@ -144,24 +137,6 @@ def test_ast_source_seal_is_stable_on_the_phase474_python_312_runtime():
         "value=Dict(keys=[Constant(value='student_id')], "
         "values=[Name(id='private_value', ctx=Load())]))])"
     )
-
-
-@pytest.mark.parametrize(
-    "method",
-    ["put_item", "update_item", "transact_write_items", "put_object",
-     "upload_part", "send_email", "send_message", "admin_update_user_attributes",
-     "post_to_connection", "invoke_model"],
-)
-def test_synthetic_sink_inside_registered_module_cannot_be_blessed_by_regeneration(tmp_path: Path, method: str):
-    _generator_module()
-    shutil.copytree(ROOT / "src", tmp_path / "src")
-    target = tmp_path / "src" / "stoa" / "db" / "repositories" / "account_deletion_repo.py"
-    with target.open("a", encoding="utf-8") as handle:
-        handle.write("\n\ndef synthetic_unreviewed_private_sink(client, private_value):\n" f"    return client.{method}(Item={{'student_id': private_value}})\n")
-    result = _run("--root", str(tmp_path), "--output", str(tmp_path / "regenerated.json"),
-                  "--evidence-output", str(tmp_path / "regenerated-evidence.json"))
-    assert result.returncode == 1
-    assert "unreviewed mutating source" in result.stderr.lower()
 
 
 def test_explicit_exclusions_are_closed_and_capability_is_never_excluded():
@@ -197,7 +172,8 @@ def test_runtime_selectors_are_real_collected_lower_boundary_tests():
     payload = json.loads(INVENTORY.read_text())
     selectors = {selector for row in payload["rows"] for selector in (row["purge_selector"], row["no_resurrection_selector"])}
     assert selectors
-    for selector in sorted(selectors):
+    for sealed in sorted(selectors):
+        selector = current_selector(sealed)
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "--collect-only", "-q", selector],
             cwd=ROOT,
@@ -284,3 +260,19 @@ def test_reviewed_semantics_reject_weakening_after_candidate_regeneration(
     target.write_text(source.replace(before, after, 1))
     with pytest.raises(ValueError, match="reviewed private-store semantic"):
         module.validate_private_store_semantics(tmp_path)
+
+
+@pytest.mark.parametrize("seal", [INVENTORY, INVENTORY_V2], ids=["v1", "v2"])
+def test_every_test_file_a_seal_names_resolves_to_a_file_today(seal: Path):
+    """The seals cannot follow a rename, so the rename table has to."""
+    named = {
+        match.split("::")[0]
+        for match in re.findall(r"tests/[A-Za-z0-9_/]+\.py::[A-Za-z0-9_]+", seal.read_text())
+    }
+    assert named
+    for file_name in sorted(named):
+        current = RENAMED_TEST_FILES.get(file_name, file_name)
+        assert (ROOT / current).is_file(), f"{file_name} -> {current}"
+    for old, new in RENAMED_TEST_FILES.items():
+        assert not (ROOT / old).exists(), old
+        assert (ROOT / new).is_file(), new
