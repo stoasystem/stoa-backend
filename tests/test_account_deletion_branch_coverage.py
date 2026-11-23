@@ -11,7 +11,8 @@ branch by hand; this test is there for the next kind of row.
 
 It works by `entity_type`, the name every kind of row is written with:
 
-1. `written_entity_types` reads `src/stoa` and collects every `entity_type` a
+1. `written_entity_types` (`entity_type_scan`, shared with the data type
+   catalog gates, #587) reads `src/stoa` and collects every `entity_type` a
    row can be written with: the value under an `"entity_type"` key of a dict
    literal, an `entity_type=` keyword argument, and the value an update sets
    with `SET entity_type = :x`. A name or `module.NAME` is resolved to the
@@ -55,153 +56,13 @@ Reasons in `KEPT`:
 
 from __future__ import annotations
 
-import ast
 import json
-import re
-from collections.abc import Iterator, Mapping
-from pathlib import Path
+from collections.abc import Mapping
 from typing import Any
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-
-type Function = ast.FunctionDef | ast.AsyncFunctionDef
-
-# `SET entity_type = :entity` (or `#entity_type`, or `if_not_exists(...)`) in an
-# update expression; a condition (`... AND entity_type = :entity`) only reads it.
-_SET_ENTITY = re.compile(
-    r"(?:\bSET\b|,)\s*#?entity_type\s*=\s*"
-    r"(?:if_not_exists\(\s*#?entity_type\s*,\s*)?(:\w+)"
-)
-
-
-def _module_name(root: Path, path: Path) -> str:
-    parts = list(path.relative_to(root / "src").with_suffix("").parts)
-    if parts[-1] == "__init__":
-        parts.pop()
-    return ".".join(parts)
-
-
-class _Modules:
-    """The modules under `src/stoa`: their trees, string constants and imports."""
-
-    def __init__(self, root: Path) -> None:
-        self.trees: dict[str, tuple[str, ast.Module]] = {}
-        self.constants: dict[str, dict[str, str]] = {}
-        self.imports: dict[str, dict[str, tuple[str, str | None]]] = {}
-        for path in sorted((root / "src" / "stoa").rglob("*.py")):
-            name = _module_name(root, path)
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-            self.trees[name] = (path.relative_to(root).as_posix(), tree)
-            self.constants[name] = constants = {}
-            self.imports[name] = imports = {}
-            package = name.split(".") if path.name == "__init__.py" else name.split(".")[:-1]
-            for node in tree.body:
-                if isinstance(node, (ast.Assign, ast.AnnAssign)):
-                    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-                    value = node.value
-                    if isinstance(value, ast.Constant) and isinstance(value.value, str):
-                        for target in targets:
-                            if isinstance(target, ast.Name):
-                                constants[target.id] = value.value
-                elif isinstance(node, ast.ImportFrom):
-                    base = node.module or ""
-                    if node.level:
-                        stem = package[: len(package) - node.level + 1]
-                        base = ".".join([*stem, *([node.module] if node.module else [])])
-                    for alias in node.names:
-                        imports[alias.asname or alias.name] = (base, alias.name)
-                elif isinstance(node, ast.Import):
-                    for alias in node.names:
-                        imports[alias.asname or alias.name] = (alias.name, None)
-
-    def resolve_all(self, module: str, node: ast.expr) -> set[str] | None:
-        """The strings `node` can stand for (both arms of `a if c else b`), or None."""
-        if isinstance(node, ast.IfExp):
-            body = self.resolve_all(module, node.body)
-            orelse = self.resolve_all(module, node.orelse)
-            return None if body is None or orelse is None else body | orelse
-        value = self._resolve(module, node)
-        return None if value is None else {value}
-
-    def _resolve(self, module: str, node: ast.expr) -> str | None:
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            return node.value
-        if isinstance(node, ast.Name):
-            if node.id in self.constants[module]:
-                return self.constants[module][node.id]
-            source = self.imports[module].get(node.id)
-            if source and source[1] and source[0] in self.constants:
-                return self.constants[source[0]].get(source[1])
-            return None
-        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
-            source = self.imports[module].get(node.value.id)
-            if source:
-                target = source[0] if source[1] is None else f"{source[0]}.{source[1]}"
-                if target in self.constants:
-                    return self.constants[target].get(node.attr)
-        return None
-
-
-def _written_values(scope: ast.AST) -> Iterator[ast.expr]:
-    """Every expression `scope` writes as an `entity_type`."""
-    placeholders: set[str] = set()
-    for node in ast.walk(scope):
-        if isinstance(node, ast.Dict):
-            for key, value in zip(node.keys, node.values, strict=True):
-                if isinstance(key, ast.Constant) and key.value == "entity_type":
-                    yield value
-        elif isinstance(node, ast.keyword) and node.arg == "entity_type":
-            yield node.value
-        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            placeholders.update(_SET_ENTITY.findall(node.value))
-    if placeholders:
-        for node in ast.walk(scope):
-            if isinstance(node, ast.Dict):
-                for key, value in zip(node.keys, node.values, strict=True):
-                    if isinstance(key, ast.Constant) and key.value in placeholders:
-                        yield value
-
-
-def written_entity_types(root: Path) -> tuple[dict[str, set[str]], set[str]]:
-    """`entity_type` -> its writers (`file::function`); and the unresolved writers."""
-    modules = _Modules(root)
-    found: dict[str, set[str]] = {}
-    unresolved: set[str] = set()
-    for module, (relative, tree) in modules.trees.items():
-        functions: list[Function] = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        ]
-        # A function nested in another is read as part of the outer one.
-        nested = {
-            id(inner)
-            for function in functions
-            for inner in ast.walk(function)
-            if inner is not function and isinstance(inner, (ast.FunctionDef, ast.AsyncFunctionDef))
-        }
-        # Module level too (a counter kind declared as a constant).
-        top = ast.Module(
-            body=[
-                node
-                for node in tree.body
-                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-            ],
-            type_ignores=[],
-        )
-        scopes: list[tuple[str, ast.AST]] = [("<module>", top)]
-        scopes.extend((f.name, f) for f in functions if id(f) not in nested)
-        for name, scope in scopes:
-            writer = f"{relative}::{name}"
-            for value in _written_values(scope):
-                resolved = modules.resolve_all(module, value)
-                if resolved is None:
-                    unresolved.add(writer)
-                for entity_type in resolved or ():
-                    found.setdefault(entity_type, set()).add(writer)
-    return found, unresolved
+from entity_type_scan import ROOT, written_entity_types
 
 
 # Writers whose `entity_type` the scan cannot resolve, and what they write.

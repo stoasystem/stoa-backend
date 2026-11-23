@@ -43,3 +43,20 @@ How code in this repository is usually written. Moved from the old `.planning/co
 
 - `.env.example` is tracked; real `.env` files are ignored.
 - The repository is LF with `core.autocrlf=false`; Python that writes files passes `newline="\n"`.
+
+## Adding a data type
+
+Every kind of row the code writes has one entry in the data type catalog, `src/stoa/db/data_catalog.py` (#586). When you add a new `entity_type` - or a writer starts putting a new attribute that holds an account id on an existing one - give its entry three things:
+
+- **The account pointers**: every place the row names an account (`Field`, `Ids`, `Summaries`, `KeyId` for an account in the key, `ScopeId`), each with its role: `owner` when deleting that account removes or tombstones the row, `reference` when it only scrubs the name out. A type that points to no account declares `accounts=()`. An attribute that looks like an account id but is deliberately not handled (an administrator's `updated_by`) goes in `not_pointers`, with its reason.
+- **The deletion handling**: the `deletion` slot, empty until candidate I fills it (see #586).
+- **The owning module**: where its rows are written.
+
+Nothing else decides which accounts a row names: read it through `data_catalog.mentions` / `names`, not a field list of your own. A row written without an `entity_type` is matched by its key (`UNTYPED`); prefer giving new rows an `entity_type`.
+
+What fails if you don't:
+
+- `tests/test_data_catalog.py`: a written `entity_type` with no entry, an entry nothing writes, an entry naming the wrong module, an account-looking attribute a writer writes that the entry neither declares nor lists in `not_pointers`, a writer whose fields the scan cannot read that is not in `FIELDS_READ_BY_HAND`, and any difference from today's deletion and registry rules that is not one of the intended ones (`scripts/compare_data_catalog.py`, `INTENDED` and `ROLE_CHANGES`).
+- `tests/test_account_deletion_branch_coverage.py`: the same `entity_type` with no deletion branch and no `KEPT` reason (#534).
+
+`scripts/compare_data_catalog.py` runs the same comparison read-only over the live table and prints counts only.
