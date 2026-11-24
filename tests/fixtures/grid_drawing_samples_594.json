@@ -1,0 +1,325 @@
+{
+  "source": {
+    "sourceId": "stoa-backend-594-samples",
+    "sourceVersion": "2026-11-24",
+    "sourceType": "manifest"
+  },
+  "operatorNote": "Sample grid drawing exercises for #594: plot points, a rectangle of a given area, a rotation.",
+  "lessons": [
+    {
+      "publicLessonId": "grid-drawing-samples-594",
+      "title": "Zeichnen im Gitter: Beispiele",
+      "objective": "Punkte, Rechtecke und Bildfiguren im Koordinatengitter zeichnen.",
+      "description": "Beispielaufgaben für das Zeichnen im Koordinatengitter (#594).",
+      "subjectId": "math",
+      "topicId": "brueche",
+      "unitId": "brueche-u2",
+      "gradeLevel": "grade_6_primary",
+      "difficulty": "practice",
+      "estimatedMinutes": 8,
+      "language": "de",
+      "publish": true,
+      "exercises": [
+        {
+          "exerciseId": "grid-drawing-samples-594-q01",
+          "type": "grid_drawing",
+          "prompt": "Zeichne die Punkte A(1|2), B(4|5) und C(7|1) ins Koordinatensystem ein.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 8,
+            "yMin": 0,
+            "yMax": 6,
+            "step": 1,
+            "axes": true,
+            "axisLabels": true,
+            "labels": [
+              "A",
+              "B",
+              "C"
+            ]
+          },
+          "checks": [
+            {
+              "kind": "point",
+              "label": "A",
+              "x": 1,
+              "y": 2
+            },
+            {
+              "kind": "point",
+              "label": "B",
+              "x": 4,
+              "y": 5
+            },
+            {
+              "kind": "point",
+              "label": "C",
+              "x": 7,
+              "y": 1
+            },
+            {
+              "kind": "count",
+              "points": 3
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "A",
+                  "x": 1,
+                  "y": 2
+                },
+                {
+                  "label": "B",
+                  "x": 4,
+                  "y": 5
+                },
+                {
+                  "label": "C",
+                  "x": 7,
+                  "y": 1
+                }
+              ]
+            }
+          ],
+          "explanation": "Zuerst nach rechts (x), dann nach oben (y): A liegt 1 nach rechts und 2 nach oben.",
+          "difficulty": "practice",
+          "translations": {
+            "en": {
+              "prompt": "Plot the points A(1|2), B(4|5) and C(7|1) in the coordinate system.",
+              "explanation": "First to the right (x), then up (y): A is 1 to the right and 2 up."
+            },
+            "fr": {
+              "prompt": "Place les points A(1|2), B(4|5) et C(7|1) dans le repère.",
+              "explanation": "D’abord vers la droite (x), puis vers le haut (y) : A est 1 à droite et 2 en haut."
+            },
+            "it": {
+              "prompt": "Disegna i punti A(1|2), B(4|5) e C(7|1) nel sistema di coordinate.",
+              "explanation": "Prima a destra (x), poi in alto (y): A è 1 a destra e 2 in alto."
+            }
+          }
+        },
+        {
+          "exerciseId": "grid-drawing-samples-594-q02",
+          "type": "grid_drawing",
+          "prompt": "Zeichne ein Rechteck mit dem Flächeninhalt 12 Häuschen.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 10,
+            "yMin": 0,
+            "yMax": 8,
+            "step": 1
+          },
+          "checks": [
+            {
+              "kind": "polygon",
+              "shape": "rectangle",
+              "area": 12
+            },
+            {
+              "kind": "count",
+              "polygons": 1
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "P",
+                  "x": 1,
+                  "y": 1
+                },
+                {
+                  "label": "Q",
+                  "x": 5,
+                  "y": 1
+                },
+                {
+                  "label": "R",
+                  "x": 5,
+                  "y": 4
+                },
+                {
+                  "label": "S",
+                  "x": 1,
+                  "y": 4
+                }
+              ],
+              "polygons": [
+                [
+                  "P",
+                  "Q",
+                  "R",
+                  "S"
+                ]
+              ]
+            },
+            {
+              "points": [
+                {
+                  "label": "P",
+                  "x": 2,
+                  "y": 2
+                },
+                {
+                  "label": "Q",
+                  "x": 8,
+                  "y": 2
+                },
+                {
+                  "label": "R",
+                  "x": 8,
+                  "y": 4
+                },
+                {
+                  "label": "S",
+                  "x": 2,
+                  "y": 4
+                }
+              ],
+              "polygons": [
+                [
+                  "P",
+                  "Q",
+                  "R",
+                  "S"
+                ]
+              ]
+            }
+          ],
+          "explanation": "Länge mal Breite muss 12 ergeben, zum Beispiel 3 · 4, 2 · 6 oder 1 · 12.",
+          "difficulty": "practice",
+          "translations": {
+            "en": {
+              "prompt": "Draw a rectangle with an area of 12 squares.",
+              "explanation": "Length times width must make 12, for example 3 · 4, 2 · 6 or 1 · 12."
+            },
+            "fr": {
+              "prompt": "Dessine un rectangle d’une aire de 12 carreaux.",
+              "explanation": "Longueur fois largeur doit donner 12, par exemple 3 · 4, 2 · 6 ou 1 · 12."
+            },
+            "it": {
+              "prompt": "Disegna un rettangolo con un’area di 12 quadretti.",
+              "explanation": "Lunghezza per larghezza deve dare 12, per esempio 3 · 4, 2 · 6 o 1 · 12."
+            }
+          }
+        },
+        {
+          "exerciseId": "grid-drawing-samples-594-q03",
+          "type": "grid_drawing",
+          "prompt": "Drehe das Dreieck ABC um 90° im Gegenuhrzeigersinn um den Punkt Z. Zeichne das Bilddreieck A'B'C'.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 10,
+            "yMin": 0,
+            "yMax": 8,
+            "step": 1,
+            "axes": true,
+            "labels": [
+              "A'",
+              "B'",
+              "C'"
+            ],
+            "given": {
+              "points": [
+                {
+                  "label": "A",
+                  "x": 1,
+                  "y": 1
+                },
+                {
+                  "label": "B",
+                  "x": 4,
+                  "y": 1
+                },
+                {
+                  "label": "C",
+                  "x": 1,
+                  "y": 3
+                },
+                {
+                  "label": "Z",
+                  "x": 5,
+                  "y": 4
+                }
+              ],
+              "polygons": [
+                [
+                  "A",
+                  "B",
+                  "C"
+                ]
+              ]
+            }
+          },
+          "checks": [
+            {
+              "kind": "image",
+              "of": [
+                "A",
+                "B",
+                "C"
+              ],
+              "rotate": {
+                "center": [
+                  5,
+                  4
+                ],
+                "angle": 90
+              }
+            },
+            {
+              "kind": "count",
+              "polygons": 1
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "A'",
+                  "x": 8,
+                  "y": 0
+                },
+                {
+                  "label": "B'",
+                  "x": 8,
+                  "y": 3
+                },
+                {
+                  "label": "C'",
+                  "x": 6,
+                  "y": 0
+                }
+              ],
+              "polygons": [
+                [
+                  "A'",
+                  "B'",
+                  "C'"
+                ]
+              ]
+            }
+          ],
+          "explanation": "Jeder Punkt dreht sich um Z: A(1|1) liegt 4 links und 3 unter Z, A' liegt 3 rechts und 4 unter Z, also A'(8|0).",
+          "difficulty": "practice",
+          "translations": {
+            "en": {
+              "prompt": "Rotate triangle ABC by 90° anticlockwise about the point Z. Draw the image triangle A'B'C'.",
+              "explanation": "Every point turns about Z: A(1|1) is 4 left of and 3 below Z, so A' is 3 right of and 4 below Z, which is A'(8|0)."
+            },
+            "fr": {
+              "prompt": "Fais tourner le triangle ABC de 90° dans le sens inverse des aiguilles d’une montre autour du point Z. Dessine le triangle image A'B'C'.",
+              "explanation": "Chaque point tourne autour de Z : A(1|1) est 4 à gauche et 3 sous Z, donc A' est 3 à droite et 4 sous Z, soit A'(8|0)."
+            },
+            "it": {
+              "prompt": "Ruota il triangolo ABC di 90° in senso antiorario attorno al punto Z. Disegna il triangolo immagine A'B'C'.",
+              "explanation": "Ogni punto ruota attorno a Z: A(1|1) è 4 a sinistra e 3 sotto Z, quindi A' è 3 a destra e 4 sotto Z, cioè A'(8|0)."
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

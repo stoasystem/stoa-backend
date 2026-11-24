@@ -41,7 +41,8 @@ _POINTER_FIELDS = {
 }
 _MAX_CHALLENGE_PAGES = 1000
 #: The shape of a stored submitted answer: a string, or a flat list of strings,
-#: bounded in size (`practice_projection_service.normalize_submitted_answer`).
+#: bounded in size (`practice_projection_service.normalize_submitted_answer`);
+#: for a grid drawing (#594), the drawing as `grid_drawing.Drawing.stored` gives it.
 SUBMITTED_ANSWER_SCHEMA_VERSION = 1
 
 PRACTICE_PRIVATE_ROW_REGISTRY = frozenset(
@@ -752,7 +753,7 @@ def mark_lesson_completed(
 def put_attempt(
     student_id: str,
     challenge_id: str,
-    submitted_answer: str | list[str],
+    submitted_answer: str | list[str] | dict[str, Any],
     correct: bool,
     *,
     subject_id: str = "",
@@ -770,6 +771,7 @@ def put_attempt(
     prompt: str = "",
     options: list[Any] | None = None,
     correct_options: list[int] | None = None,
+    standard_drawing: Mapping[str, Any] | None = None,
     challenge_type: str = "",
     attempt_id: str | None = None,
     created_at: str | None = None,
@@ -802,7 +804,8 @@ def put_attempt(
 
     `correct_options` is the key of a choose-several exercise (`multi_select`,
     #593): the numbers of its right options, which the result shows once the
-    answer is on record. Only those receipts carry it.
+    answer is on record. Only those receipts carry it. `standard_drawing` is a
+    grid drawing's first solution (`grid_drawing`, #594), shown the same way.
     """
     table = db_table.table()
     generation = _write_generation(student_id, account_fence_generation, table)
@@ -849,6 +852,8 @@ def put_attempt(
         item.update(snapshot_fields)
     if correct_options:
         item["correct_options"] = list(correct_options)
+    if standard_drawing:
+        item["standard_drawing"] = dict(standard_drawing)
     operations = build_practice_write_transaction(
         item=item, owner_id=student_id, generation=generation
     )
