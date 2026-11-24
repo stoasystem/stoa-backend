@@ -591,9 +591,23 @@ def bedrock_asker(
     session = require_sso_operator_session(
         profile_name=profile, region_name=region, expected_account_id=account_id
     )
+    from stoa import config
     from stoa.services.model_call.bedrock import BedrockAdapter
+    from stoa.services.model_call.development_profile import development_profile
 
     model = BedrockAdapter(session.client("bedrock-runtime", region_name=region))
+    # The questions are asked as production asks them, but booked as development (#612).
+    settings = config.settings()
+    invoked_id = development_profile(session, region=region, model_id=settings.bedrock_model_id)
+    config.install(
+        settings.model_copy(
+            update={
+                "bedrock_inference_profile_arn": (
+                    "" if invoked_id == settings.bedrock_model_id else invoked_id
+                )
+            }
+        )
+    )
 
     def ask(item: dict[str, Any]) -> tuple[Mapping[str, Any], int, int]:
         return ask_reply(item, model, correlation_id=f"eval-{uuid.uuid4().hex[:12]}")

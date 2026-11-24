@@ -89,8 +89,18 @@ def _refusal(error: Exception) -> str:
     return type(error).__name__
 
 
-def probe(adapter: Adapter, *, model_id: str, invoke: bool, exact: bool = False) -> list[str]:
-    """Run the checks; one line per check, each starting PASS or FAIL."""
+def probe(
+    adapter: Adapter,
+    *,
+    model_id: str,
+    invoke: bool,
+    exact: bool = False,
+    invoked_id: str | None = None,
+) -> list[str]:
+    """Run the checks; one line per check, each starting PASS or FAIL.
+
+    Counted on `model_id`, sent through `invoked_id` when given (#612).
+    """
     counted, sent = report_bodies()
     connection = adapter.connect(_PROBE_SECONDS)
     lines: list[str] = []
@@ -104,7 +114,9 @@ def probe(adapter: Adapter, *, model_id: str, invoke: bool, exact: bool = False)
         lines.append("SKIP invoke: pass --invoke to send the body (costs under a cent)")
         return lines
     try:
-        stream = connection.stream(model_id, sent if exact else {**sent, "max_tokens": 1})
+        stream = connection.stream(
+            invoked_id or model_id, sent if exact else {**sent, "max_tokens": 1}
+        )
         stop_reason = _stop_reason(stream.events)
     except Exception as error:
         lines.append(f"FAIL invoke: {_refusal(error)}")
@@ -150,9 +162,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None, *, adapter: Adapter | None = None) -> int:
     args = _parse_args(argv)
     model_id = args.model_id or config.settings().bedrock_model_id
+    invoked_id = None
     if adapter is None:
         from stoa.security.aws_operator_identity import require_sso_operator_session
         from stoa.services.model_call.bedrock import BedrockAdapter
+        from stoa.services.model_call.development_profile import development_profile
 
         session = require_sso_operator_session(
             profile_name=args.profile,
@@ -160,11 +174,15 @@ def main(argv: Sequence[str] | None = None, *, adapter: Adapter | None = None) -
             expected_account_id=args.account_id,
         )
         adapter = BedrockAdapter(session.client("bedrock-runtime", region_name=args.region))
+        if args.invoke:
+            invoked_id = development_profile(session, region=args.region, model_id=model_id)
     print(f"Probing the weekly report request on {model_id} in {args.region}")
     if args.exact and not args.invoke:
         print("--exact only goes with --invoke")
         return 2
-    lines = probe(adapter, model_id=model_id, invoke=args.invoke, exact=args.exact)
+    lines = probe(
+        adapter, model_id=model_id, invoke=args.invoke, exact=args.exact, invoked_id=invoked_id
+    )
     for line in lines:
         print(line)
     return 1 if any(line.startswith("FAIL") for line in lines) else 0

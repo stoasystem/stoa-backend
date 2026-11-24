@@ -378,6 +378,10 @@ class Settings(BaseSettings):
     # Bedrock
     # EU cross-region inference profile — no manual model access approval needed
     bedrock_model_id: str = "eu.anthropic.claude-sonnet-4-6"
+    # The application inference profile the model is invoked through, by ARN,
+    # so the bill can tell the product from development (#612). Empty: invoke
+    # `bedrock_model_id` itself. Tokens are always counted on `bedrock_model_id`.
+    bedrock_inference_profile_arn: str = ""
     # The output cap of an Ask answer, and so what one question reserves of the
     # weekly allowance before the model is called. 2048 cut off a multi-step
     # derivative answer, LaTeX and all (#531); the prompt's length budget keeps

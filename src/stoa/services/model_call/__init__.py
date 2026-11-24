@@ -4,7 +4,10 @@
 messages (images ride in them), the one tool the answer must come through, the
 output limit and temperature, the deadline, and optionally an admission hook,
 a callback for the partial tool input and a correlation id. The model id is
-read from the configuration.
+read from the configuration, and so is the application inference profile the
+call is invoked through, when there is one (#612): the profile decides only
+where the provider books the cost. Tokens are counted on the model id, since
+the count takes a model and not a profile.
 
 The system prompt comes in two parts (#442). `system` is what every call of
 its kind shares, word for word; with the tool, which is sent ahead of it, it
@@ -303,7 +306,9 @@ def call(
     """
     if clock() >= deadline:
         return NotSent(DEADLINE_EXCEEDED, retryable=True)
-    model_id = config.settings().bedrock_model_id
+    settings = config.settings()
+    model_id = settings.bedrock_model_id
+    invoked_id = settings.bedrock_inference_profile_arn.strip() or model_id
     body = _invoke_body(
         system=system,
         system_tail=system_tail,
@@ -327,7 +332,7 @@ def call(
         if clock() >= deadline:
             return NotSent(DEADLINE_EXCEEDED, retryable=True)
     try:
-        stream = connection.stream(model_id, body)
+        stream = connection.stream(invoked_id, body)
     except MalformedStream:
         return NotSent(MALFORMED_RESPONSE, retryable=True)
     except Exception as error:
@@ -341,7 +346,7 @@ def call(
         stream.events,
         request_id=stream.request_id,
         tool_name=tool.name,
-        inference_profile_id=model_id,
+        inference_profile_id=invoked_id,
         cost_class=CostClass.of(admission),
         deadline=deadline,
         clock=clock,
@@ -457,11 +462,11 @@ def _read(
                     except Exception:
                         logger.warning("partial tool input was not delivered", exc_info=True)
             elif kind == "message_delta":
-                usage.update(payload.get("usage") or {})
+                _merge_usage(usage, payload.get("usage") or {})
                 stop_reason = (payload.get("delta") or {}).get("stop_reason", stop_reason)
             elif kind == "message_start":
                 message = payload.get("message") or {}
-                usage.update(message.get("usage") or {})
+                _merge_usage(usage, message.get("usage") or {})
                 message_id = message.get("id", message_id)
                 model = message.get("model", model)
     except MalformedStream:
@@ -499,6 +504,32 @@ def _read(
     if not isinstance(stop_reason, str) or not stop_reason.strip():
         return NotSent(MALFORMED_PROVIDER_USAGE, retryable=True)
     return Answered(tool_input=tool_input, usage=paid, stop_reason=stop_reason.strip())
+
+
+# The two counts of the prompt cache, as the provider names them (#442).
+_CACHE_COUNTS = ("cache_creation_input_tokens", "cache_read_input_tokens")
+
+
+def _merge_usage(usage: dict[str, Any], reported: Mapping[str, Any]) -> None:
+    """Take one event's part of the usage into what the stream has reported so far (#612).
+
+    The usage comes in two parts, at the start of the message and at its end,
+    and the end may repeat a count the start already gave. A null says
+    nothing, so it replaces nothing; and a cache count never goes down, so an
+    end that repeats it as 0 does not undo the count the reply was billed at.
+    """
+    for name, value in reported.items():
+        if value is None:
+            continue
+        earlier = usage.get(name)
+        if (
+            name in _CACHE_COUNTS
+            and _exact_count(earlier)
+            and _exact_count(value)
+            and value < earlier
+        ):
+            continue
+        usage[name] = value
 
 
 def _usage(

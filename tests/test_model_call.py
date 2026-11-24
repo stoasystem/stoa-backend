@@ -567,6 +567,62 @@ def test_a_reply_without_cache_counts_touched_no_cache() -> None:
     assert (result.usage.cache_write_input_tokens, result.usage.cache_read_input_tokens) == (0, 0)
 
 
+@pytest.mark.parametrize(
+    "end_usage",
+    [
+        # The end of the message repeats the cache counts as 0 ...
+        {"cache_creation_input_tokens": 0, "cache_read_input_tokens": 0},
+        # ... or as null, with the input count as well.
+        {
+            "input_tokens": None,
+            "cache_creation_input_tokens": None,
+            "cache_read_input_tokens": None,
+        },
+    ],
+)
+def test_the_end_of_the_message_does_not_undo_the_cache_counts_of_its_start(
+    end_usage: dict[str, Any],
+) -> None:
+    """#612: `message_delta` carries usage too, and what it repeats must not
+    turn a reply that read the cache into one that did not."""
+    usage = {
+        "input_tokens": 40,
+        "cache_creation_input_tokens": 200,
+        "cache_read_input_tokens": 1500,
+        "output_tokens": 30,
+    }
+    result = _call(FakeAdapter(Reply(input=INPUT, usage=usage, end_usage=end_usage)))
+
+    assert isinstance(result, model_call.Answered)
+    assert result.usage.input_tokens == 1740
+    assert result.usage.cache_write_input_tokens == 200
+    assert result.usage.cache_read_input_tokens == 1500
+    assert result.usage.output_tokens == 30
+
+
+def test_the_end_of_the_message_may_raise_a_count_and_correct_the_others() -> None:
+    """Totals reported at the end stand: a cache count that grew, and any other
+    count, which the end states for the whole reply."""
+    usage = {"input_tokens": 40, "cache_read_input_tokens": 0, "output_tokens": 1}
+    end_usage = {"input_tokens": 37, "cache_read_input_tokens": 1500, "output_tokens": 30}
+
+    result = _call(FakeAdapter(Reply(input=INPUT, usage=usage, end_usage=end_usage)))
+
+    assert isinstance(result, model_call.Answered)
+    assert (result.usage.input_tokens, result.usage.output_tokens) == (1537, 30)
+    assert result.usage.cache_read_input_tokens == 1500
+
+
+def test_a_cache_count_the_end_of_the_message_garbles_is_still_not_a_count() -> None:
+    usage = {"input_tokens": 40, "cache_read_input_tokens": 1500, "output_tokens": 30}
+
+    result = _call(
+        FakeAdapter(Reply(input=INPUT, usage=usage, end_usage={"cache_read_input_tokens": -1}))
+    )
+
+    assert result == model_call.NotSent("malformed_provider_usage", retryable=True)
+
+
 @pytest.mark.parametrize("count", [-1, 1.5, "12"])
 def test_a_cache_count_that_is_not_a_count_is_not_answered(count: object) -> None:
     usage = {"input_tokens": 40, "cache_read_input_tokens": count, "output_tokens": 30}
@@ -644,3 +700,76 @@ def test_the_body_counted_keeps_the_cache_point() -> None:
     assert isinstance(result, model_call.Answered)
     [counted] = model.counted_bodies
     assert counted["system"] == model.requests[0]["system"]
+
+
+# ── Invoked through an application inference profile (#612) ─────────────────
+
+PRODUCT_PROFILE = "arn:aws:bedrock:eu-central-2:111122223333:application-inference-profile/abc123"
+
+
+class _Routed(FakeAdapter):
+    """The fake, keeping which id each body was counted on and sent through."""
+
+    def __init__(self, *outcomes: Any, **kwargs: Any) -> None:
+        super().__init__(*outcomes, **kwargs)
+        self.counted_on: list[str] = []
+        self.sent_through: list[str] = []
+
+    def count(self, model_id: str, body: Mapping[str, Any]) -> int:
+        self.counted_on.append(model_id)
+        return super().count(model_id, body)
+
+    def stream(self, model_id: str, body: Mapping[str, Any]) -> Any:
+        self.sent_through.append(model_id)
+        return super().stream(model_id, body)
+
+
+def test_without_a_profile_the_model_id_is_counted_and_invoked() -> None:
+    model = _Routed(answer=INPUT)
+
+    result = _call(model, admission=lambda _tokens, _limit: model_call.Admit())
+
+    model_id = config.settings().bedrock_model_id
+    assert isinstance(result, model_call.Answered)
+    assert (model.counted_on, model.sent_through) == ([model_id], [model_id])
+    assert result.usage.inference_profile_id == model_id
+
+
+def test_with_a_profile_the_call_is_sent_through_it_and_counted_on_the_model() -> None:
+    """The profile is where the cost is booked; CountTokens takes a model, not a profile."""
+    config.install(
+        config.settings().model_copy(
+            update={"bedrock_inference_profile_arn": f" {PRODUCT_PROFILE} "}
+        )
+    )
+    model = _Routed(answer=INPUT)
+
+    result = _call(model, admission=lambda _tokens, _limit: model_call.Admit())
+
+    assert isinstance(result, model_call.Answered)
+    assert model.counted_on == [config.settings().bedrock_model_id]
+    assert model.sent_through == [PRODUCT_PROFILE]
+    assert result.usage.inference_profile_id == PRODUCT_PROFILE
+
+
+def test_the_bedrock_adapter_invokes_through_the_profile_s_arn_on_the_wire() -> None:
+    config.install(
+        config.settings().model_copy(update={"bedrock_inference_profile_arn": PRODUCT_PROFILE})
+    )
+    client = runtime()
+    urls: list[str] = []
+    client.meta.events.register(
+        "before-send.bedrock-runtime.InvokeModelWithResponseStream",
+        lambda request, **_: urls.append(request.url),
+    )
+    streaming(client, _STREAMED, [])
+    model_call.install(bedrock.BedrockAdapter(client))
+
+    result = _call()
+
+    assert isinstance(result, model_call.Answered)
+    [url] = urls
+    assert url.endswith(
+        "/model/arn%3Aaws%3Abedrock%3Aeu-central-2%3A111122223333%3A"
+        "application-inference-profile%2Fabc123/invoke-with-response-stream"
+    )

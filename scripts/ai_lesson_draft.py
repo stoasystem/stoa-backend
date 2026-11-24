@@ -213,10 +213,13 @@ def bedrock_model(profile: str, region: str, account_id: str, model_id: str) -> 
     from botocore.config import Config
 
     from stoa.security.aws_operator_identity import require_sso_operator_session
+    from stoa.services.model_call.development_profile import development_profile
 
     session = require_sso_operator_session(
         profile_name=profile, region_name=region, expected_account_id=account_id
     )
+    # Booked as development, apart from what students' questions cost (#612).
+    invoked_id = development_profile(session, region=region, model_id=model_id)
     client = session.client(
         "bedrock-runtime", region_name=region,
         config=Config(read_timeout=600, retries={"max_attempts": 4, "mode": "adaptive"}),
@@ -225,7 +228,7 @@ def bedrock_model(profile: str, region: str, account_id: str, model_id: str) -> 
     def call(system: str, user: str, schema: Mapping[str, Any], max_tokens: int) -> Reply:
         started = time.monotonic()
         response = client.converse(
-            modelId=model_id,
+            modelId=invoked_id,
             system=[{"text": system}],
             messages=[{"role": "user", "content": [{"text": user}]}],
             inferenceConfig={"maxTokens": max_tokens},
