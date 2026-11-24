@@ -11,6 +11,7 @@ comes back as its `WriteRefused`.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from typing import Literal
 
 from stoa.db import table as db_table
@@ -51,6 +52,63 @@ def _one_page(
         raise AttachmentRepositoryConflict("dependency_failure") from None
 
 
+# ── The cleanup's index (#611) ───────────────────────────────────────────────
+#
+# The cleanup sweep found its uploads with a filtered scan of the whole table.
+# It shares the sparse index the generation sweep reads (#502), in a bucket of
+# its own. An upload row carries `sweep_bucket` and `sweep_due_at` exactly
+# while it is in a state the cleanup may come to act on:
+#
+# - refused or handed to cleanup (`invalid`, `expired`, `cleanup_pending`): due
+#   at once, whatever the time;
+# - any other unspent state (issuing to validated): due when its usable window
+#   ends. A state change inside that window does not move it, and neither does
+#   an operation lease, taken or renewed: a lease lasts two minutes and may
+#   outlive the window, so the reader keeps the scan's own condition on it
+#   (`LEASE_LAPSED`) instead of every lease write keeping the key right.
+#
+# The write that creates the row sets both; a write that refuses it or hands it
+# to cleanup makes it due at once; a write that spends it, protects it or
+# finishes its cleanup removes them. Account deletion deletes the row.
+CLEANUP_INDEX = "GSI-SweepPending"
+CLEANUP_BUCKET = "upload_cleanup"
+CLEANUP_INDEX_FIELDS = ("sweep_bucket", "sweep_due_at")
+# The index's sort key for an upload the cleanup may take whatever the time.
+CLEANUP_DUE_AT_ONCE = "1970-01-01T00:00:00Z"
+CLEANUP_DUE_AT_ONCE_STATES = frozenset(
+    {UploadStatus.INVALID, UploadStatus.EXPIRED, UploadStatus.CLEANUP_PENDING}
+)
+CLEANUP_DUE_PAST_USABLE_STATES = frozenset(
+    {
+        UploadStatus.PENDING_UPLOAD,
+        UploadStatus.VALIDATING,
+        UploadStatus.VALIDATED,
+        UploadStatus.ISSUING,
+        UploadStatus.ASSEMBLING,
+        UploadStatus.PROMOTING,
+    }
+)
+# A continuation key of the index: the base table's key and the index's own.
+_CLEANUP_INDEX_PAGE_KEY = ("PK", "SK", *CLEANUP_INDEX_FIELDS)
+
+
+def cleanup_due_at(epoch: int) -> str:
+    """The index's sort key for the epoch second `epoch`: UTC, so it sorts as text."""
+    return datetime.fromtimestamp(epoch, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def cleanup_index_fields(item: Mapping[str, object]) -> dict[str, str]:
+    """The index keys the upload row `item` should carry; none when it should carry none."""
+    state = item.get("status")
+    if state in CLEANUP_DUE_AT_ONCE_STATES:
+        due_at = CLEANUP_DUE_AT_ONCE
+    elif state in CLEANUP_DUE_PAST_USABLE_STATES:
+        due_at = cleanup_due_at(usable_until(item))
+    else:
+        return {}
+    return {"sweep_bucket": CLEANUP_BUCKET, "sweep_due_at": due_at}
+
+
 def upload_key(upload_id: str) -> dict[str, str]:
     return {"PK": f"UPLOAD#{upload_id}", "SK": "META"}
 
@@ -71,7 +129,11 @@ def create_upload_intent(item: dict[str, object], *, table: object | None = None
             [
                 {
                     "Put": {
-                        "Item": {**upload_key(upload_id), **item},
+                        "Item": {
+                            **upload_key(upload_id),
+                            **item,
+                            **cleanup_index_fields(item),
+                        },
                         "ConditionExpression": (
                             "attribute_not_exists(PK) AND attribute_not_exists(SK)"
                         ),
@@ -445,6 +507,63 @@ def list_upload_cleanup_candidates(
     return page.items, cursor
 
 
+def query_upload_cleanup_candidates(
+    now_epoch: int,
+    *,
+    limit: int,
+    exclusive_start_key: dict[str, object] | None = None,
+    table: object | None = None,
+) -> tuple[list[dict[str, object]], dict[str, object] | None]:
+    """One bounded page of the uploads due for cleanup at `now_epoch`, earliest due first (#611).
+
+    A query of the cleanup's bucket of `GSI-SweepPending`, so what a run reads
+    follows how many uploads are due, not how large the table is. The filter is
+    the scan's (`list_upload_cleanup_candidates`), word for word but for the
+    key: the index says which rows are uploads and when their window ends, the
+    filter still decides, so an entry a write left behind costs a read and
+    nothing else. Eventually consistent, as the scan was; the claim that
+    follows is conditional.
+    """
+    query: dict[str, object] = {
+        "IndexName": CLEANUP_INDEX,
+        "Limit": limit,
+        "KeyConditionExpression": "sweep_bucket=:bucket AND sweep_due_at<=:due",
+        "FilterExpression": (
+            "#status IN (:invalid,:expired,:cleanup_pending) OR ("
+            "#status IN (:pending,:validating,:validated,:issuing,:assembling,:promoting) "
+            "AND " + PAST_USABLE + " AND " + LEASE_LAPSED + ")"
+        ),
+        "ExpressionAttributeNames": {"#status": "status"},
+        "ExpressionAttributeValues": {
+            ":bucket": CLEANUP_BUCKET,
+            ":due": cleanup_due_at(now_epoch),
+            ":invalid": "invalid",
+            ":expired": "expired",
+            ":cleanup_pending": "cleanup_pending",
+            ":pending": "pending_upload",
+            ":validating": "validating",
+            ":validated": "validated",
+            ":issuing": "issuing",
+            ":assembling": "assembling",
+            ":promoting": "promoting",
+            ":now": now_epoch,
+        },
+    }
+    try:
+        page = next(
+            db_table.pages(
+                "query",
+                start=exclusive_start_key or None,
+                table=table,
+                key=_CLEANUP_INDEX_PAGE_KEY,
+                **query,
+            )
+        )
+    except db_table.TableUnavailable:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return page.items, page.last_key
+
+
 def claim_upload_cleanup(
     upload_id: str,
     version: int,
@@ -541,7 +660,7 @@ def block_upload_cleanup(
         upload_id,
         version,
         "SET #status=:blocked, #version=:next, expires_at=:retire "
-        "REMOVE cleanup_reference_cursor",
+        "REMOVE cleanup_reference_cursor, " + ", ".join(CLEANUP_INDEX_FIELDS),
         {
             ":blocked": "cleanup_blocked",
             ":next": version + 1,
@@ -1062,6 +1181,10 @@ def _transition_request(
     (and moves it one on), and as asked on the owner, the source states, the
     operation fence, the usable window at `usable_at`, and a further `condition`
     over its own `values`. `attributes` are set and `remove` removed with it.
+
+    It keeps the row's place in the cleanup's index (#611): a target the
+    cleanup takes at once is due at once, a target it never takes leaves the
+    index, and any other keeps the due time the row was created with.
     """
     names: dict[str, str] = {"#status": "status", "#version": "version"}
     expression_values: dict[str, object] = {
@@ -1098,6 +1221,12 @@ def _transition_request(
         names[f"#a{index}"] = name
         expression_values[f":a{index}"] = value
         update += f", #a{index}=:a{index}"
+    if str(target) in CLEANUP_DUE_AT_ONCE_STATES:
+        expression_values[":sweep_bucket"] = CLEANUP_BUCKET
+        expression_values[":sweep_due_at"] = CLEANUP_DUE_AT_ONCE
+        update += ", sweep_bucket=:sweep_bucket, sweep_due_at=:sweep_due_at"
+    elif str(target) not in CLEANUP_DUE_PAST_USABLE_STATES:
+        remove = (*remove, *CLEANUP_INDEX_FIELDS)
     if remove:
         update += " REMOVE " + ", ".join(remove)
     return {
