@@ -1,4 +1,3 @@
-from stoa.db import table as db_table
 from stoa.services import help_requests, teacher_dispatch_service
 from fakes.dynamodb import FakeTable, as_stored as _as_stored
 
@@ -110,37 +109,9 @@ def test_dispatch_planner_rejects_inactive_deleting_and_implicit_availability():
     assert refusals["teacher-missing-availability"] == "not_available"
 
 
-def _dispatch_table(*rows: dict) -> FakeTable:
-    """A real table for the dispatch scans, plus the account fence they consult.
-
-    The doubles these tests used to carry told the two scans apart by comparing
-    `ExpressionAttributeValues` to a literal and answered from a script. That is the
-    fifth incident in `fakes/dynamodb.py`: nothing evaluated `FilterExpression`, so a
-    scan that had stopped naming `PROFILE` would have got profiles back anyway.
-    """
-    table = FakeTable()
-    table.seed(
-        {
-            "PK": "USER#teacher-low-load",
-            "SK": "ACCOUNT_FENCE",
-            "status": "active",
-            "generation": 3,
-        }
-    )
-    for row in rows:
-        table.seed(row)
-    return table
-
-
 def _scans_since(table: FakeTable, already_seen: int) -> list[dict]:
     """The scan requests of one walk, so two walks are not read as one."""
     return [call for name, call in table.requests if name == "scan"][already_seen:]
-
-
-def _profile_row(**overrides: object) -> dict:
-    teacher = dict(TEACHERS[0])
-    teacher.update(overrides)
-    return {"PK": f"USER#{teacher['user_id']}", "SK": "PROFILE", **teacher}
 
 
 def _help_row(conversation_id: str, **overrides: object) -> dict:
@@ -167,57 +138,37 @@ def _help_request_walk(*rows: dict) -> tuple[list[dict], list[dict]]:
     return found, _scans_since(table, 0)
 
 
-def test_dispatch_scans_continue_after_sparse_filtered_page(monkeypatch):
+def test_the_help_request_scan_continues_after_a_sparse_filtered_page():
     """A page whose rows the filter all drops must not end the walk.
 
     `Limit` counts rows read, so the first page here is one unrelated row and no
     match at all - the shape that made `/admin/users` answer an empty list forever.
+    The teachers are no longer found by a scan at all (#609,
+    `test_teacher_online_dispatch.py`).
     """
-    table = _dispatch_table(
-        {"PK": "PRACTICE#0", "SK": "ROW"},
-        _profile_row(),
-    )
-    db_table.install(table)
-
-    teachers = teacher_dispatch_service.list_teacher_profiles(limit=1)
-    profile_scans = _scans_since(table, 0)
     # The conversation row sorts before its help request and is filtered out.
     requests, request_scans = _help_request_walk(
         {"PK": "CONV#conv-1", "SK": "CONV", "entity_type": "conversation"},
         _help_row("conv-1"),
     )
 
-    assert [item["user_id"] for item in teachers] == ["teacher-low-load"]
     assert [item["conversation_id"] for item in requests] == ["conv-1"]
-    for walk in (profile_scans, request_scans):
-        assert len(walk) > 1, "a filtered-empty page has to be followed, not accepted"
-        assert all("ExclusiveStartKey" in call for call in walk[1:])
+    assert len(request_scans) > 1, "a filtered-empty page has to be followed, not accepted"
+    assert all("ExclusiveStartKey" in call for call in request_scans[1:])
 
 
-def test_dispatch_scans_continue_after_nonempty_business_rejected_page(monkeypatch):
+def test_the_help_request_scan_continues_after_a_business_rejected_page():
     """A page whose rows pass the filter but fail the business rule, likewise.
 
-    The rejected rows below match `SK = :profile` and `entity_type = help_request`
-    exactly, so only the business rule can turn them down - which is the branch
-    this test is about.
+    The rejected row below matches `entity_type = help_request` exactly, so only
+    the business rule can turn it down - which is the branch this test is about.
     """
-    table = _dispatch_table(
-        _profile_row(user_id="student-rejected", role="student"),
-        _profile_row(),
-    )
-    db_table.install(table)
-
-    teachers = teacher_dispatch_service.list_teacher_profiles(limit=1)
-    profile_scans = _scans_since(table, 0)
     # A deletion tombstone left in a request's place is no request.
     requests, request_scans = _help_request_walk(
         _help_row("conv-0-rejected", status="deleted", owner_deletion_generation=2),
         _help_row("conv-eligible"),
     )
 
-    assert [item["user_id"] for item in teachers] == ["teacher-low-load"]
     assert [item["conversation_id"] for item in requests] == ["conv-eligible"]
-    for walk in (profile_scans, request_scans):
-        assert len(walk) > 1
-        assert all("ExclusiveStartKey" in call for call in walk[1:])
-
+    assert len(request_scans) > 1
+    assert all("ExclusiveStartKey" in call for call in request_scans[1:])

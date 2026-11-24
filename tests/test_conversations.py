@@ -2016,12 +2016,16 @@ def _with_a_teacher_on_duty(table) -> None:
         {"PK": "USER#teacher-1", "SK": "ACCOUNT_FENCE", "status": "active", "generation": 2}
     )
     # On duty means online too: the teacher's bell polled just now (#472).
+    seen_at = datetime.now(timezone.utc).isoformat()
     table.rows[("USER#teacher-1", user_repo.TEACHER_SEEN_SK)] = _as_stored(
         {
             "PK": "USER#teacher-1",
             "SK": user_repo.TEACHER_SEEN_SK,
             "user_id": "teacher-1",
-            "seen_at": datetime.now(timezone.utc).isoformat(),
+            "seen_at": seen_at,
+            # The index the teachers seen lately are listed through (#609).
+            "sweep_bucket": user_repo.TEACHER_SEEN_BUCKET,
+            "sweep_due_at": seen_at,
         }
     )
 

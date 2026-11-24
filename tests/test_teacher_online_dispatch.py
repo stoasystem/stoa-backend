@@ -172,3 +172,116 @@ def test_a_students_bell_is_no_heartbeat(table) -> None:
 
     assert response.status_code == 200, response.text
     assert _rows_of(table, STUDENT) == before
+
+
+# ── the teachers are listed from the heartbeat rows, not a scan (#609) ──────
+#
+# `list_teacher_profiles` found the teachers by scanning the whole table, on
+# every request of a student's page that shows whether a teacher is there. It
+# now reads the heartbeat rows through their index and each seen account's
+# profile and fence by key.
+
+
+def _reads(table: FakeTable) -> list[str]:
+    return [name for name, _call in table.requests if name in {"scan", "query", "get_item"}]
+
+
+def test_the_heartbeat_row_carries_its_place_in_the_index(table) -> None:
+    from fakes.dynamodb import DEFAULT_INDEXES, IndexSchema
+    from stoa.db.repositories import user_repo
+    from stoa.services.ask_question import _store
+
+    table.seed(*_account(TEACHER))
+    teacher_dispatch_service.record_teacher_seen(TEACHER, now=at())
+
+    row = table.rows[(f"USER#{TEACHER}", user_repo.TEACHER_SEEN_SK)]
+    assert row["sweep_bucket"] == user_repo.TEACHER_SEEN_BUCKET
+    assert row["sweep_due_at"] == row["seen_at"] == at()
+    assert DEFAULT_INDEXES[user_repo.TEACHER_SEEN_INDEX] == IndexSchema("sweep_bucket", "sweep_due_at")
+    # The generation sweep (#502) shares the index and reads its own bucket only.
+    assert user_repo.TEACHER_SEEN_INDEX == _store.SWEEP_PENDING_INDEX
+    assert user_repo.TEACHER_SEEN_BUCKET != _store.SWEEP_PENDING_BUCKET
+    assert _store.query_generation_sweep_commands(now=NOW + timedelta(days=1), table=table) == ([], True)
+
+
+def test_listing_the_teachers_scans_nothing_and_does_not_grow_with_the_table(table) -> None:
+    table.seed(*_account(TEACHER), *_account("teacher-two"), *_account(STUDENT, role="student"))
+    for teacher in (TEACHER, "teacher-two"):
+        teacher_dispatch_service.record_teacher_seen(teacher, now=at())
+    table.requests.clear()
+
+    listed = teacher_dispatch_service.list_teacher_profiles()
+
+    assert sorted(profile["user_id"] for profile in listed) == sorted([TEACHER, "teacher-two"])
+    assert all(profile["dispatch_seen_at"] == at() for profile in listed)
+    small = _reads(table)
+    assert "scan" not in small
+    # One query of the index, then each teacher's profile and fence by key.
+    assert sorted(small) == ["get_item"] * 4 + ["query"]
+
+    for index in range(300):
+        table.seed({"PK": f"PRACTICE#{index:03d}", "SK": "ROW", "entity_type": "filler"})
+    table.requests.clear()
+
+    assert len(teacher_dispatch_service.list_teacher_profiles()) == 2
+    assert sorted(_reads(table)) == sorted(small)
+
+
+def test_a_seen_account_that_cannot_take_dispatch_is_not_listed(table) -> None:
+    """A heartbeat row is where to look, not a reason to trust what is found."""
+    table.seed(
+        *_account(TEACHER),
+        *_account("student-seen", role="student"),
+        *_account("teacher-inactive"),
+        *_account("teacher-leaving"),
+    )
+    table.rows[("USER#teacher-inactive", "PROFILE")]["account_status"] = "suspended"
+    for user_id in (TEACHER, "student-seen", "teacher-inactive", "teacher-leaving"):
+        teacher_dispatch_service.record_teacher_seen(user_id, now=at())
+    table.rows[("USER#teacher-leaving", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
+
+    listed = teacher_dispatch_service.list_teacher_profiles()
+
+    assert [profile["user_id"] for profile in listed] == [TEACHER]
+
+
+def test_a_heartbeat_written_before_the_index_counts_from_its_next_stamp(table) -> None:
+    """Rows stamped before #609 carry no index keys; the next stamp, a minute on, adds them."""
+    from stoa.db.repositories import user_repo
+
+    table.seed(*_account(TEACHER))
+    table.seed(
+        {
+            "PK": f"USER#{TEACHER}",
+            "SK": user_repo.TEACHER_SEEN_SK,
+            "entity_type": "teacher_seen",
+            "user_id": TEACHER,
+            "seen_at": at(),
+        }
+    )
+
+    assert teacher_dispatch_service.list_teacher_profiles() == []
+
+    teacher_dispatch_service.record_teacher_seen(TEACHER, now=at(1.5))
+
+    assert _offered(at(1.5)) == [TEACHER]
+
+
+def test_the_limit_caps_the_teachers_listed(table) -> None:
+    for teacher in ("teacher-a", "teacher-b", "teacher-c"):
+        table.seed(*_account(teacher))
+        teacher_dispatch_service.record_teacher_seen(teacher, now=at())
+
+    assert len(teacher_dispatch_service.list_teacher_profiles(limit=2)) == 2
+    assert teacher_dispatch_service.list_teacher_profiles(limit=0) == []
+
+
+def test_with_nobody_seen_lately_the_reason_is_that_nobody_is_online(table) -> None:
+    """Teachers exist but none has a heartbeat row: that is `not_online`, not no teachers."""
+    table.seed(*_account(TEACHER), *_account("teacher-two", availability="paused"))
+
+    plan = teacher_dispatch_service.plan_dispatch(QUESTION, now=at())
+
+    assert plan["refused"] == []
+    assert plan["summary"]["noCandidateReason"] == "not_online"
+    assert teacher_dispatch_service.teacher_availability_summary(now=at())["online"] is False
