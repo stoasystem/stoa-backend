@@ -1224,9 +1224,9 @@ def test_a_real_deletion_enters_the_one_pipeline_and_records_who_and_why(
     _assert_no_secrets(answer, fake_table)
     assert "fingerprint" not in str(answer) and "PK" not in str(answer)
 
-    # The scheduled job's sweep finds it, as it finds a self-deletion.
-    page = account_deletion_repo.scan_pending_deletion_commands(table=fake_table)
-    assert [item["command_id"] for item in page.items] == [result["deletionCommandId"]]
+    # The scheduled job finds it in the pending registry, as it finds a self-deletion.
+    pending = account_deletion_repo.list_pending_deletions(table=fake_table)
+    assert [entry.command_id for entry in pending] == [result["deletionCommandId"]]
 
     # And it is not accepted twice.
     again = _delete("S26-0001", dry=False, confirm="S26-0001")

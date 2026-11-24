@@ -292,7 +292,6 @@ _ENTRIES: tuple[DataType, ...] = (
             "deletion_user_id",
         ),
     ),
-    DataType("account_deletion_scan_cursor", _repo("account_deletion_repo"), ()),
     DataType(
         "account_email_claim",
         _repo("account_email_claim_repo"),

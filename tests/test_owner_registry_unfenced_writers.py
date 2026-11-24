@@ -107,7 +107,6 @@ def scan(root: Path) -> set[str]:
 
 
 REVIEWED: dict[str, str] = {
-    "src/stoa/db/repositories/account_deletion_repo.py::advance_deletion_scan_cursor": "deletion_flow",
     # The owner registry sweep's own result row (JOB#owner_registry_sweep): counts only.
     "src/stoa/services/owner_registry_sweep.py::record_run": "deletion_flow",
     # The backfill (`write=True`, an operator's run): it writes only the registry
@@ -124,7 +123,6 @@ REVIEWED: dict[str, str] = {
     "src/stoa/db/repositories/account_deletion_repo.py::ensure_active_account_fence": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::finalize_account_deletion": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::persist_branch_result": "deletion_flow",
-    "src/stoa/db/repositories/account_deletion_repo.py::register_pending_deletion": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::release_deletion_command_claim": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::renew_deletion_command_claim": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::replace_teacher_session_with_tombstone": "deletion_flow",

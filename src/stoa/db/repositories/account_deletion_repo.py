@@ -40,11 +40,6 @@ class _UpdateTable(Protocol):
     def update_item(self, **kwargs: object) -> object: ...
 
 
-@runtime_checkable
-class _PutTable(Protocol):
-    def put_item(self, **kwargs: object) -> object: ...
-
-
 def _dependency_mapping(value: object) -> AccountDeletionItem:
     if not isinstance(value, Mapping):
         raise AccountDeletionConflict("malformed account deletion dependency response")
@@ -274,9 +269,9 @@ def deletion_command_key(user_id: str, command_id: str) -> dict[str, str]:
 # Every accepted, unfinished deletion has one row in this partition, written in
 # the transaction that accepts it and deleted in the one that finalizes it, so
 # the scheduled job finds them all with one strong query instead of a cursor
-# walk over the whole table (#397). Commands accepted before the registry
-# existed have no row; the job's old discovery scan still finds those and
-# writes their row on the way (`register_pending_deletion`).
+# walk over the whole table (#397). That walk, kept for the commands accepted
+# before the registry existed, is gone (#611): a command without a row here is
+# one the job does not find.
 PENDING_REGISTRY_PK = "ACCOUNT_DELETION_PENDING"
 
 
@@ -338,25 +333,6 @@ def list_pending_deletions(*, table: Any | None = None) -> list[PendingDeletion]
     except (db_table.PageTokenInvalid, db_table.TableUnavailable) as exc:
         raise AccountDeletionConflict("pending deletion registry unavailable") from exc
     return found
-
-
-def register_pending_deletion(
-    *,
-    user_id: str,
-    command_id: str,
-    accepted_at: str | None = None,
-    table: Any | None = None,
-) -> None:
-    """Write the registry row of a command accepted before the registry existed."""
-    target = table or db_table.table()
-    if not isinstance(target, _PutTable):
-        raise AccountDeletionConflict("account deletion dependency unavailable")
-    try:
-        db_table.put(
-            table=target, Item=_pending_registry_item(user_id, command_id, accepted_at)
-        )
-    except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
-        raise AccountDeletionConflict("pending deletion registry unavailable") from exc
 
 
 def unregister_pending_deletion(
@@ -1810,143 +1786,6 @@ def close_unused_provider_revoke_debt(
         ],
         table=target,
     )
-    return True
-
-
-def scan_pending_deletion_commands(
-    *,
-    limit: int = 25,
-    cursor: dict[str, str] | None = None,
-    table: Any | None = None,
-) -> OwnedPrivatePage:
-    # Always the real scan, never a same-named method on the table: discovery
-    # is what the sweep's cursor walks (ticket 13).
-    target = table or db_table.table()
-    page = next(
-        sweep_pages(
-            "pending command",
-            table=target,
-            cursor=cursor or None,
-            page_limit=min(max(int(limit), 1), 100),
-            maximum_pages=1,
-            FilterExpression="entity_type=:entity AND #status IN (:pending,:running)",
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={
-                ":entity": "account_deletion_command",
-                ":pending": "pending",
-                ":running": "running",
-            },
-        )
-    )
-    return OwnedPrivatePage(tuple(page.items), page.last_key)
-
-
-# Where the scheduled sweep stopped. A scan's `Limit` counts rows read, so one
-# run covers a bounded slice of the table; the next run carries on from here,
-# and reaching the end of the table starts the next cycle from the top. The
-# version rises on every write, the reset included, so a run that read an older
-# place cannot overwrite a newer one.
-DELETION_SCAN_CURSOR_KEY = {"PK": "JOB#account_deletion", "SK": "SCAN_CURSOR"}
-
-
-@dataclass(frozen=True, slots=True)
-class DeletionScanCursor:
-    cursor: dict[str, str] | None
-    # None when no row is stored yet, which the next write must tell apart from
-    # a stored row at version 0.
-    version: int | None
-    cycle_started_at: str | None
-    # Consecutive runs that kept this place because a command in its slice
-    # failed; the sweep moves past the slice once this reaches its limit.
-    held_runs: int = 0
-
-
-def get_deletion_scan_cursor(*, table: Any | None = None) -> DeletionScanCursor:
-    """The stored place, or the top of the table when there is none.
-
-    A stored cursor that is not a valid key is read as the top of the table:
-    starting a cycle over costs one rescan, while refusing would stop the
-    schedule until someone repaired the row. The version is kept so the next
-    write still applies. A version that is not a whole number is refused: the
-    next write is conditional on it, so there is nothing safe to write against.
-    """
-    target = table or db_table.table()
-    item = _get_item(target, Key=dict(DELETION_SCAN_CURSOR_KEY), ConsistentRead=True).get(
-        "Item"
-    )
-    if not isinstance(item, Mapping):
-        return DeletionScanCursor(cursor=None, version=None, cycle_started_at=None)
-    version = stored_int(item.get("version"))
-    if version is None or version < 0:
-        raise AccountDeletionConflict("invalid deletion scan cursor version")
-    try:
-        cursor = continuation_key(item["cursor"], "deletion scan") if item.get("cursor") else None
-    except AccountDeletionConflict:
-        cursor = None
-    # Only an observation: a malformed start time is dropped rather than
-    # allowed to fail the write that carries the scan forward.
-    try:
-        started: str | None = _valid_lifecycle_timestamp(item.get("cycle_started_at"))
-    except AccountDeletionConflict:
-        started = None
-    held_runs = stored_int(item.get("held_runs"))
-    return DeletionScanCursor(
-        cursor=cursor,
-        version=version,
-        cycle_started_at=started,
-        held_runs=held_runs if held_runs is not None and held_runs > 0 else 0,
-    )
-
-
-def advance_deletion_scan_cursor(
-    *,
-    expected_version: int | None,
-    cursor: dict[str, str] | None,
-    cycle_started_at: str | None,
-    updated_at: str,
-    held_runs: int = 0,
-    table: Any | None = None,
-) -> bool:
-    """Store the sweep's new place if nobody has moved it since it was read.
-
-    `expected_version` is None when the read found no row. False means another
-    run stored a place first; its place stands.
-    """
-    if expected_version is not None and (
-        isinstance(expected_version, bool)
-        or not isinstance(expected_version, int)
-        or expected_version < 0
-    ):
-        raise AccountDeletionConflict("invalid deletion scan cursor version")
-    if isinstance(held_runs, bool) or not isinstance(held_runs, int) or held_runs < 0:
-        raise AccountDeletionConflict("invalid deletion scan held run count")
-    item: dict[str, Any] = {
-        **DELETION_SCAN_CURSOR_KEY,
-        "entity_type": "account_deletion_scan_cursor",
-        "version": (expected_version or 0) + 1,
-        "updated_at": _valid_lifecycle_timestamp(updated_at),
-        "held_runs": held_runs,
-    }
-    if cursor is not None:
-        item["cursor"] = continuation_key(cursor, "deletion scan")
-    if cycle_started_at is not None:
-        item["cycle_started_at"] = _valid_lifecycle_timestamp(cycle_started_at)
-    request: dict[str, Any] = {"Item": item}
-    if expected_version is None:
-        request["ConditionExpression"] = "attribute_not_exists(PK)"
-    else:
-        request["ConditionExpression"] = "#version = :expected"
-        request["ExpressionAttributeNames"] = {"#version": "version"}
-        request["ExpressionAttributeValues"] = {":expected": expected_version}
-    target = table or db_table.table()
-    if not isinstance(target, _PutTable):
-        raise AccountDeletionConflict("account deletion dependency unavailable")
-    try:
-        db_table.put(table=target, **request)
-    except db_table.WriteRefused:
-        return False
-    except db_table.TableUnavailable as exc:
-        raise AccountDeletionConflict("deletion scan cursor unavailable") from exc
     return True
 
 
