@@ -157,7 +157,7 @@ async def _current_help_requests(
 ) -> list[TeacherItem]:
     """The help requests this teacher may read, each one decided as it is listed."""
     current: list[TeacherItem] = []
-    for record in help_requests.list_all(table=db_table.table()):
+    for record in help_requests.list_for_teacher(actor.user_id, table=db_table.table()):
         conv = _teacher_mapping(record)
         loaded = teacher_task_resource(ResourceType.TEACHER_HELP_REQUEST, conv)
         try:

@@ -20,15 +20,20 @@ def _help_requests_table(*records: dict) -> FakeTable:
     table = FakeTable()
     table.seed(
         *(
-            {
-                "PK": f"CONV#{record['conversation_id']}",
-                "SK": "HELP",
-                "entity_type": "help_request",
-                "escalation_request_id": record["conversation_id"],
-                "version": 1,
-                **record,
-            }
-            for record in records
+            # With the index keys the store writes (#608): the teacher's queue
+            # reads the requests through them.
+            {**row, **help_requests.index_fields(row)}
+            for row in (
+                {
+                    "PK": f"CONV#{record['conversation_id']}",
+                    "SK": "HELP",
+                    "entity_type": "help_request",
+                    "escalation_request_id": record["conversation_id"],
+                    "version": 1,
+                    **record,
+                }
+                for record in records
+            )
         )
     )
     return table
