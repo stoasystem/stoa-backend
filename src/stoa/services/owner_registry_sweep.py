@@ -5,26 +5,19 @@ its registry rows (`stoa.db.owner_registry`) instead of scanning the table. That
 is only as good as the registry, so one full walk - daily, never per deletion -
 checks two things for every account at once:
 
-1. **Unregistered rows.** A row that names an account (any string attribute,
-   or a `#`/`:`/`/`-separated part of one, equal to an account id) in a
-   partition that is neither one of that account's derived partitions nor
-   registered under it. Each is then put to the deletion's own scans
-   (`DELETION_SCANS`), and falls into one of two kinds:
-
-   - **A missing registration**: some branch of that account's deletion would
-     take the row. The registry path reads only derived and registered
-     partitions, so it would never see it. These are what close the registry
-     path (`record_run`, `registry_path_ready`) and raise the alarm.
-   - **An unmatched mention**: no branch would take it - the administrator
-     who opened an account, the teacher a notification went to. Scan or
-     registry, the account's deletion leaves the row as it is, so the two
-     paths agree and nothing is missing from the registry. Counted and
-     logged, because a row that keeps a deleted account's id is worth a
-     look, but it closes nothing.
-2. **Leftovers of deleted accounts.** A row the data type catalog still
-   says names an account whose fence says `deleted` (`data_catalog.names`,
-   what deletion reads since #588), other than what deletion keeps on purpose (the fence,
-   its commands, its tombstones) - plus any registry row still filed under it.
+1. **Missing registrations.** For every row, the accounts the data type
+   catalog says it points to (`data_catalog.mentions`, owner or reference:
+   deletion removes the one and scrubs the other, #588), less the account's
+   own derived partitions and the partitions registered under it (#590). The
+   registry path reads only those, so it would never see the row. These are
+   what close the registry path (`record_run`, `registry_path_ready`) and
+   raise the alarm. A field the catalog lists as no pointer (`created_by`,
+   `invited_by`, `actor_id`) is a mention: no deletion acts on it, nothing
+   registers it, and it is not counted (#586 decision 1).
+2. **Leftovers of deleted accounts.** A row the catalog still says points to
+   an account whose fence says `deleted`, other than what deletion keeps on
+   purpose (the fence, its commands, its tombstones) - plus any registry row
+   still filed under it.
 
 3. **Stale references into a deleted account.** A registry row another
    account holds for one of a deleted account's derived partitions
@@ -39,6 +32,11 @@ the registry. The second checks every row and, for a backfill, writes the
 missing registry rows. Both are report-only unless `write=True`; nothing is
 deleted or re-queued here. `remove_stale_references` is the one removal, and
 only the daily job calls it.
+
+Rows of a kind the catalog does not know point to no account, so they are
+never a finding; they are counted on their own line, by `entity_type` (or key
+family, for a row written without one), because a kind the catalog misses is
+one no deletion takes.
 
 The report holds counts by key family (`CONV/MSG`) and up to `SAMPLE_LIMIT`
 keys per finding - keys, never row contents.
@@ -72,15 +70,21 @@ logger = logging.getLogger(__name__)
 
 SAMPLE_LIMIT = 20
 
-# Partitions that hold no account's data, whatever ids they mention: evidence
-# kept on purpose, the deletion's own bookkeeping, and shared content. A row
-# here is neither an unregistered row nor a leftover.
+# Partitions no deletion acts on, whatever the catalog says their rows point
+# to: evidence kept on purpose, the deletion's own bookkeeping, and the
+# classes the deletion inventory excludes. A row here is neither a missing
+# registration nor a leftover. (Not a rule of whose a row is: that is the
+# catalog's. Which kinds a deletion keeps is candidate I's `deletion` slot.)
+# The shared practice content lives under the exact key `PRACTICE` and names
+# no account; the old untyped `PRACTICE#` / `PRACTICE_ATTEMPT#` /
+# `PRACTICE_PROGRESS#` rows do, and the practice branch deletes them, so they
+# are checked like any other since #590.
 NOT_OWNED_PREFIXES: tuple[str, ...] = (
     "SECURITY_AUDIT#",
     "AUDIT_RETENTION#",
     "ACCOUNT_DELETION_PENDING",
     "JOB#",
-    "PRACTICE",
+    "PRACTICE_CHALLENGE_LOOKUP",
     "CURRICULUM_METRIC#",
     "CURRICULUM_VERSION#",
     "CURRICULUM_MANIFEST#",
@@ -109,21 +113,14 @@ _RETAINED_ACCOUNT_SK_PREFIXES = (
     "PROVIDER_REVOKE#",
 )
 
-# Where an id names the owner rather than someone the row only mentions.
-_OWNER_ATTRIBUTES = frozenset(
-    {"owner_id", "student_id", "user_id", "child_id", "child_user_id", "beneficiary_id"}
-)
-
-_SEPARATORS = ("#", ":", "/")
-
 # Every scan a deletion branch finds an account's rows with. Each pages the
 # table through `account_deletion_repo.sweep_pages`, which is also where the
-# registry path narrows the read to derived and registered partitions - so a
-# row one of these takes, in a partition that is neither, is exactly what the
-# registry path would miss. `tests/test_owner_registry_sweep.py` holds this
-# list to every caller of `sweep_pages` in the tree. (The attachments branch
-# pages inline and takes rows by `owner_id` / `student_id`, which
-# `scan_owned_private_rows` also does.)
+# registry path narrows the read to derived and registered partitions.
+# `tests/test_owner_registry_sweep.py` holds this list to every caller of
+# `sweep_pages` in the tree. The walk no longer asks them (#590): the catalog
+# says whom a row points to, and every scan asks the catalog too (#588). The
+# test holds them to the catalog instead - a row one of them takes is a row the
+# catalog names - and whether they stay is candidate I's call.
 DELETION_SCANS: tuple[Callable[..., Any], ...] = (
     account_deletion_repo.scan_owned_private_rows,
     adaptive_learning_repo.scan_adaptive_private_rows,
@@ -159,9 +156,9 @@ class _OneRow:
 def deletion_takes(item: Mapping[str, Any], account: str, *, table: object) -> bool:
     """Whether any branch of `account`'s deletion would take this row.
 
-    Asked of the scans themselves rather than of a copy of their rules. A scan
-    that counts the row as unresolved, or cannot make it out at all, counts as
-    taking it: in doubt, the registration is missing.
+    Asked of the scans themselves. A scan that counts the row as unresolved,
+    or cannot make it out at all, counts as taking it. Not used by the walk
+    since #590; the tests compare it with the catalog.
     """
     view = _OneRow(item, table)
     for scan in DELETION_SCANS:
@@ -184,9 +181,8 @@ class SweepReport:
     # family of the first row that showed them.
     unregistered: Counter[str] = field(default_factory=Counter)
     unregistered_samples: list[dict[str, str]] = field(default_factory=list)
-    # Named in an unregistered partition by a row no deletion branch takes.
-    mentions: Counter[str] = field(default_factory=Counter)
-    mention_samples: list[dict[str, str]] = field(default_factory=list)
+    # Rows of a kind the catalog does not know, by `entity_type` or key family.
+    unknown: Counter[str] = field(default_factory=Counter)
     registry_written: int = 0
     leftovers: Counter[str] = field(default_factory=Counter)
     leftover_samples: list[dict[str, str]] = field(default_factory=list)
@@ -213,9 +209,8 @@ class SweepReport:
             "missing_registrations": sum(self.unregistered.values()),
             "unregistered_by_family": dict(sorted(self.unregistered.items())),
             "unregistered_samples": self.unregistered_samples,
-            "unmatched_mentions": sum(self.mentions.values()),
-            "unmatched_mentions_by_family": dict(sorted(self.mentions.items())),
-            "unmatched_mention_samples": self.mention_samples,
+            "rows_unknown_to_catalog": sum(self.unknown.values()),
+            "unknown_to_catalog_by_kind": dict(sorted(self.unknown.items())),
             "registry_written": self.registry_written,
             "leftover_rows": sum(self.leftovers.values()),
             "leftovers_by_family": dict(sorted(self.leftovers.items())),
@@ -249,6 +244,14 @@ def family(item: Mapping[str, Any]) -> str:
     return f"{pk.split('#')[0] or '?'}/{sk.split('#')[0] or '?'}"
 
 
+def kind(item: Mapping[str, Any]) -> str:
+    """A row's `entity_type`, or its key family for a row written without one."""
+    entity_type = item.get("entity_type")
+    if isinstance(entity_type, str) and entity_type:
+        return entity_type
+    return f"(untyped) {family(item)}"
+
+
 def census(rows: Iterable[Mapping[str, Any]]) -> Census:
     active: set[str] = set()
     deleted: set[str] = set()
@@ -268,44 +271,6 @@ def census(rows: Iterable[Mapping[str, Any]]) -> Census:
     return Census(frozenset(active), frozenset(deleted), frozenset(registry))
 
 
-def named_accounts(item: Mapping[str, Any], accounts: frozenset[str]) -> dict[str, str]:
-    """Every account the row names, each with the role it is named in."""
-    found: dict[str, str] = {}
-
-    def visit(value: object, attribute: str, depth: int) -> None:
-        if isinstance(value, str):
-            for token in _tokens(value):
-                if token in accounts:
-                    role = (
-                        owner_registry.ROLE_OWNER
-                        if attribute in _OWNER_ATTRIBUTES
-                        else owner_registry.ROLE_REFERENCE
-                    )
-                    if found.get(token) != owner_registry.ROLE_OWNER:
-                        found[token] = role
-        elif depth < 4 and isinstance(value, Mapping):
-            for name, member in value.items():
-                if isinstance(name, str) and name in accounts:
-                    found.setdefault(name, owner_registry.ROLE_REFERENCE)
-                visit(member, attribute, depth + 1)
-        elif depth < 4 and isinstance(value, (list, tuple, set, frozenset)):
-            for member in value:
-                visit(member, attribute, depth + 1)
-
-    for name, value in item.items():
-        if name == "PK":
-            continue
-        visit(value, name, 0)
-    return found
-
-
-def _tokens(value: str) -> set[str]:
-    parts = {value}
-    for separator in _SEPARATORS:
-        parts = {piece for part in parts for piece in part.split(separator)}
-    return parts | {value}
-
-
 def _not_owned(pk: str) -> bool:
     return pk.startswith(NOT_OWNED_PREFIXES)
 
@@ -313,31 +278,36 @@ def _not_owned(pk: str) -> bool:
 def check_row(
     item: Mapping[str, Any], seen: Census
 ) -> tuple[list[tuple[str, str]], bool]:
-    """The registry rows this row lacks, and whether it is a deleted account's leftover."""
+    """The registry rows this row lacks, and whether it is a deleted account's leftover.
+
+    Both from the catalog alone (#590): the active accounts it points to that
+    have not registered its partition, each with the role the catalog gives,
+    and whether it still points to a deleted account.
+    """
     pk = str(item.get("PK") or "")
     if not pk or _not_owned(pk) or owner_registry.is_registry_row(item):
         return [], False
-    missing: list[tuple[str, str]] = []
-    named = named_accounts(item, seen.active)
-    for account, role in named.items():
-        if owner_registry.is_derived_for(pk, account) or (account, pk) in seen.registry:
-            continue
-        missing.append((account, role))
-    leftover = any(_is_leftover(item, account) for account in seen.deleted)
+    named = data_catalog.mentions(item)
+    missing = [
+        (account, str(role))
+        for account, role in named.items()
+        if account in seen.active
+        and not owner_registry.is_derived_for(pk, account)
+        and (account, pk) not in seen.registry
+    ]
+    leftover = any(
+        _is_leftover(item, account) for account in named if account in seen.deleted
+    )
     return missing, leftover
 
 
 def _is_leftover(item: Mapping[str, Any], account: str) -> bool:
     if account_deletion_repo.is_deletion_tombstone(item):
         return False
-    if item.get("PK") == f"USER#{account}" and str(item.get("SK") or "").startswith(
-        _RETAINED_ACCOUNT_SK_PREFIXES
-    ):
-        return False
-    try:
-        return data_catalog.names(item, account)
-    except ValueError:  # not an account id
-        return False
+    return not (
+        item.get("PK") == f"USER#{account}"
+        and str(item.get("SK") or "").startswith(_RETAINED_ACCOUNT_SK_PREFIXES)
+    )
 
 
 def record_run(report: SweepReport, *, now_iso: str, table: object | None = None) -> None:
@@ -354,7 +324,7 @@ def record_run(report: SweepReport, *, now_iso: str, table: object | None = None
             "complete": report.complete,
             "rows_scanned": report.rows_scanned,
             "missing_registrations": sum(report.unregistered.values()),
-            "unmatched_mentions": sum(report.mentions.values()),
+            "rows_unknown_to_catalog": sum(report.unknown.values()),
             "leftover_rows": sum(report.leftovers.values()),
         },
     )
@@ -379,8 +349,8 @@ def run(
 ) -> SweepReport:
     """Census, then the check (and, with `write`, the backfill) from `start`.
 
-    A backfill writes the missing registrations only: an unmatched mention
-    needs no registry row.
+    A backfill writes the missing registrations only, each in the role the
+    catalog gives (`check_row`).
 
     Resumable: `report.last_key` is where the second scan stopped (`None` once
     it reached the end, with `report.complete`). Handing it back as `start`
@@ -395,7 +365,6 @@ def run(
         registry_rows=len(seen.registry),
     )
     registry = set(seen.registry)
-    mentioned: set[tuple[str, str]] = set()
     # A deleted account's derived partitions, the registry rows other accounts
     # hold for them, and every (account, partition) some row still names.
     gone_partitions = {
@@ -422,11 +391,15 @@ def run(
                         "SK": str(item.get("SK")),
                     }
                 continue
+            if data_catalog.data_type_of(item) is None:
+                report.unknown[kind(item)] += 1
             missing, leftover = check_row(item, seen)
             key = {"PK": str(item.get("PK")), "SK": str(item.get("SK"))}
             if key["PK"] in gone_partitions:
                 named_in.update(
-                    (account, key["PK"]) for account in named_accounts(item, seen.active)
+                    (account, key["PK"])
+                    for account in data_catalog.mentions(item)
+                    if account in seen.active
                 )
             if leftover:
                 report.leftovers[family(item)] += 1
@@ -434,17 +407,6 @@ def run(
                     report.leftover_samples.append(key)
             for account, role in missing:
                 if (account, key["PK"]) in registry:
-                    continue
-                if not deletion_takes(item, account, table=target):
-                    # Once per (account, partition), like a registration; a
-                    # later row there that a branch does take still counts.
-                    if (account, key["PK"]) not in mentioned:
-                        mentioned.add((account, key["PK"]))
-                        report.mentions[family(item)] += 1
-                        if len(report.mention_samples) < SAMPLE_LIMIT:
-                            report.mention_samples.append(
-                                {**key, "account": account, "role": role}
-                            )
                     continue
                 report.unregistered[family(item)] += 1
                 if len(report.unregistered_samples) < SAMPLE_LIMIT:
@@ -471,13 +433,13 @@ def run(
         if remaining_seconds is not None and remaining_seconds() < min_remaining_seconds:
             break
     logger.info(
-        "owner_registry_sweep accounts=%d deleted=%d rows=%d unregistered=%d mentions=%d "
+        "owner_registry_sweep accounts=%d deleted=%d rows=%d unregistered=%d unknown=%d "
         "written=%d leftovers=%d deleted_registry=%d stale_references=%d complete=%s",
         report.accounts,
         report.deleted_accounts,
         report.rows_scanned,
         sum(report.unregistered.values()),
-        sum(report.mentions.values()),
+        sum(report.unknown.values()),
         report.registry_written,
         sum(report.leftovers.values()),
         report.registry_of_deleted_accounts,

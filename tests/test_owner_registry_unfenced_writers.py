@@ -111,7 +111,9 @@ REVIEWED: dict[str, str] = {
     # The owner registry sweep's own result row (JOB#owner_registry_sweep): counts only.
     "src/stoa/services/owner_registry_sweep.py::record_run": "deletion_flow",
     # The backfill (`write=True`, an operator's run): it writes only the registry
-    # rows the walk found missing, by its own census until #590.
+    # rows the walk found missing - the catalog's accounts for the row, in the
+    # catalog's role (#590) - and only for accounts still active, which
+    # `db_table.registered` cannot tell apart.
     "src/stoa/services/owner_registry_sweep.py::run": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::begin_account_deletion": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::claim_deletion_command": "deletion_flow",

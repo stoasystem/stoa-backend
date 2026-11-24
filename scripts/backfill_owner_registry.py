@@ -5,8 +5,9 @@ Since the dual-write, every fenced write registers the partition it goes into
 under its owner (`USER#{id}/OWNS#{partition}`) and under each `also=` account
 (`USER#{id}/REFERENCED_IN#{partition}`). Rows written before that have none, and
 neither do rows written outside `fenced`. This walks the table once, finds every
-row that names an account in a partition that account has not registered, and -
-only with `--apply` - writes the missing registry rows. Accounts and the registry
+row the data type catalog says points to an active account in a partition that
+account has not registered (#590), and - only with `--apply` - writes the
+missing registry rows, in the catalog's role. Accounts and the registry
 are read first (one strong scan), then the rows (a second); see
 `stoa.services.owner_registry_sweep`, which the daily sweep job shares.
 

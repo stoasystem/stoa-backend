@@ -751,8 +751,8 @@ def test_an_account_opened_and_extended_by_an_administrator_leaves_nothing_unreg
     A missing registration closes the registry path for every deletion until
     somebody backfills it. The number claim, the email claim, the profile's
     `created_by` and the period record's `actor_id` name an account only as a
-    mention: no deletion acts on them, so nothing registers them and the sweep
-    counts them as mentions, not as missing registrations (#586 decision 1, #589).
+    mention: no deletion acts on them, so nothing registers them and the sweep,
+    which asks the catalog, does not count them (#586 decision 1, #589, #590).
     """
     from test_account_admin_endpoints import _issue
 
@@ -787,7 +787,6 @@ def test_an_account_opened_and_extended_by_an_administrator_leaves_nothing_unreg
         if owner_registry.is_registry_row(row)
     }
     assert not {(account, "ACCOUNT_NUMBER"), (account, "EMAIL"), ("admin-1", "USER")} & registered
-    assert report.mentions
 
 
 def test_an_operators_extension_registers_no_account_for_the_operator(
