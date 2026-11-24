@@ -55,7 +55,7 @@ from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import BotoCoreError, ClientError
 
 from stoa import config
-from stoa.db import owner_registry
+from stoa.db import owner_registry, read_metering
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +72,18 @@ _installed: object | None = None
 
 @lru_cache
 def _real_table() -> object:
-    return boto3.resource("dynamodb", region_name=config.settings().aws_region).Table(
+    real = boto3.resource("dynamodb", region_name=config.settings().aws_region).Table(
         config.settings().dynamodb_table_name
     )
+    _metered(real.meta.client)
+    return real
+
+
+def _metered(boto_client: Any) -> Any:
+    """`boto_client`, reporting what its reads consume while the switch is on (#610)."""
+    if config.settings().dynamodb_read_metering:
+        read_metering.attach(boto_client)
+    return boto_client
 
 
 def table() -> object:
@@ -104,7 +113,7 @@ def client() -> Any:
     once used the resource's client learned this separately; this is the only
     place it now has to be known.
     """
-    return boto3.client("dynamodb", region_name=config.settings().aws_region)
+    return _metered(boto3.client("dynamodb", region_name=config.settings().aws_region))
 
 
 def transactional(target: object) -> bool:
