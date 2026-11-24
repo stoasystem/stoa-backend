@@ -384,6 +384,83 @@ def test_an_inbox_is_read_by_queries_of_the_index_and_never_a_scan(table) -> Non
     assert {request["IndexName"] for request in requests} == {notification_repo.INBOX_INDEX}
 
 
+def test_the_bell_shows_a_persons_own_among_more_than_a_hundred_and_scans_nothing() -> None:
+    """The bell itself (#613, step 2): `list_user_events` and the digest read the inbox.
+
+    With the scan, a site holding more than a hundred notifications showed each
+    person only those of theirs that fell among the first hundred it met.
+    """
+    double = FakeTable(page_item_cap=7)
+    double.seed(*(_fence(user_id) for user_id in PEOPLE))
+    db_table.install(double)
+    try:
+        for number in range(150):
+            notification_repo.put_event(
+                _event(
+                    f"other-{number:03d}",
+                    recipient_id=STUDENT,
+                    recipient_role="student",
+                    created_at=f"2026-11-24T09:{number // 60:02d}:{number % 60:02d}Z",
+                )
+            )
+        notification_repo.put_event(
+            _event("mine-new", recipient_id=TEACHER, recipient_role="teacher", created_at="2026-11-24T11:00:00Z")
+        )
+        notification_repo.put_event(
+            _event(
+                "mine-archived",
+                recipient_id=TEACHER,
+                recipient_role="teacher",
+                created_at="2026-11-24T10:00:00Z",
+                status="archived",
+            )
+        )
+        scans = double.calls["scan"]
+        teacher = {"sub": TEACHER, "role": "teacher"}
+
+        shown = notification_service.list_user_events(teacher)
+        unread = notification_service.list_user_events(teacher, status="created", limit=100)
+        archived = notification_service.list_user_events(teacher, status="archived")
+        student = notification_service.list_user_events({"sub": STUDENT, "role": "student"}, limit=100)
+        preview = notification_service.digest_preview(teacher)
+
+        assert [item["eventId"] for item in shown] == ["mine-new"]
+        assert [item["eventId"] for item in unread] == ["mine-new"]
+        assert [item["eventId"] for item in archived] == ["mine-archived"]
+        # The newest hundred of the student's own hundred and fifty, newest first.
+        assert len(student) == 100
+        assert student[0]["eventId"] == "other-149"
+        assert preview["userId"] == TEACHER
+        assert double.calls["scan"] == scans
+    finally:
+        db_table.install(None)
+
+
+def test_the_administrators_list_reads_every_notification_of_the_site() -> None:
+    """It still scans, but every page: the hundred-first notification is no longer lost."""
+    double = FakeTable(page_item_cap=7)
+    double.seed(*(_fence(user_id) for user_id in PEOPLE))
+    db_table.install(double)
+    try:
+        for number in range(130):
+            notification_repo.put_event(
+                _event(
+                    f"e{number:03d}",
+                    recipient_id=STUDENT,
+                    recipient_role="student",
+                    created_at=f"2026-11-24T09:{number // 60:02d}:{number % 60:02d}Z",
+                )
+            )
+
+        listed = notification_service.list_admin_events(limit=100)
+
+        assert len(listed) == 100
+        assert listed[0]["eventId"] == "e129"
+        assert len(notification_repo.list_all_events()) == 130
+    finally:
+        db_table.install(None)
+
+
 def test_a_row_of_another_kind_in_the_bucket_is_not_a_notification(table) -> None:
     table.seed(
         {

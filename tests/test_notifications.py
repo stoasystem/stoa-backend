@@ -42,8 +42,17 @@ def _install_notification_repo(monkeypatch):
     def get_event(event_id):
         return events.get(event_id)
 
-    def list_events(limit=100):
-        return list(events.values())[:limit]
+    def list_inbox(*, user_id="", role="", table=None):
+        # One person's notifications and their role's, as the index finds them (#613).
+        return [
+            dict(event)
+            for event in events.values()
+            if event.get("recipient_id") == user_id
+            or (event.get("recipient_id") in {None, ""} and event.get("recipient_role") == role)
+        ]
+
+    def list_all_events(*, table=None):
+        return list(events.values())
 
     def update_event(event_id, updates):
         events[event_id].update(updates)
@@ -62,7 +71,8 @@ def _install_notification_repo(monkeypatch):
         "load_delivery_event_strong",
         get_event,
     )
-    monkeypatch.setattr(notification_service.notification_repo, "list_events", list_events)
+    monkeypatch.setattr(notification_service.notification_repo, "list_inbox", list_inbox)
+    monkeypatch.setattr(notification_service.notification_repo, "list_all_events", list_all_events)
     monkeypatch.setattr(notification_service.notification_repo, "update_event", update_event)
     monkeypatch.setattr(notification_service.notification_repo, "put_preferences", put_preferences)
     monkeypatch.setattr(notification_service.notification_repo, "get_preferences", get_preferences)
