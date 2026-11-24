@@ -250,11 +250,10 @@ def test_every_deletion_scan_is_asked():
     """
     import ast
 
-    # Not an account's rows: the pending-command sweep (and the helper nested
-    # in it). And the attachments branch, which pages inline and takes rows by
-    # `owner_id` / `student_id` as `scan_owned_private_rows` does.
+    # Not an account's rows: the helper that looks for an account's deletion
+    # commands. And the attachments branch, which pages inline and takes rows
+    # by `owner_id` / `student_id` as `scan_owned_private_rows` does.
     not_a_row_scan = {
-        "scan_pending_deletion_commands",
         "_scan_commands",
         "_attachments_branch",
     }

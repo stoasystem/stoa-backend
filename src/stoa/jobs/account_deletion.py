@@ -1,12 +1,10 @@
 """Scheduled discovery and continuation for durable account deletion commands.
 
-Discovery has two halves (#397). Every command accepted since the pending
-registry exists has a row in `ACCOUNT_DELETION_PENDING`, and one strong query of
-that partition finds all of them on every run. Commands accepted before it - the
-ones in flight when it was deployed - have none, so the old cursor scan still
-runs too, and writes the missing registry row for each command it finds; from
-the next run on those are found by the query as well. The scan can go once no
-command without a row is left.
+Every accepted command has a row in `ACCOUNT_DELETION_PENDING`, written in the
+transaction that accepts it (#397), and one strong query of that partition
+finds all of them on every run. The cursor scan of the whole table that found
+the commands accepted before that registry existed is gone (#611): production
+held none on 2026-11-24, and what a run reads no longer follows the table.
 """
 
 from __future__ import annotations
@@ -25,22 +23,15 @@ from stoa.services.account_deletion_service import AccountDeletionService
 logger = logging.getLogger(__name__)
 
 
-# Everything the sweep calls. A repository without one of these is refused
-# before anything is read: a double missing the cursor methods used to get the
-# old start-from-the-top behaviour silently, which is the bug #7 describes.
+# Everything a run calls. A repository without one of these is refused before
+# anything is read: a double missing a method used to get a quieter behaviour
+# silently (#7), and a run that could not list the registry would find nothing
+# and report an empty success.
 _REQUIRED_REPOSITORY_METHODS = (
-    "get_deletion_scan_cursor",
-    "advance_deletion_scan_cursor",
-    "scan_pending_deletion_commands",
+    "list_pending_deletions",
+    "get_deletion_command",
     "claim_deletion_command",
 )
-
-
-# How many consecutive runs a failing command may keep the sweep in place. The
-# next run after that still tries the slice first, and moves past it if the
-# command fails again; the command itself is left exactly as it is, for the
-# request-side continuation or a later cycle to finish (ticket 12).
-_HOLD_LIMIT = 3
 
 
 # Below this much remaining Lambda time a run claims no further command.
@@ -55,29 +46,28 @@ class DeletionJobSummary:
     retryable: int = 0
 
 
-def _registered_commands(repository: Any) -> list[dict[str, Any]]:
-    """The commands the pending registry names, each read by its key.
+def _registered_commands(repository: Any) -> tuple[list[dict[str, Any]], bool]:
+    """The commands the pending registry names, each read by its key, and whether all were read.
 
     A row whose command is finished or gone is dropped on the way. A registry
-    that cannot be read is logged, not fatal: the scan below still runs.
+    that cannot be read, or a command that cannot, is logged and makes the
+    answer incomplete: the run reports it, and the next run asks again.
     """
-    lister = getattr(repository, "list_pending_deletions", None)
-    loader = getattr(repository, "get_deletion_command", None)
-    if not callable(lister) or not callable(loader):
-        return []
     try:
-        entries = lister()
+        entries = repository.list_pending_deletions()
     except Exception:
         logger.warning("account_deletion_registry_unavailable")
-        return []
+        return [], False
     commands: list[dict[str, Any]] = []
+    complete = True
     for entry in entries:
         try:
-            command = loader(entry.user_id, entry.command_id)
+            command = repository.get_deletion_command(entry.user_id, entry.command_id)
         except Exception:
             logger.warning(
                 "account_deletion_registry_read_failed command_id=%s", entry.command_id
             )
+            complete = False
             continue
         if not command or command.get("status") not in {"pending", "running"}:
             unregister = getattr(repository, "unregister_pending_deletion", None)
@@ -88,29 +78,7 @@ def _registered_commands(repository: Any) -> list[dict[str, Any]]:
                     pass
             continue
         commands.append(dict(command))
-    return commands
-
-
-def _backfill_registry(repository: Any, commands: list[dict[str, Any]]) -> None:
-    """Register the scanned commands accepted before the registry existed."""
-    register = getattr(repository, "register_pending_deletion", None)
-    if not callable(register):
-        return
-    for command in commands:
-        user_id = command.get("user_id")
-        command_id = command.get("command_id")
-        if not isinstance(user_id, str) or not user_id:
-            continue
-        if not isinstance(command_id, str) or not command_id:
-            continue
-        try:
-            register(
-                user_id=user_id,
-                command_id=command_id,
-                accepted_at=command.get("accepted_at"),
-            )
-        except Exception:
-            logger.warning("account_deletion_registry_backfill_failed command_id=%s", command_id)
+    return commands, complete
 
 
 def _claim(repository: Any, command: Mapping[str, Any]) -> Any:
@@ -145,91 +113,19 @@ def run_pending_deletions(
         raise account_deletion_repo.AccountDeletionConflict(
             f"deletion repository lacks {', '.join(missing)}"
         )
-    now = datetime.now(UTC)
-    # One run reads a bounded slice of the table, so it starts where the last
-    # run stopped. Without this every run read the same first slice, and a
-    # command further down was never reached by the schedule (#7).
-    place = repository.get_deletion_scan_cursor()
-    commands: list[dict[str, Any]] = []
-    cursor: dict[str, str] | None = place.cursor
-    # The starting place counts as seen: a page that hands it back again is
-    # going round in a circle, not moving on.
-    seen_cursors: set[tuple[str, str]] = (
-        {(cursor["PK"], cursor["SK"])} if cursor is not None else set()
-    )
-    unfinished = False
-    # A continuation key the scan should never hand back; where it points is
-    # not a place worth keeping.
-    anomalous = False
-    pages = 0
-    while len(commands) < limit and pages < 100:
-        pages += 1
-        page_limit = max(limit - len(commands), 1)
-        page = repository.scan_pending_deletion_commands(limit=page_limit, cursor=cursor)
-        items, next_cursor = list(page.items), page.cursor
-        commands.extend(dict(item) for item in items[:page_limit])
-        if next_cursor is None:
-            cursor = None
-            break
-        if (
-            not isinstance(next_cursor, dict)
-            or set(next_cursor) != {"PK", "SK"}
-            or not all(
-                isinstance(next_cursor.get(field), str) and next_cursor[field]
-                for field in ("PK", "SK")
-            )
-        ):
-            unfinished = anomalous = True
-            break
-        identity = (next_cursor["PK"], next_cursor["SK"])
-        if identity in seen_cursors:
-            unfinished = anomalous = True
-            break
-        seen_cursors.add(identity)
-        cursor = next_cursor
-    # Running out of scan budget is not the same as having nothing to do.
-    # `Limit` is applied before the filter, so a page reads that many rows
-    # and yields the deletion commands among them - on a table of any size
-    # the budget runs out long before twenty-five of them are found. This
-    # returned early and threw the commands it had already found away, so
-    # every deletion stopped after the one pass the request itself did.
-    if len(commands) < limit and cursor is not None and pages >= 100:
-        unfinished = True
-    _backfill_registry(repository, commands)
-    # Registered commands first, then whatever the scan found that is not
-    # among them; each command is handled once per run.
-    scanned_ids = {str(command.get("command_id") or "") for command in commands}
-    registered = [
-        command
-        for command in _registered_commands(repository)
-        if str(command.get("command_id") or "") not in scanned_ids
-    ]
+    registered, complete = _registered_commands(repository)
+    unfinished = not complete
     worker = (
         service_factory
         or (lambda: AccountDeletionService(remaining_seconds=remaining_seconds))
     )()
     claimed = continued = retryable = 0
-    failed_command_ids: list[str] = []
-    for command in registered:
+    # The registry is small and read whole; `limit` bounds what one run takes on.
+    for command in registered[:limit]:
         if remaining_seconds is not None and remaining_seconds() < MIN_REMAINING_SECONDS:
+            # Not attempted is not failed: the next run's query finds it again.
             unfinished = True
             break
-        try:
-            claim = _claim(repository, command)
-            if not claim:
-                continue
-            claimed += 1
-            worker.continue_command(claim)
-            continued += 1
-        except Exception:
-            # Found again by the next run's query; it does not hold the scan.
-            unfinished = True
-    for command in commands:
-        if remaining_seconds is not None and remaining_seconds() < MIN_REMAINING_SECONDS:
-            # Not attempted is not failed, and the place need not hold for it:
-            # the registry row written above finds it on the next run.
-            unfinished = True
-            continue
         try:
             claim = _claim(repository, command)
             if not claim:
@@ -239,68 +135,17 @@ def run_pending_deletions(
             worker.continue_command(claim)
             continued += 1
         except Exception:
+            # Found again by the next run's query, five minutes on.
             retryable += 1
-            failed_command_ids.append(str(command.get("command_id") or ""))
-    # Only after every command found here has been dealt with: a run that ends
-    # before this line leaves the stored place where it was, and the next run
-    # reads the same slice again. A command that failed holds the place too, so
-    # the next run retries it in five minutes rather than a whole cycle later.
-    # Reaching the end of the table starts the next cycle from the top. A write
-    # refused because another run stored a place first is fine; that run's
-    # place stands.
-    # The cycle started when its first run stored anything; a hold at the very
-    # start of a cycle stores the start time too, and later runs keep it.
-    cycle_started_at = place.cycle_started_at or now.isoformat()
-    if anomalous:
-        logger.warning(
-            "account_deletion_scan_anomaly version=%s reason=continuation_key",
-            place.version,
-        )
-    elif retryable and place.held_runs < _HOLD_LIMIT:
-        # A write lost to another run on the same version is not counted.
-        repository.advance_deletion_scan_cursor(
-            expected_version=place.version,
-            cursor=place.cursor,
-            cycle_started_at=cycle_started_at,
-            updated_at=now.isoformat(),
-            held_runs=place.held_runs + 1,
-        )
-        logger.warning(
-            "account_deletion_scan_held version=%s failed_commands=%s held_runs=%s",
-            place.version,
-            retryable,
-            place.held_runs + 1,
-        )
-    else:
-        if retryable:
             logger.warning(
-                "account_deletion_scan_skipped version=%s held_runs=%s command_ids=%s",
-                place.version,
-                place.held_runs,
-                ",".join(failed_command_ids),
+                "account_deletion_command_failed command_id=%s",
+                str(command.get("command_id") or ""),
             )
-        stored = repository.advance_deletion_scan_cursor(
-            expected_version=place.version,
-            cursor=cursor,
-            cycle_started_at=None if cursor is None else cycle_started_at,
-            updated_at=now.isoformat(),
-            held_runs=0,
-        )
-        if stored and cursor is None:
-            # Taken after the reset is stored, not at entry: the scan and the
-            # claims in between are part of the cycle.
-            completed = datetime.now(UTC)
-            started = datetime.fromisoformat(cycle_started_at)
-            logger.info(
-                "account_deletion_scan_cycle_completed version=%s completed_at=%s "
-                "duration_seconds=%s",
-                (place.version or 0) + 1,
-                completed.isoformat(),
-                int((completed - started).total_seconds()),
-            )
-    # A sweep that stopped short says so, so the next run knows to come back.
+    if len(registered) > limit:
+        unfinished = True
+    # A run that stopped short says so, so the next run knows to come back.
     return DeletionJobSummary(
-        len(commands) + len(registered),
+        len(registered),
         claimed,
         continued,
         retryable + (1 if unfinished else 0),
@@ -308,7 +153,7 @@ def run_pending_deletions(
 
 
 def _registered_command(repository: Any, command_id: str) -> dict[str, Any] | None:
-    """The command named `command_id`, found through the registry, never a scan."""
+    """The command named `command_id`, found through the registry, by key."""
     lister = getattr(repository, "list_pending_deletions", None)
     loader = getattr(repository, "get_deletion_command", None)
     if not callable(lister) or not callable(loader):
@@ -329,10 +174,9 @@ async def continue_deletion_command(
     against the API's 29 s (#397). It now only tombstones the profile, which
     gives the address back at once, and returns the lease; a few keyed reads
     and writes whatever the size of the table. The provider revoke, the
-    identity rows and every scan are the scheduled job's, on the deletion
+    identity rows and every branch are the scheduled job's, on the deletion
     function, which alone holds the Cognito admin rights. The command is found
-    through the pending registry, by key, never by a scan; one accepted before
-    the registry is left to the schedule.
+    through the pending registry, by key.
     """
     try:
         worker = service or AccountDeletionService()

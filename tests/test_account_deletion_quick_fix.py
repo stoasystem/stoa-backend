@@ -347,9 +347,10 @@ def _legacy_command(command_id: str, user: str) -> dict[str, Any]:
     }
 
 
-def test_registered_commands_are_found_every_run_and_older_ones_by_the_scan(
+def test_registered_commands_are_found_every_run_and_nothing_is_scanned_for(
     small_table: FakeTable,
 ) -> None:
+    """The cursor scan that found commands without a registry row is gone (#611)."""
     command_id = _accept("student-small")
     small_table.seed(
         *_unrelated(2_600),
@@ -365,19 +366,19 @@ def test_registered_commands_are_found_every_run_and_older_ones_by_the_scan(
 
     first = job.run_pending_deletions(service_factory=lambda: worker)
 
-    # The registered command is claimed although the scan's budget ends long
-    # before its row; the older one is past that budget this run.
     assert worker.continued == [command_id]
-    assert first.discovered == 1
+    assert first.discovered == 1 and first.retryable == 0
     assert "gone#finished" not in _registered(small_table)
 
     job.run_pending_deletions(service_factory=lambda: worker)
 
-    assert worker.continued == [command_id, "legacy-command"]
-    # Found by the scan, and registered on the way: the next run's query finds it.
+    # A command with no registry row is not looked for: the table is never scanned,
+    # and no row is written for it. (The registered one is still leased to the first run.)
+    assert worker.continued == [command_id]
+    assert not [operation for operation, _ in small_table.requests if operation == "scan"]
     assert {
         (entry.user_id, entry.command_id) for entry in account_deletion_repo.list_pending_deletions()
-    } == {("student-small", command_id), ("zz-legacy", "legacy-command")}
+    } == {("student-small", command_id)}
 
 
 @pytest.mark.parametrize("value", ["", "not-a-time", "2026-11-11T10:00:00", None])
@@ -533,15 +534,13 @@ def test_no_command_is_claimed_with_less_than_the_margin_left(
     assert _command(table, lifecycle.STUDENT, command_id) == before
 
 
-def test_an_in_flight_command_from_before_the_fix_is_picked_up_and_completes(
+def test_a_command_left_mid_run_with_an_old_format_result_is_picked_up_and_completes(
     table: FakeTable, providers: dict[Kind, _Provider]
 ) -> None:
-    """The production command in flight at deploy: no registry row, an old-format
-    attachment result, mid-run, an expired lease, accepted under the current seal."""
+    """As the production command in flight at the #397 deploy was, but for its registry
+    row: an old-format attachment result, mid-run, an expired lease, the current seal."""
     student = lifecycle.STUDENT
     command_id = _accept(student)
-    registry = account_deletion_repo.pending_registry_key(student, command_id)
-    del table.rows[(registry["PK"], registry["SK"])]
     seal = service.load_private_store_seal()
     contract = seal["branch_contracts"]["attachments"]
     results = {
@@ -659,7 +658,7 @@ def test_the_request_side_releases_the_email_only_and_never_scans(
     assert int(command["lease_expires_at"]) < int(datetime.now(UTC).timestamp())
 
 
-def test_the_request_side_leaves_a_command_without_a_registry_row_to_the_schedule(
+def test_the_request_side_does_not_scan_for_a_command_without_a_registry_row(
     table: FakeTable, providers: dict[Kind, _Provider]
 ) -> None:
     student = lifecycle.STUDENT

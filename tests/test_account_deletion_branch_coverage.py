@@ -91,7 +91,6 @@ KEPT: dict[str, str] = {
     # -- deletion_flow ------------------------------------------------------------
     "account_deletion_command": "deletion_flow",
     "account_deletion_pending": "deletion_flow",
-    "account_deletion_scan_cursor": "deletion_flow",
     "account_fence": "deletion_flow",
     "provider_identity_revoke_debt": "deletion_flow",
     "identity_deletion_evidence": "deletion_flow",

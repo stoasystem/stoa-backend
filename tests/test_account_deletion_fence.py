@@ -461,8 +461,8 @@ def test_question_and_session_scrub_allowlists_exclude_all_private_learning_fiel
 def test_scheduled_discovery_recovers_lost_route_trigger_and_reconstructs_service(
     monkeypatch,
 ) -> None:
-    # The real repository against the shared table double: the sweep now
-    # requires the cursor methods, and a double without them is refused.
+    # The real repository against the shared table double. The command is
+    # found through its row in the pending registry (#397, #611).
     from fakes.dynamodb import FakeTable
 
     _repository, service, job = _deletion_modules()
@@ -478,7 +478,13 @@ def test_scheduled_discovery_recovers_lost_route_trigger_and_reconstructs_servic
             "generation": 1,
             "status": "pending",
             "version": 1,
-        }
+        },
+        {
+            **account_deletion_repo.pending_registry_key(STUDENT_ID, "delete-command-1"),
+            "entity_type": "account_deletion_pending",
+            "deletion_user_id": STUDENT_ID,
+            "deletion_command_id": "delete-command-1",
+        },
     )
     calls: list[account_deletion_repo.DeletionCommandClaim] = []
     result = job.run_pending_deletions(

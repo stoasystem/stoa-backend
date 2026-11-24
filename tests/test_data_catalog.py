@@ -77,7 +77,7 @@ def test_every_written_entity_type_has_a_catalog_entry():
         "rows written with an entity_type the data type catalog does not list: add an entry "
         f"to stoa.db.data_catalog (its account pointers, or none) - {missing}"
     )
-    assert len(found) >= 138
+    assert len(found) >= 137
 
 
 def test_the_catalog_lists_only_types_the_code_writes_or_the_deletion_still_reaches():
