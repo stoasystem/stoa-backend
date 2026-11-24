@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Put the notifications written before #613 in the index they are found through.
+"""Put the notifications written before #613 in the indexes they are found through.
 
 A notification carries the keys of GSI-SweepPending - who it is for, and when
-it was created - from the backend release that writes them on
-(`notification_repo.index_fields`). Notifications written before that release
-have neither, so a reader of the index would not find them until this script
-writes them. Run it once that release is deployed, and before the release that
-reads the index instead of scanning the table.
+it was created - and of GSI-Listing - the site's list of all of them - from
+the backend releases that write them on (`notification_repo.index_fields`).
+Notifications written before have some or none of them, so a reader of the
+indexes would not find them until this script writes them. Run it once the
+release that writes the keys is deployed.
 
     python scripts/backfill_notification_inbox_index.py            # dry run: counts, writes nothing
     python scripts/backfill_notification_inbox_index.py --apply    # writes the rows the dry run counted
@@ -55,7 +55,7 @@ def count(items: Sequence[Mapping[str, Any]]) -> Counter[str]:
     for item in items:
         counts["notifications"] += 1
         fields = notification_repo.index_fields(item)
-        if not fields:
+        if "sweep_bucket" not in fields:
             counts["in no inbox"] += 1
         elif item.get("recipient_id"):
             counts["for one person"] += 1
@@ -80,7 +80,7 @@ def apply(table: Any, items: Sequence[Mapping[str, Any]]) -> Counter[str]:
 
 def _inbox_of(item: Mapping[str, Any]) -> tuple[str, str] | None:
     """Whose inbox the row itself says it is in: (user id, "") or ("", role)."""
-    if not notification_repo.index_fields(item):
+    if "sweep_bucket" not in notification_repo.index_fields(item):
         return None
     recipient_id = item.get("recipient_id")
     if recipient_id:
@@ -104,6 +104,16 @@ def verify(table: Any, items: Sequence[Mapping[str, Any]]) -> list[str]:
         # Named by event only: a person's id stays out of the output.
         problems.extend(f"missing from its inbox: {name}" for name in sorted(wanted - found))
         problems.extend(f"in an inbox it does not belong in: {name}" for name in sorted(found - wanted))
+    # The site's list: every notification with a creation time, and nothing else.
+    listed_wanted = {
+        str(item.get("event_id")) for item in items if "listing" in notification_repo.index_fields(item)
+    }
+    listed_found = {
+        str(item.get("event_id"))
+        for item in notification_repo.list_site_events(want=len(items) + 1000, table=table)
+    }
+    problems.extend(f"missing from the site's list: {name}" for name in sorted(listed_wanted - listed_found))
+    problems.extend(f"in the site's list, not a notification: {name}" for name in sorted(listed_found - listed_wanted))
     return problems
 
 

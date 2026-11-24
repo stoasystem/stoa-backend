@@ -72,6 +72,7 @@ DEFAULT_INDEXES: dict[str, IndexSchema] = {
     "GSI-ReviewState": IndexSchema("review_state", "created_at"),
     "GSI-SweepPending": IndexSchema("sweep_bucket", "sweep_due_at"),
     "GSI-TopicShelf": IndexSchema("topic_shelf", "topic_order"),
+    "GSI-Listing": IndexSchema("listing", "listed_at"),
 }
 
 

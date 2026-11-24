@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from itertools import islice
 from typing import Protocol, runtime_checkable
 from uuid import uuid4
 
@@ -593,6 +594,18 @@ INBOX_SOURCE_FIELDS = frozenset({"recipient_id", "recipient_role", "created_at"}
 _INBOX_INDEX_KEY = ("PK", "SK", *INBOX_INDEX_FIELDS)
 _INBOX_BUCKET = "notification_inbox"
 
+# The administrators' list is every notification of the site, whoever it is for,
+# newest first. A row is in one bucket of GSI-SweepPending - its recipient's - so
+# that index cannot hold them all in one place, and the list scanned the table.
+# Every notification therefore also carries the keys of GSI-Listing: `listing`
+# names the list, the same for all of them, and `listed_at` is when it was
+# created. Set once with the inbox keys, and gone with them in a tombstone.
+LISTING_INDEX = "GSI-Listing"
+LISTING_INDEX_FIELDS = ("listing", "listed_at")
+LISTING_NAME = NOTIFICATION_ENTITY
+_LISTING_INDEX_KEY = ("PK", "SK", *LISTING_INDEX_FIELDS)
+INDEX_FIELDS = (*INBOX_INDEX_FIELDS, *LISTING_INDEX_FIELDS)
+
 
 def inbox_bucket(*, user_id: str = "", role: str = "") -> str:
     """The index partition of one person's notifications, or of a whole role's."""
@@ -604,18 +617,20 @@ def inbox_bucket(*, user_id: str = "", role: str = "") -> str:
 
 
 def index_fields(item: Mapping[str, object]) -> dict[str, str]:
-    """The index keys a row carries: both for a notification, none for anything else.
+    """The index keys a row carries: a notification's, none for anything else.
 
-    A notification with no `recipient_id` is for everyone in its
-    `recipient_role`, as `notification_service._visible_to_user` reads it. One
-    that names neither, or has no creation time, is in no inbox: an index key
-    is never written empty.
+    Every notification with a creation time is in the site's list
+    (`LISTING_INDEX_FIELDS`). It is in an inbox too (`INBOX_INDEX_FIELDS`) when
+    it says who it is for: one with no `recipient_id` is for everyone in its
+    `recipient_role`, as `notification_service._visible_to_user` reads it, and
+    one that names neither is in no inbox. An index key is never written empty.
     """
     if item.get("entity_type") != NOTIFICATION_ENTITY:
         return {}
     created_at = item.get("created_at")
     if not isinstance(created_at, str) or not created_at:
         return {}
+    listed = {"listing": LISTING_NAME, "listed_at": created_at}
     recipient_id = item.get("recipient_id")
     recipient_role = item.get("recipient_role")
     if isinstance(recipient_id, str) and recipient_id:
@@ -623,13 +638,13 @@ def index_fields(item: Mapping[str, object]) -> dict[str, str]:
     elif recipient_id in {None, ""} and isinstance(recipient_role, str) and recipient_role:
         bucket = inbox_bucket(role=recipient_role)
     else:
-        return {}
-    return {"sweep_bucket": bucket, "sweep_due_at": created_at}
+        return listed
+    return {"sweep_bucket": bucket, "sweep_due_at": created_at, **listed}
 
 
 def carried_index_fields(item: Mapping[str, object]) -> dict[str, object]:
     """The index keys a stored row holds now."""
-    return {name: item[name] for name in INBOX_INDEX_FIELDS if name in item}
+    return {name: item[name] for name in INDEX_FIELDS if name in item}
 
 
 def build_notification_write_transaction(
@@ -868,7 +883,7 @@ def update_event(
         return existing
     if any(
         updates[name] != existing.get(name)
-        for name in (INBOX_SOURCE_FIELDS | set(INBOX_INDEX_FIELDS)) & updates.keys()
+        for name in (INBOX_SOURCE_FIELDS | set(INDEX_FIELDS)) & updates.keys()
     ):
         # Its place in the index follows from these; nothing moves a notification
         # to another person or another time.
@@ -880,15 +895,53 @@ def update_event(
 def list_all_events(*, table: object | None = None) -> list[NotificationItem]:
     """Every notification on the table, from every page of the scan.
 
-    For the administrators' list of the whole site's notifications, and the
-    backfill of #613 and its check. One person's notifications are read with
-    `list_inbox`, never from here.
+    For the one-off backfill of #613 and its check; nothing a request calls.
+    The administrators' list reads `list_site_events`, a person's `list_inbox`.
     """
     return db_table.rows(
         "scan",
         table=table or db_table.table(),
         FilterExpression=Attr("entity_type").eq(NOTIFICATION_ENTITY),
     )
+
+
+def list_site_events(
+    *,
+    want: int,
+    keep: Callable[[Mapping[str, object]], bool] | None = None,
+    table: object | None = None,
+) -> list[NotificationItem]:
+    """The site's newest `want` notifications that `keep` admits, newest first (#613).
+
+    A query of the site's list in GSI-Listing, read a page at a time until
+    enough are found or the list ends, so what it reads follows how many
+    notifications are looked at, not the size of the table. Eventually
+    consistent. For the administrators' list; one person's are `list_inbox`.
+    """
+    if want <= 0:
+        return []
+    found: list[NotificationItem] = []
+    for page in islice(
+        db_table.pages(
+            "query",
+            table=table or db_table.table(),
+            key=_LISTING_INDEX_KEY,
+            IndexName=LISTING_INDEX,
+            KeyConditionExpression=Key("listing").eq(LISTING_NAME),
+            ScanIndexForward=False,
+        ),
+        db_table.SCAN_PAGE_BUDGET,
+    ):
+        for item in page.items:
+            if item.get("entity_type") != NOTIFICATION_ENTITY:
+                continue
+            if keep is None or keep(item):
+                found.append(dict(item))
+                if len(found) >= want:
+                    return found
+        if page.last_key is None:
+            return found
+    raise db_table.TableUnavailable("page_budget_spent")
 
 
 def list_inbox(
@@ -950,20 +1003,19 @@ def reindex_event(item: Mapping[str, object], *, table: object | None = None) ->
             db_table.update(
                 table=table or db_table.table(),
                 Key={"PK": item["PK"], "SK": item["SK"]},
-                UpdateExpression="SET #bucket = :bucket, #due = :due",
+                UpdateExpression="SET " + ", ".join(f"#{name} = :{name}" for name in fields),
                 ConditionExpression=(
-                    "attribute_exists(PK) AND #entity = :entity AND #created = :due"
+                    "attribute_exists(PK) AND #entity = :entity AND #created = :created"
                 ),
                 ExpressionAttributeNames={
-                    "#bucket": "sweep_bucket",
-                    "#due": "sweep_due_at",
+                    **{f"#{name}": name for name in fields},
                     "#entity": "entity_type",
                     "#created": "created_at",
                 },
                 ExpressionAttributeValues={
-                    ":bucket": fields["sweep_bucket"],
-                    ":due": fields["sweep_due_at"],
+                    **{f":{name}": value for name, value in fields.items()},
                     ":entity": NOTIFICATION_ENTITY,
+                    ":created": item.get("created_at"),
                 },
             )
         except db_table.WriteRefused as exc:
