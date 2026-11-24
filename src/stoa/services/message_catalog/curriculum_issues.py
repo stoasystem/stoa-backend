@@ -95,6 +95,48 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "La réponse doit être l’une des options.",
         "it": "La risposta deve essere una delle opzioni.",
     },
+    "curriculum_issue.too_many_options": {
+        "de": "Eine Mehrfachauswahl hat höchstens {max_options} Optionen.",
+        "en": "A choose-several exercise has at most {max_options} options.",
+        "fr": "Un exercice à choix multiples a au plus {max_options} options.",
+        "it": "Un esercizio a scelta multipla ha al massimo {max_options} opzioni.",
+    },
+    "curriculum_issue.correct_options_invalid": {
+        "de": "Die richtigen Optionen müssen eine Liste verschiedener Optionsnummern sein (0 ist die erste), mindestens eine.",
+        "en": "The correct options must be a list of different option numbers (0 is the first), at least one.",
+        "fr": "Les bonnes options doivent être une liste de numéros d’options différents (0 est la première), au moins un.",
+        "it": "Le opzioni corrette devono essere un elenco di numeri di opzione diversi (0 è la prima), almeno uno.",
+    },
+    "curriculum_issue.correct_options_without_multi_select": {
+        "de": "Richtige Optionen gibt es nur bei einer Mehrfachauswahl (multi_select).",
+        "en": "Only a choose-several exercise (multi_select) has correct options.",
+        "fr": "Seul un exercice à choix multiples (multi_select) a des bonnes options.",
+        "it": "Solo un esercizio a scelta multipla (multi_select) ha opzioni corrette.",
+    },
+    "curriculum_issue.hotspot_not_an_option": {
+        "de": "Der Klickbereich «{choice}» nennt keine Option: A ist die erste Option, B die zweite und so weiter.",
+        "en": "The hotspot \"{choice}\" names no option: A is the first option, B the second, and so on.",
+        "fr": "La zone cliquable « {choice} » ne désigne aucune option : A est la première option, B la deuxième, etc.",
+        "it": "L’area cliccabile «{choice}» non indica nessuna opzione: A è la prima opzione, B la seconda e così via.",
+    },
+    "curriculum_issue.hotspot_repeated": {
+        "de": "Die Option {choice} hat mehr als einen Klickbereich in der Abbildung.",
+        "en": "Option {choice} has more than one hotspot in the figure.",
+        "fr": "L’option {choice} a plus d’une zone cliquable dans la figure.",
+        "it": "L’opzione {choice} ha più di un’area cliccabile nella figura.",
+    },
+    "curriculum_issue.hotspot_without_multi_select": {
+        "de": "Klickbereiche (data-choice) gibt es nur in der Abbildung einer Mehrfachauswahl (multi_select).",
+        "en": "Only the figure of a choose-several exercise (multi_select) may have hotspots (data-choice).",
+        "fr": "Seule la figure d’un exercice à choix multiples (multi_select) peut avoir des zones cliquables (data-choice).",
+        "it": "Solo la figura di un esercizio a scelta multipla (multi_select) può avere aree cliccabili (data-choice).",
+    },
+    "curriculum_issue.translation_hotspots_mismatch": {
+        "de": "Die übersetzte Abbildung muss dieselben Optionen als Klickbereiche haben wie das Original.",
+        "en": "The translated figure must have the same options as hotspots as the original.",
+        "fr": "La figure traduite doit avoir les mêmes options comme zones cliquables que l’original.",
+        "it": "La figura tradotta deve avere le stesse opzioni come aree cliccabili dell’originale.",
+    },
     "curriculum_issue.skills_not_a_list": {
         "de": "Die Kompetenzen müssen eine Liste sein.",
         "en": "Skills must be a list.",

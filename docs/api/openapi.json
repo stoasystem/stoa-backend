@@ -2833,6 +2833,14 @@
             ],
             "title": "Correctfeedback"
           },
+          "correctOptions": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 12,
+            "title": "Correctoptions",
+            "type": "array"
+          },
           "difficulty": {
             "default": "practice",
             "maxLength": 80,
@@ -2926,7 +2934,7 @@
                 }
               ]
             },
-            "maxItems": 10,
+            "maxItems": 12,
             "title": "Optionfigures",
             "type": "array"
           },
@@ -2936,7 +2944,7 @@
               "minLength": 1,
               "type": "string"
             },
-            "maxItems": 10,
+            "maxItems": 12,
             "title": "Options",
             "type": "array"
           },
@@ -3056,7 +3064,7 @@
                 }
               ]
             },
-            "maxItems": 10,
+            "maxItems": 12,
             "title": "Optionfigures",
             "type": "array"
           },
@@ -3066,7 +3074,7 @@
               "minLength": 1,
               "type": "string"
             },
-            "maxItems": 10,
+            "maxItems": 12,
             "title": "Options",
             "type": "array"
           },
@@ -8904,6 +8912,7 @@
         "additionalProperties": false,
         "properties": {
           "answer": {
+            "description": "By the exercise's `type`. `multiple_choice`: the picked option's text, as shown. `multi_select`: the numbers of the picked options, 0 for the first, in any order, each at most once, at least one: `[0, 2]`. A hotspot in the figure (`data-choice=\"B\"`) is the option with that letter, A for the first. Anything else: the typed text, or a list of texts for an ordering. An answer that cannot be one is refused with `practice_answer_invalid`.",
             "title": "Answer"
           },
           "conversationId": {
@@ -8949,6 +8958,21 @@
           "correct": {
             "title": "Correct",
             "type": "boolean"
+          },
+          "correctOptions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only for a `multi_select` exercise: the numbers of its right options, 0 for the first, in order. `standardAnswer` is the same options as text.",
+            "title": "Correctoptions"
           },
           "explanation": {
             "minLength": 1,
@@ -9023,6 +9047,7 @@
                 "type": "null"
               }
             ],
+            "description": "An allowlisted inline SVG. In a `multi_select` exercise an element carrying `data-choice=\"B\"` is a hotspot: the option with that letter, A for the first.",
             "title": "Figure"
           },
           "gradeLevel": {
@@ -9112,6 +9137,7 @@
             "title": "Topicid"
           },
           "type": {
+            "description": "How the exercise is answered: `text_input` (typed), `multiple_choice` (one option), `multi_select` (a set of options, see the answer submission), or another kind.",
             "minLength": 1,
             "title": "Type",
             "type": "string"
@@ -9207,6 +9233,7 @@
                 "type": "null"
               }
             ],
+            "description": "An allowlisted inline SVG. In a `multi_select` exercise an element carrying `data-choice=\"B\"` is a hotspot: the option with that letter, A for the first.",
             "title": "Figure"
           },
           "id": {
@@ -9266,6 +9293,7 @@
             "type": "string"
           },
           "type": {
+            "description": "How the exercise is answered: `text_input` (typed), `multiple_choice` (one option), `multi_select` (a set of options, see the answer submission), or another kind.",
             "minLength": 1,
             "title": "Type",
             "type": "string"
@@ -9705,6 +9733,7 @@
         "description": "One answer to a lesson quiz, naming the exercise it answers (#213, #113).\n\n`exerciseId` names the exercise answered, so the same answer sent twice -\na retry after a lost response - is recognised and answered with the first\nresult rather than judged against the next exercise.",
         "properties": {
           "answer": {
+            "description": "By the exercise's `type`. `multiple_choice`: the picked option's text, as shown. `multi_select`: the numbers of the picked options, 0 for the first, in any order, each at most once, at least one: `[0, 2]`. A hotspot in the figure (`data-choice=\"B\"`) is the option with that letter, A for the first. Anything else: the typed text, or a list of texts for an ordering. An answer that cannot be one is refused with `practice_answer_invalid`.",
             "title": "Answer"
           },
           "exerciseId": {
@@ -11478,6 +11507,7 @@
                 "type": "null"
               }
             ],
+            "description": "An allowlisted inline SVG. In a `multi_select` exercise an element carrying `data-choice=\"B\"` is a hotspot: the option with that letter, A for the first.",
             "title": "Figure"
           },
           "lapses": {
@@ -11543,6 +11573,7 @@
           },
           "type": {
             "default": "text_input",
+            "description": "How the exercise is answered: `text_input` (typed), `multiple_choice` (one option), `multi_select` (a set of options, see the answer submission), or another kind.",
             "title": "Type",
             "type": "string"
           }

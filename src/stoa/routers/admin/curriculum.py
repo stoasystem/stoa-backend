@@ -18,6 +18,7 @@ from stoa.services import (
     curriculum_analytics_service,
     curriculum_migration_service,
     curriculum_ops_service,
+    multi_select,
 )
 
 
@@ -50,7 +51,7 @@ class CurriculumExerciseTranslation(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     prompt: str = Field(..., min_length=1, max_length=2000)
-    options: list[_ExerciseOption] = Field(default_factory=list, max_length=10)
+    options: list[_ExerciseOption] = Field(default_factory=list, max_length=multi_select.MAX_OPTIONS)
     correct_answer: str | None = Field(default=None, alias="correctAnswer", max_length=2000)
     accepted_answers: list[_AcceptedAnswer] = Field(
         default_factory=list,
@@ -59,7 +60,9 @@ class CurriculumExerciseTranslation(BaseModel):
     )
     explanation: str | None = Field(default=None, max_length=2000)
     figure: str | None = Field(default=None, max_length=32_000)
-    option_figures: list[str | None] = Field(default_factory=list, alias="optionFigures", max_length=10)
+    option_figures: list[str | None] = Field(
+        default_factory=list, alias="optionFigures", max_length=multi_select.MAX_OPTIONS
+    )
 
 
 class CurriculumErrorCause(BaseModel):
@@ -92,7 +95,12 @@ class CurriculumExerciseDraftRequest(BaseModel):
         max_length=answer_judging.MAX_ACCEPTED_ANSWERS,
     )
     explanation: str | None = Field(default=None, max_length=2000)
-    options: list[_ExerciseOption] = Field(default_factory=list, max_length=10)
+    options: list[_ExerciseOption] = Field(default_factory=list, max_length=multi_select.MAX_OPTIONS)
+    # A choose-several exercise's key (`multi_select`, #593): the numbers of its
+    # right options, 0 for the first. The same in every language.
+    correct_options: list[int] = Field(
+        default_factory=list, alias="correctOptions", max_length=multi_select.MAX_OPTIONS
+    )
     translations: dict[Literal["de", "en", "fr", "it"], CurriculumExerciseTranslation] = Field(
         default_factory=dict
     )
@@ -100,7 +108,9 @@ class CurriculumExerciseDraftRequest(BaseModel):
     incorrect_feedback: str | None = Field(default=None, alias="incorrectFeedback", max_length=500)
     knowledge_point: str | None = Field(default=None, alias="knowledgePoint", max_length=200)
     figure: str | None = Field(default=None, max_length=32_000)
-    option_figures: list[str | None] = Field(default_factory=list, alias="optionFigures", max_length=10)
+    option_figures: list[str | None] = Field(
+        default_factory=list, alias="optionFigures", max_length=multi_select.MAX_OPTIONS
+    )
     # One entry per option, `null` for the right option and for an untagged one (#452).
     option_error_causes: list[CurriculumErrorCause | None] = Field(
         default_factory=list, alias="optionErrorCauses", max_length=10

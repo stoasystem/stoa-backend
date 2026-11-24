@@ -250,11 +250,17 @@ def build_attempt_result(
     if next_challenge_id is not None and not isinstance(next_challenge_id, str):
         raise ValueError("a complete immutable attempt receipt is required")
     correct = receipt["correct"]
+    correct_options = receipt.get("correct_options")
     return PracticeAttemptResult.from_recorded_attempt(
         receipt,
         challengeId=receipt["challenge_id"],
         correct=correct,
         standardAnswer=receipt["standard_answer"],
+        correctOptions=(
+            [int(index) for index in correct_options]
+            if isinstance(correct_options, list) and correct_options
+            else None
+        ),
         explanation=receipt["explanation"],
         feedback=receipt["feedback"],
         nextChallengeId=next_challenge_id,
@@ -298,7 +304,12 @@ def answer_feedback(
 
 def _asks_for_a_number(challenge: Mapping[str, Any]) -> bool:
     """Whether the exercise's key holds a digit: a result to work out, as
-    opposed to a word, a sentence or a statement to pick."""
+    opposed to a word, a sentence or a statement to pick.
+
+    A choose-several exercise is picking, whatever its options say: it gets
+    the line that fits every subject (#593)."""
+    if challenge.get("type") == "multi_select":
+        return False
     key = challenge.get("correct_answer", challenge.get("answer_key"))
     return any(character.isdigit() for character in str(key or ""))
 

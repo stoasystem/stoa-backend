@@ -17,6 +17,7 @@ from stoa.services import (
     error_causes,
     exercise_localization,
     lesson_sections,
+    multi_select,
 )
 from stoa.rule_violation import RuleViolation
 from stoa.services.curriculum_errors import CurriculumErrorCode
@@ -94,6 +95,8 @@ EXERCISE_FIELD_ALIASES = {
     "correctAnswer": "answer_key",
     "accepted_answers": "accepted_answers",
     "acceptedAnswers": "accepted_answers",
+    "correct_options": "correct_options",
+    "correctOptions": "correct_options",
     "options": "options",
     "choices": "options",
     "translations": "translations",
@@ -535,6 +538,13 @@ def _exercise_payloads(public_id: str, exercises: list[dict[str, Any]]) -> list[
             item["options"] = options
         else:
             item.pop("options", None)
+        authored_key = item.pop(multi_select.FIELD, None)
+        if authored_key not in (None, []):
+            item[multi_select.FIELD] = multi_select.normalize_key(authored_key)
+        key = multi_select.correct_options(item) if multi_select.is_one(item) else None
+        if key is not None:
+            # The key is the set; `correct_answer` is what a reader is shown of it.
+            item["answer_key"] = item["correct_answer"] = multi_select.answer_text(options, key)
         figure = str(exercise.get("figure") or "").strip()
         if figure:
             item["figure"] = figure
@@ -806,18 +816,27 @@ def _validation_issues(
 
 
 def _choice_issues(exercise: dict[str, Any]) -> list[tuple[str, Issue]]:
-    """A choice exercise offers at least two different options, one of them its key."""
+    """A choice exercise offers at least two different options, one of them its key;
+    a choose-several one (`multi_select`) a set of them, maybe as hotspots in its figure."""
     options = exercise.get("options")
+    if multi_select.is_one(exercise):
+        found = multi_select.issues(exercise)
+        if isinstance(options, list) and len(
+            {answer_judging.normalize_answer(option) for option in options}
+        ) != len(options):
+            found.append(("options", Issue.of(IssueCode.OPTIONS_READ_THE_SAME)))
+        return found
+    stray = multi_select.stray_issues(exercise)
     if exercise.get("type") != "multiple_choice":
-        return [("options", Issue.of(IssueCode.OPTIONS_WITHOUT_CHOICE))] if options else []
+        return [*stray, ("options", Issue.of(IssueCode.OPTIONS_WITHOUT_CHOICE))] if options else stray
     if not isinstance(options, list) or len(options) < 2:
-        return [("options", Issue.of(IssueCode.TOO_FEW_OPTIONS))]
+        return [*stray, ("options", Issue.of(IssueCode.TOO_FEW_OPTIONS))]
     if len({answer_judging.normalize_answer(option) for option in options}) != len(options):
-        return [("options", Issue.of(IssueCode.OPTIONS_READ_THE_SAME))]
+        return [*stray, ("options", Issue.of(IssueCode.OPTIONS_READ_THE_SAME))]
     key = str(exercise.get("answer_key") or "")
     if key and key not in options:
-        return [("answer_key", Issue.of(IssueCode.ANSWER_NOT_AN_OPTION))]
-    return []
+        return [*stray, ("answer_key", Issue.of(IssueCode.ANSWER_NOT_AN_OPTION))]
+    return stray
 
 
 def _attribution_issues(lesson: dict[str, Any]) -> list[dict[str, Any]]:
