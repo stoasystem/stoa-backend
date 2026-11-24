@@ -13,7 +13,6 @@ from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 
-from stoa.db import owner_registry
 from stoa.db import table as db_table
 
 
@@ -162,16 +161,10 @@ def create_invitation(item: Mapping[str, object], *, table: object | None = None
         **dict(item),
     }
     # Written outside `fenced` (an administrator's write, before the invited
-    # person has signed in), so the registry rows are written here, before the
-    # row that names the accounts (#397): the invited account, whose deletion
-    # removes the invitation, and the inviter, whom the daily sweep would
-    # otherwise report as named in an unregistered partition.
-    # An operator call invites as `operator:agent_mcp`, which is no account and
-    # gets no registry row.
-    for field in ("account_id", "invited_by"):
-        registration = owner_registry.reference_put(row.get(field), str(row["PK"]))
-        if registration is not None:
-            _put_item(target, Item=registration["Put"]["Item"])
+    # person has signed in), so the invited account, whose deletion removes the
+    # invitation, is registered here, before the row (#397, #589). The inviter
+    # (`invited_by`) is a mention only and registers nothing (#586 decision 1).
+    db_table.registered((), rows=[row], table=target)
     _conditional_put(row, table=target)
     return row
 

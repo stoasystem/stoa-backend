@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, user_repo
 from fakes.dynamodb import from_wire
@@ -64,7 +65,13 @@ class _ProfileRaceTable:
 
     def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
         operations = from_wire(TransactItems)
-        copied = deepcopy(operations)
+        # The children a parent's profile names are registered with it (#589);
+        # this double models the profile row alone.
+        copied = [
+            operation
+            for operation in deepcopy(operations)
+            if not owner_registry.is_registry_row(operation.get("Put", {}).get("Item", {}))
+        ]
         kind = "scrub" if len(copied) == 3 else "writer"
         with self.lock:
             self.attempts[kind] += 1

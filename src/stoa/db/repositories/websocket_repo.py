@@ -8,7 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr
 
-from stoa.db import data_catalog
+from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -224,16 +224,18 @@ def update_connection(
     target = db_table.table()
     owner_id = str(existing.get("owner_id") or existing.get("user_id") or "")
     generation = _generation(owner_id, existing.get("account_fence_generation"), target)
+    operations = build_connection_write_transaction(
+        item=existing,
+        owner_id=owner_id,
+        generation=generation,
+        mode="update",
+        updates=updates,
+    )
     db_table.fenced(
         owner_id,
-        build_connection_write_transaction(
-            item=existing,
-            owner_id=owner_id,
-            generation=generation,
-            mode="update",
-            updates=updates,
-        ),
+        operations,
         generation=generation,
+        rows=owner_registry.rows_after(existing, operations),
         table=target,
     )
     return {**existing, **updates}

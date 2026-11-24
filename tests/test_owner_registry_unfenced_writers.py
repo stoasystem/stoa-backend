@@ -1,15 +1,16 @@
 """Every write outside `fenced` is reviewed for the owner registry (#397).
 
 A registry-path deletion reads only the account's derived partitions and the
-partitions registered under it. `db_table.fenced` registers what it writes;
-a write that does not go through it - and does not call
-`account_deletion_repo.registry_operations_for` or `owner_registry` itself -
-is invisible to that deletion unless one of the reasons below holds. This
-scans `src/stoa` for such writers (direct `put_item` / `update_item` /
+partitions registered under it. A write registers what it writes only through
+`db_table.fenced` or, outside any fence, `db_table.registered` (#589): both
+ask the data type catalog whom the rows name. A function that writes and calls
+neither is invisible to that deletion unless one of the reasons below holds.
+This scans `src/stoa` for such writers (direct `put_item` / `update_item` /
 `transact_write_items`, `db_table.put/update/transact`, and callers of the
 private helpers that make them) and requires each to be listed with its
-reason. A new one fails here until someone decides: register it, or say why
-not. A listed one that no longer writes, or now registers, fails as stale.
+reason. A new one fails here until someone decides: write it through
+`registered`, or say why not. A listed one that no longer writes, or now
+registers, fails as stale.
 
 Reasons:
 - deletion_flow: the deletion's own writes (tombstones, scrubs, bookkeeping).
@@ -33,7 +34,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 WRITE_ATTRS = {"put_item", "update_item", "transact_write_items", "batch_writer"}
 GATEWAY_WRITES = {"put", "update", "transact"}
-REGISTERS = ("fenced(", "registry_operations_for(", "owner_registry.")
+# The two write functions that register; nothing else counts (#589).
+REGISTERING_WRITES = {"fenced", "registered"}
 
 type Function = ast.FunctionDef | ast.AsyncFunctionDef
 
@@ -67,8 +69,7 @@ def _calls(function: Function, names: set[str]) -> bool:
 
 
 def _registers(function: Function) -> bool:
-    body = ast.unparse(function)
-    return any(token in body for token in REGISTERS)
+    return _calls(function, REGISTERING_WRITES)
 
 
 def scan(root: Path) -> set[str]:
@@ -109,6 +110,9 @@ REVIEWED: dict[str, str] = {
     "src/stoa/db/repositories/account_deletion_repo.py::advance_deletion_scan_cursor": "deletion_flow",
     # The owner registry sweep's own result row (JOB#owner_registry_sweep): counts only.
     "src/stoa/services/owner_registry_sweep.py::record_run": "deletion_flow",
+    # The backfill (`write=True`, an operator's run): it writes only the registry
+    # rows the walk found missing, by its own census until #590.
+    "src/stoa/services/owner_registry_sweep.py::run": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::begin_account_deletion": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::claim_deletion_command": "deletion_flow",
     "src/stoa/db/repositories/account_deletion_repo.py::close_unused_provider_revoke_debt": "deletion_flow",
@@ -259,8 +263,8 @@ def test_every_unfenced_writer_is_reviewed_for_the_owner_registry():
     found = scan(ROOT)
     new = sorted(found - REVIEWED.keys())
     assert not new, (
-        "writes outside db_table.fenced that register nothing: register the "
-        "partition (account_deletion_repo.registry_operations_for) or list the "
+        "writes outside db_table.fenced that register nothing: write through "
+        "db_table.registered or list the "
         f"writer in REVIEWED with its reason: {new}"
     )
 
@@ -279,6 +283,19 @@ def test_the_scan_sees_a_new_unfenced_writer(tmp_path):
         "    db_table.fenced(item['owner_id'], [{'Put': {'Item': item}}], table=table)",
         "",
     ]
+    unfenced = ["def put_private(table, item):", "    db_table.registered([{'Put': {'Item': item}}])", ""]
+    # Naming the registry is not registering: only the two write functions count.
+    by_hand = [
+        "def put_private(table, item):",
+        "    table.put_item(Item=owner_registry.registry_item('a', item['PK']))",
+        "    table.put_item(Item=item)",
+        "",
+    ]
     (source / "new_repo.py").write_text("\n".join(new), encoding="utf-8")
     (source / "registered_repo.py").write_text("\n".join(registered), encoding="utf-8")
-    assert scan(tmp_path) == {"src/stoa/new_repo.py::put_private"}
+    (source / "unfenced_repo.py").write_text("\n".join(unfenced), encoding="utf-8")
+    (source / "by_hand_repo.py").write_text("\n".join(by_hand), encoding="utf-8")
+    assert scan(tmp_path) == {
+        "src/stoa/new_repo.py::put_private",
+        "src/stoa/by_hand_repo.py::put_private",
+    }

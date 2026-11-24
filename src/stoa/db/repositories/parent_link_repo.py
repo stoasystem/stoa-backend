@@ -431,10 +431,9 @@ def close_link(
         operations.append({"Put": operation})
     # Unfenced (a closed link must be recordable whatever either account's
     # state), so each side registers where the other's row names it (#397).
-    operations.extend(account_deletion_repo.registry_operations_for([forward, reverse], operations))
     target = table or db_table.table()
     try:
-        db_table.transact(operations, table=target)
+        db_table.registered(operations, table=target)
     except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
         raise ParentLinkConflict("parent link close refused") from exc
     return dict(body)

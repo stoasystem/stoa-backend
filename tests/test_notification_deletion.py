@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from stoa.db import data_catalog
+from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, notification_repo, websocket_repo
 from stoa.services import account_deletion_service, notification_service
@@ -485,9 +485,9 @@ def test_the_catalog_says_whose_a_notification_is_and_the_registry_agrees() -> N
 
     For each field a notification could name an account in, asked of each
     side: the notification scan takes the row exactly when the catalog names
-    the account, the generic deletion scan likewise, the owner registry
-    (`mentioned_accounts`, until #589) files it for the same accounts, and the
-    family tombstones it for an owner and scrubs a mention out of it.
+    the account, the generic deletion scan likewise, the owner registry files
+    it for the same accounts in the same role (#589), and the family
+    tombstones it for an owner and scrubs a mention out of it.
     """
     owners = {"owner_id", "student_id"}
     references = {"actor_id", "teacher_id", "parent_id"}
@@ -513,7 +513,7 @@ def test_the_catalog_says_whose_a_notification_is_and_the_registry_agrees() -> N
                 other, table=_seeded(row), maximum_pages=1
             ).items
         ), field
-        assert taken == (other in account_deletion_repo.mentioned_accounts(row)), field
+        assert _registered(row).get(other) == role, field
         assert notification_repo._targets_owner(row, other) == (role == data_catalog.OWNER)
         assert notification_repo._targets_identity_reference(row, other) == (
             role == data_catalog.REFERENCE
@@ -526,4 +526,12 @@ def test_the_catalog_says_whose_a_notification_is_and_the_registry_agrees() -> N
     assert data_catalog.role_of(row, other) == data_catalog.REFERENCE
     assert _notification_scan_takes(row, other)
     assert notification_repo._targets_identity_reference(row, other)
-    assert account_deletion_repo.mentioned_accounts(row)[other] == "reference"
+    assert _registered(row)[other] == "reference"
+
+
+def _registered(row: dict) -> dict[str, str]:
+    """Whom the owner registry files `row` under, and in which role, when it is written."""
+    return {
+        put["Put"]["Item"]["registry_account"]: put["Put"]["Item"]["role"]
+        for put in owner_registry.registry_operations(None, (), [{"Put": {"Item": row}}])
+    }

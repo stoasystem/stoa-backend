@@ -45,7 +45,6 @@ from zoneinfo import ZoneInfo
 
 from boto3.dynamodb.conditions import Key
 
-from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, user_repo
 from stoa.services import current_relationship
@@ -539,13 +538,9 @@ def _write(
             }
         },
     ]
-    # The record names who set the period. `fenced` registers the account the
-    # period belongs to; the actor is registered here, ahead of the record, so
-    # the daily sweep finds no account named in an unregistered partition (#397).
-    actor = owner_registry.reference_put(record.actor_id, f"USER#{user_id}")
+    # The record names who set the period (`actor_id`), a mention only: no
+    # registry row for it (#586 decision 1, #589).
     try:
-        if actor is not None:
-            db_table.put(table=table, Item=actor["Put"]["Item"])
         db_table.fenced(user_id, operations, table=table)
     except account_deletion_repo.AccountDeletionConflict as exc:
         # The account is being deleted, or its fence is not active.

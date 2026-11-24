@@ -30,6 +30,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, security_audit_repo, user_repo
@@ -210,6 +211,7 @@ def transition(
                 security_audit_repo.append_event_operation(user_id, event),
                 *also,
             ],
+            rows=owner_registry.rows_after(account, [update]),
         )
     except (
         account_deletion_repo.AccountDeletionConflict,

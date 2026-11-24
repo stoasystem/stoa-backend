@@ -11,7 +11,7 @@ from typing import Any, Protocol, runtime_checkable
 import uuid
 
 from boto3.dynamodb.conditions import Attr, Key
-from stoa.db import data_catalog
+from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -733,7 +733,13 @@ def mark_lesson_completed(
         else None,
     )
     if _atomic_table(table):
-        db_table.fenced(user_id, operations, generation=generation, table=table)
+        db_table.fenced(
+            user_id,
+            operations,
+            generation=generation,
+            rows=owner_registry.rows_after(existing or item, operations),
+            table=table,
+        )
     else:
         _put_item(table, Item=operations[0]["Put"]["Item"])
     item.update(
@@ -1117,7 +1123,13 @@ def record_study_day(
         else None,
     )
     if _atomic_table(target):
-        db_table.fenced(student_id, operations, generation=generation, table=target)
+        db_table.fenced(
+            student_id,
+            operations,
+            generation=generation,
+            rows=owner_registry.rows_after(existing or item, operations),
+            table=target,
+        )
     else:
         _put_item(target, Item=operations[0]["Put"]["Item"])
     item.update(owner_id=student_id, account_fence_generation=generation)
@@ -1405,7 +1417,13 @@ def update_quiz_paper(
     update["ExpressionAttributeValues"][":paper_answered_before"] = int(answered)
     try:
         if _atomic_table(target):
-            db_table.fenced(student_id, operations, generation=generation, table=target)
+            db_table.fenced(
+                student_id,
+                operations,
+                generation=generation,
+                rows=owner_registry.rows_after(update["Key"], operations),
+                table=target,
+            )
         else:
             target.update_item(**update)
     except Exception as error:  # noqa: BLE001

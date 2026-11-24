@@ -746,13 +746,13 @@ def test_a_record_is_not_deleted_behind_a_fence_that_is_not_this_deletions(
 def test_an_account_opened_and_extended_by_an_administrator_leaves_nothing_unregistered(
     admin_table: AccountAdminTable,
 ) -> None:
-    """The daily sweep finds every account these rows name already registered.
+    """The daily sweep finds no missing registration in these rows.
 
     A missing registration closes the registry path for every deletion until
-    somebody backfills it, and each of these writes once left one: the number
-    claim and the email claim (written outside `fenced`), the profile's
-    `created_by` and the period record's `actor_id` (the administrator, whom
-    `fenced` does not register).
+    somebody backfills it. The number claim, the email claim, the profile's
+    `created_by` and the period record's `actor_id` name an account only as a
+    mention: no deletion acts on them, so nothing registers them and the sweep
+    counts them as mentions, not as missing registrations (#586 decision 1, #589).
     """
     from test_account_admin_endpoints import _issue
 
@@ -786,7 +786,8 @@ def test_an_account_opened_and_extended_by_an_administrator_leaves_nothing_unreg
         for row in admin_table.rows.values()
         if owner_registry.is_registry_row(row)
     }
-    assert {(account, "ACCOUNT_NUMBER"), (account, "EMAIL"), ("admin-1", "USER")} <= registered
+    assert not {(account, "ACCOUNT_NUMBER"), (account, "EMAIL"), ("admin-1", "USER")} & registered
+    assert report.mentions
 
 
 def test_an_operators_extension_registers_no_account_for_the_operator(

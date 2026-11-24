@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from boto3.dynamodb.conditions import Attr, ConditionBase
 
-from stoa.db import data_catalog
+from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -653,19 +653,14 @@ def _persist_private(
         mode=mode,
         updates=updates,
     )
-    # A Put's actor and metadata accounts are registered by the fenced write
-    # itself; an Update's are not visible to it, so they are named here, as
-    # references - their fences do not become conditions of the write (#397).
-    operations = [
-        *operations,
-        *account_deletion_repo.registry_operations_for(
-            [{**stored, **dict(updates or {})}], operations
-        ),
-    ]
+    # The accounts the row names (its actor, its metadata) are registered by
+    # the fenced write from the row as it will stand; their fences do not
+    # become conditions of the write (#397, #589).
     db_table.fenced(
         owner_id,
         operations,
         generation=generation,
+        rows=[{**stored, **dict(updates or {})}],
         table=target,
     )
     return stored
@@ -1012,16 +1007,18 @@ def _update_payment_expiry_reminder(
     generation = _generation(
         parent_id, current.get("account_fence_generation"), target
     )
+    operations = build_notification_write_transaction(
+        item=current,
+        owner_id=parent_id,
+        generation=generation,
+        mode="update",
+        updates=updates,
+    )
     db_table.fenced(
         parent_id,
-        build_notification_write_transaction(
-            item=current,
-            owner_id=parent_id,
-            generation=generation,
-            mode="update",
-            updates=updates,
-        ),
+        operations,
         generation=generation,
+        rows=owner_registry.rows_after(current, operations),
         table=target,
     )
     return {**current, **dict(updates)}

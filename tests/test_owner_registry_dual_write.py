@@ -3,7 +3,8 @@
 Every Put/Update made through `db_table.fenced` registers the partition it went
 into under the owner's own partition, in the same transaction, unless the
 partition is one the owner's id determines. Deletion does not read the registry
-yet; these tests pin only the write side.
+yet; these tests pin only the write side. Whom a write registers is the data
+type catalog's answer (#589).
 """
 
 from __future__ import annotations
@@ -180,12 +181,10 @@ def test_a_parent_link_registers_each_side_where_the_other_wrote(table):
         table=table,
     )
 
-    # Each side's own partition is derived; the other side's is registered as a reference.
-    assert _registry(table, PARENT) == {
-        f"OWNS#STUDENT#{STUDENT}": "owner",
-        # ...and named by the reverse row's `PARENT#` sort key.
-        f"REFERENCED_IN#STUDENT#{STUDENT}": "reference",
-    }
+    # Each side's own partition is derived; the other side's is registered, for
+    # the fence owner and for the `also=` account. These rows carry no
+    # `entity_type`, so the catalog names nobody else in them (#589).
+    assert _registry(table, PARENT) == {f"OWNS#STUDENT#{STUDENT}": "owner"}
     assert _registry(table, STUDENT) == {f"REFERENCED_IN#PARENT#{PARENT}": "reference"}
 
 
@@ -354,51 +353,190 @@ def test_a_recovery_audit_event_registers_the_parent_and_student_it_names(table)
     assert _registry(table, TEACHER) == {}
 
 
-# -- accounts a row names (#397 audit) ----------------------------------------------------
+# -- accounts a row names: the data type catalog, and nothing else (#589) ----------------
+
+NOTIFICATION = {"PK": "NOTIFICATION#e1", "SK": "META", "entity_type": "notification_event"}
 
 
 @pytest.mark.parametrize(
-    ("item", "expected"),
+    ("row", "expected"),
     [
-        ({"owner_id": STUDENT}, {STUDENT: "owner"}),
-        ({"PK": "PARENT#p", "SK": f"CHILD#{STUDENT}"}, {STUDENT: "reference"}),
-        ({"scope": f"student:{STUDENT}"}, {STUDENT: "reference"}),
-        ({"scope": f"student/{STUDENT}"}, {STUDENT: "reference"}),
-        ({"scope": "global"}, {}),
         (
-            {"entity_type": "notification_event", "owner_id": STUDENT, "actor_id": TEACHER,
+            {**NOTIFICATION, "owner_id": STUDENT, "actor_id": TEACHER,
              "metadata": {"teacher_id": PARENT}},
             {STUDENT: "owner", TEACHER: "reference", PARENT: "reference"},
         ),
-        # The accounts the notification scan scrubs out of a notification are
-        # registered as references (#574); its `metadata` owners, whose
-        # deletion tombstones it, are named the way the sweep's backfill names
-        # any id inside `metadata`.
+        # A notification about a student is tombstoned with them (#574): owner.
         (
-            {"entity_type": "notification_event", "owner_id": STUDENT,
-             "metadata": {"parent_id": PARENT, "actor_id": TEACHER}},
-            {STUDENT: "owner", TEACHER: "reference", PARENT: "reference"},
+            {**NOTIFICATION, "owner_id": PARENT, "metadata": {"student_id": STUDENT}},
+            {PARENT: "owner", STUDENT: "owner"},
         ),
         (
-            {"entity_type": "notification_event", "owner_id": PARENT,
-             "metadata": {"student_id": STUDENT, "owner_id": TEACHER}},
-            {PARENT: "owner", STUDENT: "reference", TEACHER: "reference"},
-        ),
-        (
-            {"entity_type": "help_request", "student_id": STUDENT, "dispatched_teacher_id": TEACHER,
+            {"PK": "CONV#c1", "SK": "HELP_REQUEST", "entity_type": "help_request",
+             "student_id": STUDENT, "dispatched_teacher_id": TEACHER,
              "previous_dispatch_teacher_ids": [PARENT]},
             {STUDENT: "owner", TEACHER: "reference", PARENT: "reference"},
         ),
-        ({"children": [{"student_id": STUDENT}]}, {STUDENT: "reference"}),
+        (
+            {"PK": f"USER#{TEACHER}", "SK": "CAPABILITY#teacher_support",
+             "entity_type": "capability_grant_current", "user_id": TEACHER,
+             "scope": f"student:{STUDENT}"},
+            {TEACHER: "owner", STUDENT: "owner"},
+        ),
+        # No generic owner fields: a kind the catalog does not know names nobody,
+        # and neither does a field its entry does not declare.
+        ({"PK": "NEW#x", "SK": "ROW", "entity_type": "brand_new_kind", "owner_id": STUDENT}, {}),
+        ({"PK": "PARITY#x", "SK": "ROW", "entity_type": "help_request",
+          "target_user_id": STUDENT, "scope": STUDENT}, {}),
+        # A field the catalog lists as no pointer is a mention: nobody (#586 decision 1).
+        ({"PK": "INVITATION#d", "SK": "META", "entity_type": "account_invitation",
+          "account_id": STUDENT, "invited_by": TEACHER}, {STUDENT: "owner"}),
+        ({"PK": "USAGE_PERIOD#r", "SK": "RECORD", "entity_type": "usage_period_record",
+          "user_id": STUDENT, "actor_id": TEACHER}, {STUDENT: "owner"}),
+        ({"PK": "ACCOUNT_NUMBER#S-1", "SK": "CLAIM", "entity_type": "account_number",
+          "account_id": STUDENT}, {}),
     ],
 )
-def test_mentions_are_what_the_registry_files(item, expected):
-    """What registration files a row under, until it reads the catalog (#589).
+def test_a_write_registers_exactly_whom_the_catalog_says_its_row_names(table, row, expected):
+    assert {
+        account: role for account, role in data_catalog.mentions(row).items()
+    } == expected
+    db_table.registered([{"Put": {"Item": row}}], table=table)
 
-    Deletion reads the data type catalog since #588; that the catalog and
-    this agree, kind by kind, is `tests/test_data_catalog.py`'s parity gate.
-    """
-    assert account_deletion_repo.mentioned_accounts(item) == expected
+    for account in (STUDENT, TEACHER, PARENT):
+        # An account's own derived partitions are never registered.
+        role = None if owner_registry.is_derived_for(row["PK"], account) else expected.get(account)
+        prefix = owner_registry.OWNER_PREFIX if role == "owner" else owner_registry.REFERENCE_PREFIX
+        assert _registry(table, account) == ({f"{prefix}{row['PK']}": role} if role else {}), account
+
+
+def test_who_opened_an_account_is_not_registered(table):
+    from stoa.db.repositories import user_repo
+
+    profile = {"PK": f"USER#{STUDENT}", "SK": "PROFILE", "user_id": STUDENT, "role": "student",
+               "created_by": TEACHER, "created_at": "2026-11-24T10:00:00+00:00"}
+    table.rows.pop(tuple(account_deletion_repo.account_fence_key(STUDENT).values()))
+    db_table.install(table)
+    try:
+        user_repo.put_user_with_email_claim(profile, claim_operation={"Put": {"Item": {
+            "PK": "EMAIL#digest", "SK": "CLAIM", "entity_type": "account_email_claim",
+            "account_id": STUDENT,
+        }}})
+    finally:
+        db_table.install(None)
+
+    assert (f"USER#{STUDENT}", "PROFILE") in table.rows
+    assert _registry(table, STUDENT) == {}
+    assert _registry(table, TEACHER) == {}
+
+
+def test_an_invitation_registers_the_invited_account_not_the_inviter(table):
+    from stoa.db.repositories import account_invitation_repo
+
+    account_invitation_repo.create_invitation(
+        {"invitation_id": "inv-1", "token_digest": "digest-1", "account_id": STUDENT,
+         "invited_by": TEACHER, "status": "pending", "role": "student"},
+        table=table,
+    )
+
+    assert _registry(table, STUDENT) == {"OWNS#ACCOUNT_INVITATION#digest-1": "owner"}
+    assert _registry(table, TEACHER) == {}
+
+
+# -- an Update that changes whom a row names (#589) ----------------------------------------
+
+
+def _pointer_update(teacher: str = TEACHER) -> dict:
+    return {
+        "Update": {
+            "Key": {"PK": "CONV#c1", "SK": "HELP_REQUEST"},
+            "UpdateExpression": "SET #t = :t, dispatch_status = :s",
+            "ExpressionAttributeNames": {"#t": "dispatched_teacher_id"},
+            "ExpressionAttributeValues": {":t": teacher, ":s": "dispatched"},
+        }
+    }
+
+
+def test_an_update_that_sets_an_account_pointer_must_pass_its_row(table):
+    before = dict(table.rows)
+    with pytest.raises(ValueError, match="rows="):
+        db_table.fenced(STUDENT, [_pointer_update()], table=table)
+    with pytest.raises(ValueError, match="rows="):
+        db_table.registered([_pointer_update()], table=table)
+    assert table.rows == before
+
+
+def test_an_update_registers_whom_its_row_will_name(table):
+    row = {"PK": "CONV#c1", "SK": "HELP_REQUEST", "entity_type": "help_request",
+           "student_id": STUDENT}
+    table.seed(row)
+    update = _pointer_update()
+
+    db_table.fenced(
+        STUDENT, [update], rows=owner_registry.rows_after(row, [update]), table=table
+    )
+
+    assert table.rows[("CONV#c1", "HELP_REQUEST")]["dispatched_teacher_id"] == TEACHER
+    assert _registry(table, TEACHER) == {"REFERENCED_IN#CONV#c1": "reference"}
+
+
+def test_an_update_of_other_fields_needs_no_row(table):
+    db_table.fenced(STUDENT, [_update("CONV#c1")], table=table)
+
+    assert _registry(table, STUDENT) == {"OWNS#CONV#c1": "owner"}
+
+
+@pytest.mark.parametrize(
+    ("expression", "names", "changed"),
+    [
+        ("SET #s = :s, updated_at = :now", {"#s": "status"}, []),
+        ("SET #t = if_not_exists(#t, :t) ADD previous_dispatch_teacher_ids :x",
+         {"#t": "teacher_id"}, ["teacher_id", "previous_dispatch_teacher_ids"]),
+        ("SET metadata.read_at = :r", {}, []),
+        ("SET metadata = :m", {}, ["metadata"]),
+        ("SET children.#c = :entry", {"#c": STUDENT}, [f"children.{STUDENT}"]),
+        ("REMOVE scope, owner_id", {}, []),
+    ],
+)
+def test_the_pointer_paths_an_update_sets(expression, names, changed):
+    update = {"UpdateExpression": expression, "ExpressionAttributeNames": names}
+    assert owner_registry.updated_pointer_paths(update) == changed
+
+
+def test_rows_after_applies_simple_assignments_and_refuses_the_rest():
+    key = {"PK": "USAGE#s", "SK": "VOICE#2026-11"}
+    update = {
+        "Key": key,
+        "UpdateExpression": (
+            "SET #c = :next, owner_id = if_not_exists(owner_id, :owner), "
+            "entity_type = if_not_exists(entity_type, :kind) ADD tally :one REMOVE stale"
+        ),
+        "ExpressionAttributeNames": {"#c": "count"},
+        "ExpressionAttributeValues": {":next": 2, ":owner": STUDENT, ":kind": "rate_counter",
+                                      ":one": 1},
+    }
+    (after,) = owner_registry.rows_after({**key, "tally": 1, "stale": True}, [{"Update": update}])
+    assert after == {**key, "count": 2, "owner_id": STUDENT, "entity_type": "rate_counter",
+                     "tally": 2}
+    # A row already owned keeps its owner under if_not_exists.
+    (kept,) = owner_registry.rows_after({**key, "owner_id": TEACHER}, [{"Update": update}])
+    assert kept["owner_id"] == TEACHER
+    # Another key's Update is not this row's.
+    assert owner_registry.rows_after({"PK": "x", "SK": "y"}, [{"Update": update}]) == []
+    appended = {**update, "UpdateExpression": "SET children = list_append(children, :c)",
+                "ExpressionAttributeValues": {":c": []}}
+    with pytest.raises(ValueError):
+        owner_registry.rows_after(key, [{"Update": appended}])
+
+
+def test_registered_with_no_operations_registers_ahead(table):
+    row = {"PK": "REPORT_RECOVERY_JOB#j", "SK": "SUMMARY", "entity_type": "REPORT_RECOVERY_JOB",
+           "filters": {"student_id": STUDENT}}
+
+    db_table.registered((), rows=[row], table=table)
+
+    assert ("REPORT_RECOVERY_JOB#j", "SUMMARY") not in table.rows
+    assert _registry(table, STUDENT) == {"OWNS#REPORT_RECOVERY_JOB#j": "owner"}
 
 
 def test_a_fenced_put_registers_every_account_its_row_names(table):
@@ -455,10 +593,11 @@ def test_a_capability_grant_registers_the_student_it_is_scoped_to(table):
     from stoa.db.repositories import capability_repo
 
     grant = {"PK": f"USER#{TEACHER}", "SK": "CAPABILITY#teacher_support#1", "scope": f"student:{STUDENT}",
-             "entity_type": "capability_grant"}
+             "entity_type": "capability_grant_current", "user_id": TEACHER}
     capability_repo._apply(table, [{"kind": "put", "item": grant, "condition": "absent"}])
 
-    assert _registry(table, STUDENT) == {f"REFERENCED_IN#USER#{TEACHER}": "reference"}
+    # The student's deletion terminalizes a grant scoped to them: owner (#586 decision 7).
+    assert _registry(table, STUDENT) == {f"OWNS#USER#{TEACHER}": "owner"}
 
 
 def test_closing_a_link_registers_each_side_for_the_other(table):
@@ -475,8 +614,9 @@ def test_closing_a_link_registers_each_side_for_the_other(table):
     )
 
     assert table.rows[(f"PARENT#{PARENT}", f"CHILD#{STUDENT}")]["status"] != "active"
+    # Either side's deletion deletes both rows: each owns the other's (#586 decision 7).
     assert _registry(table, STUDENT) == {f"OWNS#PARENT#{PARENT}": "owner"}
-    assert _registry(table, PARENT) == {f"REFERENCED_IN#STUDENT#{STUDENT}": "reference"}
+    assert _registry(table, PARENT) == {f"OWNS#STUDENT#{STUDENT}": "owner"}
 
 
 def test_a_help_request_written_without_a_fence_registers_its_lapsed_teachers(table):

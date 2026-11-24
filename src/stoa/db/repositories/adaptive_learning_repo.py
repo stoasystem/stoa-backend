@@ -7,7 +7,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 
-from stoa.db import data_catalog
+from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -254,7 +254,13 @@ def put_memory_snapshot(item: dict[str, Any]) -> None:
         else None,
     )
     if _atomic_table(table):
-        db_table.fenced(owner, operations, generation=generation, table=table)
+        db_table.fenced(
+            owner,
+            operations,
+            generation=generation,
+            rows=owner_registry.rows_after(existing or stored, operations),
+            table=table,
+        )
     else:
         _put_item(table, Item=operations[-1]["Put"]["Item"])
     item.update(owner_id=owner, account_fence_generation=generation)
@@ -383,7 +389,13 @@ def update_assignment(
                 mutation["ConditionExpression"] += " AND #expected_status=:expected_status"
                 mutation["ExpressionAttributeNames"]["#expected_status"] = "status"
                 mutation["ExpressionAttributeValues"][":expected_status"] = expected_status
-            db_table.fenced(owner, operations, generation=generation, table=table)
+            db_table.fenced(
+                owner,
+                operations,
+                generation=generation,
+                rows=owner_registry.rows_after(existing, operations),
+                table=table,
+            )
             return get_assignment(assignment_id) or {**existing, **updates}
         attributes = _update_item(table, **kwargs)
     except (

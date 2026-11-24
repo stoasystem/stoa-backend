@@ -1328,10 +1328,8 @@ def test_建号事务恰好写下profile围栏与占位行(
         (f"USER#{issued['userId']}", "PROFILE"),
         (f"USER#{issued['userId']}", "ACCOUNT_FENCE"),
         ("EMAIL#atomic@example.ch#student", account_email_claim_repo.CLAIM_SK),
-        # #397: the claim's partition under the new account, and the new
-        # account's under the administrator who opened it.
-        (f"USER#{issued['userId']}", "REFERENCED_IN#EMAIL#atomic@example.ch#student"),
-        ("USER#admin-1", f"REFERENCED_IN#USER#{issued['userId']}"),
+        # No registry rows: the claim goes with the profile's deletion, and who
+        # opened the account is a mention only (#586 decision 1, #589).
     }
 
 
@@ -1774,7 +1772,8 @@ def test_an_invitation_registers_its_partition_for_the_accounts_it_names(
 
     The invitation is written outside `fenced` and holds the invited person's
     address and name. Unregistered, the registry path would never read it, and
-    the daily sweep would report it the day it was issued.
+    the daily sweep would report it the day it was issued. The inviter is a
+    mention only and is not registered (#586 decision 1, #589).
     """
     from stoa.db import owner_registry
 
@@ -1791,4 +1790,4 @@ def test_an_invitation_registers_its_partition_for_the_accounts_it_names(
         if owner_registry.is_registry_row(item)
     }
     assert (row["account_id"], partition) in registered
-    assert (row["invited_by"], partition) in registered
+    assert (row["invited_by"], partition) not in registered

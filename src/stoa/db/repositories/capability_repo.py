@@ -685,15 +685,10 @@ def _apply(table: object, operations: list[_CapabilityOperation]) -> None:
             put["ExpressionAttributeValues"] = put_values
         transact_items.append({"Put": put})
     # Grants live in the grantee's partition but name their student in
-    # `scope`; deletion of that student takes them (the data type catalog), so the
-    # student registers the grantee's partition in the same write (#397).
-    transact_items.extend(
-        account_deletion_repo.registry_operations_for(
-            [op["Put"]["Item"] for op in transact_items if "Put" in op], transact_items
-        )
-    )
+    # `scope`; deletion of that student takes them (the data type catalog), so
+    # the write registers the grantee's partition under the student (#397).
     try:
-        db_table.transact(transact_items, table=table)
+        db_table.registered(transact_items, table=table)
     except db_table.WriteRefused as exc:
         raise CapabilityVersionConflict("conditional capability transaction failed") from exc
 
