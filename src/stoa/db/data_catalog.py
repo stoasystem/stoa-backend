@@ -39,8 +39,8 @@ with none at all (the profile, a practice attempt, usage counters); those are
 matched by their key shape (`UNTYPED`). A deletion tombstone whose type is
 `{type}_deletion_tombstone` built from another type's name is matched by that
 suffix. A row that matches nothing is unknown: `mentions` says it names no
-account, because a caller walking the whole table (the sweep, a comparison
-script) has to get through rows written before a type had a name; and
+account, because a caller walking the whole table (the sweep) has to get
+through rows written before a type had a name; and
 `mentions_strict` raises `UnknownDataType`, for a caller that must not guess.
 
 Account deletion reads it (#588): `owns`, `names` and `role_of` are the one
@@ -49,9 +49,9 @@ only its own choice of which kinds it handles and how. The owner registry
 reads it too (#589): a write registers its partition under every account
 `mentions` gives, in the role given (`owner_registry.registry_operations`),
 and an Update that sets one of the `POINTER_PATHS` has to say how its row
-will stand. The sweep switches over in #590; until then
-`tests/test_data_catalog.py` holds the catalog to the rules registration and
-deletion followed before #588-#589, difference by difference.
+will stand. So does the registry's daily sweep (#590): a missing registration
+is an account `mentions` gives that has not registered the row's partition, and
+a leftover is a row that still points to a deleted account.
 """
 
 from __future__ import annotations

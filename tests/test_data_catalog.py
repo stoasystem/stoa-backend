@@ -1,8 +1,9 @@
-"""The data type catalog is complete, and says what the old rules said (#587).
+"""The data type catalog is complete (#587).
 
 `stoa.db.data_catalog` lists every kind of row and the accounts it points to.
-Account deletion reads it since #588 and the owner registry since #589; the sweep switches
-over in #590. Three gates hold it in place:
+Account deletion (#588), the owner registry (#589) and its sweep (#590) read it
+and nothing else, so there is no second rule left to compare it with. Three
+gates hold it in place:
 
 1. **Closed world.** Every `entity_type` the code writes
    (`entity_type_scan.written_entity_types`) has an entry, and every entry is a
@@ -16,15 +17,13 @@ over in #590. Three gates hold it in place:
    fields the scan cannot see (a spread of a parameter) is listed in
    `FIELDS_READ_BY_HAND` with where the fields come from; its entry was
    declared by reading the code.
-3. **Parity.** For every entry, synthetic rows put an id in each declared
-   pointer and in each field the old rules read on any row; and every row the
-   deletion branch gate builds (`deleted_by_branch`) is compared too. The old
-   answer (`compare_data_catalog.old_rule`: registration's `mentioned_accounts`
-   and the deletion rules as they stood before #588-#589, frozen in that
-   script) and the catalog's
-   (`mentions`) must agree, except for the intended differences in
-   `compare_data_catalog.INTENDED` - each one a decision in #586 - and the
-   role changes in `compare_data_catalog.ROLE_CHANGES`.
+3. **Pointers read.** For every entry, a synthetic row with an id in each
+   declared pointer is read as naming it; and every row the deletion branch
+   gate builds (`deleted_by_branch`) is a known kind that names the account
+   its branch deletes it for.
+
+The comparison with the rules before #588-#589 (`scripts/compare_data_catalog.py`)
+ran over production before each step and is retired with #590.
 
 A new kind of row fails 1 until it has an entry; a new account field on a
 writer fails 2 until it is declared or reasoned away.
@@ -38,7 +37,6 @@ from typing import Any
 
 import pytest
 
-import compare_data_catalog as compare
 from entity_type_scan import ROOT, written_entity_types, written_fields
 from stoa.db import data_catalog
 from stoa.db.data_catalog import (
@@ -53,7 +51,6 @@ from stoa.db.data_catalog import (
     ScopeId,
     Summaries,
 )
-from stoa.db.repositories import notification_repo
 
 PROBE = "probe-587"
 OTHER = "other-587"
@@ -430,7 +427,7 @@ def test_an_unknown_row_names_nobody_unless_asked_strictly():
     assert data_catalog.mentions_strict(tombstone) == {}
 
 
-# -- 3. parity ---------------------------------------------------------------------------------
+# -- 3. pointers read ---------------------------------------------------------------------------------
 
 # A key of each kind as its writer builds it, where today's rules read the key
 # (a practice partition, a report family, a link SK). `{a}` is the account the
@@ -532,64 +529,8 @@ def _pointer_probes(entry: DataType) -> list[tuple[str, dict[str, Any]]]:
     return rows
 
 
-def _rule_probes(entry: DataType) -> list[tuple[str, dict[str, Any]]]:
-    """Rows of `entry`'s kind, each with `PROBE` in one place today's rules read."""
-    rows: list[tuple[str, dict[str, Any]]] = []
-
-    def probe(label: str, **changes: Any) -> None:
-        rows.append(_probe(entry, label, **changes))
-
-    # Read on any row, whatever its kind (`_targets_user`).
-    for field in sorted(compare.GENERIC_FALLBACKS):
-        probe(field, **{field: PROBE})
-    if entry.name not in SAMPLE_KEYS:  # a kind whose SK a rule reads keeps its own
-        probe("SK CHILD#", SK=f"CHILD#{PROBE}")
-        probe("SK PARENT#", SK=f"PARENT#{PROBE}")
-    for field in ("children", "child_summaries", "student_summaries"):
-        probe(f"{field}{{}}", **{field: {PROBE: {}}})
-        probe(f"{field}[]", **{field: [{"child_id": PROBE}]})
-    probe("scope student:", scope=f"student:{PROBE}")
-    probe("scope student/", scope=f"student/{PROBE}")
-    probe("bare scope", scope=PROBE)
-    # Read on some kinds only.
-    scalar, collection, metadata = (
-        compare.OLD_CROSS_ACCOUNT_REFERENCES.get(
-            entry.name, (frozenset(), frozenset(), frozenset())
-        )
-    )
-    for field in sorted(scalar):
-        probe(field, **{field: PROBE})
-    for field in sorted(collection):
-        probe(field, **{field: [PROBE]})
-    inside = set(metadata)
-    if entry.name in notification_repo.NOTIFICATION_PRIVATE_ROW_REGISTRY:
-        inside |= compare.OLD_NOTIFICATION_OWNER_METADATA  # the old `_targets_owner`
-    for field in sorted(inside):
-        probe(f"metadata.{field}", **{f"metadata__{field}": PROBE})
-    for field in ("student_id", "parent_id"):  # `_recovery_job_record_accounts`
-        probe(f"filters.{field}", **{f"filters__{field}": PROBE})
-        probe(f"metadata.{field}", **{f"metadata__{field}": PROBE})
-        probe(f"metadata.filters.{field}", **{f"metadata__filters__{field}": PROBE})
-        probe(f"metadata.result_filters.{field}", **{f"metadata__result_filters__{field}": PROBE})
-    return rows
-
-
-def _probes(entry: DataType) -> list[tuple[str, dict[str, Any]]]:
-    return [*_pointer_probes(entry), *_rule_probes(entry)]
-
-
 def _entries() -> list[DataType]:
     return [*CATALOG.values(), *UNTYPED]
-
-
-@pytest.mark.parametrize("entry", _entries(), ids=lambda entry: entry.name)
-def test_the_catalog_agrees_with_todays_rules_but_for_the_intended_differences(entry):
-    unexplained: list[tuple[str, str, str, str]] = []
-    for label, row in _probes(entry):
-        for difference in compare.compare(row):
-            if compare.intended(difference, row) is None:
-                unexplained.append((label, difference.field, difference.kind, difference.account))
-    assert not unexplained, unexplained
 
 
 @pytest.mark.parametrize("entry", _entries(), ids=lambda entry: entry.name)
@@ -598,53 +539,9 @@ def test_every_declared_pointer_is_read(entry):
         assert PROBE in data_catalog.mentions(row), (label, row)
 
 
-def test_the_rows_the_branch_gate_builds_agree_with_todays_rules():
+def test_the_rows_the_branch_gate_builds_are_known_and_name_their_account():
     from test_account_deletion_branch_coverage import ACCOUNT, deleted_by_branch
 
-    unexplained = []
     for entity_type, (_, row) in sorted(deleted_by_branch().items()):
         assert data_catalog.data_type_of(row) is not None, entity_type
         assert data_catalog.names(row, ACCOUNT), entity_type
-        for difference in compare.compare(row):
-            if compare.intended(difference, row) is None:
-                unexplained.append((entity_type, difference.field, difference.kind))
-    assert not unexplained, unexplained
-
-
-def test_every_role_change_is_listed_and_every_listing_happens():
-    seen: set[tuple[str, str]] = set()
-    for entry in _entries():
-        for _, row in _probes(entry):
-            for difference in compare.compare(row):
-                if difference.kind.startswith("role:"):
-                    seen.update((entry.name, field) for field in difference.field.split("+"))
-    assert seen == set(compare.ROLE_CHANGES), sorted(seen ^ set(compare.ROLE_CHANGES))
-
-
-def test_the_comparison_script_only_reads(capsys):
-    from fakes.dynamodb import FakeTable
-
-    rows = [
-        {"PK": "CONV#c", "SK": "CONV", "entity_type": "conversation", "student_id": "s1"},
-        {"PK": "CONV#c", "SK": "MSG#m", "entity_type": "conversation_message", "user_id": "s2"},
-        {"PK": "NEW#x", "SK": "ROW", "entity_type": "brand_new_kind", "owner_id": "s3"},
-        {"PK": "SESSION#x", "SK": "ROW", "student_id": "s4"},
-    ]
-    table = FakeTable(page_item_cap=2)
-    table.seed(*rows)
-    assert compare.main([], table=table) == 0
-    assert dict(table.calls) == {"scan": 2}
-    report = json.loads(capsys.readouterr().out)
-    assert report["rows_scanned"] == 4
-    assert report["rows_unknown_to_catalog"] == {"(untyped) SESSION/ROW": 1, "brand_new_kind": 1}
-    assert report["differences"] == [
-        {
-            "entity_type": "conversation_message",
-            "field": "user_id",
-            "kind": "old_only",
-            "intended": "REVIEW (generic_fallback: stored rows carry it)",
-            "rows": 1,
-        }
-    ]
-    printed = json.dumps(report)
-    assert not any(secret in printed for secret in ("s1", "s2", "s3", "s4", "CONV#c"))

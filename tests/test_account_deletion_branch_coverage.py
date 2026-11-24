@@ -457,6 +457,11 @@ class _AnyClient:
         return lambda *_args, **_kwargs: {}
 
 
+# Who writes the rows `picks_by_branch` stores: an account of its own, so its
+# fenced write registers nothing under `ACCOUNT` that the catalog does not.
+WRITER = "writer-590"
+
+
 def picks_by_branch(
     monkeypatch: pytest.MonkeyPatch, rows: list[dict[str, Any]]
 ) -> dict[str, set[tuple[str, str]]]:
@@ -464,13 +469,16 @@ def picks_by_branch(
 
     The operations a branch hands its rows to are replaced by a recorder, so
     each branch reads what it would and changes nothing. The read is the
-    registry path's: `ACCOUNT`'s derived partitions, and a registry row for
-    every other partition a row is in, as `fenced` writes them.
+    registry path's: `ACCOUNT`'s derived partitions and the partitions
+    registered under it. The rows are written by another account through the
+    real `fenced` write, so what is registered under `ACCOUNT` is only what the
+    data type catalog says the rows point to (#590): a row whose registration
+    the catalog misses is a row its branch does not find.
     """
     from fakes.dynamodb import FakeTable
     from stoa import aws
     from stoa.aws import Kind
-    from stoa.db import owner_registry, table as db_table
+    from stoa.db import table as db_table
     from stoa.db.repositories import (
         account_deletion_repo,
         adaptive_learning_repo,
@@ -491,11 +499,10 @@ def picks_by_branch(
     )
 
     table = FakeTable()
-    table.seed(*rows)
     table.seed_active_account(ACCOUNT)
-    for partition in sorted({str(row["PK"]) for row in rows}):
-        if not owner_registry.is_derived_for(partition, ACCOUNT):
-            table.seed(owner_registry.registry_item(ACCOUNT, partition))
+    table.seed_active_account(WRITER)
+    for row in rows:
+        db_table.fenced(WRITER, [{"Put": {"Item": row}}], table=table)
     db_table.install(table)
     aws.install({Kind.S3: _AnyClient(), Kind.COGNITO: _AnyClient()})
 

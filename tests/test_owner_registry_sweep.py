@@ -2,6 +2,7 @@
 
 Both run the same two-scan walk against the in-memory table: report-only by
 default, writing registry rows only when asked, resumable from a saved key.
+Whom a row points to is the data type catalog's answer alone (#590).
 """
 
 from __future__ import annotations
@@ -58,7 +59,7 @@ def table() -> FakeTable:
         {"PK": "TEACHER_SUPPORT_CASE#k", "SK": "CASE", "student_id": STUDENT,
          "teacher_id": TEACHER, "entity_type": "help_request"},
         # The student's notification that went to the teacher: registered for
-        # its owner, and no branch of the teacher's deletion takes it.
+        # its owner; `recipient_id` is no pointer in the catalog.
         {"PK": "NOTIFICATION#n1", "SK": "META", "entity_type": "notification_event",
          "owner_id": STUDENT, "recipient_id": TEACHER},
         owner_registry.registry_item(STUDENT, "NOTIFICATION#n1"),
@@ -105,28 +106,36 @@ def test_a_dry_run_reports_and_writes_nothing(table):
         (STUDENT, "CONV#c1", "owner"),
         (STUDENT, "TEACHER_SUPPORT_CASE#k", "owner"),
         (TEACHER, "TEACHER_SUPPORT_CASE#k", "reference"),
-        (STUDENT, f"USER#{TEACHER}", "reference"),
+        # The student's deletion terminalizes a grant scoped to them: owner.
+        (STUDENT, f"USER#{TEACHER}", "owner"),
     }
     assert table.calls["put_item"] == table.calls["transact_write_items"] == 0
 
 
-def test_a_row_no_deletion_branch_takes_is_a_mention_not_a_missing_registration(table):
-    """What closes the registry path is what it would miss, not every id in a row.
+def test_a_field_the_catalog_does_not_list_is_no_finding(table):
+    """What closes the registry path is what the catalog says a row points to (#590).
 
-    The teacher's deletion leaves the student's notification alone on either
-    path, so its `recipient_id` is no gap in the registry - while the same
-    teacher on a help request is, because that deletion does take the request.
+    The notification's `recipient_id` is no pointer, so the teacher's deletion
+    leaves it alone on either path and it is no gap in the registry - while the
+    same teacher on a help request is, because the catalog lists `teacher_id`.
+    The walk no longer splits strings looking for ids, nor counts mentions.
     """
     result = sweep.run(table=table).as_dict()
 
-    assert result["unmatched_mentions"] == 1
-    assert result["unmatched_mentions_by_family"] == {"NOTIFICATION/META": 1}
-    assert result["unmatched_mention_samples"] == [
-        {"PK": "NOTIFICATION#n1", "SK": "META", "account": TEACHER, "role": "reference"}
-    ]
-    assert (TEACHER, "TEACHER_SUPPORT_CASE#k") in {
-        (sample["account"], sample["PK"]) for sample in result["unregistered_samples"]
-    }
+    samples = {(sample["account"], sample["PK"]) for sample in result["unregistered_samples"]}
+    assert (TEACHER, "NOTIFICATION#n1") not in samples
+    assert (TEACHER, "TEACHER_SUPPORT_CASE#k") in samples
+    assert "unmatched_mentions" not in result
+
+
+def test_rows_of_a_kind_the_catalog_does_not_know_are_counted_apart(table):
+    result = sweep.run(table=table).as_dict()
+
+    # `message` is no kind the catalog lists, so it points to no one and is no
+    # finding; it is counted so that a kind the catalog misses shows up.
+    assert result["unknown_to_catalog_by_kind"]["message"] == 1
+    assert result["rows_unknown_to_catalog"] == sum(result["unknown_to_catalog_by_kind"].values())
+    assert not any(STUDENT in label for label in result["unknown_to_catalog_by_kind"])
 
 
 def test_a_mention_alone_leaves_the_registry_complete_and_is_never_backfilled():
@@ -143,16 +152,14 @@ def test_a_mention_alone_leaves_the_registry_complete_and_is_never_backfilled():
     report = sweep.run(table=double, write=True)
 
     assert report.registry_complete and report.registry_written == 0
-    assert sum(report.mentions.values()) == 1
     assert _registry(double) == before
 
 
 def test_a_row_the_catalog_names_below_the_top_level_is_a_missing_registration():
-    """The scans are asked, and they read the data type catalog (#588).
+    """A recovery job's summary names the student only in its filters (#590).
 
-    A recovery job's summary names the student only in its filters; the
-    catalog says it is the student's, so deletion takes it and its partition
-    has to be registered.
+    The catalog says it is the student's, so deletion takes it (#588) and its
+    partition has to be registered.
     """
     double = FakeTable()
     row = {
@@ -167,7 +174,6 @@ def test_a_row_the_catalog_names_below_the_top_level_is_a_missing_registration()
     report = sweep.run(table=double)
 
     assert report.unregistered == {"REPORT_RECOVERY_JOB/SUMMARY": 1}
-    assert not report.mentions
 
 
 def _recovery_target_event(parent: str, student: str) -> dict:
@@ -201,7 +207,7 @@ def test_a_recovery_audit_event_naming_a_parent_needs_its_registration():
 
     assert report.unregistered == {"REPORT_RECOVERY_JOB/AUDIT": 1}
     assert report.unregistered_samples == [
-        {"PK": row["PK"], "SK": row["SK"], "account": PARENT, "role": "reference"}
+        {"PK": row["PK"], "SK": row["SK"], "account": PARENT, "role": "owner"}
     ]
 
 
@@ -240,7 +246,7 @@ def test_every_deletion_scan_is_asked():
     """Each function that pages through `sweep_pages` to find an account's rows.
 
     A new deletion branch with its own scan has to be added to `DELETION_SCANS`,
-    or a row only it takes would be filed as a mention.
+    so that the test below holds it to the catalog.
     """
     import ast
 
@@ -266,6 +272,25 @@ def test_every_deletion_scan_is_asked():
     assert callers - not_a_row_scan == {scan.__name__ for scan in sweep.DELETION_SCANS}
 
 
+def test_a_row_a_deletion_scan_takes_is_one_the_catalog_names():
+    """The walk asks the catalog, not the scans (#590): so no scan may take more.
+
+    A row some branch's scan takes for an account the catalog does not say
+    the row points to would be one the registry never lists, and the registry
+    path would miss it.
+    """
+    from test_account_deletion_branch_coverage import ACCOUNT, deleted_by_branch
+
+    taken_beyond = []
+    for entity_type, (_, row) in sorted(deleted_by_branch().items()):
+        for account in (ACCOUNT, STUDENT):
+            if sweep.deletion_takes(row, account, table=FakeTable()) and not (
+                data_catalog.names(row, account)
+            ):
+                taken_beyond.append((entity_type, account))
+    assert not taken_beyond
+
+
 def test_the_sweep_finds_a_deleted_accounts_leftovers_and_registry(table):
     report = sweep.run(table=table)
 
@@ -285,7 +310,7 @@ def test_apply_writes_exactly_the_missing_rows_and_is_idempotent(table):
     assert first.registry_written == 4
     assert (f"USER#{STUDENT}", "OWNS#CONV#c1") in written
     assert (f"USER#{TEACHER}", "REFERENCED_IN#TEACHER_SUPPORT_CASE#k") in written
-    assert (f"USER#{STUDENT}", f"REFERENCED_IN#USER#{TEACHER}") in written
+    assert (f"USER#{STUDENT}", f"OWNS#USER#{TEACHER}") in written
 
     second = sweep.run(table=table, write=True)
     assert second.registry_written == 0
@@ -318,6 +343,7 @@ def test_rows_from_the_dual_write_are_complete_without_a_backfill():
     db_table.fenced(
         STUDENT,
         [{"Put": {"Item": {"PK": "TEACHER_SUPPORT_CASE#k", "SK": "CASE",
+                           "entity_type": "help_request",
                            "student_id": STUDENT, "teacher_id": TEACHER}}}],
         also={TEACHER: None},
         table=double,
@@ -374,7 +400,7 @@ def test_the_daily_job_is_report_only_and_logs_findings(table, caplog):
     assert table.rows == before
     assert marker["complete"] is True
     assert marker["missing_registrations"] == 4 and marker["leftover_rows"] == 2
-    assert marker["unmatched_mentions"] == 1
+    assert marker["rows_unknown_to_catalog"] == summary["rows_unknown_to_catalog"] > 0
     assert summary["missing_registrations"] == 4 and summary["leftover_rows"] == 2
     assert "owner_registry_sweep_findings" in caplog.text
     assert STUDENT not in json.dumps(marker, default=str)
@@ -382,14 +408,15 @@ def test_the_daily_job_is_report_only_and_logs_findings(table, caplog):
     assert "owner_id" not in caplog.text
 
 
-def test_the_daily_job_logs_a_mention_without_raising_a_finding(caplog):
+def test_the_daily_job_logs_an_unknown_kind_without_raising_a_finding(caplog):
     double = FakeTable()
     double.seed(
-        _fence(STUDENT),
-        _fence(TEACHER),
+        {**_fence(STUDENT), "entity_type": "account_fence", "user_id": STUDENT},
         {"PK": "NOTIFICATION#n1", "SK": "META", "entity_type": "notification_event",
          "owner_id": STUDENT, "recipient_id": TEACHER},
         owner_registry.registry_item(STUDENT, "NOTIFICATION#n1"),
+        # A kind the catalog does not list: it points to no one, whatever it holds.
+        {"PK": "NEW#x", "SK": "ROW", "entity_type": "brand_new_kind", "owner_id": STUDENT},
     )
     db_table.install(double)
     try:
@@ -399,9 +426,9 @@ def test_the_daily_job_logs_a_mention_without_raising_a_finding(caplog):
         db_table.install(None)
 
     marker = double.rows[(sweep.RUN_MARKER_KEY["PK"], sweep.RUN_MARKER_KEY["SK"])]
-    assert marker["missing_registrations"] == 0 and marker["unmatched_mentions"] == 1
+    assert marker["missing_registrations"] == 0 and marker["rows_unknown_to_catalog"] == 1
     assert summary["registry_complete"] is True
-    assert "owner_registry_sweep_mentions count=1" in caplog.text
+    assert "owner_registry_sweep_unknown count=1 kinds=['brand_new_kind']" in caplog.text
     # The alarm's metric filter matches these three, and none was logged.
     for alarming in (
         "owner_registry_sweep_findings",
@@ -441,6 +468,22 @@ def test_a_legacy_curriculum_signal_names_no_one():
     assert report.registry_complete
 
 
+def test_an_old_untyped_practice_row_is_checked_and_shared_content_is_not():
+    """The practice branch deletes old `PRACTICE#` rows (#588), so they need registering (#590)."""
+    double = FakeTable()
+    double.seed(
+        _fence(STUDENT),
+        {"PK": "PRACTICE#p1", "SK": "META", "student_id": STUDENT},
+        # Shared practice content: the catalog says it points to no one.
+        {"PK": "PRACTICE", "SK": "LESSON#l1", "entity_type": "practice_lesson",
+         "created_by": STUDENT},
+    )
+
+    report = sweep.run(table=double)
+
+    assert report.unregistered == {"PRACTICE/META": 1}
+
+
 def test_teacher_activation_commands_are_a_reviewed_exclusion():
     double = FakeTable()
     double.seed(_fence(TEACHER), _fence(GONE, status="deleted"),
@@ -468,10 +511,10 @@ def _with_references_into_a_deleted_account() -> FakeTable:
          "owner_deletion_generation": 2},
         # True once, when the profile named its inviter; nothing removed it.
         owner_registry.registry_item(TEACHER, f"USER#{GONE}", owner_registry.ROLE_REFERENCE),
-        # Still true: a row in the deleted account's partition names the student.
-        {"PK": f"PROGRESS#{GONE}", "SK": "SHARED#1", "entity_type": "shared_note",
-         "reviewer_id": STUDENT},
-        owner_registry.registry_item(STUDENT, f"PROGRESS#{GONE}", owner_registry.ROLE_REFERENCE),
+        # Still true: a row in the deleted account's partition points to the student.
+        {"PK": f"PARENT#{GONE}", "SK": f"CHILD#{STUDENT}", "entity_type": "parent_student_link",
+         "parent_id": GONE, "student_id": STUDENT},
+        owner_registry.registry_item(STUDENT, f"PARENT#{GONE}"),
         # A reference into a living account's partition is not this finding.
         {"PK": f"USER#{STUDENT}", "SK": "PROFILE", "user_id": STUDENT, "invited_by": TEACHER},
         owner_registry.registry_item(TEACHER, f"USER#{STUDENT}", owner_registry.ROLE_REFERENCE),

@@ -58,8 +58,8 @@ Write such rows through `db_table.fenced` (behind the owner's account fence) or,
 
 What fails if you don't:
 
-- `tests/test_data_catalog.py`: a written `entity_type` with no entry, an entry nothing writes, an entry naming the wrong module, an account-looking attribute a writer writes that the entry neither declares nor lists in `not_pointers`, a writer whose fields the scan cannot read that is not in `FIELDS_READ_BY_HAND`, and any difference from the registration and deletion rules as they stood before #588-#589 that is not one of the intended ones (`scripts/compare_data_catalog.py`, `INTENDED` and `ROLE_CHANGES`).
+- `tests/test_data_catalog.py`: a written `entity_type` with no entry, an entry nothing writes, an entry naming the wrong module, an account-looking attribute a writer writes that the entry neither declares nor lists in `not_pointers`, a writer whose fields the scan cannot read that is not in `FIELDS_READ_BY_HAND`, and a declared pointer the catalog does not read.
 - `tests/test_account_deletion_branch_coverage.py`: the same `entity_type` with no deletion branch and no `KEPT` reason (#534).
 - `tests/test_owner_registry_unfenced_writers.py`: a function that writes to the table without calling `db_table.fenced` or `db_table.registered`, unless it is listed with its reason.
 
-`scripts/compare_data_catalog.py` runs the same comparison read-only over the live table and prints counts only.
+The daily owner registry sweep (`stoa.services.owner_registry_sweep`) checks the stored rows against the same catalog: a missing registration or a leftover of a deleted account is a finding, and rows of a kind the catalog does not know are counted on their own line (`rows_unknown_to_catalog`).
