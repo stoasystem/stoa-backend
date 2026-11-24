@@ -18,6 +18,7 @@ from stoa.services import (
     curriculum_analytics_service,
     curriculum_migration_service,
     curriculum_ops_service,
+    grid_drawing,
     multi_select,
 )
 
@@ -100,6 +101,14 @@ class CurriculumExerciseDraftRequest(BaseModel):
     # right options, 0 for the first. The same in every language.
     correct_options: list[int] = Field(
         default_factory=list, alias="correctOptions", max_length=multi_select.MAX_OPTIONS
+    )
+    # A grid drawing (`grid_drawing`, #594): the grid with its given figure, the
+    # checks a drawing must pass, and drawings that pass them, as `grid_drawing`
+    # describes them; the validation report says what is wrong with them.
+    grid: dict[str, Any] | None = None
+    checks: list[dict[str, Any]] = Field(default_factory=list, max_length=grid_drawing.MAX_CHECKS)
+    solutions: list[dict[str, Any]] = Field(
+        default_factory=list, max_length=grid_drawing.MAX_SOLUTIONS
     )
     translations: dict[Literal["de", "en", "fr", "it"], CurriculumExerciseTranslation] = Field(
         default_factory=dict

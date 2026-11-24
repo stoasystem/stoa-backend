@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from stoa.services import answer_judging, figure_svg, multi_select
+from stoa.services import answer_judging, figure_svg, grid_drawing, multi_select
 from stoa.services.curriculum_issues import Issue, IssueCode
 
 #: Locales an exercise can be translated into.
@@ -98,6 +98,10 @@ def localized(challenge: Mapping[str, Any], locale: str) -> dict[str, Any]:
         )
         shown.pop("accepted_answers", None)
         return shown
+    if grid_drawing.is_one(challenge):
+        # A drawing is judged by its checks; its written-out solution is the
+        # same in every language.
+        return shown
     key = _text(text.get("correct_answer"))
     if key:
         stored_key = challenge.get("correct_answer", challenge.get("answer_key"))
@@ -161,7 +165,7 @@ def translation_issues(exercise: Mapping[str, Any], *, max_text: int) -> list[tu
                 issues.append((field, Issue.of(IssueCode.TRANSLATION_OPTIONS_MISMATCH)))
             elif key_index is not None and _text(text.get("correct_answer")) != _text(translated[key_index]):
                 issues.append((field, Issue.of(IssueCode.TRANSLATION_ANSWER_NOT_THE_OPTION)))
-        elif stored_key and not _text(text.get("correct_answer")):
+        elif stored_key and not grid_drawing.is_one(exercise) and not _text(text.get("correct_answer")):
             issues.append((field, Issue.of(IssueCode.TRANSLATION_ANSWER_MISSING)))
         issues.extend((field, issue) for issue in figure_issues(text, options))
         accepted = text.get("accepted_answers") or []

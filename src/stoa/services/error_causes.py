@@ -314,10 +314,11 @@ def typed_rule(
     """The rule that explains a wrong answer to a typed exercise, else `None`.
 
     A choice exercise has none: its causes are authored on the options, and a
-    choose-several one (`multi_select`, #593) gets no cause per option yet. The
+    choose-several one (`multi_select`, #593) gets no cause per option yet,
+    nor does a grid drawing (`grid_drawing`, #594). The
     key is read as the reader saw it and as it is stored, as in `of_wrong_answer`.
     """
-    if challenge.get("type") in {"multiple_choice", "multi_select"}:
+    if challenge.get("type") in {"multiple_choice", "multi_select", "grid_drawing"}:
         return None
     return rule_of(answer, _keys(shown, challenge))
 

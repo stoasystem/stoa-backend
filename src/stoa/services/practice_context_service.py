@@ -24,6 +24,7 @@ from stoa.db.repositories import practice_repo
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.services import (
     curriculum_service,
+    grid_drawing,
     knowledge_map_service,
     knowledge_mastery_service,
     practice_projection_service,
@@ -226,6 +227,8 @@ def _recent_mistakes(
 
 def _answer_text(attempt: Mapping[str, Any]) -> str:
     answer = attempt.get("submitted_answer", attempt.get("student_answer"))
+    if isinstance(answer, Mapping):
+        answer = grid_drawing.stored_text(answer)
     if isinstance(answer, list):
         answer = ", ".join(str(item) for item in answer)
     return _bounded(answer, _MAX_ANSWER_CHARS)

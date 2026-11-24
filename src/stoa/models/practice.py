@@ -23,7 +23,8 @@ DEFAULT_CHALLENGE_TYPE = "text_input"
 #: What the student projections say about `type` and `figure`, for the client.
 TYPE_DESCRIPTION = (
     "How the exercise is answered: `text_input` (typed), `multiple_choice` (one option), "
-    "`multi_select` (a set of options, see the answer submission), or another kind."
+    "`multi_select` (a set of options, see the answer submission), `grid_drawing` "
+    "(a drawing on `grid`), or another kind."
 )
 FIGURE_DESCRIPTION = (
     "An allowlisted inline SVG. In a `multi_select` exercise an element carrying "
@@ -38,6 +39,56 @@ OpaqueAttemptId = Annotated[
 
 class _PracticeContract(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class GridPoint(_PracticeContract):
+    """A labelled point on a grid; a coordinate is a multiple of the grid's step."""
+
+    label: NonEmptyText
+    x: int | float
+    y: int | float
+
+
+class GridDrawing(_PracticeContract):
+    """Points, and segments and polygons joining points by label (`grid_drawing`, #594).
+
+    The same shape is the figure already on a grid (`GridSpec.given`), what a
+    student sends as the answer to a `grid_drawing` exercise, the answer a
+    receipt records, and the solution shown once an answer is on record.
+    """
+
+    points: list[GridPoint] = Field(default_factory=list)
+    segments: list[list[str]] = Field(default_factory=list)
+    polygons: list[list[str]] = Field(default_factory=list)
+
+
+class GridLimits(_PracticeContract):
+    """The most one drawing may hold."""
+
+    points: int
+    segments: int
+    polygons: int
+
+
+class GridSpec(_PracticeContract):
+    """The grid a `grid_drawing` exercise is drawn on, without its checks or solutions.
+
+    Bounds are whole numbers; `step` is 1 or 0.5. `axes` draws the axes through
+    0 and `axisLabels` numbers them. `labels` are the point names the exercise
+    asks for, in order; a student's labels must differ from the given figure's.
+    The exercise's `figure` is this grid and its given figure drawn as an SVG.
+    """
+
+    x_min: int = Field(alias="xMin")
+    x_max: int = Field(alias="xMax")
+    y_min: int = Field(alias="yMin")
+    y_max: int = Field(alias="yMax")
+    step: int | float
+    axes: bool = False
+    axis_labels: bool = Field(default=False, alias="axisLabels")
+    labels: list[str] = Field(default_factory=list)
+    given: GridDrawing = Field(default_factory=GridDrawing)
+    limits: GridLimits
 
 
 class PracticeChallengePreview(_PracticeContract):
@@ -55,6 +106,7 @@ class PracticeChallengePreview(_PracticeContract):
     hint_available: bool = Field(alias="hintAvailable")
     figure: str | None = Field(default=None, description=FIGURE_DESCRIPTION)
     option_figures: list[str] | None = Field(default=None, alias="optionFigures")
+    grid: GridSpec | None = None
     unit_id: str | None = Field(default=None, alias="unitId")
     subject_id: str | None = Field(default=None, alias="subjectId")
     grade_level: str | None = Field(default=None, alias="gradeLevel")
@@ -104,6 +156,7 @@ class PracticeExercisePreview(_PracticeContract):
     choices: list[str] | None = None
     figure: str | None = Field(default=None, description=FIGURE_DESCRIPTION)
     option_figures: list[str] | None = Field(default=None, alias="optionFigures")
+    grid: GridSpec | None = None
     difficulty: str = "practice"
     estimated_minutes: int = Field(default=5, alias="estimatedMinutes", ge=0)
     skills: list[str] = Field(default_factory=list)
@@ -148,6 +201,12 @@ ANSWER_DESCRIPTION = (
     "`multi_select`: the numbers of the picked options, 0 for the first, in any order, "
     "each at most once, at least one: `[0, 2]`. A hotspot in the figure "
     "(`data-choice=\"B\"`) is the option with that letter, A for the first. "
+    "`grid_drawing`: a drawing, `{points: [{label, x, y}], segments: [[a, b]], "
+    "polygons: [[a, b, c, ...]]}`, segments and polygons naming points by label, "
+    "the student's or the given figure's. Points lie on grid points inside the grid; "
+    "labels are 1-3 letters, digits or primes, unique and not a given label; two "
+    "points never share a grid point; a polygon has 3-12 different points; at most "
+    "`grid.limits`, and not empty. "
     "Anything else: the typed text, or a list of texts for an ordering. "
     "An answer that cannot be one is refused with `practice_answer_invalid`."
 )
@@ -225,6 +284,14 @@ class PracticeAttemptResult(_PracticeContract):
             "0 for the first, in order. `standardAnswer` is the same options as text."
         ),
     )
+    standard_drawing: GridDrawing | None = Field(
+        default=None,
+        alias="standardDrawing",
+        description=(
+            "Only for a `grid_drawing` exercise: a drawing that is right. Another drawing "
+            "may be right too; `standardAnswer` is this one written out."
+        ),
+    )
     explanation: NonEmptyText
     feedback: NonEmptyText
     next_challenge_id: str | None = Field(default=None, alias="nextChallengeId")
@@ -259,7 +326,7 @@ class PracticeMistake(_PracticeContract):
     subject_id: str = Field(default="", alias="subjectId")
     topic: str = ""
     prompt: str = ""
-    your_answer: str | list[str] | None = Field(alias="yourAnswer")
+    your_answer: str | list[str] | GridDrawing | None = Field(alias="yourAnswer")
     answer_state: LegacyAnswerState = Field(alias="answerState")
     message: str | None = None
     created_at: str = Field(default="", alias="createdAt")
@@ -296,6 +363,7 @@ class ReviewCard(_PracticeContract):
     options: list[str] = Field(default_factory=list)
     figure: str | None = Field(default=None, description=FIGURE_DESCRIPTION)
     option_figures: list[str] | None = Field(default=None, alias="optionFigures")
+    grid: GridSpec | None = None
     type: str = Field(default=DEFAULT_CHALLENGE_TYPE, description=TYPE_DESCRIPTION)
     due_at: str = Field(default="", alias="dueAt")
     lapses: int = 0

@@ -2821,6 +2821,15 @@
             ],
             "title": "Answerkey"
           },
+          "checks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 30,
+            "title": "Checks",
+            "type": "array"
+          },
           "correctFeedback": {
             "anyOf": [
               {
@@ -2883,6 +2892,18 @@
               }
             ],
             "title": "Figure"
+          },
+          "grid": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grid"
           },
           "incorrectFeedback": {
             "anyOf": [
@@ -2972,6 +2993,15 @@
               "type": "string"
             },
             "title": "Skills",
+            "type": "array"
+          },
+          "solutions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 5,
+            "title": "Solutions",
             "type": "array"
           },
           "translations": {
@@ -4548,6 +4578,172 @@
         ],
         "title": "Grade",
         "type": "string"
+      },
+      "GridDrawing": {
+        "additionalProperties": false,
+        "description": "Points, and segments and polygons joining points by label (`grid_drawing`, #594).\n\nThe same shape is the figure already on a grid (`GridSpec.given`), what a\nstudent sends as the answer to a `grid_drawing` exercise, the answer a\nreceipt records, and the solution shown once an answer is on record.",
+        "properties": {
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/GridPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "polygons": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Polygons",
+            "type": "array"
+          },
+          "segments": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Segments",
+            "type": "array"
+          }
+        },
+        "title": "GridDrawing",
+        "type": "object"
+      },
+      "GridLimits": {
+        "additionalProperties": false,
+        "description": "The most one drawing may hold.",
+        "properties": {
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "polygons": {
+            "title": "Polygons",
+            "type": "integer"
+          },
+          "segments": {
+            "title": "Segments",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "points",
+          "segments",
+          "polygons"
+        ],
+        "title": "GridLimits",
+        "type": "object"
+      },
+      "GridPoint": {
+        "additionalProperties": false,
+        "description": "A labelled point on a grid; a coordinate is a multiple of the grid's step.",
+        "properties": {
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Y"
+          }
+        },
+        "required": [
+          "label",
+          "x",
+          "y"
+        ],
+        "title": "GridPoint",
+        "type": "object"
+      },
+      "GridSpec": {
+        "additionalProperties": false,
+        "description": "The grid a `grid_drawing` exercise is drawn on, without its checks or solutions.\n\nBounds are whole numbers; `step` is 1 or 0.5. `axes` draws the axes through\n0 and `axisLabels` numbers them. `labels` are the point names the exercise\nasks for, in order; a student's labels must differ from the given figure's.\nThe exercise's `figure` is this grid and its given figure drawn as an SVG.",
+        "properties": {
+          "axes": {
+            "default": false,
+            "title": "Axes",
+            "type": "boolean"
+          },
+          "axisLabels": {
+            "default": false,
+            "title": "Axislabels",
+            "type": "boolean"
+          },
+          "given": {
+            "$ref": "#/components/schemas/GridDrawing"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/GridLimits"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Step"
+          },
+          "xMax": {
+            "title": "Xmax",
+            "type": "integer"
+          },
+          "xMin": {
+            "title": "Xmin",
+            "type": "integer"
+          },
+          "yMax": {
+            "title": "Ymax",
+            "type": "integer"
+          },
+          "yMin": {
+            "title": "Ymin",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "xMin",
+          "xMax",
+          "yMin",
+          "yMax",
+          "step",
+          "limits"
+        ],
+        "title": "GridSpec",
+        "type": "object"
       },
       "HTTPValidationError": {
         "properties": {
@@ -8912,7 +9108,7 @@
         "additionalProperties": false,
         "properties": {
           "answer": {
-            "description": "By the exercise's `type`. `multiple_choice`: the picked option's text, as shown. `multi_select`: the numbers of the picked options, 0 for the first, in any order, each at most once, at least one: `[0, 2]`. A hotspot in the figure (`data-choice=\"B\"`) is the option with that letter, A for the first. Anything else: the typed text, or a list of texts for an ordering. An answer that cannot be one is refused with `practice_answer_invalid`.",
+            "description": "By the exercise's `type`. `multiple_choice`: the picked option's text, as shown. `multi_select`: the numbers of the picked options, 0 for the first, in any order, each at most once, at least one: `[0, 2]`. A hotspot in the figure (`data-choice=\"B\"`) is the option with that letter, A for the first. `grid_drawing`: a drawing, `{points: [{label, x, y}], segments: [[a, b]], polygons: [[a, b, c, ...]]}`, segments and polygons naming points by label, the student's or the given figure's. Points lie on grid points inside the grid; labels are 1-3 letters, digits or primes, unique and not a given label; two points never share a grid point; a polygon has 3-12 different points; at most `grid.limits`, and not empty. Anything else: the typed text, or a list of texts for an ordering. An answer that cannot be one is refused with `practice_answer_invalid`.",
             "title": "Answer"
           },
           "conversationId": {
@@ -9003,6 +9199,17 @@
             "minLength": 1,
             "title": "Standardanswer",
             "type": "string"
+          },
+          "standardDrawing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GridDrawing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only for a `grid_drawing` exercise: a drawing that is right. Another drawing may be right too; `standardAnswer` is this one written out."
           }
         },
         "required": [
@@ -9060,6 +9267,16 @@
               }
             ],
             "title": "Gradelevel"
+          },
+          "grid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GridSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "hintAvailable": {
             "title": "Hintavailable",
@@ -9137,7 +9354,7 @@
             "title": "Topicid"
           },
           "type": {
-            "description": "How the exercise is answered: `text_input` (typed), `multiple_choice` (one option), `multi_select` (a set of options, see the answer submission), or another kind.",
+            "description": "How the exercise is answered: `text_input` (typed), `multiple_choice` (one option), `multi_select` (a set of options, see the answer submission), `grid_drawing` (a drawing on `grid`), or another kind.",
             "minLength": 1,
             "title": "Type",
             "type": "string"
@@ -9236,6 +9453,16 @@
             "description": "An allowlisted inline SVG. In a `multi_select` exercise an element carrying `data-choice=\"B\"` is a hotspot: the option with that letter, A for the first.",
             "title": "Figure"
           },
+          "grid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GridSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "minLength": 1,
             "title": "Id",
@@ -9293,7 +9520,7 @@
             "type": "string"
           },
           "type": {
-            "description": "How the exercise is answered: `text_input` (typed), `multiple_choice` (one option), `multi_select` (a set of options, see the answer submission), or another kind.",
+            "description": "How the exercise is answered: `text_input` (typed), `multiple_choice` (one option), `multi_select` (a set of options, see the answer submission), `grid_drawing` (a drawing on `grid`), or another kind.",
             "minLength": 1,
             "title": "Type",
             "type": "string"
@@ -9504,6 +9731,9 @@
                   "type": "string"
                 },
                 "type": "array"
+              },
+              {
+                "$ref": "#/components/schemas/GridDrawing"
               },
               {
                 "type": "null"
@@ -9733,7 +9963,7 @@
         "description": "One answer to a lesson quiz, naming the exercise it answers (#213, #113).\n\n`exerciseId` names the exercise answered, so the same answer sent twice -\na retry after a lost response - is recognised and answered with the first\nresult rather than judged against the next exercise.",
         "properties": {
           "answer": {
-            "description": "By the exercise's `type`. `multiple_choice`: the picked option's text, as shown. `multi_select`: the numbers of the picked options, 0 for the first, in any order, each at most once, at least one: `[0, 2]`. A hotspot in the figure (`data-choice=\"B\"`) is the option with that letter, A for the first. Anything else: the typed text, or a list of texts for an ordering. An answer that cannot be one is refused with `practice_answer_invalid`.",
+            "description": "By the exercise's `type`. `multiple_choice`: the picked option's text, as shown. `multi_select`: the numbers of the picked options, 0 for the first, in any order, each at most once, at least one: `[0, 2]`. A hotspot in the figure (`data-choice=\"B\"`) is the option with that letter, A for the first. `grid_drawing`: a drawing, `{points: [{label, x, y}], segments: [[a, b]], polygons: [[a, b, c, ...]]}`, segments and polygons naming points by label, the student's or the given figure's. Points lie on grid points inside the grid; labels are 1-3 letters, digits or primes, unique and not a given label; two points never share a grid point; a polygon has 3-12 different points; at most `grid.limits`, and not empty. Anything else: the typed text, or a list of texts for an ordering. An answer that cannot be one is refused with `practice_answer_invalid`.",
             "title": "Answer"
           },
           "exerciseId": {
@@ -11510,6 +11740,16 @@
             "description": "An allowlisted inline SVG. In a `multi_select` exercise an element carrying `data-choice=\"B\"` is a hotspot: the option with that letter, A for the first.",
             "title": "Figure"
           },
+          "grid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GridSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "lapses": {
             "default": 0,
             "title": "Lapses",
@@ -11573,7 +11813,7 @@
           },
           "type": {
             "default": "text_input",
-            "description": "How the exercise is answered: `text_input` (typed), `multiple_choice` (one option), `multi_select` (a set of options, see the answer submission), or another kind.",
+            "description": "How the exercise is answered: `text_input` (typed), `multiple_choice` (one option), `multi_select` (a set of options, see the answer submission), `grid_drawing` (a drawing on `grid`), or another kind.",
             "title": "Type",
             "type": "string"
           }

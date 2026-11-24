@@ -9,6 +9,7 @@ from typing import Any
 from stoa.models.practice import (
     DEFAULT_CHALLENGE_TYPE,
     CurriculumLessonPreview,
+    GridDrawing,
     DirectionalHintTemplateId,
     HintNonDerivabilityDecision,
     LegacyAnswerState,
@@ -20,7 +21,13 @@ from stoa.models.practice import (
     PrivilegedPracticeAnswer,
 )
 from stoa.db.repositories import practice_repo
-from stoa.services import exercise_localization, lesson_sections, locale_service, message_catalog
+from stoa.services import (
+    exercise_localization,
+    grid_drawing,
+    lesson_sections,
+    locale_service,
+    message_catalog,
+)
 from stoa.services.curriculum_translations import translated_title
 
 
@@ -88,7 +95,12 @@ def build_mistake_projection(attempt: Mapping[str, Any]) -> PracticeMistake:
         answer_state = LegacyAnswerState.UNKNOWN_LEGACY
         message = LEGACY_ANSWER_UNKNOWN_MESSAGE
     else:
-        answer = normalize_submitted_answer(attempt[answer_key])
+        stored = attempt[answer_key]
+        answer = (
+            GridDrawing.model_validate(grid_drawing.client_drawing(stored))
+            if isinstance(stored, Mapping)
+            else normalize_submitted_answer(stored)
+        )
         answer_state = LegacyAnswerState.RECORDED
         message = None
 
@@ -126,11 +138,21 @@ def build_challenge_preview(raw: Mapping[str, Any], locale: str = "de") -> dict[
             type=raw.get("type") or DEFAULT_CHALLENGE_TYPE,
             prompt=shown["prompt"],
             options=shown.get("options"),
-            figure=shown.get("figure"),
+            figure=_figure(raw, shown),
             optionFigures=shown.get("option_figures"),
+            grid=grid_drawing.client_grid(raw) if grid_drawing.is_one(raw) else None,
             hintAvailable=approved_directional_hint(raw) is not None,
         )
     )
+
+
+def _figure(raw: Mapping[str, Any], shown: Mapping[str, Any]) -> str | None:
+    """The figure a student sees: a grid drawing's grid drawn by the backend
+    (`grid_drawing.render`), else the exercise's own in their language."""
+    if grid_drawing.is_one(raw):
+        return grid_drawing.render(raw)
+    figure = shown.get("figure")
+    return figure if isinstance(figure, str) else None
 
 
 def build_lesson_preview(
@@ -171,8 +193,9 @@ def build_exercise_preview(raw: Mapping[str, Any], locale: str = "de") -> dict[s
             type=raw.get("type") or DEFAULT_CHALLENGE_TYPE,
             prompt=shown["prompt"],
             choices=shown.get("options"),
-            figure=shown.get("figure"),
+            figure=_figure(raw, shown),
             optionFigures=shown.get("option_figures"),
+            grid=grid_drawing.client_grid(raw) if grid_drawing.is_one(raw) else None,
             difficulty=raw.get("difficulty", "practice"),
             estimatedMinutes=_as_int(raw.get("estimated_minutes", 5)),
             skills=raw.get("skills", []),
@@ -251,6 +274,7 @@ def build_attempt_result(
         raise ValueError("a complete immutable attempt receipt is required")
     correct = receipt["correct"]
     correct_options = receipt.get("correct_options")
+    standard_drawing = receipt.get("standard_drawing")
     return PracticeAttemptResult.from_recorded_attempt(
         receipt,
         challengeId=receipt["challenge_id"],
@@ -259,6 +283,11 @@ def build_attempt_result(
         correctOptions=(
             [int(index) for index in correct_options]
             if isinstance(correct_options, list) and correct_options
+            else None
+        ),
+        standardDrawing=(
+            GridDrawing.model_validate(grid_drawing.client_drawing(standard_drawing))
+            if isinstance(standard_drawing, Mapping)
             else None
         ),
         explanation=receipt["explanation"],
@@ -306,9 +335,10 @@ def _asks_for_a_number(challenge: Mapping[str, Any]) -> bool:
     """Whether the exercise's key holds a digit: a result to work out, as
     opposed to a word, a sentence or a statement to pick.
 
-    A choose-several exercise is picking, whatever its options say: it gets
-    the line that fits every subject (#593)."""
-    if challenge.get("type") == "multi_select":
+    A choose-several exercise is picking, whatever its options say, and a
+    drawing is no calculation: both get the line that fits every subject
+    (#593, #594)."""
+    if challenge.get("type") in {"multi_select", "grid_drawing"}:
         return False
     key = challenge.get("correct_answer", challenge.get("answer_key"))
     return any(character.isdigit() for character in str(key or ""))

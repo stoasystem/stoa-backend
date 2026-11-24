@@ -40,6 +40,7 @@ from stoa.services import (
     curriculum_analytics_service,
     error_causes,
     exercise_localization,
+    grid_drawing,
     learning_session,
     multi_select,
     practice_projection_service,
@@ -66,8 +67,8 @@ class Judgement:
     challenge: Mapping[str, Any]
     #: The exercise in the reader's language, the one judged and the one quoted.
     shown: Mapping[str, Any]
-    #: The submitted answer, normalized.
-    answer: str | list[str]
+    #: The submitted answer, normalized; a grid drawing as it is stored.
+    answer: str | list[str] | dict[str, Any]
     correct: bool
     correct_feedback: str
     incorrect_feedback: str
@@ -82,15 +83,21 @@ def judge(challenge: Mapping[str, Any], raw_answer: object, *, locale: str) -> J
 
     A choose-several exercise (`multi_select`) is answered with the numbers of
     the picked options and judged as a set; what is recorded is the picked
-    options as the reader read them. Every other exercise is answered with
-    text, judged by `answer_judging`.
+    options as the reader read them. A grid drawing (`grid_drawing`) is
+    answered with a drawing and judged by its checks; what is recorded is
+    the drawing. Every other exercise is answered with text, judged by
+    `answer_judging`.
 
     Raises `AnswerInvalid` for an answer that cannot be one.
     """
     shown = exercise_localization.localized(challenge, locale)
-    answer: str | list[str]
+    answer: str | list[str] | dict[str, Any]
     try:
-        if multi_select.is_one(challenge):
+        if grid_drawing.is_one(challenge):
+            drawing = grid_drawing.submitted_drawing(raw_answer, challenge)
+            answer = drawing.stored()
+            correct = grid_drawing.judge(drawing, challenge)
+        elif multi_select.is_one(challenge):
             options = shown.get("options") if isinstance(shown.get("options"), list) else []
             selection = multi_select.submitted_selection(raw_answer, len(options))
             answer = [str(options[index]) for index in selection]
@@ -171,6 +178,7 @@ def answer_practice(
             correct_options=(
                 multi_select.correct_options(challenge) if multi_select.is_one(challenge) else None
             ),
+            standard_drawing=_standard_drawing(challenge),
             challenge_type=str(challenge.get("type") or ""),
             created_at=created_at,
             asked_ai=asked_ai,
@@ -299,6 +307,14 @@ def _next_challenge_id(challenge_id: str, lesson_id: str) -> str | None:
     except ValueError:
         return None
     return challenge_ids[index + 1] if index + 1 < len(challenge_ids) else None
+
+
+def _standard_drawing(challenge: Mapping[str, Any]) -> dict[str, Any] | None:
+    """A grid exercise's first solution, which the result shows once the answer is on record."""
+    if not grid_drawing.is_one(challenge):
+        return None
+    found = grid_drawing.solutions(challenge)
+    return found[0].stored() if found else None
 
 
 def _text(item: Mapping[str, Any], field: str) -> str:

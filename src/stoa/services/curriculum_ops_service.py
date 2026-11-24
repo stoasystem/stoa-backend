@@ -16,6 +16,7 @@ from stoa.services import (
     curriculum_translations,
     error_causes,
     exercise_localization,
+    grid_drawing,
     lesson_sections,
     multi_select,
 )
@@ -97,6 +98,9 @@ EXERCISE_FIELD_ALIASES = {
     "acceptedAnswers": "accepted_answers",
     "correct_options": "correct_options",
     "correctOptions": "correct_options",
+    "grid": "grid",
+    "checks": "checks",
+    "solutions": "solutions",
     "options": "options",
     "choices": "options",
     "translations": "translations",
@@ -545,6 +549,14 @@ def _exercise_payloads(public_id: str, exercises: list[dict[str, Any]]) -> list[
         if key is not None:
             # The key is the set; `correct_answer` is what a reader is shown of it.
             item["answer_key"] = item["correct_answer"] = multi_select.answer_text(options, key)
+        for field in (grid_drawing.GRID_FIELD, grid_drawing.CHECKS_FIELD, grid_drawing.SOLUTIONS_FIELD):
+            if item.get(field) in (None, [], {}):
+                item.pop(field, None)
+        grid_drawing.normalize(item)
+        drawn = grid_drawing.first_solution_text(item) if grid_drawing.is_one(item) else None
+        if drawn:
+            # The checks judge; `correct_answer` writes out the first solution.
+            item["answer_key"] = item["correct_answer"] = drawn
         figure = str(exercise.get("figure") or "").strip()
         if figure:
             item["figure"] = figure
@@ -816,6 +828,17 @@ def _validation_issues(
 
 
 def _choice_issues(exercise: dict[str, Any]) -> list[tuple[str, Issue]]:
+    """What is wrong with how an exercise is answered: a grid drawing's grid,
+    checks and solutions (`grid_drawing`), else its options (`_option_issues`)."""
+    if grid_drawing.is_one(exercise):
+        found = [*grid_drawing.issues(exercise), *multi_select.stray_issues(exercise)]
+        if exercise.get("options"):
+            found.append(("options", Issue.of(IssueCode.OPTIONS_WITHOUT_CHOICE)))
+        return found
+    return [*grid_drawing.stray_issues(exercise), *_option_issues(exercise)]
+
+
+def _option_issues(exercise: dict[str, Any]) -> list[tuple[str, Issue]]:
     """A choice exercise offers at least two different options, one of them its key;
     a choose-several one (`multi_select`) a set of them, maybe as hotspots in its figure."""
     options = exercise.get("options")
