@@ -45,7 +45,10 @@ from stoa.services.uploads._lifecycle import (
 )
 from stoa.services.uploads._store import consume_operation
 
+CLEANUP_PAGE_KEY = _store.CLEANUP_INDEX_PAGE_KEY
+
 __all__ = [
+    "CLEANUP_PAGE_KEY",
     "Phase",
     "UPLOAD_CHUNK_BYTES",
     "cleanup",
@@ -160,8 +163,12 @@ def usable(
 def cleanup_candidates(
     now_epoch: int, *, limit: int, exclusive_start_key: dict[str, Any] | None
 ) -> tuple[list[dict[str, object]], dict[str, Any] | None]:
-    """One page of uploads the sweep may clean, and where the next page starts."""
-    return _store.list_upload_cleanup_candidates(
+    """One page of the uploads due for cleanup, earliest due first, and where the next starts.
+
+    Read from the cleanup's index (#611); `CLEANUP_PAGE_KEY` is what a
+    continuation key of it holds.
+    """
+    return _store.query_upload_cleanup_candidates(
         now_epoch, limit=limit, exclusive_start_key=exclusive_start_key
     )
 

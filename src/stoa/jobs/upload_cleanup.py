@@ -21,10 +21,10 @@ DEFAULT_BATCH_LIMIT = 25
 MAX_BATCH_LIMIT = 100
 DEFAULT_PAGE_LIMIT = 100
 MAX_PAGE_LIMIT = 100
-# Pages of the table scanned per run, at most, while looking for a batch.
+# Pages of the cleanup's index read per run, at most, while looking for a batch.
 DEFAULT_MAX_PAGES = 200
 MAX_PAGES = 1000
-# Stop scanning or cleaning with this much of the Lambda's time left.
+# Stop reading or cleaning with this much of the Lambda's time left.
 MIN_REMAINING_SECONDS = 20.0
 
 
@@ -55,13 +55,16 @@ def cleanup_expired_uploads(
     max_pages: int = DEFAULT_MAX_PAGES,
     remaining_seconds: Callable[[], float] | None = None,
 ) -> CleanupSummary:
-    """Clean at most one batch, finding it anywhere in the table.
+    """Clean at most one batch of the uploads due for cleanup, earliest due first.
 
-    A scheduled run starts from the top every time, so the scan goes on page
-    after page until the batch is full, the table ends, or the page or time
-    budget is spent (#250): a run that looked at the first page only would
-    never reach most of the table. A run stopped early returns where it got
-    to as an opaque continuation, for a run started by hand.
+    The uploads are read from the cleanup's index (#611), which holds upload
+    rows only, so a run reads what is due and not the table. A page of the
+    index can still come back short of the batch (an upload past its window
+    with an operation live on it is read and held back), so a scheduled run,
+    which starts from the top every time, reads on until the batch is full,
+    the due uploads end, or the page or time budget is spent (#250). A run
+    stopped early returns where it got to as an opaque continuation, for a
+    run started by hand.
     """
     batch_limit = _bounded_limit(batch_limit, DEFAULT_BATCH_LIMIT, MAX_BATCH_LIMIT)
     page_limit = _bounded_limit(page_limit, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT)
@@ -176,7 +179,7 @@ def _candidate_cursor(candidate: Any) -> dict[str, str]:
     """Accept an exact repository cursor without coercing private values."""
     if not isinstance(candidate, dict):
         raise RuntimeError("invalid cleanup candidate page")
-    cursor = {"PK": candidate.get("PK"), "SK": candidate.get("SK")}
+    cursor = {name: candidate.get(name) for name in uploads.CLEANUP_PAGE_KEY}
     if any(not isinstance(value, str) or not value for value in cursor.values()):
         raise RuntimeError("invalid cleanup candidate page")
     return cursor  # type: ignore[return-value]
@@ -193,4 +196,4 @@ def _decode_cursor(token: str | None) -> dict[str, Any] | None:
     """The key a run started by hand continues from; `PageTokenInvalid` is a `ValueError`."""
     if token is None:
         return None
-    return db_table.read_page_token(token, CONTINUATION_SCOPE, key=db_table.BASE_KEY)
+    return db_table.read_page_token(token, CONTINUATION_SCOPE, key=uploads.CLEANUP_PAGE_KEY)

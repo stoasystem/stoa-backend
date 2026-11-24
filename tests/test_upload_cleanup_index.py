@@ -1,15 +1,15 @@
 """Upload rows the cleanup may act on carry their place in `GSI-SweepPending` (#611).
 
-The upload cleanup finds its uploads with a filtered scan of the whole of
-`stoa-main` every fifteen minutes, so what it reads grows with the table. The
-sparse index the generation sweep reads (#502) holds them too, in a bucket of
-their own: an upload row carries `sweep_bucket` and `sweep_due_at` while it is
+The upload cleanup used to find its uploads with a filtered scan of the whole
+of `stoa-main` every fifteen minutes, so what it read grew with the table. It
+reads the sparse index the generation sweep reads (#502), in a bucket of its
+own: an upload row carries `sweep_bucket` and `sweep_due_at` while it is
 refused, handed to cleanup or not yet spent, and loses them when it is spent,
 protected or cleaned.
 
 These hold each write to that, and a seeded walk over the store's writes holds
-the index reader to exactly what the scan admits at any moment, so switching
-the cleanup from the scan to the index loses no upload.
+the index reader to exactly what that scan's filter admits at any moment, so
+the cleanup reading the index loses no upload.
 """
 
 from __future__ import annotations
@@ -85,17 +85,64 @@ def _indexed(table: FakeTable) -> dict[str, dict[str, Any]]:
             return rows
 
 
+# The filter the cleanup scanned the whole table with before it read the index
+# (#250), kept here as the definition of what the cleanup acts on: the reader
+# has to return exactly the uploads it admits.
+SCAN_FILTER: dict[str, Any] = {
+    "FilterExpression": (
+        "begins_with(PK,:upload) AND SK=:meta AND ("
+        "#status IN (:invalid,:expired,:cleanup_pending) OR ("
+        "#status IN (:pending,:validating,:validated,:issuing,:assembling,:promoting) "
+        "AND (usable_until <= :now OR (attribute_not_exists(usable_until) AND expires_at <= :now))"
+        " AND (attribute_not_exists(operation_lease_expires_at) OR "
+        "operation_lease_expires_at <= :now)))"
+    ),
+    "ExpressionAttributeNames": {"#status": "status"},
+    "ExpressionAttributeValues": {
+        ":upload": "UPLOAD#",
+        ":meta": "META",
+        ":invalid": "invalid",
+        ":expired": "expired",
+        ":cleanup_pending": "cleanup_pending",
+        ":pending": "pending_upload",
+        ":validating": "validating",
+        ":validated": "validated",
+        ":issuing": "issuing",
+        ":assembling": "assembling",
+        ":promoting": "promoting",
+    },
+}
+
+
 def _scanned(now: int) -> set[str]:
-    """What the scan the cleanup runs today admits at `now`, over the whole table."""
+    """What the old scan's filter admits at `now`, over the whole table."""
     admitted: set[str] = set()
-    cursor: dict[str, Any] | None = None
+    start: dict[str, Any] | None = None
+    table = db_table.table()
     while True:
-        page, cursor = _store.list_upload_cleanup_candidates(
-            now, limit=3, exclusive_start_key=cursor
-        )
-        admitted.update(str(item["PK"]) for item in page)
-        if cursor is None:
+        request: dict[str, Any] = {
+            **SCAN_FILTER,
+            "ExpressionAttributeValues": {**SCAN_FILTER["ExpressionAttributeValues"], ":now": now},
+        }
+        if start is not None:
+            request["ExclusiveStartKey"] = start
+        page = table.scan(**request)
+        admitted.update(str(item["PK"]) for item in page["Items"])
+        start = page.get("LastEvaluatedKey")
+        if not start:
             return admitted
+
+
+def test_the_reference_filter_is_the_condition_an_upload_is_claimed_by() -> None:
+    """Its window and lease conditions are the store's, so the reference cannot drift."""
+    expression = str(SCAN_FILTER["FilterExpression"])
+    assert f"{_store.PAST_USABLE} AND {_store.LEASE_LAPSED}" in expression
+    states = {
+        value
+        for name, value in SCAN_FILTER["ExpressionAttributeValues"].items()
+        if name not in (":upload", ":meta")
+    }
+    assert states == _store.CLEANUP_DUE_AT_ONCE_STATES | _store.CLEANUP_DUE_PAST_USABLE_STATES
 
 
 def _queried(now: int, *, limit: int = 3) -> list[str]:
@@ -353,7 +400,7 @@ def test_a_generation_sweep_command_is_not_an_upload_candidate(table) -> None:
     assert _queried(START) == []
 
 
-def test_the_reader_answers_a_table_failure_as_the_scan_does() -> None:
+def test_the_reader_answers_a_table_failure_as_a_dependency_failure() -> None:
     class _Down(FakeTable):
         def query(self, **_request: Any) -> dict[str, Any]:
             return {"Items": "not a page"}
@@ -638,3 +685,41 @@ def test_verify_reports_an_entry_that_should_not_be_there(old_rows, capsys) -> N
     out = capsys.readouterr().out
     assert "not expected: UPLOAD#u2" in out
     assert f"due {_store.CLEANUP_DUE_AT_ONCE}, expected" in out
+
+
+# ── The job reads the index ───────────────────────────────────────────────────
+
+
+def test_the_job_finds_its_uploads_in_the_index_and_never_scans(table, monkeypatch) -> None:
+    """The scheduled job, on the real reader: due uploads only, in order, by continuation."""
+    from stoa.config import Settings
+    from stoa.jobs import upload_cleanup
+    from stoa.services import uploads
+
+    for number in range(4):
+        _issue(f"u{number}", now=START + number)
+    _store.mark_upload_issuance_failed("u2", OWNER, 1)
+    _issue("later", now=START + 3600)
+    visited: list[str] = []
+
+    def observed(candidate: dict[str, Any], **_kwargs: Any) -> str:
+        visited.append(str(candidate["upload_id"]))
+        return "deferred"
+
+    monkeypatch.setattr(uploads, "cleanup", observed)
+    scans = table.calls["scan"]
+    token = None
+    for _ in range(2):
+        summary = upload_cleanup.cleanup_expired_uploads(
+            s3=object(),
+            settings_obj=Settings(s3_images_bucket="bucket"),
+            now=datetime.fromtimestamp(START + WINDOW + 60, UTC),
+            batch_limit=2,
+            page_limit=2,
+            continuation_token=token,
+        )
+        token = summary.continuation_token
+        assert summary.invalid_continuation == 0
+
+    assert visited == ["u2", "u0", "u1", "u3"]
+    assert table.calls["scan"] == scans

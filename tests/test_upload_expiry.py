@@ -85,25 +85,29 @@ def test_usable_until_falls_back_to_the_ttl_field_of_an_old_row() -> None:
     assert upload_store.usable_until({"expires_at": 99}) == 99
 
 
-# ── The sweep pages through the whole table ───────────────────────────────────
+# ── The sweep pages through its index ─────────────────────────────────────────
 
 
 class _Pages:
-    """A repository whose cleanup candidates are spread over pages, as a scan returns them."""
+    """A repository whose cleanup candidates are spread over pages, as the index returns them."""
 
     def __init__(self, pages: list[list[dict[str, Any]]]) -> None:
         self.pages = pages
         self.reads: list[Any] = []
 
-    def list_upload_cleanup_candidates(self, now_epoch, *, limit, exclusive_start_key=None):
+    def query_upload_cleanup_candidates(self, now_epoch, *, limit, exclusive_start_key=None):
         index = 0 if exclusive_start_key is None else int(exclusive_start_key["SK"])
         self.reads.append(exclusive_start_key)
-        cursor = {"PK": "page", "SK": str(index + 1)} if index + 1 < len(self.pages) else None
+        cursor = (
+            {"PK": "page", "SK": str(index + 1), "sweep_bucket": "upload_cleanup", "sweep_due_at": "1970-01-01T00:00:00Z"}
+            if index + 1 < len(self.pages)
+            else None
+        )
         return self.pages[index], cursor
 
 
 def _candidate(n: int) -> dict[str, Any]:
-    return {"PK": f"UPLOAD#u{n}", "SK": "META", "upload_id": f"u{n}"}
+    return {"PK": f"UPLOAD#u{n}", "SK": "META", "upload_id": f"u{n}", "sweep_bucket": "upload_cleanup", "sweep_due_at": "1970-01-01T00:00:00Z"}
 
 
 @pytest.fixture
@@ -122,7 +126,7 @@ def _sweep(
     monkeypatch: pytest.MonkeyPatch, repository: _Pages, **kwargs: Any
 ) -> upload_cleanup.CleanupSummary:
     monkeypatch.setattr(
-        upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+        upload_store, "query_upload_cleanup_candidates", repository.query_upload_cleanup_candidates
     )
     return upload_cleanup.cleanup_expired_uploads(
         s3=MultipartS3(BUCKET),
@@ -132,7 +136,7 @@ def _sweep(
 
 
 def test_candidates_past_the_first_page_are_cleaned(monkeypatch, cleaned) -> None:
-    # Most of the table is not uploads: the first pages match nothing.
+    # A page of the index can match nothing: a live lease holds its uploads back.
     repository = _Pages([[], [], [_candidate(1)], [], [_candidate(2)]])
 
     summary = _sweep(monkeypatch, repository)
@@ -150,7 +154,7 @@ def test_one_run_cleans_at_most_one_batch(monkeypatch, cleaned) -> None:
 
     assert len(cleaned) == upload_cleanup.DEFAULT_BATCH_LIMIT == 25
     assert summary.continuation_token is not None
-    # The batch was full after one page: the rest of the table waits for the next run.
+    # The batch was full after one page: the rest waits for the next run.
     assert len(repository.reads) == 1
 
 
@@ -165,7 +169,7 @@ def test_a_run_short_of_time_stops_before_the_lambda_does(monkeypatch, cleaned) 
 
     _sweep(monkeypatch, repository, remaining_seconds=remaining)
 
-    # Stopped scanning after the second page, and cleaned nothing it had no time for.
+    # Stopped reading after the second page, and cleaned nothing it had no time for.
     assert len(repository.reads) == 2
     assert cleaned == []
 
@@ -183,7 +187,7 @@ def test_the_page_budget_bounds_one_run(monkeypatch, cleaned) -> None:
 def test_the_scheduled_event_runs_the_sweep(monkeypatch: pytest.MonkeyPatch, cleaned) -> None:
     repository = _Pages([[_candidate(1)]])
     monkeypatch.setattr(
-        upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+        upload_store, "query_upload_cleanup_candidates", repository.query_upload_cleanup_candidates
     )
     aws.install({Kind.S3: MultipartS3(BUCKET)})
 
@@ -204,7 +208,7 @@ def test_each_run_logs_its_counts_without_the_cursor(
     # the log line is the only place a run's counts show up (#256).
     repository = _Pages([[_candidate(1), _candidate(2)], [_candidate(3)]])
     monkeypatch.setattr(
-        upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+        upload_store, "query_upload_cleanup_candidates", repository.query_upload_cleanup_candidates
     )
     aws.install({Kind.S3: MultipartS3(BUCKET)})
 
@@ -289,7 +293,7 @@ def test_the_account_deletion_function_runs_the_sweep_by_name(
 
     repository = _Pages([[_candidate(1)]])
     monkeypatch.setattr(
-        upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+        upload_store, "query_upload_cleanup_candidates", repository.query_upload_cleanup_candidates
     )
     aws.install({Kind.S3: MultipartS3(BUCKET)})
     monkeypatch.setattr(
