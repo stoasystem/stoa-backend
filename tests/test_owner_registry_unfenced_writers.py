@@ -171,6 +171,9 @@ REVIEWED: dict[str, str] = {
     "src/stoa/db/repositories/report_repo.py::update_recovery_job_target": "existing_partition",
     "src/stoa/db/repositories/report_repo.py::update_report_status": "existing_partition",
     "src/stoa/db/repositories/upload_code_repo.py::claim_code": "existing_partition",
+    # The #608 backfill: sets or removes index keys on a request already in its
+    # conversation's partition; it names no account.
+    "src/stoa/services/help_requests.py::reindex": "existing_partition",
     "src/stoa/services/ask_question/_store.py::_leased_command_update": "existing_partition",
     "src/stoa/services/ask_question/_store.py::_unsettled_end_update": "existing_partition",
     "src/stoa/services/ask_question/_store.py::close_stale_lease": "existing_partition",

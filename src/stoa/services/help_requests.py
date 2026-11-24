@@ -106,6 +106,35 @@ _SCAN_PAGE_LIMIT = 1000
 # A read on GSI-StudentId continues from the index's key as well as the table's.
 _STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
 
+# ── The indexes a request is found through (#608) ────────────────────────────
+#
+# `list_all` finds requests by scanning the whole table, so what it reads
+# follows the size of the table, not how many requests there are. Two sparse
+# indexes hold the requests the frequent readers want:
+#
+# - A request not yet ended (`pending`, `in_progress`) carries `sweep_bucket`
+#   and `sweep_due_at`, the keys of GSI-SweepPending (#502), in a bucket of its
+#   own and ordered by when it was asked. The write that ends it removes them.
+# - A request a teacher holds carries `started_at` beside its `teacher_id`, the
+#   keys of GSI-TeacherId, from the write that gives it to the teacher until
+#   one takes the teacher off it. An ended request stays there: it is still
+#   its teacher's to read.
+#
+# Every write of the record sets or removes them through `index_fields`, in the
+# same write that changes the state they follow. Account deletion replaces the
+# record with a tombstone that keeps none of them.
+OPEN_INDEX = "GSI-SweepPending"
+OPEN_BUCKET = "help_open"
+OPEN_INDEX_FIELDS = ("sweep_bucket", "sweep_due_at")
+HOLDER_INDEX = "GSI-TeacherId"
+HOLDER_INDEX_FIELD = "started_at"
+INDEX_FIELDS = (*OPEN_INDEX_FIELDS, HOLDER_INDEX_FIELD)
+_OPEN_INDEX_KEY = ("PK", "SK", *OPEN_INDEX_FIELDS)
+_HOLDER_INDEX_KEY = ("PK", "SK", "teacher_id", HOLDER_INDEX_FIELD)
+# What a record whose own times cannot be read is filed under: first in the
+# index, so it is read early rather than hidden, and the same on every write.
+_INDEX_TIME_UNKNOWN = "1970-01-01T00:00:00Z"
+
 # The question words a request's state is told in. Their one reader is
 # `sla_metrics`: the admin stats count requests beside the legacy question rows,
 # in those rows' words.
@@ -323,6 +352,132 @@ def list_all(*, table: Any | None = None) -> list[dict[str, Any]]:
 def list_open(*, table: Any | None = None) -> list[dict[str, Any]]:
     """The requests a student is still waiting on: pending ones."""
     return [record for record in list_all(table=table) if stored_status(record) == PENDING]
+
+
+def index_fields(record: Mapping[str, Any]) -> dict[str, str]:
+    """The index keys a record in this state carries (#608).
+
+    The ones of `INDEX_FIELDS` not returned are the ones it must not carry.
+    Derived from the record alone, so the same state always gives the same
+    keys: a request not yet ended is filed under when it was asked, one a
+    teacher holds under when that teacher took it.
+    """
+    fields: dict[str, str] = {}
+    if stored_status(record) in OPEN:
+        fields["sweep_bucket"] = OPEN_BUCKET
+        fields["sweep_due_at"] = _index_time(
+            record.get("escalated_at"), record.get("created_at")
+        )
+    if record.get("teacher_id"):
+        fields[HOLDER_INDEX_FIELD] = _index_time(
+            record.get("accepted_at"), record.get("escalated_at"), record.get("created_at")
+        )
+    return fields
+
+
+def _index_time(*candidates: Any) -> str:
+    """The first of `candidates` that reads as a time, UTC to the second, so it sorts as text."""
+    for candidate in candidates:
+        moment = _parse(candidate)
+        if moment is not None:
+            return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return _INDEX_TIME_UNKNOWN
+
+
+def list_unended(*, table: Any | None = None) -> list[dict[str, Any]]:
+    """Every request not yet ended, the longest asked first: one query of its index (#608).
+
+    What it reads follows how many requests are waiting or in progress, not
+    the size of the table. Eventually consistent: a request written in the
+    last moment may be missing, and one just ended may still be there, so a
+    reader that acts on a record does so on a condition, as every write here does.
+    """
+    return _indexed_records(
+        table,
+        key=_OPEN_INDEX_KEY,
+        IndexName=OPEN_INDEX,
+        KeyConditionExpression=Key("sweep_bucket").eq(OPEN_BUCKET),
+    )
+
+
+def list_held_by(teacher_id: str, *, table: Any | None = None) -> list[dict[str, Any]]:
+    """The requests this teacher holds, the ended ones too: one query of its index (#608).
+
+    Eventually consistent, as `list_unended` is.
+    """
+    if not teacher_id:
+        return []
+    return [
+        record
+        for record in _indexed_records(
+            table,
+            key=_HOLDER_INDEX_KEY,
+            IndexName=HOLDER_INDEX,
+            KeyConditionExpression=Key("teacher_id").eq(teacher_id),
+            FilterExpression=Attr("entity_type").eq(ENTITY_TYPE),
+        )
+        if record.get("teacher_id") == teacher_id
+    ]
+
+
+def _indexed_records(table: Any | None, *, key: Sequence[str], **request: Any) -> list[dict[str, Any]]:
+    """Every record an index query admits, from every page of it."""
+    store: Any = table or db_table.table()
+    found: list[dict[str, Any]] = []
+    try:
+        for page in islice(
+            db_table.pages("query", table=store, key=key, **request), _SCAN_PAGE_LIMIT
+        ):
+            found.extend(dict(item) for item in page.items if _is_record(item))
+            if page.last_key is None:
+                return found
+    except db_table.TableUnavailable as exc:
+        if exc.code.startswith("malformed"):
+            raise HelpRequestUnavailable("index read did not advance") from exc
+        raise
+    raise HelpRequestUnavailable("index page limit reached")
+
+
+def reindex(record: Mapping[str, Any], *, table: Any | None = None) -> bool:
+    """Give a record written before #608 the index keys its state calls for.
+
+    For the one-off backfill (`scripts/backfill_help_request_index.py`). True
+    when this call wrote them, False when the record already carried exactly
+    them. Written on the version the record was read at, without moving it:
+    a write that landed in between set the keys itself, and this one is
+    refused with `HelpRequestConflict`.
+    """
+    fields = index_fields(record)
+    if fields == {name: record[name] for name in INDEX_FIELDS if name in record}:
+        return False
+    absent = [name for name in INDEX_FIELDS if name not in fields]
+    expression = ""
+    if fields:
+        expression = "SET " + ", ".join(f"#{name} = :{name}" for name in fields)
+    if absent:
+        expression += " REMOVE " + ", ".join(f"#{name}" for name in absent)
+    try:
+        db_table.update(
+            table=table or db_table.table(),
+            Key=key(str(record.get("conversation_id") or "")),
+            UpdateExpression=expression.strip(),
+            ConditionExpression=(
+                "attribute_exists(PK) AND #entity = :entity AND #version = :version"
+            ),
+            ExpressionAttributeNames={
+                **{f"#{name}": name for name in INDEX_FIELDS},
+                "#entity": "entity_type",
+                "#version": "version",
+            },
+            ExpressionAttributeValues={
+                **{f":{name}": value for name, value in fields.items()},
+                ":entity": ENTITY_TYPE,
+                ":version": stored_int(record.get("version")) or 0,
+            },
+        )
+    except db_table.WriteRefused as exc:
+        raise HelpRequestConflict("help request changed before it was indexed") from exc
+    return True
 
 
 def for_student(student_id: str, *, table: Any | None = None) -> dict[str, dict[str, Any]]:
@@ -737,6 +892,7 @@ def ask(
     note = str(message or "").strip()
     if note:
         record["escalation_message"] = note
+    record.update(index_fields(record))
     # The system message that opens the request in the conversation; its id
     # is the conversation's, so a conversation has one.
     system_message_put = learning_session.append(
@@ -1757,7 +1913,11 @@ def _update_operation(
     condition: str | None = None,
     values: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """One update of the record, bound to the version it was read at."""
+    """One update of the record, bound to the version it was read at.
+
+    It also leaves the record with the index keys its new state calls for (#608).
+    """
+    changes, remove = _with_index_fields(record, changes, remove)
     version = stored_int(record.get("version")) or 0
     names = {f"#{field}": field for field in (*changes, *remove, "version")}
     expression = "SET " + ", ".join(
@@ -1783,6 +1943,30 @@ def _update_operation(
     }
 
 
+def _with_index_fields(
+    record: Mapping[str, Any], changes: Mapping[str, Any], remove: Sequence[str]
+) -> tuple[dict[str, Any], tuple[str, ...]]:
+    """`changes` and `remove`, with the index keys of the record they leave (#608).
+
+    The keys are derived from the record as the write leaves it, so applying
+    this to its own result changes nothing.
+    """
+    left = {name: value for name, value in record.items() if name not in remove}
+    left.update(changes)
+    fields = index_fields(left)
+    return (
+        {**{name: value for name, value in changes.items() if name not in INDEX_FIELDS}, **fields},
+        tuple(
+            dict.fromkeys(
+                (
+                    *(name for name in remove if name not in fields),
+                    *(name for name in INDEX_FIELDS if name not in fields),
+                )
+            )
+        ),
+    )
+
+
 def _write(
     record: Mapping[str, Any],
     changes: Mapping[str, Any],
@@ -1806,6 +1990,8 @@ def _write(
     candidate, binds the teacher's profile and holds it behind the teacher's
     fence too. Returns the record as written.
     """
+    # Here as well as in `_update_operation`, so the record returned carries them.
+    changes, remove = _with_index_fields(record, changes, remove)
     fences: dict[str, int] = {}
     if fence:
         fences[str(record.get("student_id") or "")] = _int(record.get("account_fence_generation"), 1)
