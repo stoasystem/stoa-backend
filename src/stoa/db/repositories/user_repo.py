@@ -411,6 +411,17 @@ def record_sign_in(
 TEACHER_SEEN_SK = "DISPATCH_SEEN"
 
 
+#: How the heartbeat rows are listed without scanning the table (#609): each
+#: carries the keys of the sparse GSI-SweepPending (#502), in a bucket of its
+#: own, ordered by when the teacher was seen. The row leaves the index when the
+#: table drops it (`expires_at`) or the account's deletion removes it.
+TEACHER_SEEN_INDEX = "GSI-SweepPending"
+TEACHER_SEEN_BUCKET = "teacher_seen"
+_TEACHER_SEEN_INDEX_KEY = ("PK", "SK", "sweep_bucket", "sweep_due_at")
+# Far more pages than a day's teachers fill.
+_TEACHER_SEEN_PAGE_BUDGET = 50
+
+
 def record_teacher_seen(
     user_id: str, *, seen_at: str, written_before: str, expires_at: int
 ) -> None:
@@ -429,7 +440,8 @@ def record_teacher_seen(
                 "Key": key,
                 "UpdateExpression": (
                     "SET entity_type = :entity, user_id = :user_id, "
-                    "seen_at = :seen_at, expires_at = :expires_at"
+                    "seen_at = :seen_at, expires_at = :expires_at, "
+                    "sweep_bucket = :bucket, sweep_due_at = :seen_at"
                 ),
                 "ConditionExpression": (
                     "attribute_not_exists(seen_at) OR seen_at < :written_before"
@@ -439,6 +451,7 @@ def record_teacher_seen(
                     ":user_id": user_id,
                     ":seen_at": seen_at,
                     ":expires_at": expires_at,
+                    ":bucket": TEACHER_SEEN_BUCKET,
                     ":written_before": written_before,
                 },
             }
@@ -453,6 +466,42 @@ def record_teacher_seen(
         )
     except db_table.WriteRefused:
         return
+
+
+def list_teachers_seen(*, table: object | None = None) -> dict[str, str]:
+    """When each teacher with a heartbeat row was last seen, by user id (#609).
+
+    One query of the heartbeat rows' bucket in the index, so what it reads
+    follows how many teachers had STOA open in the last day, not the size of
+    the table. Eventually consistent: a first heartbeat may take a moment to
+    show. A row the table has not yet dropped after `expires_at` still comes
+    back; its `seen_at` says how old it is.
+    """
+    seen: dict[str, str] = {}
+    for page in islice(
+        db_table.pages(
+            "query",
+            table=table,
+            key=_TEACHER_SEEN_INDEX_KEY,
+            IndexName=TEACHER_SEEN_INDEX,
+            KeyConditionExpression=Key("sweep_bucket").eq(TEACHER_SEEN_BUCKET),
+        ),
+        _TEACHER_SEEN_PAGE_BUDGET,
+    ):
+        for row in page.items:
+            user_id = row.get("user_id")
+            seen_at = row.get("seen_at")
+            if (
+                row.get("SK") == TEACHER_SEEN_SK
+                and isinstance(user_id, str)
+                and row.get("PK") == f"USER#{user_id}"
+                and isinstance(seen_at, str)
+                and seen_at
+            ):
+                seen[user_id] = seen_at
+        if page.last_key is None:
+            return seen
+    raise db_table.TableUnavailable("page_budget_spent")
 
 
 def pause_teacher_dispatch(
