@@ -10,7 +10,7 @@ from enum import StrEnum
 from typing import Protocol, runtime_checkable
 from uuid import uuid4
 
-from boto3.dynamodb.conditions import Attr, ConditionBase
+from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 
 from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
@@ -571,6 +571,67 @@ def payment_expiry_reminder_sk(reminder_identity: str) -> str:
     return f"REMINDER#{identity}"
 
 
+# -- Where a notification is found by who it is for (#613) ---------------------------
+#
+# The bell reads one person's notifications. Finding them by a scan of the whole
+# table reads every row of `stoa-main` on every poll, keeps only the first hundred
+# notifications of the whole site, and stops answering once the table outgrows the
+# scan's page budget. So a notification carries the keys of GSI-SweepPending for
+# as long as it is a notification: `sweep_bucket` names who it is for - one
+# person, or a whole role when it has no `recipient_id` - and `sweep_due_at` is
+# when it was created. The generation sweep (#502), help requests (#608), teacher
+# heartbeats (#609) and the upload cleanup (#611) use the same index, each in
+# buckets of its own.
+#
+# Who a notification is for and when it was created never change, so the keys are
+# set once, by `put_event`; `update_event` refuses to move them. Account deletion
+# replaces the row with a tombstone of allowlisted fields, which has neither key
+# and so leaves the index.
+INBOX_INDEX = "GSI-SweepPending"
+INBOX_INDEX_FIELDS = ("sweep_bucket", "sweep_due_at")
+INBOX_SOURCE_FIELDS = frozenset({"recipient_id", "recipient_role", "created_at"})
+_INBOX_INDEX_KEY = ("PK", "SK", *INBOX_INDEX_FIELDS)
+_INBOX_BUCKET = "notification_inbox"
+
+
+def inbox_bucket(*, user_id: str = "", role: str = "") -> str:
+    """The index partition of one person's notifications, or of a whole role's."""
+    if user_id:
+        return f"{_INBOX_BUCKET}#user#{user_id}"
+    if role:
+        return f"{_INBOX_BUCKET}#role#{role}"
+    raise ValueError("an inbox is one person's or one role's")
+
+
+def index_fields(item: Mapping[str, object]) -> dict[str, str]:
+    """The index keys a row carries: both for a notification, none for anything else.
+
+    A notification with no `recipient_id` is for everyone in its
+    `recipient_role`, as `notification_service._visible_to_user` reads it. One
+    that names neither, or has no creation time, is in no inbox: an index key
+    is never written empty.
+    """
+    if item.get("entity_type") != NOTIFICATION_ENTITY:
+        return {}
+    created_at = item.get("created_at")
+    if not isinstance(created_at, str) or not created_at:
+        return {}
+    recipient_id = item.get("recipient_id")
+    recipient_role = item.get("recipient_role")
+    if isinstance(recipient_id, str) and recipient_id:
+        bucket = inbox_bucket(user_id=recipient_id)
+    elif recipient_id in {None, ""} and isinstance(recipient_role, str) and recipient_role:
+        bucket = inbox_bucket(role=recipient_role)
+    else:
+        return {}
+    return {"sweep_bucket": bucket, "sweep_due_at": created_at}
+
+
+def carried_index_fields(item: Mapping[str, object]) -> dict[str, object]:
+    """The index keys a stored row holds now."""
+    return {name: item[name] for name in INBOX_INDEX_FIELDS if name in item}
+
+
 def build_notification_write_transaction(
     *,
     item: Mapping[str, object],
@@ -639,8 +700,9 @@ def _persist_private(
     *,
     mode: str = "put",
     updates: Mapping[str, object] | None = None,
+    table: object | None = None,
 ) -> NotificationItem:
-    target = db_table.table()
+    target = table or db_table.table()
     owner_id = str(item.get("owner_id") or item.get("student_id") or item.get("user_id") or "")
     if not owner_id:
         raise account_deletion_repo.AccountDeletionConflict("notification owner is required")
@@ -669,6 +731,7 @@ def _persist_private(
 def put_event(item: NotificationItem) -> NotificationItem:
     event_id = _required_text(item, "event_id", "notification identity is invalid")
     stored = {**item, "PK": notification_pk(event_id), "SK": "META"}
+    stored.update(index_fields(stored))
     if stored.get("owner_classification") == "global_nonprivate":
         stored = seal_global_nonprivate_event(stored)
         target = db_table.table()
@@ -803,6 +866,13 @@ def update_event(
         )
     if not updates:
         return existing
+    if any(
+        updates[name] != existing.get(name)
+        for name in (INBOX_SOURCE_FIELDS | set(INBOX_INDEX_FIELDS)) & updates.keys()
+    ):
+        # Its place in the index follows from these; nothing moves a notification
+        # to another person or another time.
+        raise ValueError("a notification's recipient and creation time do not change")
     _persist_private(existing, mode="update", updates=updates)
     return {**existing, **updates}
 
@@ -814,6 +884,107 @@ def list_events(limit: int = 100) -> list[NotificationItem]:
         want=limit,
         FilterExpression=Attr("entity_type").eq(NOTIFICATION_ENTITY),
     )
+
+
+def list_all_events(*, table: object | None = None) -> list[NotificationItem]:
+    """Every notification on the table, from every page of the scan.
+
+    For the one-off backfill of #613 and its check; nothing a request calls.
+    """
+    return db_table.rows(
+        "scan",
+        table=table or db_table.table(),
+        FilterExpression=Attr("entity_type").eq(NOTIFICATION_ENTITY),
+    )
+
+
+def list_inbox(
+    *, user_id: str = "", role: str = "", table: object | None = None
+) -> list[NotificationItem]:
+    """The notifications for this person and for everyone in this role (#613).
+
+    One query of the index per inbox, so what it reads follows how many
+    notifications the person has, not the size of the table or how many the
+    whole site has. Every page is read: there is no cap that could leave a
+    person's own notification out. Unordered across the two inboxes; eventually
+    consistent, so a notification written in the last moment may be missing.
+    """
+    target = table or db_table.table()
+    found: list[NotificationItem] = []
+    for bucket, for_person in (
+        (inbox_bucket(user_id=user_id) if user_id else "", True),
+        (inbox_bucket(role=role) if role else "", False),
+    ):
+        if not bucket:
+            continue
+        for item in db_table.rows(
+            "query",
+            table=target,
+            key=_INBOX_INDEX_KEY,
+            IndexName=INBOX_INDEX,
+            KeyConditionExpression=Key("sweep_bucket").eq(bucket),
+            ScanIndexForward=False,
+        ):
+            if item.get("entity_type") != NOTIFICATION_ENTITY:
+                continue
+            # The row itself says who it is for; the bucket only found it.
+            recipient_id = item.get("recipient_id")
+            if for_person and recipient_id != user_id:
+                continue
+            if not for_person and (
+                recipient_id not in {None, ""} or item.get("recipient_role") != role
+            ):
+                continue
+            found.append(dict(item))
+    return found
+
+
+def reindex_event(item: Mapping[str, object], *, table: object | None = None) -> bool:
+    """Give a notification written before #613 the index keys it calls for.
+
+    For the one-off backfill (`scripts/backfill_notification_inbox_index.py`).
+    True when this call wrote them, False when the row already carried exactly
+    them. A private notification is written behind its owner's account fence,
+    as every other write of it is; one whose owner's deletion got there first is
+    refused, and the tombstone that replaces it is in no index. A global one has
+    no owner and is written on the condition that it is still that notification.
+    """
+    fields = index_fields(item)
+    if not fields or carried_index_fields(item) == fields:
+        return False
+    if item.get("owner_classification") == "global_nonprivate":
+        try:
+            db_table.update(
+                table=table or db_table.table(),
+                Key={"PK": item["PK"], "SK": item["SK"]},
+                UpdateExpression="SET #bucket = :bucket, #due = :due",
+                ConditionExpression=(
+                    "attribute_exists(PK) AND #entity = :entity AND #created = :due"
+                ),
+                ExpressionAttributeNames={
+                    "#bucket": "sweep_bucket",
+                    "#due": "sweep_due_at",
+                    "#entity": "entity_type",
+                    "#created": "created_at",
+                },
+                ExpressionAttributeValues={
+                    ":bucket": fields["sweep_bucket"],
+                    ":due": fields["sweep_due_at"],
+                    ":entity": NOTIFICATION_ENTITY,
+                },
+            )
+        except db_table.WriteRefused as exc:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "notification changed before it was indexed"
+            ) from exc
+        return True
+    try:
+        _persist_private(dict(item), mode="update", updates=fields, table=table)
+    except db_table.WriteRefused as exc:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "notification changed before it was indexed"
+        ) from exc
+    return True
 
 
 def put_preferences(item: NotificationItem) -> NotificationItem:

@@ -210,6 +210,9 @@ REVIEWED: dict[str, str] = {
     "src/stoa/db/repositories/curriculum_ops_repo.py::set_published_pointer": "not_deletion_data",
     "src/stoa/db/repositories/identity_repo.py::record_sign_in_revocation": "not_deletion_data",
     "src/stoa/db/repositories/notification_repo.py::put_event": "not_deletion_data",
+    # The #613 backfill: its unfenced branch sets index keys on a global
+    # notification, which has no owner; a private one goes through `fenced`.
+    "src/stoa/db/repositories/notification_repo.py::reindex_event": "not_deletion_data",
     "src/stoa/db/repositories/privileged_identity_repo.py::create_command": "not_deletion_data",
     "src/stoa/db/repositories/privileged_identity_repo.py::update_command": "not_deletion_data",
     "src/stoa/db/repositories/security_audit_repo.py::aggregate_authorization_probe": "not_deletion_data",
