@@ -877,19 +877,12 @@ def update_event(
     return {**existing, **updates}
 
 
-def list_events(limit: int = 100) -> list[NotificationItem]:
-    return db_table.rows(
-        "scan",
-        table=db_table.table(),
-        want=limit,
-        FilterExpression=Attr("entity_type").eq(NOTIFICATION_ENTITY),
-    )
-
-
 def list_all_events(*, table: object | None = None) -> list[NotificationItem]:
     """Every notification on the table, from every page of the scan.
 
-    For the one-off backfill of #613 and its check; nothing a request calls.
+    For the administrators' list of the whole site's notifications, and the
+    backfill of #613 and its check. One person's notifications are read with
+    `list_inbox`, never from here.
     """
     return db_table.rows(
         "scan",

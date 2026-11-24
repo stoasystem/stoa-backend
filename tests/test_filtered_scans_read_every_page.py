@@ -72,7 +72,8 @@ def test_a_notification_event_is_found_wherever_its_row_falls(table) -> None:
     )
     _bury(table)
 
-    assert [item["notification_id"] for item in notification_repo.list_events()] == ["n-1"]
+    # The administrators' list of the whole site still scans (#613).
+    assert [item["notification_id"] for item in notification_repo.list_all_events()] == ["n-1"]
 
 
 def test_a_connection_is_found_wherever_its_row_falls(table) -> None:

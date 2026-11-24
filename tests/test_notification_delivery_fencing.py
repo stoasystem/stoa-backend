@@ -292,7 +292,9 @@ def test_mixed_owner_digest_is_refused_before_email_provider(
     preferences = notification_service.default_preferences()
     preferences["teacher_responses"]["email_digest"] = True
     config.install(_ready_settings())
-    monkeypatch.setattr(notification_repo, "list_events", lambda **_kwargs: list(events.values()))
+    # The double hands back every event, another person's among them: what the
+    # digest keeps of an inbox is still decided by `_visible_to_user` (#613).
+    monkeypatch.setattr(notification_repo, "list_inbox", lambda **_kwargs: list(events.values()))
     monkeypatch.setattr(notification_repo, "get_preferences", lambda _user_id: {"preferences": preferences})
     monkeypatch.setattr(notification_repo, "get_event", lambda event_id: deepcopy(events[event_id]))
     monkeypatch.setattr(notification_repo, "update_event", lambda *_args, **_kwargs: None)

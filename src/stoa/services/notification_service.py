@@ -1273,8 +1273,11 @@ def list_user_events(
     user_id = _user_id(user)
     role = _user_role(user)
     locale = locale_service.reader_locale(user_id)
+    # This person's own inbox and their role's, read from the index (#613): the
+    # bell polls this, and a scan of the table read every row of it each time
+    # and saw only the first hundred notifications of the whole site.
     items = [
-        item for item in notification_repo.list_events(limit=max(limit, 100))
+        item for item in notification_repo.list_inbox(user_id=user_id, role=role)
         if _visible_to_user(item, user_id=user_id, role=role)
         and (status is None and item.get("status") != "archived" or status == item.get("status"))
     ]
@@ -1292,8 +1295,11 @@ def list_admin_events(
         raise NotificationViolation(_N.NOTIFICATION_STATUS_UNSUPPORTED)
     if event_type is not None and event_type not in EVENT_TYPES:
         raise NotificationViolation(_N.NOTIFICATION_EVENT_TYPE_UNSUPPORTED)
+    # Every notification of the site, whoever it is for: no index holds them
+    # all in one place, so this one still scans the table (#613), every page of
+    # it, where it used to stop at the first hundred it met.
     items = [
-        item for item in notification_repo.list_events(limit=max(limit, 100))
+        item for item in notification_repo.list_all_events()
         if (status is None or item.get("status") == status)
         and (event_type is None or item.get("event_type") == event_type)
     ]
@@ -1565,7 +1571,7 @@ def digest_preview(
     role = _user_role(user)
     preferences = get_preferences_for_user(user_id)
     items = []
-    for item in _sort_events(notification_repo.list_events(limit=max(limit, 100))):
+    for item in _sort_events(notification_repo.list_inbox(user_id=user_id, role=role)):
         if not _visible_to_user(item, user_id=user_id, role=role):
             continue
         if item.get("status") != "created":
