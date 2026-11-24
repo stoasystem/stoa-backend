@@ -160,3 +160,28 @@ def test_it_reaches_bedrock_through_the_bedrock_adapter() -> None:
     ]
     assert lines[0].endswith("input_tokens=1400")
     assert lines[2].endswith("input_tokens=800")
+
+
+def test_with_a_profile_each_request_is_counted_on_the_model_and_sent_through_the_profile() -> None:
+    """#612: a probe's cost is booked as development; CountTokens still takes the model."""
+    profile = "arn:aws:bedrock:eu-central-2:111122223333:application-inference-profile/dev123"
+    routed: list[tuple[str, str]] = []
+
+    class Routed(FakeAdapter):
+        def count(self, model_id, body):
+            routed.append(("count", model_id))
+            return super().count(model_id, body)
+
+        def stream(self, model_id, body):
+            routed.append(("stream", model_id))
+            return super().stream(model_id, body)
+
+    model = Routed(
+        _cut_off(input_tokens=1400, output_tokens=1),
+        _cut_off(input_tokens=800, output_tokens=1),
+    )
+
+    lines = probe.probe(model, model_id=MODEL_ID, invoked_id=profile)
+
+    assert all(line.startswith("PASS") for line in lines)
+    assert routed == [("count", MODEL_ID), ("stream", profile)] * 2

@@ -40,6 +40,7 @@ if __package__ in (None, ""):
 
 from scripts import probe_ask_answer_request, probe_weekly_report_request  # noqa: E402
 from stoa import config  # noqa: E402
+from stoa.services import model_call  # noqa: E402
 from stoa.services.model_call.adapter import Adapter, Connection, ProviderError  # noqa: E402
 
 DEFAULT_AWS_ACCOUNT_ID = "562923011260"
@@ -77,17 +78,26 @@ def _reply(events: Iterable[Any]) -> tuple[object, dict[str, Any]]:
         if not isinstance(event, Mapping):
             continue
         if event.get("type") == "message_start":
-            usage.update((event.get("message") or {}).get("usage") or {})
+            model_call._merge_usage(usage, (event.get("message") or {}).get("usage") or {})
         elif event.get("type") == "message_delta":
-            usage.update(event.get("usage") or {})
+            model_call._merge_usage(usage, event.get("usage") or {})
             stop_reason = (event.get("delta") or {}).get("stop_reason", stop_reason)
     return stop_reason, usage
 
 
 def probe_request(
-    connection: Connection, *, name: str, bodies: Bodies, model_id: str, invoke: bool
+    connection: Connection,
+    *,
+    name: str,
+    bodies: Bodies,
+    model_id: str,
+    invoke: bool,
+    invoked_id: str | None = None,
 ) -> list[str]:
-    """Count one request and, with `invoke`, send it; one line per step, PASS or FAIL."""
+    """Count one request and, with `invoke`, send it; one line per step, PASS or FAIL.
+
+    Counted on `model_id`, sent through `invoked_id` when given (#612).
+    """
     counted, sent = bodies()
     lines: list[str] = []
     try:
@@ -99,7 +109,7 @@ def probe_request(
     if not invoke:
         return lines
     try:
-        stream = connection.stream(model_id, {**sent, "max_tokens": 1})
+        stream = connection.stream(invoked_id or model_id, {**sent, "max_tokens": 1})
         stop_reason, usage = _reply(stream.events)
     except Exception as error:
         lines.append(f"FAIL {name} invoke: {_refusal(error)}")
@@ -114,13 +124,20 @@ def probe_request(
     return lines
 
 
-def probe(adapter: Adapter, *, model_id: str, invoke: bool = True) -> list[str]:
+def probe(
+    adapter: Adapter, *, model_id: str, invoke: bool = True, invoked_id: str | None = None
+) -> list[str]:
     """Both requests, the Ask answer first, on one connection."""
     connection = adapter.connect(_PROBE_SECONDS)
     lines: list[str] = []
     for name, bodies in REQUESTS:
         lines += probe_request(
-            connection, name=name, bodies=bodies, model_id=model_id, invoke=invoke
+            connection,
+            name=name,
+            bodies=bodies,
+            model_id=model_id,
+            invoke=invoke,
+            invoked_id=invoked_id,
         )
     return lines
 
@@ -146,6 +163,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None, *, adapter: Adapter | None = None) -> int:
     args = _parse_args(argv)
     model_id = args.model_id or config.settings().bedrock_model_id
+    invoked_id = None
     if adapter is None:
         from botocore.exceptions import BotoCoreError
 
@@ -155,6 +173,7 @@ def main(argv: Sequence[str] | None = None, *, adapter: Adapter | None = None) -
             require_sso_operator_session,
         )
         from stoa.services.model_call.bedrock import BedrockAdapter
+        from stoa.services.model_call.development_profile import development_profile
 
         try:
             session = require_sso_operator_session(
@@ -169,8 +188,12 @@ def main(argv: Sequence[str] | None = None, *, adapter: Adapter | None = None) -
             print(f"FAIL sso: {error}; {SSO_LOGIN_HINT}")
             return 2
         adapter = BedrockAdapter(session.client("bedrock-runtime", region_name=args.region))
+        if not args.count_only:
+            invoked_id = development_profile(session, region=args.region, model_id=model_id)
     print(f"Probing the model-call requests on {model_id} in {args.region}")
-    lines = probe(adapter, model_id=model_id, invoke=not args.count_only)
+    lines = probe(
+        adapter, model_id=model_id, invoke=not args.count_only, invoked_id=invoked_id
+    )
     for line in lines:
         print(line)
     return 1 if any(line.startswith("FAIL") for line in lines) else 0

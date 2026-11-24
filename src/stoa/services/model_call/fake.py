@@ -21,7 +21,8 @@ sent body takes the next of `outcomes`:
 
 - a dict is the input of the forced tool call, a string the raw text of it;
 - `Prose(text)` is a reply that calls no tool;
-- `Reply(...)` sets the stop reason or the usage as well;
+- `Reply(...)` sets the stop reason or the usage as well, and with
+  `end_usage` what the end of the message says of the usage besides (#612);
 - an exception is raised when the body is sent;
 - `Unsent(exception)` is raised while the tokens are counted instead.
 
@@ -72,6 +73,9 @@ class Reply:
     usage: Mapping[str, Any] = field(
         default_factory=lambda: {"input_tokens": INPUT_TOKENS, "output_tokens": OUTPUT_TOKENS}
     )
+    # Sent in `message_delta` as it is, on top of the output count: a provider
+    # may repeat there, as a number or as null, a count `message_start` gave.
+    end_usage: Mapping[str, Any] = field(default_factory=dict)
 
 
 class Unsent:
@@ -231,6 +235,7 @@ class FakeAdapter:
                 text=reply.text,
                 stop_reason=reply.stop_reason,
                 usage={**reply.usage, **self._cache_usage(request)},
+                end_usage=reply.end_usage,
             )
         return Stream(
             request_id=f"req-{number}",
@@ -260,7 +265,10 @@ class FakeAdapter:
         usage = dict(reply.usage)
         # As Bedrock streams it: every input count when the message starts.
         start_usage = {key: value for key, value in usage.items() if key in _START_USAGE}
-        end_usage = {key: value for key, value in usage.items() if key not in _START_USAGE}
+        end_usage = {
+            **{key: value for key, value in usage.items() if key not in _START_USAGE},
+            **reply.end_usage,
+        }
         yield {
             "type": "message_start",
             "message": {"id": f"msg_{number}", "model": model_id, "usage": start_usage},
