@@ -445,12 +445,18 @@ def test_recovery_job_target_token_stays_within_its_job():
 
 
 def test_report_repo_put_recovery_job_persists_summary_and_targets(monkeypatch):
+    from fakes.dynamodb import from_wire
+
     class FakePutTable:
         def __init__(self):
             self.calls = []
+            self.transactions = []
 
         def put_item(self, **kwargs):
             self.calls.append(kwargs)
+
+        def transact_write_items(self, *, TransactItems):  # noqa: N803
+            self.transactions.append(from_wire(TransactItems))
 
     table = FakePutTable()
     db_table.install(table)
@@ -473,11 +479,10 @@ def test_report_repo_put_recovery_job_persists_summary_and_targets(monkeypatch):
         ],
     )
 
-    # First the targeted student's owner registry row (#397), then the job.
-    assert table.calls[0] == {
-        "Item": owner_registry.registry_item("student-1", "REPORT_RECOVERY_JOB#job-1")
-    }
-    table.calls.pop(0)
+    # First the targeted student's owner registry row (#397, #589), then the job.
+    assert table.transactions == [
+        [{"Put": {"Item": owner_registry.registry_item("student-1", "REPORT_RECOVERY_JOB#job-1")}}]
+    ]
     assert table.calls[0] == {
         "Item": {
             "PK": "REPORT_RECOVERY_JOB#job-1",

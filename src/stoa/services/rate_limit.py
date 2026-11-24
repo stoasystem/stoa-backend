@@ -10,6 +10,7 @@ import hashlib
 import struct
 from typing import Any, Mapping
 
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa import config
 from stoa.db.repositories import account_deletion_repo
@@ -463,7 +464,13 @@ def check_and_record_operation(
             },
         ]
         try:
-            db_table.fenced(owner, operations, generation=generation, table=target)
+            db_table.fenced(
+                owner,
+                operations,
+                generation=generation,
+                rows=owner_registry.rows_after(counter_key, operations),
+                table=target,
+            )
         except Exception:
             try:
                 raced_operation = _get_item(target, operation_key)

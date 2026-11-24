@@ -17,6 +17,7 @@ from enum import StrEnum
 from itertools import islice
 from typing import Any
 
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import attachment_repo
 
@@ -213,7 +214,13 @@ def record_generation_progress(
             # Behind the owner's fence, at no read's cost (#397): a worker that
             # outlives the request can no longer recreate this row - which
             # names the owner - after the account is deleted.
-            db_table.fenced(owner_id, [{"Update": update}], any_generation=True, table=target)
+            db_table.fenced(
+                owner_id,
+                [{"Update": update}],
+                any_generation=True,
+                rows=owner_registry.rows_after(update["Key"], [{"Update": update}]),
+                table=target,
+            )
         else:
             update_item = getattr(target, "update_item", None)
             if not callable(update_item):

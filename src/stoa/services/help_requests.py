@@ -40,6 +40,7 @@ from typing import Any, Literal, cast
 
 from boto3.dynamodb.conditions import Attr, Key
 
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa import config
 from stoa.db.dynamodb import stored_int
@@ -1443,6 +1444,11 @@ def reply(
         message_put,
         *image_operations,
     )
+    # Each upload changes hands to the student as it is spent: the registry
+    # needs it as it will stand (#589).
+    image_rows = [
+        row for upload in images for row in owner_registry.rows_after(upload, image_operations)
+    ]
     changes: dict[str, Any] = {"updated_at": timestamp}
     if not record.get("first_teacher_action_at"):
         changes["first_teacher_action_at"] = timestamp
@@ -1454,6 +1460,7 @@ def reply(
         condition="teacher_id = :teacher",
         values={":teacher": teacher_id},
         extra=reply_operations,
+        extra_rows=image_rows,
         fence=True,
         table=store,
     )
@@ -1784,11 +1791,15 @@ def _write(
     condition: str | None = None,
     values: Mapping[str, Any] | None = None,
     extra: Sequence[dict[str, Any]] = (),
+    extra_rows: Sequence[Mapping[str, Any]] = (),
     fence: bool = False,
     teacher: Mapping[str, Any] | None = None,
     table: Any,
 ) -> dict[str, Any]:
     """Write one change to the record (and ``extra``) in one transaction.
+
+    ``extra_rows`` are rows as an Update in ``extra`` leaves them, where it
+    changes whom they name (`db_table.fenced`'s ``rows``, #589).
 
     ``fence`` holds it behind the student's active account fence, for writes
     that put rows in the student's conversation. ``teacher``, a `plan_dispatch`
@@ -1806,14 +1817,13 @@ def _write(
         operations.extend(teacher_dispatch_service.teacher_assignment_conditions(dict(teacher)))
     operations.extend(extra)
     # The request names its teachers (`teacher_id`, `dispatched_teacher_id`,
-    # `previous_dispatch_teacher_ids`) in an Update the fenced write cannot
-    # read, and `_record_no_candidate` writes without any fence: register each
-    # named account as a reference here, without making its fence a condition
-    # of the write (#397).
+    # `previous_dispatch_teacher_ids`) in an Update, and `_record_no_candidate`
+    # writes without any fence: the write registers every account the request
+    # names from the request as it will stand, without making its fence a
+    # condition of the write (#397, #589).
     merged = {**record, **changes}
     merged.setdefault("entity_type", ENTITY_TYPE)
-    merged["PK"] = operations[0]["Update"]["Key"]["PK"]
-    operations.extend(account_deletion_repo.registry_operations_for([merged], operations))
+    merged.update(operations[0]["Update"]["Key"])
     try:
         if fences:
             owner, *others = fences
@@ -1822,10 +1832,11 @@ def _write(
                 operations,
                 generation=fences[owner],
                 also={account: fences[account] for account in others},
+                rows=[merged, *extra_rows],
                 table=table,
             )
         else:
-            db_table.transact(operations, table=table)
+            db_table.registered(operations, rows=[merged, *extra_rows], table=table)
     except Exception as exc:  # noqa: BLE001 - every refusal means the request moved on
         raise HelpRequestConflict("help request changed before the write") from exc
     written = {key_: value for key_, value in record.items() if key_ not in remove or key_ in changes}

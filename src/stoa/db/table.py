@@ -367,6 +367,7 @@ def fenced(
     generation: int | None = None,
     any_generation: bool = False,
     also: Mapping[str, int | None] | None = None,
+    rows: Iterable[Mapping[str, Any]] = (),
     table: object | None = None,
 ) -> None:
     """Commit `operations` only while `owner`'s account fence is active.
@@ -385,6 +386,8 @@ def fenced(
     - `operations` may be a function of the generation, for rows that carry it.
     - `also`: other accounts whose fences must hold in the same transaction,
       each with its generation or `None` to read it.
+    - `rows`: rows as they will stand after the write, for the owner registry
+      (below). Required for an Update that sets an account pointer.
 
     Every write of an account checks the same fence row, so two of its writes at
     the same moment can cancel each other (`TransactionConflict` on the fence or
@@ -397,11 +400,14 @@ def fenced(
     or Update touches that is not one of the account's own derived partitions,
     an unconditional Put of `USER#{owner}/OWNS#{partition}` (and of
     `USER#{other}/REFERENCED_IN#{partition}` for each `also=` account), in
-    the same transaction - see `stoa.db.owner_registry`. Every account a Put's
-    row names the way deletion's matcher reads it (a notification's actor, a
-    grant's `student:` scope) is registered the same way, owner or reference. When that would take
-    the transaction past DynamoDB's 100 items, the registry rows are committed
-    first, behind the same fences, and the caller's operations after.
+    the same transaction - see `stoa.db.owner_registry`. Every account the data
+    type catalog says a Put's item or a row in `rows` names (a notification's
+    actor, a grant's `student:` scope) is registered the same way, in the role
+    the catalog gives it (#589). An Update that sets an account pointer
+    without its row in `rows` is a `ValueError`, before anything is sent. When
+    that would take the transaction past DynamoDB's 100 items, the registry
+    rows are committed first, behind the same fences, and the caller's
+    operations after.
 
     Outcomes besides success: `AccountNotWritable` (an `AccountDeletionConflict`)
     when a fence is missing, not active or not the expected generation - whether
@@ -427,9 +433,7 @@ def fenced(
     conditions = [
         fences.active_fence_condition(account, held) for account, held in generations.items()
     ]
-    registry = owner_registry.registry_operations(
-        owner, list(also or {}), own, mentions=fences.mentioned_accounts
-    )
+    registry = owner_registry.registry_operations(owner, list(also or {}), own, rows=rows)
     if len(conditions) + len(own) + len(registry) <= TRANSACTION_ITEM_LIMIT:
         own_and_registry = [*own, *registry]
     else:
@@ -457,6 +461,43 @@ def fenced(
             # operations.
             own_reasons = ()
         raise WriteRefused(exc.code, own_reasons) from exc
+
+
+def registered(
+    operations: Iterable[Operation],
+    *,
+    rows: Iterable[Mapping[str, Any]] = (),
+    table: object | None = None,
+) -> None:
+    """Commit `operations` outside any account fence, with the registry rows they need.
+
+    The one way to write, outside `fenced`, a row some account's deletion acts
+    on (#589): every account the data type catalog says a Put's item or a row
+    in `rows` names is registered under that row's partition, in the role the
+    catalog gives it, in the same transaction - see
+    `owner_registry.registry_operations`. There is no fence, so no owner of
+    the write's own.
+
+    `rows` are rows as they will stand: the merged row of an Update that sets
+    an account pointer (required, as in `fenced`), or rows the caller is about
+    to write some other way. With no `operations`, only those rows' registry
+    rows are committed, ahead of them: a registry row for a row that then
+    fails to land is harmless, a row without one is out of reach of a
+    registry-path deletion.
+
+    When everything does not fit in one transaction, the registry rows are
+    committed first and `operations` after. Outcomes as for `transact`.
+    """
+    own = list(operations)
+    registry = owner_registry.registry_operations(None, (), own, rows=rows)
+    if len(own) + len(registry) <= TRANSACTION_ITEM_LIMIT:
+        if own or registry:
+            transact([*own, *registry], table=table)
+        return
+    for start in range(0, len(registry), TRANSACTION_ITEM_LIMIT):
+        transact(registry[start : start + TRANSACTION_ITEM_LIMIT], table=table)
+    if own:
+        transact(own, table=table)
 
 
 # DynamoDB's limit on the items of one transaction.

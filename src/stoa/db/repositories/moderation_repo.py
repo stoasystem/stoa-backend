@@ -7,7 +7,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 
-from stoa.db import data_catalog
+from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -477,23 +477,25 @@ def update_case(
     values = {f":{key}": value for key, value in attrs.items()}
     values.update({":owner": student_id, ":generation": generation})
     expression = "SET " + ", ".join(f"#{key} = :{key}" for key in attrs)
+    operations = [
+        {
+            "Update": {
+                "Key": {"PK": f"MODERATION#{case_id}", "SK": "SUMMARY"},
+                "UpdateExpression": expression,
+                "ConditionExpression": (
+                    "attribute_exists(PK) AND attribute_exists(SK) "
+                    "AND student_id=:owner AND privacy_generation=:generation"
+                ),
+                "ExpressionAttributeNames": names,
+                "ExpressionAttributeValues": values,
+            }
+        },
+    ]
     db_table.fenced(
         student_id,
-        [
-            {
-                "Update": {
-                    "Key": {"PK": f"MODERATION#{case_id}", "SK": "SUMMARY"},
-                    "UpdateExpression": expression,
-                    "ConditionExpression": (
-                        "attribute_exists(PK) AND attribute_exists(SK) "
-                        "AND student_id=:owner AND privacy_generation=:generation"
-                    ),
-                    "ExpressionAttributeNames": names,
-                    "ExpressionAttributeValues": values,
-                }
-            },
-        ],
+        operations,
         generation=generation,
+        rows=owner_registry.rows_after(existing, operations),
         table=target,
     )
     return {**existing, **attrs}

@@ -32,8 +32,7 @@ entry declares:
 `mentions(row)` and `names(row, account)` read one row against its entry and
 nothing else. Ids are compared exactly as stored - no stripping - and a value
 holding `#`, `:` or `/` is never an account id (the separators every key is
-built with; an operator call signs its writes `operator:agent_mcp`), as in
-`owner_registry.reference_put`.
+built with; an operator call signs its writes `operator:agent_mcp`).
 
 A row is matched to its entry by `entity_type`. A few kinds of row are written
 with none at all (the profile, a practice attempt, usage counters); those are
@@ -47,9 +46,12 @@ script) has to get through rows written before a type had a name; and
 Account deletion reads it (#588): `owns`, `names` and `role_of` are the one
 answer to "whose is this row" for every deletion scan, and each scan keeps
 only its own choice of which kinds it handles and how. The owner registry
-and its sweep switch over in #589-#590; until then
-`tests/test_data_catalog.py` holds the catalog to the registry's rules, and
-to the deletion rules as they stood before #588, difference by difference.
+reads it too (#589): a write registers its partition under every account
+`mentions` gives, in the role given (`owner_registry.registry_operations`),
+and an Update that sets one of the `POINTER_PATHS` has to say how its row
+will stand. The sweep switches over in #590; until then
+`tests/test_data_catalog.py` holds the catalog to the rules registration and
+deletion followed before #588-#589, difference by difference.
 """
 
 from __future__ import annotations
@@ -297,8 +299,8 @@ _ENTRIES: tuple[DataType, ...] = (
         (),
         _not(
             "released by the profile's deletion tombstone in the same transaction "
-            "(`_email_claim_release`), found from the profile; `user_repo` registers it "
-            "by hand only so the sweep stops reporting it (#586 decision 1)",
+            "(`_email_claim_release`), found from the profile; a mention only, not "
+            "registered (#586 decision 1)",
             "account_id",
         ),
     ),
@@ -309,8 +311,7 @@ _ENTRIES: tuple[DataType, ...] = (
         _owner("account_id"),
         _not(
             "the inviter, usually an administrator, whose deletion must not sweep the "
-            "invitations they issued; registered by hand only so the sweep stops "
-            "reporting it (#586 decision 1)",
+            "invitations they issued; a mention only, not registered (#586 decision 1)",
             "invited_by",
         ),
     ),
@@ -321,8 +322,7 @@ _ENTRIES: tuple[DataType, ...] = (
         (),
         _not(
             "a number is claimed for good so it is never handed to another account (KEPT); "
-            "`account_provisioning_service` registers it by hand only so the sweep stops "
-            "reporting it (#586 decision 1)",
+            "a mention only, not registered (#586 decision 1)",
             "account_id",
         ),
     ),
@@ -418,8 +418,8 @@ _ENTRIES: tuple[DataType, ...] = (
         "stoa.services.usage_period",
         _owner("user_id"),
         _not(
-            "the administrator who set the period; registered by hand only so the "
-            "sweep stops reporting it (#586 decision 1)",
+            "the administrator who set the period; a mention only, not registered "
+            "(#586 decision 1)",
             "actor_id",
         ),
     ),
@@ -695,7 +695,7 @@ _ENTRIES: tuple[DataType, ...] = (
         ),
     ),
     # An operator's job: no top-level owner; the job's filters can name a
-    # student or parent (`report_repo._recovery_job_record_accounts`).
+    # student or parent; its audit events name them again in `metadata`.
     DataType(
         "REPORT_RECOVERY_JOB",
         _repo("report_repo"),
@@ -902,8 +902,8 @@ UNTYPED: tuple[DataType, ...] = (
             Summaries("student_summaries", REFERENCE),
         ),
         _not(
-            "who opened the account, usually an administrator; registered by hand only so "
-            "the sweep stops reporting it (#586 decision 1)",
+            "who opened the account, usually an administrator; a mention only, not "
+            "registered (#586 decision 1)",
             "created_by",
         ),
         untyped_key=KeyShape("USER#", sk="PROFILE"),
@@ -977,6 +977,19 @@ CATALOG: Final[Mapping[str, DataType]] = {entry.name: entry for entry in _ENTRIE
 _UNTYPED_BY_NAME: Final[Mapping[str, DataType]] = {entry.name: entry for entry in UNTYPED}
 if len(CATALOG) != len(_ENTRIES):  # pragma: no cover - a duplicate entry is a typo
     raise RuntimeError("an entity_type is listed twice in the data type catalog")
+
+
+POINTER_PATHS: Final[frozenset[str]] = frozenset(
+    pointer.attribute
+    for entry in (*_ENTRIES, *UNTYPED)
+    for pointer in entry.accounts
+    if not isinstance(pointer, KeyId)
+)
+"""Every attribute path, in any type, that can point to an account (`owner_id`,
+`metadata.student_id`, `children`, `scope`). A key cannot be updated, so the
+key pointers are not here. An Update that sets one of these, or a path above
+or inside one, can change whom a row names; the registry then needs the row as
+it will stand (`owner_registry.registry_operations`, #589)."""
 
 
 def data_type_of(row: Mapping[str, object]) -> DataType | None:

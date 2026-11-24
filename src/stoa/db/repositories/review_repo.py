@@ -15,6 +15,7 @@ from typing import Any
 
 from boto3.dynamodb.conditions import Key
 
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories.practice_repo import (
     _atomic_table,
@@ -173,7 +174,13 @@ def save_card(
         else None,
     )
     if _atomic_table(target):
-        db_table.fenced(student_id, operations, generation=generation, table=target)
+        db_table.fenced(
+            student_id,
+            operations,
+            generation=generation,
+            rows=owner_registry.rows_after(existing or item, operations),
+            table=target,
+        )
     else:
         _put_item(target, Item=operations[0]["Put"]["Item"])
     item.update(owner_id=student_id, account_fence_generation=generation)

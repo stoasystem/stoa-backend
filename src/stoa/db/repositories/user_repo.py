@@ -104,25 +104,19 @@ def put_user_with_email_claim(
     anything if it is decided in the same commit as the row it protects. Either the
     pair is taken and the profile exists, or neither happened.
 
-    The same commit registers what `fenced` would have (#397), this being the one
-    profile write made before the account has a fence to write behind: the claim's
-    partition under the new account, and the new account's partition under the
-    account that opened it (`created_by`).
+    The same commit registers whatever the data type catalog says the rows name
+    (#397, #589), this being the one profile write made before the account has a
+    fence to write behind. Neither the claim's `account_id` nor the profile's
+    `created_by` is one: the claim goes with the profile's deletion, and who
+    opened the account is a mention (#586 decision 1).
     """
-    operations = [
-        *account_deletion_repo.materialize_profile_with_fence(
-            dict(item), now_iso=_profile_created_at(item)
-        ),
-        claim_operation,
-    ]
-    account = item.get("user_id")
-    claim = claim_operation.get("Put", {}).get("Item", {})
-    registrations = [
-        owner_registry.reference_put(account, str(claim.get("PK") or "")) if claim else None,
-        owner_registry.reference_put(item.get("created_by"), f"USER#{account}"),
-    ]
-    db_table.transact(
-        [*operations, *(found for found in registrations if found is not None)],
+    db_table.registered(
+        [
+            *account_deletion_repo.materialize_profile_with_fence(
+                dict(item), now_iso=_profile_created_at(item)
+            ),
+            claim_operation,
+        ]
     )
 
 
@@ -428,31 +422,34 @@ def record_teacher_seen(
     sign-in stamp: a deleted account is never written to again. `expires_at`
     lets the table drop the row once it can no longer mean anything.
     """
+    key = {"PK": f"USER#{user_id}", "SK": TEACHER_SEEN_SK}
+    operations = [
+        {
+            "Update": {
+                "Key": key,
+                "UpdateExpression": (
+                    "SET entity_type = :entity, user_id = :user_id, "
+                    "seen_at = :seen_at, expires_at = :expires_at"
+                ),
+                "ConditionExpression": (
+                    "attribute_not_exists(seen_at) OR seen_at < :written_before"
+                ),
+                "ExpressionAttributeValues": {
+                    ":entity": "teacher_seen",
+                    ":user_id": user_id,
+                    ":seen_at": seen_at,
+                    ":expires_at": expires_at,
+                    ":written_before": written_before,
+                },
+            }
+        }
+    ]
     try:
         db_table.fenced(
             user_id,
-            [
-                {
-                    "Update": {
-                        "Key": {"PK": f"USER#{user_id}", "SK": TEACHER_SEEN_SK},
-                        "UpdateExpression": (
-                            "SET entity_type = :entity, user_id = :user_id, "
-                            "seen_at = :seen_at, expires_at = :expires_at"
-                        ),
-                        "ConditionExpression": (
-                            "attribute_not_exists(seen_at) OR seen_at < :written_before"
-                        ),
-                        "ExpressionAttributeValues": {
-                            ":entity": "teacher_seen",
-                            ":user_id": user_id,
-                            ":seen_at": seen_at,
-                            ":expires_at": expires_at,
-                            ":written_before": written_before,
-                        },
-                    }
-                }
-            ],
+            operations,
             any_generation=True,
+            rows=owner_registry.rows_after(key, operations),
         )
     except db_table.WriteRefused:
         return
@@ -680,17 +677,19 @@ def update_profile_fields_versioned(
             values = dict(expression_attribute_values)
             if values_from_profile is not None:
                 values.update(values_from_profile(profile))
+            operations = [
+                profile_update_operation(
+                    user_id,
+                    update_expression=update_expression,
+                    expression_attribute_values=values,
+                    expression_attribute_names=expression_attribute_names,
+                    expected_version=expected_version,
+                )
+            ]
             db_table.fenced(
                 user_id,
-                [
-                    profile_update_operation(
-                        user_id,
-                        update_expression=update_expression,
-                        expression_attribute_values=values,
-                        expression_attribute_names=expression_attribute_names,
-                        expected_version=expected_version,
-                    )
-                ],
+                operations,
+                rows=owner_registry.rows_after(profile, operations),
                 table=table,
             )
         except (

@@ -52,11 +52,14 @@ Every kind of row the code writes has one entry in the data type catalog, `src/s
 - **The deletion handling**: the `deletion` slot, empty until candidate I fills it (see #586).
 - **The owning module**: where its rows are written.
 
-Nothing else decides which accounts a row names: read it through `data_catalog.mentions` / `names` / `owns` / `role_of`, not a field list of your own. Account deletion does (#588): every deletion scan asks the catalog whose a row is and keeps only its own choice of which kinds it handles and how, so a row the catalog does not know is one no deletion takes. A row written without an `entity_type` is matched by its key (`UNTYPED`); prefer giving new rows an `entity_type`.
+Nothing else decides which accounts a row names: read it through `data_catalog.mentions` / `names` / `owns` / `role_of`, not a field list of your own. Account deletion does (#588): every deletion scan asks the catalog whose a row is and keeps only its own choice of which kinds it handles and how, so a row the catalog does not know is one no deletion takes. So does the owner registry (#589): a write registers its partition under every account the catalog says its rows name, and under nobody else. A row written without an `entity_type` is matched by its key (`UNTYPED`); prefer giving new rows an `entity_type`.
+
+Write such rows through `db_table.fenced` (behind the owner's account fence) or, when there is no fence to hold, `db_table.registered`; never register by hand. An Update that sets an account pointer passes the row as it will stand (`rows=`), or the write is refused before it is sent: the registry cannot see whom an Update makes the row name.
 
 What fails if you don't:
 
-- `tests/test_data_catalog.py`: a written `entity_type` with no entry, an entry nothing writes, an entry naming the wrong module, an account-looking attribute a writer writes that the entry neither declares nor lists in `not_pointers`, a writer whose fields the scan cannot read that is not in `FIELDS_READ_BY_HAND`, and any difference from the registry's rules, or from the deletion rules as they stood before #588, that is not one of the intended ones (`scripts/compare_data_catalog.py`, `INTENDED` and `ROLE_CHANGES`).
+- `tests/test_data_catalog.py`: a written `entity_type` with no entry, an entry nothing writes, an entry naming the wrong module, an account-looking attribute a writer writes that the entry neither declares nor lists in `not_pointers`, a writer whose fields the scan cannot read that is not in `FIELDS_READ_BY_HAND`, and any difference from the registration and deletion rules as they stood before #588-#589 that is not one of the intended ones (`scripts/compare_data_catalog.py`, `INTENDED` and `ROLE_CHANGES`).
 - `tests/test_account_deletion_branch_coverage.py`: the same `entity_type` with no deletion branch and no `KEPT` reason (#534).
+- `tests/test_owner_registry_unfenced_writers.py`: a function that writes to the table without calling `db_table.fenced` or `db_table.registered`, unless it is listed with its reason.
 
 `scripts/compare_data_catalog.py` runs the same comparison read-only over the live table and prints counts only.

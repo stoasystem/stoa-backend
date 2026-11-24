@@ -5,10 +5,10 @@ Read-only. Scans the table once and, for every row, compares the accounts
 the old rules take it for with the accounts `stoa.db.data_catalog.mentions`
 says it points to:
 
-- the old rules: `account_deletion_repo.mentioned_accounts` (the owner
-  registry's roles, what registration reads until #589), and the deletion
-  rules as they stood before #588 put deletion on the catalog, frozen
-  below: every account the generic matcher (`_targets_user`) took the row
+- the old rules, frozen below as they stood before #588-#589 put deletion
+  and registration on the catalog: the owner registry's roles
+  (`account_deletion_repo.mentioned_accounts`), and
+  every account the generic deletion matcher (`_targets_user`) took the row
   for, and the deletion families' own tests that look at one row
   (notifications, reports, practice, adaptive learning, AI drafts,
   conversations, attachments, invitations, sign-ins, websockets, curriculum
@@ -47,7 +47,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from stoa.db import data_catalog, owner_registry  # noqa: E402
 from stoa.db.repositories import (  # noqa: E402
-    account_deletion_repo,
     adaptive_learning_repo,
     ai_teacher_tools_repo,
     notification_repo,
@@ -90,16 +89,17 @@ def candidates(row: Mapping[str, Any]) -> set[str]:
 
 
 # Deletion's rules as they stood before #588 (main 538719ce), when every
-# deletion scan still had its own: frozen here, because deletion now reads the
-# catalog and these are the old answer this comparison and the parity gate in
-# `tests/test_data_catalog.py` measure it against. They decide nothing in
-# production. Retire them with this script once registration and the sweep
-# read the catalog too (#589, #590).
+# deletion scan still had its own, and registration's before #589 (main
+# bb8abeb4): frozen here, because both now read the catalog and these are the
+# old answer this comparison and the parity gate in `tests/test_data_catalog.py`
+# measure it against. They decide nothing in production. Retire them with this
+# script once the sweep reads the catalog too (#590).
 
 _OLD_NOTIFICATION_OWNER_METADATA = frozenset({"owner_id", "student_id"})
 _OLD_NOTIFICATION_REFERENCE_METADATA = frozenset({"actor_id", "teacher_id", "parent_id"})
 
-# What `account_deletion_repo.CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY` was.
+# What `account_deletion_repo.CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY` was, and
+# its registration-only copy `_REGISTERED_REFERENCES` until #589.
 OLD_CROSS_ACCOUNT_REFERENCES: Mapping[
     str, tuple[frozenset[str], frozenset[str], frozenset[str]]
 ] = {
@@ -192,8 +192,83 @@ def _report_takes(row: Mapping[str, Any], account: str) -> bool:
     if account in {row.get("student_id"), row.get("owner_id")}:
         return True
     return report_repo._is_recovery_job_record(pk, sk) and account in (
-        report_repo._recovery_job_record_accounts(row)
+        _old_recovery_job_record_accounts(row)
     )
+
+
+def _old_recovery_job_record_accounts(item: Mapping[str, object]) -> set[str]:
+    """What `report_repo._recovery_job_record_accounts` read, until #589."""
+    metadata = item.get("metadata")
+    holders: list[object] = [item.get("filters"), metadata]
+    if isinstance(metadata, Mapping):
+        holders += [metadata.get("filters"), metadata.get("result_filters")]
+    return {
+        str(holder[field])
+        for holder in holders
+        if isinstance(holder, Mapping)
+        for field in ("student_id", "parent_id")
+        if isinstance(holder.get(field), str) and str(holder[field]).strip()
+    }
+
+
+_OLD_OWNER_FIELDS = (
+    "owner_id",
+    "student_id",
+    "user_id",
+    "child_id",
+    "child_user_id",
+    "target_user_id",
+)
+
+
+def old_mentioned_accounts(item: Mapping[str, Any]) -> dict[str, str]:
+    """What `account_deletion_repo.mentioned_accounts`, registration's rule, said until #589."""
+    found: dict[str, str] = {}
+
+    def add(value: object, role: str) -> None:
+        if isinstance(value, str) and value.strip():
+            account = value.strip()
+            if found.get(account) != owner_registry.ROLE_OWNER:
+                found[account] = role
+
+    for field in _OLD_OWNER_FIELDS:
+        add(item.get(field), owner_registry.ROLE_OWNER)
+    sk = str(item.get("SK") or "")
+    for prefix in ("CHILD#", "PARENT#"):
+        if sk.startswith(prefix):
+            add(sk[len(prefix) :], owner_registry.ROLE_REFERENCE)
+    scalar_fields, collection_fields, metadata_fields = OLD_CROSS_ACCOUNT_REFERENCES.get(
+        str(item.get("entity_type") or ""), (frozenset(), frozenset(), frozenset())
+    )
+    for field in scalar_fields:
+        add(item.get(field), owner_registry.ROLE_REFERENCE)
+    for field in collection_fields:
+        value = item.get(field)
+        if isinstance(value, (list, tuple, set, frozenset)):
+            for member in value:
+                add(member, owner_registry.ROLE_REFERENCE)
+    metadata = item.get("metadata")
+    if isinstance(metadata, Mapping):
+        for field in metadata_fields:
+            add(metadata.get(field), owner_registry.ROLE_REFERENCE)
+    for field in ("children", "child_summaries", "student_summaries"):
+        value = item.get(field)
+        entries: Iterable[object] = ()
+        if isinstance(value, Mapping):
+            for key in value:
+                add(key, owner_registry.ROLE_REFERENCE)
+            entries = value.values()
+        elif isinstance(value, (list, tuple)):
+            entries = value
+        for entry in entries:
+            if isinstance(entry, Mapping):
+                for name in ("user_id", "student_id", "child_id"):
+                    add(entry.get(name), owner_registry.ROLE_REFERENCE)
+    scope = str(item.get("scope") or "")
+    for prefix in ("student:", "student/"):
+        if scope.startswith(prefix):
+            add(scope[len(prefix) :], owner_registry.ROLE_REFERENCE)
+    return found
 
 
 def _is_tombstone(row: Mapping[str, Any]) -> bool:
@@ -296,7 +371,7 @@ def _family_takes(row: Mapping[str, Any], account: str) -> bool:
 
 def old_rule(row: Mapping[str, Any]) -> dict[str, str | None]:
     """Every account the old rules take `row` for: its registry role, or None if unregistered."""
-    found: dict[str, str | None] = dict(account_deletion_repo.mentioned_accounts(row))
+    found: dict[str, str | None] = dict(old_mentioned_accounts(row))
     for account in candidates(row):
         if account not in found and (
             old_targets_user(row, account) or _family_takes(row, account)
@@ -493,7 +568,7 @@ FAMILY_FALLBACKS: Mapping[str, frozenset[str]] = {
         for name in notification_repo.NOTIFICATION_PRIVATE_ROW_REGISTRY
         if name != notification_repo.NOTIFICATION_ENTITY
     },
-    # `report_repo._recovery_job_record_accounts` reads `filters` and
+    # `report_repo._recovery_job_record_accounts` read `filters` and
     # `metadata` on a recovery job's summary and audit events alike; the
     # summary writes `filters`, an event `metadata`. It also reads
     # `metadata.result_filters` as a map, but the job service writes it as a
@@ -504,8 +579,8 @@ FAMILY_FALLBACKS: Mapping[str, frozenset[str]] = {
     | {"metadata.result_filters.student_id", "metadata.result_filters.parent_id"},
 }
 
-# Every role that differs from the owner registry's today, by (type, field):
-# (today's, the catalog's). Today `mentioned_accounts` files the six generic
+# Every role that differs from the owner registry's before #589, by (type, field):
+# (the old, the catalog's). `mentioned_accounts` filed the six generic
 # fields as `owner` and everything else as `reference`; the catalog says what
 # the deletion does (#586 decision 7).
 ROLE_CHANGES: Mapping[tuple[str, str], tuple[str, str]] = {

@@ -1,8 +1,8 @@
 """The data type catalog is complete, and says what the old rules said (#587).
 
 `stoa.db.data_catalog` lists every kind of row and the accounts it points to.
-Account deletion reads it since #588; the owner registry and the sweep switch
-over in #589-#590. Three gates hold it in place:
+Account deletion reads it since #588 and the owner registry since #589; the sweep switches
+over in #590. Three gates hold it in place:
 
 1. **Closed world.** Every `entity_type` the code writes
    (`entity_type_scan.written_entity_types`) has an entry, and every entry is a
@@ -19,9 +19,9 @@ over in #589-#590. Three gates hold it in place:
 3. **Parity.** For every entry, synthetic rows put an id in each declared
    pointer and in each field the old rules read on any row; and every row the
    deletion branch gate builds (`deleted_by_branch`) is compared too. The old
-   answer (`compare_data_catalog.old_rule`: `mentioned_accounts`, which
-   registration still reads, and the deletion rules as they stood before #588,
-   frozen in that script) and the catalog's
+   answer (`compare_data_catalog.old_rule`: registration's `mentioned_accounts`
+   and the deletion rules as they stood before #588-#589, frozen in that
+   script) and the catalog's
    (`mentions`) must agree, except for the intended differences in
    `compare_data_catalog.INTENDED` - each one a decision in #586 - and the
    role changes in `compare_data_catalog.ROLE_CHANGES`.

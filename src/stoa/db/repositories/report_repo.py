@@ -8,7 +8,7 @@ from hashlib import sha256
 from typing import Literal, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
-from stoa.db import data_catalog, owner_registry
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -704,9 +704,8 @@ def put_report_audit_event(report_id: str, event: ReportItem) -> None:
 def put_recovery_job_audit_event(job_id: str, event: ReportItem) -> None:
     """Append one immutable recovery job audit event."""
     table = db_table.table()
-    partition = f"REPORT_RECOVERY_JOB#{job_id}"
     item = {
-        "PK": partition,
+        "PK": f"REPORT_RECOVERY_JOB#{job_id}",
         "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
         "entity_type": "REPORT_RECOVERY_JOB_AUDIT_EVENT",
         **event,
@@ -714,10 +713,8 @@ def put_recovery_job_audit_event(job_id: str, event: ReportItem) -> None:
     # Written outside `fenced` (an operator's job, not the account's write), so
     # every account the event names in its metadata - a target's student and
     # parent, or the job's filters - is registered here, before the event
-    # (#397, #573). `put_recovery_job` registers only targets' students and the
-    # summary's filters; a parent named only as a target is first named here.
-    for account in sorted(_recovery_job_record_accounts(item)):
-        _put_item(table, Item=owner_registry.registry_item(account, partition))
+    # (#397, #573, #589). A parent named only as a target is first named here.
+    db_table.registered((), rows=[item], table=table)
     _put_item(
         table,
         Item=item,
@@ -1191,37 +1188,31 @@ def get_legal_hold_review_metadata(scope_key: str) -> ReportItem | None:
 def put_recovery_job(job: ReportItem, targets: list[ReportItem]) -> None:
     """Persist one recovery job and its stable target snapshot."""
     table = db_table.table()
-    # Written outside `fenced` (an operator's job, not the student's write), so
-    # each targeted student's registry row is written here, before the targets
-    # that carry their `student_id` (#397).
-    # The summary can name an account too, in the operator's filters.
-    partition = f"REPORT_RECOVERY_JOB#{job['job_id']}"
-    for account in sorted(
-        {str(t["student_id"]) for t in targets if isinstance(t.get("student_id"), str) and t["student_id"]}
-        | _recovery_job_record_accounts(job)
-    ):
-        _put_item(table, Item=owner_registry.registry_item(account, partition))
-    _put_item(
-        table,
-        Item={
+    summary = {
+        "PK": f"REPORT_RECOVERY_JOB#{job['job_id']}",
+        "SK": "SUMMARY",
+        "entity_type": "REPORT_RECOVERY_JOB",
+        **job,
+    }
+    rows = [
+        {
             "PK": f"REPORT_RECOVERY_JOB#{job['job_id']}",
-            "SK": "SUMMARY",
-            "entity_type": "REPORT_RECOVERY_JOB",
-            **job,
-        },
-        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
-    )
-    for index, target in enumerate(targets):
+            "SK": f"TARGET#{index:05d}#{target['target_id']}",
+            "entity_type": "REPORT_RECOVERY_JOB_TARGET",
+            "job_id": job["job_id"],
+            "target_index": index,
+            **target,
+        }
+        for index, target in enumerate(targets)
+    ]
+    # Written outside `fenced` (an operator's job, not the student's write), so
+    # every account the summary (the operator's filters) and the targets (their
+    # students) name is registered here, before them (#397, #589).
+    db_table.registered((), rows=[summary, *rows], table=table)
+    for item in [summary, *rows]:
         _put_item(
             table,
-            Item={
-                "PK": f"REPORT_RECOVERY_JOB#{job['job_id']}",
-                "SK": f"TARGET#{index:05d}#{target['target_id']}",
-                "entity_type": "REPORT_RECOVERY_JOB_TARGET",
-                "job_id": job["job_id"],
-                "target_index": index,
-                **target,
-            },
+            Item=item,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
 
@@ -2043,31 +2034,9 @@ def scan_report_private_rows(
     return ReportPrivatePage(tuple(rows), current, unresolved)
 
 
-_ACCOUNT_FIELDS = ("student_id", "parent_id")
-
-
 def _is_recovery_job_record(pk: str, sk: str) -> bool:
     """A recovery job's own summary or audit event, as opposed to one of its targets."""
     return pk.startswith("REPORT_RECOVERY_JOB#") and (sk == "SUMMARY" or sk.startswith("AUDIT#"))
-
-
-def _recovery_job_record_accounts(item: Mapping[str, object]) -> set[str]:
-    """Accounts a recovery job's summary or audit event names below the top level.
-
-    The summary keeps the operator's `filters`; an audit event keeps `metadata`,
-    which names a target's student and parent directly or repeats the filters.
-    """
-    metadata = item.get("metadata")
-    holders: list[object] = [item.get("filters"), metadata]
-    if isinstance(metadata, Mapping):
-        holders += [metadata.get("filters"), metadata.get("result_filters")]
-    return {
-        str(holder[field])
-        for holder in holders
-        if isinstance(holder, Mapping)
-        for field in _ACCOUNT_FIELDS
-        if isinstance(holder.get(field), str) and str(holder[field]).strip()
-    }
 
 
 def _names_an_account(item: Mapping[str, object]) -> bool:

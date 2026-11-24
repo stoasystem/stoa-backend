@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Any, Final
 
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -49,8 +50,13 @@ def day_key(student_id: str, day: str) -> dict[str, str]:
 
 def _fenced(student_id: str, operation: dict[str, Any], table: Any | None) -> None:
     try:
+        update = operation.get("Update")
         db_table.fenced(
-            student_id, [operation], any_generation=True, table=table or db_table.table()
+            student_id,
+            [operation],
+            any_generation=True,
+            rows=owner_registry.rows_after(update["Key"], [operation]) if update else (),
+            table=table or db_table.table(),
         )
     except account_deletion_repo.AccountDeletionConflict as exc:
         raise AccountNotWritable("account is not writable") from exc
