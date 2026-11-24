@@ -54,8 +54,8 @@ def _one_page(
 
 # ── The cleanup's index (#611) ───────────────────────────────────────────────
 #
-# The cleanup sweep found its uploads with a filtered scan of the whole table.
-# It shares the sparse index the generation sweep reads (#502), in a bucket of
+# The cleanup sweep reads its uploads from here instead of scanning the whole
+# table. It shares the sparse index the generation sweep reads (#502), in a bucket of
 # its own. An upload row carries `sweep_bucket` and `sweep_due_at` exactly
 # while it is in a state the cleanup may come to act on:
 #
@@ -64,8 +64,7 @@ def _one_page(
 # - any other unspent state (issuing to validated): due when its usable window
 #   ends. A state change inside that window does not move it, and neither does
 #   an operation lease, taken or renewed: a lease lasts two minutes and may
-#   outlive the window, so the reader keeps the scan's own condition on it
-#   (`LEASE_LAPSED`) instead of every lease write keeping the key right.
+#   outlive the window, so the reader filters on it (`LEASE_LAPSED`) instead of every lease write keeping the key right.
 #
 # The write that creates the row sets both; a write that refuses it or hands it
 # to cleanup makes it due at once; a write that spends it, protects it or
@@ -89,7 +88,7 @@ CLEANUP_DUE_PAST_USABLE_STATES = frozenset(
     }
 )
 # A continuation key of the index: the base table's key and the index's own.
-_CLEANUP_INDEX_PAGE_KEY = ("PK", "SK", *CLEANUP_INDEX_FIELDS)
+CLEANUP_INDEX_PAGE_KEY = ("PK", "SK", *CLEANUP_INDEX_FIELDS)
 
 
 def cleanup_due_at(epoch: int) -> str:
@@ -468,45 +467,6 @@ def get_upload_intent(upload_id: str, *, table: object | None = None) -> dict[st
     return _optional_mapping(response.get("Item"))
 
 
-def list_upload_cleanup_candidates(
-    now_epoch: int,
-    *,
-    limit: int,
-    exclusive_start_key: dict[str, object] | None = None,
-    table: object | None = None,
-) -> tuple[list[dict[str, object]], dict[str, object] | None]:
-    """Return one bounded page of terminal or expired unconsumed upload intents."""
-    scan: dict[str, object] = {
-        "Limit": limit,
-        "FilterExpression": (
-            "begins_with(PK,:upload) AND SK=:meta AND ("
-            "#status IN (:invalid,:expired,:cleanup_pending) OR ("
-            "#status IN (:pending,:validating,:validated,:issuing,:assembling,:promoting) "
-            "AND " + PAST_USABLE + " AND " + LEASE_LAPSED + "))"
-        ),
-        "ExpressionAttributeNames": {"#status": "status"},
-        "ExpressionAttributeValues": {
-            ":upload": "UPLOAD#",
-            ":meta": "META",
-            ":invalid": "invalid",
-            ":expired": "expired",
-            ":cleanup_pending": "cleanup_pending",
-            ":pending": "pending_upload",
-            ":validating": "validating",
-            ":validated": "validated",
-            ":issuing": "issuing",
-            ":assembling": "assembling",
-            ":promoting": "promoting",
-            ":now": now_epoch,
-        },
-    }
-    page = _one_page("scan", start=exclusive_start_key, table=table, **scan)
-    cursor = page.last_key
-    if cursor is not None and any(not isinstance(value, str) for value in cursor.values()):
-        raise AttachmentRepositoryConflict("dependency_failure")
-    return page.items, cursor
-
-
 def query_upload_cleanup_candidates(
     now_epoch: int,
     *,
@@ -517,12 +477,11 @@ def query_upload_cleanup_candidates(
     """One bounded page of the uploads due for cleanup at `now_epoch`, earliest due first (#611).
 
     A query of the cleanup's bucket of `GSI-SweepPending`, so what a run reads
-    follows how many uploads are due, not how large the table is. The filter is
-    the scan's (`list_upload_cleanup_candidates`), word for word but for the
-    key: the index says which rows are uploads and when their window ends, the
-    filter still decides, so an entry a write left behind costs a read and
-    nothing else. Eventually consistent, as the scan was; the claim that
-    follows is conditional.
+    follows how many uploads are due, not how large the table is. The index
+    says which rows are uploads and when their window ends; the filter, the
+    condition `claim_upload_cleanup` claims by, still decides, so an entry a
+    write left behind costs a read and nothing else. Eventually consistent;
+    the claim that follows is conditional.
     """
     query: dict[str, object] = {
         "IndexName": CLEANUP_INDEX,
@@ -555,7 +514,7 @@ def query_upload_cleanup_candidates(
                 "query",
                 start=exclusive_start_key or None,
                 table=table,
-                key=_CLEANUP_INDEX_PAGE_KEY,
+                key=CLEANUP_INDEX_PAGE_KEY,
                 **query,
             )
         )

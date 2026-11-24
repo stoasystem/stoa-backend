@@ -33,6 +33,7 @@ def _candidate(
     return {
         "PK": f"UPLOAD#{upload_id}",
         "SK": "META",
+        "sweep_bucket": "upload_cleanup", "sweep_due_at": "1970-01-01T00:00:00Z",
         "upload_id": upload_id,
         "owner_id": "student-content-canary",
         "status": status,
@@ -143,7 +144,11 @@ class StatefulCleanupRepository:
         page = ordered[start : start + limit]
         next_cursor = None
         if start + len(page) < len(ordered) and page:
-            next_cursor = {"PK": page[-1]["PK"], "SK": "META"}
+            next_cursor = {
+                "PK": page[-1]["PK"],
+                "SK": "META",
+                "sweep_bucket": "upload_cleanup", "sweep_due_at": "1970-01-01T00:00:00Z",
+            }
         # Deliberately model the pre-fix lease eligibility. The service must
         # independently refuse destructive work before the intent TTL.
         eligible = [
@@ -567,22 +572,22 @@ def test_part_pin_accepts_the_decimal_a_real_table_returns() -> None:
 
 class _EligibilityRecordingTable:
     def __init__(self) -> None:
-        self.scan_request: dict[str, Any] | None = None
+        self.query_request: dict[str, Any] | None = None
 
-    def scan(self, **kwargs):
-        self.scan_request = kwargs
+    def query(self, **kwargs):
+        self.query_request = kwargs
         return {"Items": []}
 
 
 def test_repository_candidate_policy_never_uses_operation_lease_as_ttl() -> None:
     table = _EligibilityRecordingTable()
 
-    upload_store.list_upload_cleanup_candidates(NOW_EPOCH, limit=10, table=table)
+    upload_store.query_upload_cleanup_candidates(NOW_EPOCH, limit=10, table=table)
 
-    assert table.scan_request is not None
+    assert table.query_request is not None
     # The lease never makes a row eligible: it may only hold an unspent row back
     # past its usable window while an operation is live on it (#268).
-    expression = table.scan_request["FilterExpression"]
+    expression = table.query_request["FilterExpression"]
     lease_condition = f"{upload_store.PAST_USABLE} AND {upload_store.LEASE_LAPSED}"
     assert lease_condition in expression
     assert expression.replace(lease_condition, "").count("operation_lease_expires_at") == 0
@@ -601,7 +606,7 @@ def test_job_isolates_candidate_failure_and_preserves_continuation(monkeypatch) 
 
     monkeypatch.setattr(uploads, "cleanup", isolated)
     monkeypatch.setattr(
-        upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+        upload_store, "query_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
     )
     result = cleanup_expired_uploads(
         s3=StatefulProvider(),
@@ -628,7 +633,7 @@ def test_job_continuation_wraparound_visits_every_candidate(monkeypatch) -> None
 
     monkeypatch.setattr(uploads, "cleanup", observed)
     monkeypatch.setattr(
-        upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+        upload_store, "query_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
     )
     token = None
     for _ in range(3):
