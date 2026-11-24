@@ -110,7 +110,8 @@ _STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
 #
 # `list_all` finds requests by scanning the whole table, so what it reads
 # follows the size of the table, not how many requests there are. Two sparse
-# indexes hold the requests the frequent readers want:
+# indexes hold the requests the frequent readers - the sweep and a teacher's
+# queue - want:
 #
 # - A request not yet ended (`pending`, `in_progress`) carries `sweep_bucket`
 #   and `sweep_due_at`, the keys of GSI-SweepPending (#502), in a bucket of its
@@ -324,7 +325,9 @@ def list_all(*, table: Any | None = None) -> list[dict[str, Any]]:
     """Every request on the table, ended ones included, from every page.
 
     A filtered scan stops at a page of the table, not at the matches (#95), so
-    every page is read. There is no index by state; requests are few.
+    every page is read: the whole table, whatever its size. For the admin
+    statistics and the index backfill only; the sweep and a teacher's queue
+    read `list_open` and `list_for_teacher` (#608).
     """
     store: Any = table or db_table.table()
     items: list[dict[str, Any]] = []
@@ -350,8 +353,25 @@ def list_all(*, table: Any | None = None) -> list[dict[str, Any]]:
 
 
 def list_open(*, table: Any | None = None) -> list[dict[str, Any]]:
-    """The requests a student is still waiting on: pending ones."""
-    return [record for record in list_all(table=table) if stored_status(record) == PENDING]
+    """The requests a student is still waiting on: pending ones, the longest asked first.
+
+    Read from the index of requests not yet ended (#608), not by a scan.
+    """
+    return [record for record in list_unended(table=table) if stored_status(record) == PENDING]
+
+
+def list_for_teacher(teacher_id: str, *, table: Any | None = None) -> list[dict[str, Any]]:
+    """Every request a teacher could be shown, each once (#608).
+
+    The ones not yet ended - an offer to this teacher is among them - and the
+    ones this teacher holds, ended or not. Which of them this teacher may
+    read is the policy's to decide (`teacher_may`); every request it admits
+    is in one of the two. Two index queries, eventually consistent.
+    """
+    found: dict[str, dict[str, Any]] = {}
+    for record in (*list_unended(table=table), *list_held_by(teacher_id, table=table)):
+        found.setdefault(str(record["conversation_id"]), record)
+    return list(found.values())
 
 
 def index_fields(record: Mapping[str, Any]) -> dict[str, str]:

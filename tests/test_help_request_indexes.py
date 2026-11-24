@@ -164,6 +164,62 @@ def test_finding_nobody_keeps_a_waiting_request_in_the_open_index(table) -> None
     _assert_indexes_hold_what_the_scan_finds(table)
 
 
+# ── The readers: the sweep and a teacher's queue ─────────────────────────────
+
+
+def _scans(table: FakeTable) -> list[dict[str, Any]]:
+    return [call for name, call in table.requests if name == "scan"]
+
+
+def test_the_sweep_finds_a_waiting_request_without_scanning_the_table(table) -> None:
+    for teacher in (TEACHER, OTHER_TEACHER):
+        table.rows[(f"USER#{teacher}", "PROFILE")]["dispatch_availability"] = "paused"
+    table.rows[(f"USER#{TEACHER}", "PROFILE")]["dispatch_availability"] = "available"
+    table.requests.clear()
+
+    outcome = help_requests.sweep(table=table)
+
+    assert outcome["conversationSweep"] == "completed"
+    assert outcome["conversationsDispatched"] == [{"conversationId": CONV, "status": "dispatched"}]
+    assert _help(table)["dispatched_teacher_id"] == TEACHER
+    assert _scans(table) == []
+
+
+def test_a_teachers_queue_and_stats_are_read_without_scanning_the_table(table) -> None:
+    _dispatch_to(table, TEACHER)
+    teacher, other = _client(), _client(OTHER_TEACHER)
+    table.requests.clear()
+
+    # Offered: in the teacher's queue through the index of requests not yet ended.
+    listed = teacher.get("/teachers/me/help-requests")
+    assert listed.status_code == 200, listed.text
+    assert [item["conversationId"] for item in listed.json()["items"]] == [CONV]
+    assert other.get("/teachers/me/help-requests").json()["items"] == []
+
+    # Resolved: out of that index, still theirs through the one of requests held.
+    assert _set_status(teacher, "resolved").status_code == 200
+    listed = teacher.get("/teachers/me/help-requests")
+    assert [(item["conversationId"], item["status"]) for item in listed.json()["items"]] == [
+        (CONV, "resolved")
+    ]
+    assert other.get("/teachers/me/help-requests").json()["items"] == []
+    stats = teacher.get("/teachers/me/stats")
+    assert stats.status_code == 200, stats.text
+    assert stats.json()["resolvedToday"] == 1
+
+    assert _scans(table) == []
+
+
+def test_a_request_in_both_indexes_is_listed_once(table) -> None:
+    _dispatch_to(table, TEACHER)
+    assert _set_status(_client(), "in_progress").status_code == 200
+
+    assert _ids(help_requests.list_for_teacher(TEACHER, table=table)) == [CONV]
+    # Not this teacher's, but not yet ended: listed, and refused by the policy.
+    assert _ids(help_requests.list_for_teacher(OTHER_TEACHER, table=table)) == [CONV]
+    assert _client(OTHER_TEACHER).get("/teachers/me/help-requests").json()["items"] == []
+
+
 # ── Account deletion ─────────────────────────────────────────────────────────
 
 
@@ -243,6 +299,7 @@ def _before_608(table: FakeTable) -> None:
 
 
 def test_a_record_written_before_is_indexed_once_and_its_version_does_not_move(table) -> None:
+    _before_608(table)
     version = _help(table)["version"]
     assert not set(help_requests.INDEX_FIELDS) & set(_help(table))
     assert help_requests.list_unended(table=table) == []
@@ -267,6 +324,7 @@ def test_reindexing_removes_keys_a_record_should_no_longer_carry(table) -> None:
 
 
 def test_a_record_that_moved_since_it_was_read_is_not_reindexed(table) -> None:
+    _before_608(table)
     read = dict(_help(table))
     _dispatch_to(table, TEACHER)
     after = dict(_help(table))
@@ -278,6 +336,7 @@ def test_a_record_that_moved_since_it_was_read_is_not_reindexed(table) -> None:
 
 
 def test_the_backfill_dry_run_counts_and_writes_nothing(table, capsys) -> None:
+    _before_608(table)
     before = {key: dict(row) for key, row in table.rows.items()}
 
     assert backfill.run(table, apply_writes=False, verify_index=False) == 0
@@ -304,6 +363,7 @@ def test_the_backfill_writes_each_record_once_and_verifies(table, capsys) -> Non
 
 
 def test_the_backfill_skips_a_record_that_moves_meanwhile(table, monkeypatch) -> None:
+    _before_608(table)
     read = [dict(_help(table))]
     _dispatch_to(table, TEACHER)
 

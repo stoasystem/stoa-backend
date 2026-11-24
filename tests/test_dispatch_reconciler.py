@@ -92,7 +92,7 @@ def test_a_chat_escalation_nobody_took_is_swept_too(monkeypatch):
     taken: list[str] = []
 
     monkeypatch.setattr(
-        help_requests, "list_all",
+        help_requests, "list_unended",
         lambda **_kwargs: [
             request("c-1"),
             request("c-2", escalation_status="in_progress", teacher_id="teacher-2"),
@@ -115,7 +115,7 @@ def test_a_chat_escalation_nobody_took_is_swept_too(monkeypatch):
 
 def test_a_chat_escalation_with_a_live_teacher_is_left_alone(monkeypatch):
     monkeypatch.setattr(
-        help_requests, "list_all",
+        help_requests, "list_unended",
         lambda **_kwargs: [request(
             "c-1", dispatch_status="dispatched", dispatched_teacher_id="teacher-3",
             dispatch_deadline_at=stamp(9),
@@ -136,7 +136,7 @@ def test_a_failed_chat_sweep_says_so_rather_than_reporting_nobody_waiting(monkey
     def explode(**_kwargs):
         raise RuntimeError("scan is having a day")
 
-    monkeypatch.setattr(help_requests, "list_all", explode)
+    monkeypatch.setattr(help_requests, "list_unended", explode)
 
     result = help_requests.sweep(now=stamp(), table=object())
 
@@ -145,7 +145,7 @@ def test_a_failed_chat_sweep_says_so_rather_than_reporting_nobody_waiting(monkey
 
 
 def test_a_healthy_chat_sweep_says_it_completed(monkeypatch):
-    monkeypatch.setattr(help_requests, "list_all", lambda **_kwargs: [])
+    monkeypatch.setattr(help_requests, "list_unended", lambda **_kwargs: [])
 
     result = help_requests.sweep(now=stamp(), table=object())
 
@@ -172,12 +172,26 @@ def test_the_lister_asks_for_help_requests_and_reads_every_page():
 
 def test_the_lister_of_waiting_requests_leaves_out_requests_that_have_ended():
     # The sweep works through what is waiting; an ended request listed there
-    # would be offered again, or stand in the place of a waiting one.
-    ended = [
-        request(f"c-{status}", escalation_status=status)
-        for status in ("expired", "withdrawn", "resolved", "in_progress")
-    ]
-    waiting = request("c-waiting")
-    table = ScanPages([*ended, waiting])
+    # would be offered again, or stand in the place of a waiting one. It reads
+    # the index of requests not yet ended (#608): a request a teacher took is
+    # still in it, and so may be an entry a write has not yet caught up with.
+    from fakes.dynamodb import FakeTable
 
-    assert help_requests.list_open(table=table) == [waiting]
+    def stored(conversation_id: str, **overrides: Any) -> dict[str, Any]:
+        row = request(conversation_id, **overrides)
+        return {**row, **help_requests.index_fields(row)}
+
+    table = FakeTable()
+    table.seed(
+        *(
+            stored(f"c-{status}", escalation_status=status)
+            for status in ("expired", "withdrawn", "resolved")
+        ),
+        stored("c-taken", escalation_status="in_progress", teacher_id="teacher-2"),
+        # Ended, with the index keys of a waiting request left on it.
+        {**stored("c-stale"), "escalation_status": "expired"},
+        stored("c-waiting"),
+    )
+
+    assert [row["conversation_id"] for row in help_requests.list_open(table=table)] == ["c-waiting"]
+    assert not [name for name, _call in table.requests if name == "scan"]

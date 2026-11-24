@@ -7,7 +7,11 @@ dispatched to the test teacher a minute earlier was on a later page: the
 teacher could not see it, take it or answer it.
 
 Since #189 the detail, reply and status change read the request's own record
-by its key; the list still scans (`help_requests.list_all`), every page of it.
+by its key. The list read every page of a scan (`help_requests.list_all`) until
+#608; it now reads two sparse indexes (`help_requests.list_for_teacher`), so the
+size of the table no longer matters to it, and these tests hold that it still
+finds a request wherever its row falls. The scan itself is kept to its rules by
+the last test here: the admin statistics still use it.
 """
 
 from __future__ import annotations

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from stoa.db import table as db_table
 from stoa.routers import conversations, teachers
 from stoa.security.declared_authorization import get_authorization_fact_repository
-from stoa.services import teacher_dispatch_service
+from stoa.services import help_requests, teacher_dispatch_service
 from actor_helpers import install_actor_overrides
 
 
@@ -188,8 +188,12 @@ def test_teacher_router_exposes_no_legacy_route():
 
 
 def _help_record(conversation_id: str, **fields) -> dict:
-    """A help request as its own record (#189); its id is its conversation's."""
-    return {
+    """A help request as its own record (#189); its id is its conversation's.
+
+    With the index keys the store writes (#608): a teacher's queue reads the
+    requests through them.
+    """
+    row = {
         "PK": f"CONV#{conversation_id}",
         "SK": "HELP",
         "entity_type": "help_request",
@@ -199,6 +203,7 @@ def _help_record(conversation_id: str, **fields) -> dict:
         "version": 1,
         **fields,
     }
+    return {**row, **help_requests.index_fields(row)}
 
 
 def test_help_request_list_and_stats_include_only_current_assignment(monkeypatch):

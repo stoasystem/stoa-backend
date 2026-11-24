@@ -89,6 +89,10 @@ def build_table(monkeypatch) -> FakeTable:
             "dispatch_no_candidate_reason": "not_available",
             "dispatch_no_candidate_since": CREATED,
             "dispatch_updated_at": CREATED,
+            # A request not yet ended carries its place in the index the sweep
+            # and a teacher's queue read (#608).
+            "sweep_bucket": help_requests.OPEN_BUCKET,
+            "sweep_due_at": "2026-09-28T12:00:00Z",
         },
         *_teacher_rows(TEACHER),
         *_teacher_rows(OTHER_TEACHER),
