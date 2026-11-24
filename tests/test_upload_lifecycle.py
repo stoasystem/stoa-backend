@@ -78,7 +78,7 @@ def _dynamodb_unavailable(message: str = "table-private-diagnostic-canary") -> C
 class _Table(FakeTable):
     """The shared table double, which raises whatever `fault` returns for a request.
 
-    `fault(operation, request)` is asked before every point read, write and scan; it
+    `fault(operation, request)` is asked before every point read, write, scan and query; it
     returns the exception the table answers with, or `None` to serve the request.
     """
 
@@ -104,6 +104,10 @@ class _Table(FakeTable):
     def scan(self, **kwargs: Any) -> dict[str, Any]:
         self._serve("scan", kwargs)
         return super().scan(**kwargs)
+
+    def query(self, **kwargs: Any) -> dict[str, Any]:
+        self._serve("query", kwargs)
+        return super().query(**kwargs)
 
 
 def _once(
@@ -902,6 +906,8 @@ def _seed_cleanup(
         row["staging_version_id"] = s3.seed_object(
             _staging_key(upload_id), b"abc", {"upload-id": upload_id}
         )
+    # Where the store's writes would have put it in the cleanup's index (#611).
+    row.update(upload_store.cleanup_index_fields(row))
     table.seed(row)
     return row
 
@@ -1265,9 +1271,11 @@ def test_cleanup_batch_unexpected_candidate_isolation_keeps_opaque_continuation(
     assert _row(table, "candidate-private-1")["status"] == "cleanup_complete"
     # Not reached this run: the continuation resumes after the last candidate it took.
     assert _row(table, "candidate-private-2")["status"] == "invalid"
-    assert upload_cleanup._decode_cursor(result.continuation_token) == upload_store.upload_key(
-        "candidate-private-1"
-    )
+    assert upload_cleanup._decode_cursor(result.continuation_token) == {
+        **upload_store.upload_key("candidate-private-1"),
+        "sweep_bucket": upload_store.CLEANUP_BUCKET,
+        "sweep_due_at": upload_store.CLEANUP_DUE_AT_ONCE,
+    }
     rendered = str(result.public_dict()) + caplog.text
     assert "candidate-private" not in rendered
     assert "provider-coordinate-private-canary" not in rendered
@@ -1276,7 +1284,7 @@ def test_cleanup_batch_unexpected_candidate_isolation_keeps_opaque_continuation(
 def test_cleanup_batch_global_candidate_listing_failure_is_not_empty_success(table) -> None:
     table.fault = lambda operation, request: (
         _dynamodb_unavailable("global-table-provider-private-canary")
-        if operation == "scan" and (request.get("ExpressionAttributeValues") or {}).get(":upload")
+        if operation == "query" and request.get("IndexName") == upload_store.CLEANUP_INDEX
         else None
     )
 
@@ -1397,4 +1405,5 @@ def test_cleanup_rejects_invalid_cursor_without_touching_the_table(table) -> Non
 
     assert result.invalid_continuation == 1
     assert table.rows == before
-    assert table.calls["scan"] == 0 and table.calls["update_item"] == 0
+    assert table.calls["scan"] == table.calls["query"] == 0
+    assert table.calls["update_item"] == 0
