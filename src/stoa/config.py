@@ -166,6 +166,11 @@ class Settings(BaseSettings):
 
     # DynamoDB
     dynamodb_table_name: str = "stoa-main"
+    # Measure what each HTTP request reads from the table (#610): every read
+    # asks for its consumed capacity and the request ends with one
+    # `dynamodb_read_metering` log line. Off unless DYNAMODB_READ_METERING=true;
+    # meant to be switched on for a measurement and off again.
+    dynamodb_read_metering: bool = False
 
     # A chat help request no teacher took within this long is ended by the
     # dispatch sweep and its weekly case given back (#87).

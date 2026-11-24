@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from mangum import Mangum
 
 from stoa import config
+from stoa.db.read_metering import ReadMeteringMiddleware
 from stoa.operator_calls.catalog import OPERATOR_CALL_KEY
 from stoa.rule_violation import CorrelationMiddleware, install_rule_violation_handler
 from stoa.security.errors import redacted_validation_errors
@@ -116,6 +117,11 @@ app.add_middleware(UnexpectedFailureMiddleware)
 # locale and budget middleware, so it runs outside them and the whole request
 # is served under the id.
 app.add_middleware(CorrelationMiddleware)
+
+# What each request reads from the table (#610), only while
+# DYNAMODB_READ_METERING is on; otherwise it passes the request straight
+# through. Outside everything but CORS, so the time it logs is the request's.
+app.add_middleware(ReadMeteringMiddleware)
 
 # Every rule violation, raised by a route or a dependency, is rendered here.
 install_rule_violation_handler(app)
