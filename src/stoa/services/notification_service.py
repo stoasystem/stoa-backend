@@ -1295,14 +1295,13 @@ def list_admin_events(
         raise NotificationViolation(_N.NOTIFICATION_STATUS_UNSUPPORTED)
     if event_type is not None and event_type not in EVENT_TYPES:
         raise NotificationViolation(_N.NOTIFICATION_EVENT_TYPE_UNSUPPORTED)
-    # Every notification of the site, whoever it is for: no index holds them
-    # all in one place, so this one still scans the table (#613), every page of
-    # it, where it used to stop at the first hundred it met.
-    items = [
-        item for item in notification_repo.list_all_events()
-        if (status is None or item.get("status") == status)
-        and (event_type is None or item.get("event_type") == event_type)
-    ]
+    # Every notification of the site, whoever it is for, read newest first from
+    # the site's list in its own index (#613), not by a scan of the table.
+    items = notification_repo.list_site_events(
+        want=limit,
+        keep=lambda item: (status is None or item.get("status") == status)
+        and (event_type is None or item.get("event_type") == event_type),
+    )
     return [event_response(item, locale=locale) for item in _sort_events(items)[:limit]]
 
 

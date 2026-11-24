@@ -37,7 +37,8 @@ PEOPLE = {STUDENT: "student", OTHER_STUDENT: "student", TEACHER: "teacher", PARE
 ROLES = ("student", "teacher", "parent", "admin")
 GENERATION = 3
 CREATED = "2026-11-24T10:00:00Z"
-INDEX_FIELDS = set(notification_repo.INBOX_INDEX_FIELDS)
+INDEX_FIELDS = set(notification_repo.INDEX_FIELDS)
+INBOX_FIELDS = set(notification_repo.INBOX_INDEX_FIELDS)
 
 
 def _fence(user_id: str, *, status: str = "active") -> dict[str, Any]:
@@ -236,7 +237,16 @@ def test_a_global_notification_is_filed_under_its_role_and_keeps_its_seal(table)
 )
 def test_a_row_that_is_in_no_inbox_carries_neither_key(fields) -> None:
     event = {**_event("e1", recipient_id=TEACHER, recipient_role="teacher"), **fields}
-    assert notification_repo.index_fields(event) == {}
+    carried = notification_repo.index_fields(event)
+    assert not INBOX_FIELDS & set(carried)
+    # A notification that says when it was created is still in the site's list;
+    # a row that is no notification, or has no creation time, is in no index.
+    listed = event.get("entity_type") == notification_repo.NOTIFICATION_ENTITY and bool(
+        event.get("created_at")
+    )
+    assert carried == (
+        {"listing": notification_repo.LISTING_NAME, "listed_at": CREATED} if listed else {}
+    )
 
 
 def test_an_index_key_is_never_empty() -> None:
@@ -436,29 +446,72 @@ def test_the_bell_shows_a_persons_own_among_more_than_a_hundred_and_scans_nothin
         db_table.install(None)
 
 
-def test_the_administrators_list_reads_every_notification_of_the_site() -> None:
-    """It still scans, but every page: the hundred-first notification is no longer lost."""
+def test_the_administrators_list_reads_the_sites_newest_from_its_index_and_scans_nothing() -> None:
+    """Every notification of the site, whoever it is for, newest first (#613).
+
+    The scan it replaces kept the first hundred it met, so the hundred-first
+    notification was lost; and it read every row of the table to find them.
+    """
     double = FakeTable(page_item_cap=7)
     double.seed(*(_fence(user_id) for user_id in PEOPLE))
+    # Rows of the table that are no notifications: the list does not read them.
+    double.seed(*({"PK": f"PRACTICE#{n:03d}", "SK": "ROW", "entity_type": "filler"} for n in range(200)))
     db_table.install(double)
     try:
         for number in range(130):
             notification_repo.put_event(
                 _event(
                     f"e{number:03d}",
-                    recipient_id=STUDENT,
-                    recipient_role="student",
+                    recipient_id=STUDENT if number % 2 else TEACHER,
+                    recipient_role="student" if number % 2 else "teacher",
                     created_at=f"2026-11-24T09:{number // 60:02d}:{number % 60:02d}Z",
+                    status="read" if number < 10 else "created",
                 )
             )
+        notification_repo.put_event(_global_event("for-admins", created_at="2026-11-24T12:00:00Z"))
+        double.requests.clear()
 
         listed = notification_service.list_admin_events(limit=100)
+        # The ten oldest are the read ones: found past the first pages, not lost.
+        read = notification_service.list_admin_events(status="read", limit=100)
+        asked = list(double.requests)
+        # The delivery status counts the same list; what else it reads is its own.
+        status = notification_service.delivery_status(limit=100)
 
+        assert [item["eventId"] for item in listed[:3]] == ["for-admins", "e129", "e128"]
         assert len(listed) == 100
-        assert listed[0]["eventId"] == "e129"
-        assert len(notification_repo.list_all_events()) == 130
+        assert [item["eventId"] for item in read] == [f"e{n:03d}" for n in range(9, -1, -1)]
+        assert status["recentEventCount"] == 100
+        assert not [operation for operation, _request in asked if operation == "scan"]
+        queries = [request for operation, request in asked if operation == "query"]
+        assert {request["IndexName"] for request in queries} == {notification_repo.LISTING_INDEX}
+        # The newest hundred of 131 at seven rows a page: fifteen pages, never all of the table.
+        first_listing = 100 // 7 + 1
+        assert len(queries) >= first_listing
     finally:
         db_table.install(None)
+
+
+def test_every_notification_is_in_the_sites_list_and_a_tombstone_is_not(table) -> None:
+    assert DEFAULT_INDEXES[notification_repo.LISTING_INDEX] == IndexSchema(
+        *notification_repo.LISTING_INDEX_FIELDS
+    )
+    notification_repo.put_event(_event("e1", recipient_id=TEACHER, recipient_role="teacher"))
+    notification_repo.put_event(_global_event("g1"))
+
+    assert _row(table, "e1")["listing"] == notification_repo.LISTING_NAME
+    assert _row(table, "e1")["listed_at"] == CREATED
+    assert _ids(notification_repo.list_site_events(want=10)) == ["e1", "g1"]
+    assert notification_repo.list_site_events(want=0) == []
+
+    # The owner's deletion replaces the row with a tombstone of allowlisted fields.
+    table.seed(_fence(STUDENT, status="deletion_pending"))
+    notification_repo.scrub_notification_private_row(
+        _row(table, "e1"), owner_id=STUDENT, generation=GENERATION, now_iso=CREATED, table=table
+    )
+
+    assert not INDEX_FIELDS & set(_row(table, "e1"))
+    assert _ids(notification_repo.list_site_events(want=10)) == ["g1"]
 
 
 def test_a_row_of_another_kind_in_the_bucket_is_not_a_notification(table) -> None:
@@ -493,6 +546,10 @@ def _seed_legacy(table: FakeTable) -> None:
         _legacy(notification_repo.seal_global_nonprivate_event(_global_event("old-global"))),
     )
     notification_repo.put_event(_event("new", recipient_id=PARENT, recipient_role="parent"))
+    # One written between the two releases of #613: in its inbox, not yet in the site's list.
+    notification_repo.put_event(_event("between", recipient_id=PARENT, recipient_role="parent"))
+    for name in notification_repo.LISTING_INDEX_FIELDS:
+        del _row(table, "between")[name]
 
 
 def test_the_dry_run_counts_and_writes_nothing(table, capsys) -> None:
@@ -504,8 +561,8 @@ def test_the_dry_run_counts_and_writes_nothing(table, capsys) -> None:
     assert table.rows == before
     printed = capsys.readouterr().out
     assert (
-        "notifications: 5 | for one person: 3 | for a role: 2 | in no inbox: 0 | "
-        "in place: 1 | to write: 4"
+        "notifications: 6 | for one person: 4 | for a role: 2 | in no inbox: 0 | "
+        "in place: 1 | to write: 5"
     ) in printed
     assert "[DRY RUN]" in printed
 
@@ -524,14 +581,17 @@ def test_the_backfill_puts_every_old_notification_in_its_inbox(table, capsys) ->
     _seed_legacy(table)
 
     assert backfill.run(table, apply_writes=True, verify_index=False) == 0
-    assert "in place: 1 | written: 4" in capsys.readouterr().out
+    assert "in place: 1 | written: 5" in capsys.readouterr().out
+    assert _ids(notification_repo.list_site_events(want=100)) == _ids(
+        notification_repo.list_all_events(table=table)
+    )
 
     assert backfill.run(table, apply_writes=False, verify_index=True) == 0
     assert "Index problems: 0" in capsys.readouterr().out
     _assert_every_inbox_holds_what_the_scan_finds(table)
     sealed = notification_repo.seal_global_nonprivate_event(_global_event("old-global"))
     assert _row(table, "old-global")["classification_digest"] == sealed["classification_digest"]
-    # Nothing but the two keys was added.
+    # Nothing but the index keys was added.
     old = _legacy(_event("old-teacher", recipient_id=TEACHER, recipient_role="teacher"))
     assert {k: v for k, v in _row(table, "old-teacher").items() if k not in INDEX_FIELDS} == old
 
@@ -545,7 +605,7 @@ def test_running_the_backfill_again_writes_nothing(table, capsys) -> None:
     assert backfill.run(table, apply_writes=True, verify_index=False) == 0
 
     assert table.rows == before
-    assert "in place: 5" in capsys.readouterr().out
+    assert "in place: 6" in capsys.readouterr().out
 
 
 def test_the_backfill_skips_a_notification_whose_owner_is_being_deleted(table, capsys) -> None:
@@ -554,7 +614,7 @@ def test_the_backfill_skips_a_notification_whose_owner_is_being_deleted(table, c
 
     assert backfill.run(table, apply_writes=True, verify_index=False) == 0
 
-    assert "account closing or changed meanwhile, skipped: 3" in capsys.readouterr().out
+    assert "account closing or changed meanwhile, skipped: 4" in capsys.readouterr().out
     assert not INDEX_FIELDS & set(_row(table, "old-teacher"))
     assert INDEX_FIELDS <= set(_row(table, "old-global"))
 

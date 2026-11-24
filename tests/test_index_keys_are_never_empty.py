@@ -47,6 +47,8 @@ INDEX_KEY_ATTRIBUTES = frozenset(
         "sweep_due_at",
         "topic_shelf",
         "topic_order",
+        "listing",
+        "listed_at",
     }
 )
 

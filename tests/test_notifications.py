@@ -51,8 +51,10 @@ def _install_notification_repo(monkeypatch):
             or (event.get("recipient_id") in {None, ""} and event.get("recipient_role") == role)
         ]
 
-    def list_all_events(*, table=None):
-        return list(events.values())
+    def list_site_events(*, want, keep=None, table=None):
+        # The site's list, newest first, as its own index finds it (#613).
+        newest = sorted(events.values(), key=lambda event: event.get("created_at", ""), reverse=True)
+        return [dict(event) for event in newest if keep is None or keep(event)][:want]
 
     def update_event(event_id, updates):
         events[event_id].update(updates)
@@ -72,7 +74,7 @@ def _install_notification_repo(monkeypatch):
         get_event,
     )
     monkeypatch.setattr(notification_service.notification_repo, "list_inbox", list_inbox)
-    monkeypatch.setattr(notification_service.notification_repo, "list_all_events", list_all_events)
+    monkeypatch.setattr(notification_service.notification_repo, "list_site_events", list_site_events)
     monkeypatch.setattr(notification_service.notification_repo, "update_event", update_event)
     monkeypatch.setattr(notification_service.notification_repo, "put_preferences", put_preferences)
     monkeypatch.setattr(notification_service.notification_repo, "get_preferences", get_preferences)
