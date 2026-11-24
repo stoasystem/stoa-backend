@@ -16,9 +16,8 @@ let an offer lapse off dispatch.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
-from typing import Any, Protocol, cast
+from typing import Any
 
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, user_repo
@@ -47,13 +46,20 @@ SEEN_WRITE_INTERVAL_SECONDS = 60
 SEEN_ROW_LIFETIME_SECONDS = 24 * 60 * 60
 
 
-class _ScanTable(Protocol):
-    def scan(self, **kwargs: object) -> object: ...
-
-
 def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
-    """Return teacher/admin profiles usable by the dispatch planner."""
-    table = cast(_ScanTable, db_table.table())
+    """The teacher and admin profiles the dispatch planner chooses among.
+
+    Those of the accounts seen lately: the ones with a heartbeat row (#609).
+    Only a teacher seen in the last `ONLINE_WINDOW_SECONDS` can be offered a
+    request, so a teacher with no heartbeat row at all - never seen, or not
+    for `SEEN_ROW_LIFETIME_SECONDS` - is left out rather than listed and
+    refused. This used to scan the whole table for profiles, on every request
+    of a student's page that shows whether a teacher is there; it now reads
+    one small index partition and each seen account's profile and fence by key.
+    """
+    if limit <= 0:
+        return []
+    table = db_table.table()
 
     def eligible_profile(profile: dict[str, Any]) -> dict[str, Any] | None:
         teacher_id = str(profile.get("user_id") or "")
@@ -73,30 +79,18 @@ def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
             return None
         return {**profile, "account_fence_generation": generation}
 
-    # The heartbeat rows come with the same scan, which reads every row anyway.
-    seen: dict[str, str] = {}
-
-    def eligible_or_seen(item: dict[str, Any]) -> dict[str, Any] | None:
-        if item.get("SK") == user_repo.TEACHER_SEEN_SK:
-            owner = str(item.get("user_id") or "")
-            if owner and item.get("seen_at"):
-                seen[owner] = str(item["seen_at"])
-            return None
-        return eligible_profile(item)
-
-    profiles = _scan_filtered_items(
-        table,
-        filter_expression="SK = :profile OR SK = :seen",
-        expression_attribute_values={":profile": "PROFILE", ":seen": user_repo.TEACHER_SEEN_SK},
-        accept_item=eligible_or_seen,
-        limit=limit,
-    )
-    return [
-        {**profile, "dispatch_seen_at": seen[str(profile["user_id"])]}
-        if str(profile["user_id"]) in seen
-        else profile
-        for profile in profiles
-    ]
+    profiles: list[dict[str, Any]] = []
+    for teacher_id, seen_at in user_repo.list_teachers_seen(table=table).items():
+        stored = db_table.get(table=table, Key={"PK": f"USER#{teacher_id}", "SK": "PROFILE"})
+        if stored is None or stored.get("user_id") != teacher_id:
+            continue
+        profile = eligible_profile(stored)
+        if profile is None:
+            continue
+        profiles.append({**profile, "dispatch_seen_at": seen_at})
+        if len(profiles) >= limit:
+            break
+    return profiles
 
 
 def plan_dispatch(
@@ -398,48 +392,6 @@ def _refusal_reason(
     return None
 
 
-def _scan_filtered_items(
-    table: _ScanTable,
-    *,
-    filter_expression: str,
-    expression_attribute_values: dict[str, object],
-    accept_item: Callable[[dict[str, Any]], dict[str, Any] | None],
-    limit: int,
-) -> list[dict[str, Any]]:
-    """Collect final business-eligible matches across DynamoDB scan pages."""
-    if limit <= 0:
-        return []
-    items: list[dict[str, Any]] = []
-    last_evaluated_key: dict[str, object] | None = None
-    reads = db_table.pages(
-        "scan",
-        table=table,
-        FilterExpression=filter_expression,
-        ExpressionAttributeValues=expression_attribute_values,
-        Limit=limit,
-    )
-    try:
-        for page in reads:
-            for item in page.items:
-                accepted = accept_item(item)
-                if accepted is not None:
-                    items.append(accepted)
-                if len(items) >= limit:
-                    break
-            if (
-                len(items) >= limit
-                or page.last_key is None
-                or page.last_key == last_evaluated_key
-            ):
-                break
-            last_evaluated_key = page.last_key
-    except db_table.TableUnavailable as exc:
-        # A page the table did not answer in shape ends the walk with what is in hand.
-        if not exc.code.startswith("malformed"):
-            raise
-    return items[:limit]
-
-
 def _top_refusal_reason(refused: list[dict[str, Any]]) -> str | None:
     counts: dict[str, int] = {}
     for item in refused:
@@ -447,7 +399,8 @@ def _top_refusal_reason(refused: list[dict[str, Any]]) -> str | None:
         if code:
             counts[str(code)] = counts.get(str(code), 0) + 1
     if not counts:
-        return "no_teacher_profiles"
+        # Nobody was listed at all: no teacher has been seen lately (#609).
+        return "not_online"
     return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
 
 

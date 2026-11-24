@@ -152,6 +152,9 @@ def test_a_registry_path_deletion_completes_without_scanning_the_table(
     # registry rows before the switch was turned on.
     assert owner_registry_sweep.run(table=table, write=True).complete
     assert _vouch(table).registry_complete
+    # The table was built by offering a help request, which lists the teachers
+    # through an index (#609); what is held to no index is the deletion.
+    requests_before = len(table.requests)
     command_id = quick._accept(student)
     scans_before = table.calls["scan"]
 
@@ -160,7 +163,12 @@ def test_a_registry_path_deletion_completes_without_scanning_the_table(
     assert command["status"] == "complete", command.get("branch_results")
     assert command["inventory_sha256"] == sha256(V2.read_bytes()).hexdigest()
     assert table.calls["scan"] == scans_before
-    reads = [request for name, request in table.requests if name in {"query", "scan"}]
+    reads = [
+        request
+        for name, request in table.requests[requests_before:]
+        if name in {"query", "scan"}
+    ]
+    assert reads
     assert not any("IndexName" in request for request in reads)
     assert all(request.get("ConsistentRead") is True for name, request in table.requests
                if name == "query" and "IndexName" not in request)
