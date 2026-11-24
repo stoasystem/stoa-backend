@@ -41,6 +41,7 @@ from stoa.services import (
     error_causes,
     exercise_localization,
     learning_session,
+    multi_select,
     practice_projection_service,
     review_service,
     usage_ledger_service,
@@ -79,14 +80,26 @@ class Judgement:
 def judge(challenge: Mapping[str, Any], raw_answer: object, *, locale: str) -> Judgement:
     """Normalize, localize, judge and find the feedback. Records nothing.
 
+    A choose-several exercise (`multi_select`) is answered with the numbers of
+    the picked options and judged as a set; what is recorded is the picked
+    options as the reader read them. Every other exercise is answered with
+    text, judged by `answer_judging`.
+
     Raises `AnswerInvalid` for an answer that cannot be one.
     """
+    shown = exercise_localization.localized(challenge, locale)
+    answer: str | list[str]
     try:
-        answer = practice_projection_service.normalize_submitted_answer(raw_answer)
+        if multi_select.is_one(challenge):
+            options = shown.get("options") if isinstance(shown.get("options"), list) else []
+            selection = multi_select.submitted_selection(raw_answer, len(options))
+            answer = [str(options[index]) for index in selection]
+            correct = multi_select.judge(selection, challenge)
+        else:
+            answer = practice_projection_service.normalize_submitted_answer(raw_answer)
+            correct = answer_judging.judge_challenge(answer, shown, locale=locale)
     except ValueError as error:
         raise AnswerInvalid(str(error)) from error
-    shown = exercise_localization.localized(challenge, locale)
-    correct = answer_judging.judge_challenge(answer, shown, locale=locale)
     # A wrong typed answer a rule explains is told what the rule found (#565).
     rule = None if correct else error_causes.typed_rule(challenge, shown, answer)
     correct_feedback, incorrect_feedback = practice_projection_service.answer_feedback(
@@ -155,6 +168,9 @@ def answer_practice(
             next_challenge_id=next_challenge_id,
             prompt=str(shown.get("prompt") or ""),
             options=shown.get("options") if isinstance(shown.get("options"), list) else None,
+            correct_options=(
+                multi_select.correct_options(challenge) if multi_select.is_one(challenge) else None
+            ),
             challenge_type=str(challenge.get("type") or ""),
             created_at=created_at,
             asked_ai=asked_ai,

@@ -769,6 +769,7 @@ def put_attempt(
     next_challenge_id: str | None = None,
     prompt: str = "",
     options: list[Any] | None = None,
+    correct_options: list[int] | None = None,
     challenge_type: str = "",
     attempt_id: str | None = None,
     created_at: str | None = None,
@@ -798,6 +799,10 @@ def put_attempt(
     cause of the distractor it picked, or `unclassified`. Only wrong answers
     given now carry it; a wrong one without it predates it and reads as
     unclassified.
+
+    `correct_options` is the key of a choose-several exercise (`multi_select`,
+    #593): the numbers of its right options, which the result shows once the
+    answer is on record. Only those receipts carry it.
     """
     table = db_table.table()
     generation = _write_generation(student_id, account_fence_generation, table)
@@ -842,6 +847,8 @@ def put_attempt(
     }
     if any(value not in (None, "", []) for value in snapshot_fields.values()):
         item.update(snapshot_fields)
+    if correct_options:
+        item["correct_options"] = list(correct_options)
     operations = build_practice_write_transaction(
         item=item, owner_id=student_id, generation=generation
     )

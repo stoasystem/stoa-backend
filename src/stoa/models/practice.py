@@ -20,6 +20,16 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, StringConstrain
 #: definition, so the two paths cannot drift apart again (#124).
 DEFAULT_CHALLENGE_TYPE = "text_input"
 
+#: What the student projections say about `type` and `figure`, for the client.
+TYPE_DESCRIPTION = (
+    "How the exercise is answered: `text_input` (typed), `multiple_choice` (one option), "
+    "`multi_select` (a set of options, see the answer submission), or another kind."
+)
+FIGURE_DESCRIPTION = (
+    "An allowlisted inline SVG. In a `multi_select` exercise an element carrying "
+    "`data-choice=\"B\"` is a hotspot: the option with that letter, A for the first."
+)
+
 NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 OpaqueAttemptId = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
@@ -36,14 +46,14 @@ class PracticeChallengePreview(_PracticeContract):
     challenge_id: NonEmptyText = Field(alias="challengeId")
     lesson_id: NonEmptyText = Field(alias="lessonId")
     prompt: NonEmptyText
-    type: NonEmptyText
+    type: NonEmptyText = Field(description=TYPE_DESCRIPTION)
     choices: list[str] | None = Field(
         default=None,
         alias="options",
         validation_alias=AliasChoices("options", "choices"),
     )
     hint_available: bool = Field(alias="hintAvailable")
-    figure: str | None = None
+    figure: str | None = Field(default=None, description=FIGURE_DESCRIPTION)
     option_figures: list[str] | None = Field(default=None, alias="optionFigures")
     unit_id: str | None = Field(default=None, alias="unitId")
     subject_id: str | None = Field(default=None, alias="subjectId")
@@ -89,10 +99,10 @@ class PracticeExercisePreview(_PracticeContract):
     lesson_id: NonEmptyText = Field(alias="lessonId")
     subject_id: NonEmptyText = Field(alias="subjectId")
     topic_id: NonEmptyText = Field(alias="topicId")
-    type: NonEmptyText
+    type: NonEmptyText = Field(description=TYPE_DESCRIPTION)
     prompt: NonEmptyText
     choices: list[str] | None = None
-    figure: str | None = None
+    figure: str | None = Field(default=None, description=FIGURE_DESCRIPTION)
     option_figures: list[str] | None = Field(default=None, alias="optionFigures")
     difficulty: str = "practice"
     estimated_minutes: int = Field(default=5, alias="estimatedMinutes", ge=0)
@@ -132,12 +142,23 @@ class CurriculumExerciseListPreview(_PracticeContract):
     count: int = Field(ge=0)
 
 
+#: What `answer` holds, by exercise type: the contract the client answers by.
+ANSWER_DESCRIPTION = (
+    "By the exercise's `type`. `multiple_choice`: the picked option's text, as shown. "
+    "`multi_select`: the numbers of the picked options, 0 for the first, in any order, "
+    "each at most once, at least one: `[0, 2]`. A hotspot in the figure "
+    "(`data-choice=\"B\"`) is the option with that letter, A for the first. "
+    "Anything else: the typed text, or a list of texts for an ordering. "
+    "An answer that cannot be one is refused with `practice_answer_invalid`."
+)
+
+
 class PracticeAnswerSubmission(_PracticeContract):
     # The route treats this as untrusted input and narrows it through the bounded
     # submitted-answer normalizer before comparison or persistence.  Keeping the
     # input object-valued also lets the route return one redacted error contract
     # instead of echoing unsupported values through validation diagnostics.
-    answer: object
+    answer: object = Field(description=ANSWER_DESCRIPTION)
     # The learning session the answer is given in: the Ask conversation open
     # beside the exercise, if any. The receipt records whether the student
     # asked about this exercise there before answering (#449). One that is not
@@ -153,7 +174,7 @@ class QuizAnswerSubmission(_PracticeContract):
     result rather than judged against the next exercise.
     """
 
-    answer: object
+    answer: object = Field(description=ANSWER_DESCRIPTION)
     exercise_id: str = Field(alias="exerciseId", min_length=1, max_length=200)
 
 
@@ -196,6 +217,14 @@ class PracticeAttemptResult(_PracticeContract):
     challenge_id: NonEmptyText = Field(alias="challengeId")
     correct: bool
     standard_answer: NonEmptyText = Field(alias="standardAnswer")
+    correct_options: list[int] | None = Field(
+        default=None,
+        alias="correctOptions",
+        description=(
+            "Only for a `multi_select` exercise: the numbers of its right options, "
+            "0 for the first, in order. `standardAnswer` is the same options as text."
+        ),
+    )
     explanation: NonEmptyText
     feedback: NonEmptyText
     next_challenge_id: str | None = Field(default=None, alias="nextChallengeId")
@@ -265,9 +294,9 @@ class ReviewCard(_PracticeContract):
     topic_id: str = Field(default="", alias="topicId")
     prompt: str = ""
     options: list[str] = Field(default_factory=list)
-    figure: str | None = None
+    figure: str | None = Field(default=None, description=FIGURE_DESCRIPTION)
     option_figures: list[str] | None = Field(default=None, alias="optionFigures")
-    type: str = DEFAULT_CHALLENGE_TYPE
+    type: str = Field(default=DEFAULT_CHALLENGE_TYPE, description=TYPE_DESCRIPTION)
     due_at: str = Field(default="", alias="dueAt")
     lapses: int = 0
     reps: int = 0

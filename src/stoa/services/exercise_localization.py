@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from stoa.services import answer_judging, figure_svg
+from stoa.services import answer_judging, figure_svg, multi_select
 from stoa.services.curriculum_issues import Issue, IssueCode
 
 #: Locales an exercise can be translated into.
@@ -89,6 +89,15 @@ def localized(challenge: Mapping[str, Any], locale: str) -> dict[str, Any]:
     figures, stored_figures = text.get("option_figures"), challenge.get("option_figures")
     if isinstance(figures, list) and isinstance(stored_figures, list) and len(figures) == len(stored_figures):
         shown["option_figures"] = list(figures)
+    selection = multi_select.correct_options(challenge) if multi_select.is_one(challenge) else None
+    if selection is not None:
+        # The key is the set of option numbers, the same in every language;
+        # what is shown of it is the options as this reader reads them.
+        shown["correct_answer"] = shown["answer_key"] = multi_select.answer_text(
+            shown["options"], selection
+        )
+        shown.pop("accepted_answers", None)
+        return shown
     key = _text(text.get("correct_answer"))
     if key:
         stored_key = challenge.get("correct_answer", challenge.get("answer_key"))

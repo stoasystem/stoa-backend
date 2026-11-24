@@ -280,6 +280,7 @@ def test_snapshot_result_uses_only_complete_receipt() -> None:
         "challengeId": "challenge-1",
         "correct": False,
         "standardAnswer": "x = 5",
+        "correctOptions": None,
         "explanation": "Subtract four from both sides.",
         "feedback": "Review inverse operations.",
         "nextChallengeId": "challenge-2",

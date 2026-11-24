@@ -10,6 +10,11 @@ drawing could lose the line the answer depends on.
 `figure_issues` says what is wrong with one, as `curriculum_issues.Issue`
 codes the console translates (#112); an empty list means it may be stored and
 shown as written.
+
+One attribute is not drawing: `data-choice`, which makes an element a hotspot
+the student can pick (#593). Its value names an option by its letter, `A` for
+the first; which letters fit the exercise is checked with the exercise
+(`multi_select`), since a figure alone does not know its options.
 """
 
 from __future__ import annotations
@@ -23,6 +28,8 @@ from stoa.services.curriculum_issues import Issue, IssueCode
 MAX_FIGURE_LENGTH = 32_000
 
 SVG_NAMESPACE = "http://www.w3.org/2000/svg"
+#: The attribute that makes an element a hotspot of a `multi_select` exercise.
+HOTSPOT_ATTRIBUTE = "data-choice"
 ELEMENTS = frozenset({
     "svg", "g", "defs", "marker", "title", "desc",
     "line", "polyline", "polygon", "rect", "circle", "ellipse", "path",
@@ -37,6 +44,7 @@ ATTRIBUTES = frozenset({
     "font-size", "font-family", "font-weight", "font-style", "text-anchor", "dominant-baseline",
     "markerWidth", "markerHeight", "refX", "refY", "orient", "markerUnits",
     "marker-start", "marker-mid", "marker-end",
+    HOTSPOT_ATTRIBUTE,
 })
 #: The only reference a figure may make: to a marker of its own, written just so.
 #: A paint or marker attribute is read as CSS, which reads `URL(` and the escape
@@ -105,3 +113,21 @@ def has_text(svg: str) -> bool:
         for element in root.iter()
         if _name(element.tag)[1] in {"text", "tspan"}
     )
+
+
+def hotspots(svg: object) -> list[str]:
+    """The `data-choice` values of a figure's hotspots, in document order.
+
+    A figure that does not parse has none; `figure_issues` reports it.
+    """
+    if not isinstance(svg, str) or not svg.strip():
+        return []
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return []
+    return [
+        element.attrib[HOTSPOT_ATTRIBUTE]
+        for element in root.iter()
+        if HOTSPOT_ATTRIBUTE in element.attrib
+    ]

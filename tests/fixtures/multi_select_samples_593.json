@@ -1,0 +1,134 @@
+{
+  "source": {
+    "sourceId": "stoa-backend-593-samples",
+    "sourceVersion": "2026-11-24",
+    "sourceType": "manifest"
+  },
+  "operatorNote": "Sample choose-several exercises for #593: one with text options, one with hotspots in the figure.",
+  "lessons": [
+    {
+      "publicLessonId": "multi-select-samples-593",
+      "title": "Mehrfachauswahl: Beispiele",
+      "objective": "Alle richtigen Optionen auswählen.",
+      "description": "Beispielaufgaben für die Mehrfachauswahl (#593).",
+      "subjectId": "math",
+      "topicId": "brueche",
+      "unitId": "brueche-u2",
+      "gradeLevel": "grade_6_primary",
+      "difficulty": "practice",
+      "estimatedMinutes": 5,
+      "language": "de",
+      "publish": true,
+      "exercises": [
+        {
+          "exerciseId": "multi-select-samples-593-q01",
+          "type": "multi_select",
+          "prompt": "Welche dieser Zahlen sind Primzahlen? Wähle alle aus.",
+          "options": [
+            "2",
+            "9",
+            "11",
+            "15",
+            "17"
+          ],
+          "correctOptions": [
+            0,
+            2,
+            4
+          ],
+          "explanation": "2, 11 und 17 haben nur die Teiler 1 und sich selbst. 9 = 3 · 3 und 15 = 3 · 5.",
+          "difficulty": "practice",
+          "translations": {
+            "en": {
+              "prompt": "Which of these numbers are prime? Select all.",
+              "options": [
+                "2",
+                "9",
+                "11",
+                "15",
+                "17"
+              ],
+              "explanation": "2, 11 and 17 are divisible only by 1 and themselves. 9 = 3 · 3 and 15 = 3 · 5."
+            },
+            "fr": {
+              "prompt": "Lesquels de ces nombres sont premiers ? Sélectionne-les tous.",
+              "options": [
+                "2",
+                "9",
+                "11",
+                "15",
+                "17"
+              ],
+              "explanation": "2, 11 et 17 n’ont que 1 et eux-mêmes comme diviseurs. 9 = 3 · 3 et 15 = 3 · 5."
+            },
+            "it": {
+              "prompt": "Quali di questi numeri sono primi? Selezionali tutti.",
+              "options": [
+                "2",
+                "9",
+                "11",
+                "15",
+                "17"
+              ],
+              "explanation": "2, 11 e 17 sono divisibili solo per 1 e per sé stessi. 9 = 3 · 3 e 15 = 3 · 5."
+            }
+          }
+        },
+        {
+          "exerciseId": "multi-select-samples-593-q02",
+          "type": "multi_select",
+          "prompt": "Welche markierten Punkte liegen innerhalb des Kreises? Tippe sie in der Abbildung an.",
+          "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 100\"><circle cx=\"60\" cy=\"50\" r=\"35\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"/><g data-choice=\"A\"><circle cx=\"50\" cy=\"40\" r=\"3\" fill=\"currentColor\"/><text x=\"54\" y=\"37\" font-size=\"8\">A</text></g><g data-choice=\"B\"><circle cx=\"104\" cy=\"18\" r=\"3\" fill=\"currentColor\"/><text x=\"108\" y=\"15\" font-size=\"8\">B</text></g><g data-choice=\"C\"><circle cx=\"18\" cy=\"86\" r=\"3\" fill=\"currentColor\"/><text x=\"22\" y=\"83\" font-size=\"8\">C</text></g><g data-choice=\"D\"><circle cx=\"72\" cy=\"66\" r=\"3\" fill=\"currentColor\"/><text x=\"76\" y=\"63\" font-size=\"8\">D</text></g><g data-choice=\"E\"><circle cx=\"108\" cy=\"82\" r=\"3\" fill=\"currentColor\"/><text x=\"112\" y=\"79\" font-size=\"8\">E</text></g></svg>",
+          "options": [
+            "A",
+            "B",
+            "C",
+            "D",
+            "E"
+          ],
+          "correctOptions": [
+            0,
+            3
+          ],
+          "explanation": "Nur A und D sind näher beim Mittelpunkt als der Radius; B, C und E liegen ausserhalb.",
+          "difficulty": "practice",
+          "translations": {
+            "en": {
+              "prompt": "Which marked points lie inside the circle? Tap them in the figure.",
+              "options": [
+                "A",
+                "B",
+                "C",
+                "D",
+                "E"
+              ],
+              "explanation": "Only A and D are closer to the centre than the radius; B, C and E lie outside."
+            },
+            "fr": {
+              "prompt": "Quels points marqués se trouvent à l’intérieur du cercle ? Touche-les dans la figure.",
+              "options": [
+                "A",
+                "B",
+                "C",
+                "D",
+                "E"
+              ],
+              "explanation": "Seuls A et D sont plus proches du centre que le rayon ; B, C et E sont à l’extérieur."
+            },
+            "it": {
+              "prompt": "Quali punti segnati si trovano all’interno del cerchio? Toccali nella figura.",
+              "options": [
+                "A",
+                "B",
+                "C",
+                "D",
+                "E"
+              ],
+              "explanation": "Solo A e D sono più vicini al centro del raggio; B, C ed E sono all’esterno."
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
