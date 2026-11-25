@@ -1049,6 +1049,107 @@ def get_preferences(user_id: str) -> NotificationItem | None:
     return _optional_item(response.get("Item"))
 
 
+# -- Where a push device is found (#624) -----------------------------------------------
+#
+# A push device row is keyed by its person and its reference, so a person's
+# devices, and the registrations of one device, were found by a scan of the
+# whole table: sending a push read every row of `stoa-main`, and the check that
+# a device is not already someone else's looked at the site's first hundred
+# device rows only. So a device row carries two places to be found from:
+# - GSI-SweepPending: `sweep_bucket` is its person's bucket, `sweep_due_at` when
+#   it was registered - for sending to the person's devices.
+# - GSI-Listing: `listing` is the list of the registrations of one device,
+#   `listed_at` when it was registered - for the ownership check.
+#
+# The device is where the provider is sent to: the hash of the provider's
+# reference when the registration gave one, else `token_hash` (the hash of the
+# token, or of the reference). The check reads the lists of both the new
+# token's hash and the new reference's hash.
+#
+# The keys follow from the row and are rewritten with it. Account deletion
+# replaces the row with a tombstone of allowlisted fields, which holds none of
+# them and so leaves both indexes.
+PUSH_TOKEN_USER_INDEX = "GSI-SweepPending"
+PUSH_TOKEN_DEVICE_INDEX = "GSI-Listing"
+PUSH_TOKEN_INDEX_FIELDS = ("sweep_bucket", "sweep_due_at", "listing", "listed_at")
+_PUSH_TOKEN_USER_INDEX_KEY = ("PK", "SK", "sweep_bucket", "sweep_due_at")
+_PUSH_TOKEN_DEVICE_INDEX_KEY = ("PK", "SK", "listing", "listed_at")
+
+
+def push_token_user_bucket(user_id: str) -> str:
+    """The GSI-SweepPending partition of one person's push devices."""
+    if not user_id:
+        raise ValueError("a person's devices are found by their id")
+    return f"{PUSH_TOKEN_ENTITY}#user#{user_id}"
+
+
+def push_token_device_listing(device_key: str) -> str:
+    """The GSI-Listing partition of the registrations of one device."""
+    if not device_key:
+        raise ValueError("a device is found by its key")
+    return f"{PUSH_TOKEN_ENTITY}#device#{device_key}"
+
+
+def _sha256(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def push_token_device_key(item: Mapping[str, object]) -> str:
+    """Where the provider is sent to: the reference's hash, else the token's hash."""
+    reference = item.get("provider_token_reference")
+    if isinstance(reference, str) and reference:
+        return _sha256(reference)
+    token_hash = item.get("token_hash")
+    return token_hash if isinstance(token_hash, str) else ""
+
+
+def push_token_lookup_keys(*, token_hash: str, provider_token_reference: str | None) -> set[str]:
+    """The device lists a new registration is checked against: its token's and its reference's."""
+    keys = {token_hash} if token_hash else set()
+    if provider_token_reference:
+        keys.add(_sha256(provider_token_reference))
+    return keys
+
+
+def push_token_index_fields(item: Mapping[str, object]) -> dict[str, str]:
+    """The index keys a push device row carries; none for any other row.
+
+    Its person's bucket when it names a `user_id`, its device's list when it
+    has a token hash or a provider reference, both ordered by when it was
+    registered. A row with no registration time is in neither: an index key is
+    never written empty.
+    """
+    if item.get("entity_type") != PUSH_TOKEN_ENTITY:
+        return {}
+    created_at = item.get("created_at")
+    if not isinstance(created_at, str) or not created_at:
+        return {}
+    fields: dict[str, str] = {}
+    user_id = item.get("user_id")
+    if isinstance(user_id, str) and user_id:
+        fields.update(sweep_bucket=push_token_user_bucket(user_id), sweep_due_at=created_at)
+    device_key = push_token_device_key(item)
+    if device_key:
+        fields.update(listing=push_token_device_listing(device_key), listed_at=created_at)
+    return fields
+
+
+def carried_push_token_index_fields(item: Mapping[str, object]) -> dict[str, object]:
+    """The index keys a stored push device row holds now."""
+    return {name: item[name] for name in PUSH_TOKEN_INDEX_FIELDS if name in item}
+
+
+def _push_token_index_updates(
+    existing: Mapping[str, object], updates: Mapping[str, object]
+) -> dict[str, object]:
+    """`updates` with the index keys the row will call for once they are applied."""
+    called_for = push_token_index_fields({**existing, **updates})
+    return {
+        **updates,
+        **{name: value for name, value in called_for.items() if existing.get(name) != value},
+    }
+
+
 def put_push_token(item: NotificationItem) -> NotificationItem:
     user_id = _required_text(item, "user_id", "notification identity is invalid")
     token_reference = _required_text(
@@ -1059,6 +1160,7 @@ def put_push_token(item: NotificationItem) -> NotificationItem:
         "PK": push_token_pk(user_id, token_reference),
         "SK": "META",
     }
+    stored.update(push_token_index_fields(stored))
     existing = get_push_token(user_id, token_reference)
     if existing:
         updates = {key: value for key, value in stored.items() if key not in {"PK", "SK"}}
@@ -1096,8 +1198,91 @@ def update_push_token(
     if not existing:
         return None
     if updates:
+        updates = _push_token_index_updates(existing, updates)
         _persist_private(existing, mode="update", updates=updates)
     return {**existing, **updates}
+
+
+def list_user_push_tokens(
+    user_id: str, *, status: str | None = None, table: object | None = None
+) -> list[NotificationItem]:
+    """One person's push devices, from GSI-SweepPending (#624).
+
+    One query of the person's bucket, every page of it, so what it reads follows
+    how many devices the person registered, not the size of the table.
+    Eventually consistent.
+    """
+    return [
+        dict(item)
+        for item in db_table.rows(
+            "query",
+            table=table or db_table.table(),
+            key=_PUSH_TOKEN_USER_INDEX_KEY,
+            IndexName=PUSH_TOKEN_USER_INDEX,
+            KeyConditionExpression=Key("sweep_bucket").eq(push_token_user_bucket(user_id)),
+        )
+        # The row itself says whose it is; the bucket only found it.
+        if item.get("entity_type") == PUSH_TOKEN_ENTITY
+        and item.get("user_id") == user_id
+        and (status is None or item.get("status") == status)
+    ]
+
+
+def list_device_push_tokens(
+    device_keys: set[str], *, table: object | None = None
+) -> list[NotificationItem]:
+    """Every registration of these devices, whoever made it, from GSI-Listing (#624).
+
+    One query per device, every page of it: what it reads follows how many
+    times the device was registered, not the size of the table or how many
+    devices the site has. Eventually consistent.
+    """
+    target = table or db_table.table()
+    found: dict[tuple[object, object], NotificationItem] = {}
+    for device_key in sorted(key for key in device_keys if key):
+        for item in db_table.rows(
+            "query",
+            table=target,
+            key=_PUSH_TOKEN_DEVICE_INDEX_KEY,
+            IndexName=PUSH_TOKEN_DEVICE_INDEX,
+            KeyConditionExpression=Key("listing").eq(push_token_device_listing(device_key)),
+        ):
+            if item.get("entity_type") == PUSH_TOKEN_ENTITY:
+                found[(item.get("PK"), item.get("SK"))] = dict(item)
+    return list(found.values())
+
+
+def list_all_push_tokens(*, table: object | None = None) -> list[NotificationItem]:
+    """Every push device row on the table, from every page of the scan.
+
+    For the one-off backfill of #624 and its check; nothing a request calls.
+    """
+    return db_table.rows(
+        "scan",
+        table=table or db_table.table(),
+        FilterExpression=Attr("entity_type").eq(PUSH_TOKEN_ENTITY),
+    )
+
+
+def reindex_push_token(item: Mapping[str, object], *, table: object | None = None) -> bool:
+    """Give a push device row written before #624 the index keys it calls for.
+
+    For the one-off backfill (`scripts/backfill_push_token_index.py`). True when
+    this call wrote them, False when the row already carried exactly them. The
+    row is written behind its owner's account fence, as every other write of it
+    is; one whose owner's deletion got there first is refused, and the
+    tombstone that replaces it is in no index.
+    """
+    fields = push_token_index_fields(item)
+    if not fields or carried_push_token_index_fields(item) == fields:
+        return False
+    try:
+        _persist_private(dict(item), mode="update", updates=fields, table=table)
+    except db_table.WriteRefused as exc:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "push device changed before it was indexed"
+        ) from exc
+    return True
 
 
 def get_payment_expiry_reminder(

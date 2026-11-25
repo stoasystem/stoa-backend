@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
@@ -121,6 +121,79 @@ def connection_pk(connection_id: str) -> str:
     return f"WS_CONN#{connection_id}"
 
 
+# -- Where a connection is found by whose it is (#624) --------------------------------
+#
+# A notification is pushed to the open connections that subscribed to its
+# channel. A connection can only subscribe to its own person's channel
+# (`user:{id}`) and its own role's (`role:{role}`), so the connections that can
+# receive a notification are one person's or one role's. Finding them by a scan
+# of the whole table read every row of `stoa-main` for every notification, kept
+# the first 500 connection rows of the whole site, and stopped answering once
+# the table outgrew the scan's page budget.
+#
+# So a connection carries two places to be found from:
+# - GSI-SweepPending: `sweep_bucket` is its person's bucket, `sweep_due_at` when
+#   it connected. The help requests (#608), notifications (#613) and others use
+#   the same index, each in buckets of their own.
+# - GSI-Listing: `listing` is its role's list, `listed_at` when it connected.
+#   The administrators' list of notifications (#613) is another list there.
+#
+# Whose a connection is, its role and when it connected never change, so the
+# keys are set by `put_connection`, and `update_connection` refuses to move
+# them; it gives them to a row written before them. Account deletion deletes the
+# row, and with it its place in both indexes. Expired rows leave with the
+# table's TTL on `expires_at`.
+USER_INDEX = "GSI-SweepPending"
+USER_INDEX_FIELDS = ("sweep_bucket", "sweep_due_at")
+ROLE_INDEX = "GSI-Listing"
+ROLE_INDEX_FIELDS = ("listing", "listed_at")
+INDEX_FIELDS = (*USER_INDEX_FIELDS, *ROLE_INDEX_FIELDS)
+INDEX_SOURCE_FIELDS = frozenset({"user_id", "role", "connected_at"})
+_USER_INDEX_KEY = ("PK", "SK", *USER_INDEX_FIELDS)
+_ROLE_INDEX_KEY = ("PK", "SK", *ROLE_INDEX_FIELDS)
+
+
+def user_bucket(user_id: str) -> str:
+    """The GSI-SweepPending partition of one person's connections."""
+    if not user_id:
+        raise ValueError("a person's connections are found by their id")
+    return f"{CONNECTION_ENTITY}#user#{user_id}"
+
+
+def role_listing(role: str) -> str:
+    """The GSI-Listing partition of one role's connections."""
+    if not role:
+        raise ValueError("a role's connections are found by the role")
+    return f"{CONNECTION_ENTITY}#role#{role}"
+
+
+def index_fields(item: Mapping[str, object]) -> dict[str, str]:
+    """The index keys a connection row carries; none for any other row.
+
+    Its person's bucket when it names a `user_id`, its role's list when it names
+    a `role`, both ordered by when it connected. A row with no connection time
+    is in neither: an index key is never written empty.
+    """
+    if item.get("entity_type") != CONNECTION_ENTITY:
+        return {}
+    connected_at = item.get("connected_at")
+    if not isinstance(connected_at, str) or not connected_at:
+        return {}
+    fields: dict[str, str] = {}
+    user_id = item.get("user_id")
+    if isinstance(user_id, str) and user_id:
+        fields.update(sweep_bucket=user_bucket(user_id), sweep_due_at=connected_at)
+    role = item.get("role")
+    if isinstance(role, str) and role:
+        fields.update(listing=role_listing(role), listed_at=connected_at)
+    return fields
+
+
+def carried_index_fields(item: Mapping[str, object]) -> dict[str, object]:
+    """The index keys a stored row holds now."""
+    return {name: item[name] for name in INDEX_FIELDS if name in item}
+
+
 def build_connection_write_transaction(
     *,
     item: Mapping[str, object],
@@ -195,6 +268,7 @@ def put_connection(item: ConnectionItem) -> ConnectionItem:
         "owner_id": owner_id,
         "account_fence_generation": generation,
     }
+    stored.update(index_fields(stored))
     db_table.fenced(
         owner_id,
         build_connection_write_transaction(
@@ -221,6 +295,23 @@ def update_connection(
         return None
     if not updates:
         return existing
+    if any(
+        updates[name] != existing.get(name)
+        for name in (INDEX_SOURCE_FIELDS | set(INDEX_FIELDS)) & updates.keys()
+    ):
+        # Its places in the indexes follow from these; nothing moves a
+        # connection to another person, role or time.
+        raise ValueError("a connection's person, role and connection time do not change")
+    # A row written before the index keys (#624) gets them with its next
+    # refresh: a connection that is never refreshed expires within the TTL.
+    updates = {
+        **updates,
+        **{
+            name: value
+            for name, value in index_fields(existing).items()
+            if existing.get(name) != value
+        },
+    }
     target = db_table.table()
     owner_id = str(existing.get("owner_id") or existing.get("user_id") or "")
     generation = _generation(owner_id, existing.get("account_fence_generation"), target)
@@ -245,6 +336,50 @@ def delete_connection(connection_id: str) -> None:
     _delete_item(
         db_table.table(), Key={"PK": connection_pk(connection_id), "SK": "META"}
     )
+
+
+def list_user_connections(
+    user_id: str, *, table: object | None = None
+) -> list[ConnectionItem]:
+    """One person's connections, expired ones included, from GSI-SweepPending (#624).
+
+    One query of the person's bucket, every page of it, so what it reads follows
+    how many connections the person has, not the size of the table or how many
+    the whole site has. Eventually consistent: a connection opened a moment ago
+    may be missing.
+    """
+    return [
+        dict(item)
+        for item in db_table.rows(
+            "query",
+            table=table or db_table.table(),
+            key=_USER_INDEX_KEY,
+            IndexName=USER_INDEX,
+            KeyConditionExpression=Key("sweep_bucket").eq(user_bucket(user_id)),
+        )
+        # The row itself says whose it is; the bucket only found it.
+        if item.get("entity_type") == CONNECTION_ENTITY and item.get("user_id") == user_id
+    ]
+
+
+def list_role_connections(role: str, *, table: object | None = None) -> list[ConnectionItem]:
+    """Every connection of one role, expired ones included, from GSI-Listing (#624).
+
+    One query of the role's list, every page of it: what it reads follows how
+    many connections the role has, not the size of the table. Eventually
+    consistent.
+    """
+    return [
+        dict(item)
+        for item in db_table.rows(
+            "query",
+            table=table or db_table.table(),
+            key=_ROLE_INDEX_KEY,
+            IndexName=ROLE_INDEX,
+            KeyConditionExpression=Key("listing").eq(role_listing(role)),
+        )
+        if item.get("entity_type") == CONNECTION_ENTITY and item.get("role") == role
+    ]
 
 
 def list_connections(limit: int = 200) -> list[ConnectionItem]:
