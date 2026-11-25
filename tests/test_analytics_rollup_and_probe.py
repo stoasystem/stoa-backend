@@ -316,3 +316,21 @@ def test_probe_does_not_touch_the_main_table(stats_table) -> None:
     _probe_settings()
     synthetic_probe.run(transport=FakeTransport(), write_line=lambda _l: None)
     assert main.calls["put_item"] == 0
+
+
+@pytest.mark.parametrize("job", ["analytics_rollup", "synthetic_probe"])
+def test_the_ops_function_hands_each_card_134_job_to_its_own_module(
+    job: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The jobs run on the account-deletion function's schedules; a name that missed
+    its branch would fall through to running deletions."""
+    import importlib
+
+    from stoa.jobs import account_deletion as ops
+
+    module = importlib.import_module(f"stoa.jobs.{job}")
+    monkeypatch.setattr(module, "handler", lambda event, context: {"ran": job})
+    monkeypatch.setattr(
+        ops, "run_pending_deletions", lambda **_: (_ for _ in ()).throw(AssertionError("deletions ran"))
+    )
+    assert ops.handler({"job": job}, None) == {"ran": job}
