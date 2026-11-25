@@ -221,7 +221,8 @@ REVIEWED: dict[str, str] = {
     "src/stoa/db/repositories/teacher_application_repo.py::claim_invitation": "not_deletion_data",
     "src/stoa/db/repositories/teacher_application_repo.py::set_application_review_state": "not_deletion_data",
     "src/stoa/db/repositories/teacher_application_repo.py::update_activation_command": "not_deletion_data",
-    "src/stoa/routers/analytics.py::ingest_event": "not_deletion_data",
+    # The statistics table (card 134), not the main table: no account's rows.
+    "src/stoa/observability/analytics_store.py::write_event": "not_deletion_data",
     "src/stoa/routers/auth.py::admit_invitation_claim": "not_deletion_data",
     "src/stoa/services/billing_reconciliation_service.py::bind_webhook_provider_identity": "not_deletion_data",
     "src/stoa/services/paid_entitlement_service.py::apply_due_paid_transition": "not_deletion_data",

@@ -1,34 +1,36 @@
-"""Client-side product analytics ingestion — write-only, no read API yet.
-
-The frontend has posted here since day one; the route never existed, so every
-`trackEvent(...)` call (login timing included) has been silently 404ing.
+"""Client-side product analytics ingestion — write-only.
 
 The route is unauthenticated, so everything a caller sends is a claim: the
 `sessionId` only groups one browser's events and confers nothing. Admission is
-charged against the address the gateway observed, and the stored row is bounded,
-because an open write path with neither is an unbounded bill.
+charged against the address the gateway observed, because an open write path
+without a price is an unbounded bill.
+
+Card 134: an event is checked against `event_catalog` and stored in the
+statistics table (`analytics_store`), never the main table. An event the
+catalog does not list is answered 202 like any other and dropped, so the web
+client never sees an error for it. A request carrying a valid token is
+recorded under the account's role and pseudonym; any other is `anonymous`.
 """
-import time
-import uuid
-from datetime import datetime, timezone
-from decimal import Decimal
+import logging
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from stoa import config
+from stoa import config, deps
 from stoa.db import table as db_table
+from stoa.observability import analytics_store, event_catalog, features, request_metrics
+from stoa.security.identity import Actor, resolve_actor
 from stoa.security.route_inventory import explicit_route_classification
+from stoa.security.tokens import verify_access_token
 from stoa.services import rate_limit
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_EVENT_TTL_SECONDS = 90 * 24 * 60 * 60
 _INGEST_SCOPE = "analytics-events"
-_MAX_PAYLOAD_KEY_LENGTH = 64
-
-_DROPPED = object()
 
 
 class AnalyticsEventIn(BaseModel):
@@ -39,41 +41,6 @@ class AnalyticsEventIn(BaseModel):
     createdAt: str = Field(..., max_length=64)
 
     model_config = {"extra": "forbid"}
-
-
-def _dynamo_safe(value: Any) -> Any:
-    # DynamoDB refuses Python floats. Lists and maps are dropped rather than
-    # stored: the frontend only ever sends string/number/boolean/null, so a
-    # nested structure here is somebody else's client, and nesting is how one
-    # request turns into a 400 KB row.
-    if isinstance(value, bool) or value is None:
-        return value
-    if isinstance(value, float):
-        return Decimal(str(value))
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        return value[: config.settings().analytics_payload_max_value_length]
-    return _DROPPED
-
-
-def _bounded_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    """Return the storable payload and whether anything was dropped or cut."""
-    bounded: dict[str, Any] = {}
-    truncated = False
-    for key, value in payload.items():
-        if len(bounded) >= config.settings().analytics_payload_max_entries:
-            truncated = True
-            break
-        safe_key = str(key)[:_MAX_PAYLOAD_KEY_LENGTH]
-        safe_value = _dynamo_safe(value)
-        if safe_value is _DROPPED:
-            truncated = True
-            continue
-        if safe_key != str(key) or (isinstance(value, str) and safe_value != value):
-            truncated = True
-        bounded[safe_key] = safe_value
-    return bounded, truncated
 
 
 def _ingest_rate_limited() -> HTTPException:
@@ -88,7 +55,11 @@ def _ingest_rate_limited() -> HTTPException:
 
 
 def admit_analytics_event(
-    request: Request, *, now: datetime | None = None, table: object | None = None
+    request: Request,
+    *,
+    now: datetime | None = None,
+    table: object | None = None,
+    scope: str = _INGEST_SCOPE,
 ) -> None:
     """Charge one write to the caller's source window before anything is stored.
 
@@ -101,7 +72,7 @@ def admit_analytics_event(
     except rate_limit.ProxyTopologyError as exc:
         raise _ingest_rate_limited() from exc
     admitted = rate_limit.admit_source_window(
-        scope=_INGEST_SCOPE,
+        scope=scope,
         source_digest=digest,
         limit=config.settings().analytics_ingest_max_events_per_window,
         window_seconds=config.settings().analytics_ingest_window_seconds,
@@ -124,25 +95,48 @@ def admit_analytics_event(
     identifier_scope="command-local",
 )
 async def ingest_event(body: AnalyticsEventIn, request: Request):
-    """Record one client analytics event for later CloudWatch Logs Insights / table queries."""
-    table = db_table.table()
-    admit_analytics_event(request, table=table)
-    session_id = body.sessionId or "anon"
-    received_at = datetime.now(timezone.utc).isoformat()
-    payload, payload_truncated = _bounded_payload(body.payload)
-    table.put_item(
-        Item={
-            "PK": f"ANALYTICSEVENT#{session_id}",
-            "SK": f"{received_at}#{uuid.uuid4()}",
-            "entity_type": "analytics_event",
-            "name": body.name,
-            "payload": payload,
-            "payload_truncated": payload_truncated,
-            "path": body.path,
-            "session_id": session_id,
-            "client_created_at": body.createdAt,
-            "received_at": received_at,
-            "expires_at": int(time.time()) + _EVENT_TTL_SECONDS,
-        }
+    """Record one client analytics event in the statistics table."""
+    admit_analytics_event(request, table=db_table.table())
+    props = (
+        event_catalog.clean_props(body.name, body.payload)
+        if body.name in event_catalog.CLIENT_EVENTS
+        else None
+    )
+    if props is None:
+        analytics_store.dropped("unknown_event", body.name)
+        return {"status": "accepted"}
+    actor = await optional_actor(request)
+    analytics_store.write_event(
+        body.name,
+        role=actor.role.value if actor is not None else analytics_store.ANONYMOUS,
+        pid=analytics_store.pseudonym(actor.user_id) if actor is not None else None,
+        sid=body.sessionId or None,
+        route=features.frontend_route_template(body.path),
+        props=props,
+        release=request_metrics.release(),
     )
     return {"status": "accepted"}
+
+
+async def optional_actor(request: Request) -> Actor | None:
+    """The account a valid bearer token names, or `None`; never refuses.
+
+    Resolved by hand rather than as a dependency: the route stays public, and a
+    missing, expired or revoked token only makes the event anonymous.
+    """
+    header = request.headers.get("authorization") or ""
+    scheme, _, token = header.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return None
+    try:
+        settings = config.settings()
+        verified = await verify_access_token(
+            token.strip(),
+            allowed_issuers=settings.allowed_cognito_issuers,
+            allowed_client_ids=settings.allowed_cognito_access_clients,
+            key_provider=deps.get_jwks_key_provider(settings),
+        )
+        actor = await resolve_actor(verified, deps.get_identity_repository())
+    except Exception:
+        return None
+    return None if actor.must_change_password else actor

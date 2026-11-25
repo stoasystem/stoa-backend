@@ -6,6 +6,7 @@ Student progress is stored under PK=PROGRESS#{user_id}.
 """
 import logging
 from collections.abc import Mapping
+from contextlib import suppress
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, status
@@ -13,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from stoa import config
 from stoa.db.repositories import practice_repo
+from stoa.observability import telemetry
 from stoa.deps import get_actor
 from stoa.security.authorization import (
     AuthorizationAction,
@@ -594,7 +596,7 @@ async def answer_star_quiz(
     no review card. The lessons are not touched either way.
     """
     try:
-        return quiz.answer(
+        result = quiz.answer(
             quiz.STAR,
             actor.user_id,
             quiz_id,
@@ -605,6 +607,16 @@ async def answer_star_quiz(
         )
     except quiz.Refused as refused:
         raise _quiz_refusal(_STAR_QUIZ_REFUSALS, refused) from None
+    with suppress(Exception):
+        telemetry.record(
+            "exercise_answered",
+            actor_user_id=actor.user_id,
+            role=actor.role.value,
+            exercise_id=body.exercise_id,
+            correct=bool(result.get("correct")),
+            duration_ms=None,
+        )
+    return result
 
 @router.get("/{subject_id}/{topic_id}/roadmap")
 async def get_roadmap(
@@ -898,7 +910,7 @@ async def submit_answer(
 ):
     """Judge a practice answer in the reader's language and record it (`answer_recording`)."""
     try:
-        return answer_recording.answer_practice(
+        result = answer_recording.answer_practice(
             actor.user_id,
             dict(authorized_challenge.value),
             body.answer,
@@ -909,6 +921,16 @@ async def submit_answer(
         raise PracticeViolation(_P.PRACTICE_ANSWER_INVALID) from error
     except answer_recording.ReceiptUnavailable as error:
         raise PracticeViolation(_P.PRACTICE_ATTEMPT_UNAVAILABLE) from error
+    with suppress(Exception):
+        telemetry.record(
+            "exercise_answered",
+            actor_user_id=actor.user_id,
+            role=actor.role.value,
+            exercise_id=challenge_id,
+            correct=bool(getattr(result, "correct", None)),
+            duration_ms=None,
+        )
+    return result
 
 
 @router.get(

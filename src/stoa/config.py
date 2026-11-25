@@ -456,6 +456,16 @@ class Settings(BaseSettings):
     analytics_ingest_max_events_per_window: int = 600
     analytics_payload_max_entries: int = 32
     analytics_payload_max_value_length: int = 256
+    # Usage events go to their own table (card 134). Empty: events are dropped
+    # and counted, never written to the main table.
+    analytics_table_name: str = ""
+    # HMAC key for the pseudonym an event carries instead of the account id.
+    # Empty: no pseudonym, only the browser session.
+    analytics_pseudonym_key: str = ""
+    # One CloudWatch EMF line per request (`Stoa/Features`).
+    request_metrics: bool = True
+    # The deployed release, as the pipeline names it.
+    stoa_release_id: str = ""
 
     # Phone upload codes (#146). The phone is not signed in, so refused codes and
     # tokens are counted per source; one that verifies is never counted, so a
