@@ -21,7 +21,7 @@ from stoa import aws
 from stoa.aws import Kind
 from stoa.db import table as db_table
 from stoa.deps import get_actor, get_authorization_audit_sink
-from stoa.observability import analytics_store, features, health_reader, usage_stats
+from stoa.observability import analytics_store, cost_reader, features, health_reader, usage_stats
 from stoa.routers import admin
 from stoa.security import admin_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
@@ -158,10 +158,17 @@ def _fresh_caches():
     health_reader.clear_cache()
     usage_stats.clear_cache()
     health_reader.install()
+    cost_reader.install(FailingCostExplorer())
     yield
     health_reader.clear_cache()
     usage_stats.clear_cache()
     health_reader.install()
+    cost_reader.install()
+
+
+class FailingCostExplorer:
+    def get_cost_and_usage(self, **_request: Any) -> dict[str, Any]:
+        raise RuntimeError("AccessDeniedException")
 
 
 def _app(actor: Actor | None) -> TestClient:
@@ -580,3 +587,11 @@ def test_frontend_errors_read_only_the_window_days(stats_table) -> None:
         queries = [request for operation, request in stats_table.requests if operation == "query"]
         assert len(queries) == partitions
         assert [item["messageHash"] for item in found] == (["week"] if window == "7d" else [])
+
+
+def test_a_failed_cost_read_still_answers_the_overview(classified, stats_table) -> None:
+    response = _app(ADMIN).get("/admin/analytics/overview?days=7")
+    assert response.status_code == 200, response.text
+    kpis = response.json()["kpis"]
+    assert kpis["costPerActiveUser"] is None
+    assert {"wauChange", "mauChange", "questionsPerDayChange"} <= kpis.keys()
