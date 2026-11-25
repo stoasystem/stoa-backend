@@ -45,6 +45,7 @@ from stoa.services import (
     account_operations_service,
     allowance_service,
     billing_reconciliation_service,
+    curriculum_service,
     current_relationship,
     learning_profile_service,
     learning_session,
@@ -1530,6 +1531,8 @@ async def get_child_summary(
     # What Ask questions named, by name only (#143).
     for record in asked_knowledge_repo.list_for_student(child_id):
         weak_topics_counter.update(named(_response_string_list(record.get("knowledge_points", []))))
+    # A mistake counts under its topic; one without a topic is not counted,
+    # and its subject is never a weak topic (#631).
     for mistake in evidence.mistakes:
         topic = _response_text(mistake.get("topic_id"))
         if topic:
@@ -1537,12 +1540,12 @@ async def get_child_summary(
                 topic, unit_id=mistake.get("unit_id"), lesson_id=mistake.get("lesson_id")
             )
             weak_topics_counter[topic_name or topic] += 1
-        subject = _response_text(mistake.get("subject_id"))
-        if subject:
-            weak_topics_counter[subject] += 1
     if latest_report:
+        # Reports written before #631 stored the subject (`mathematics`) among
+        # their weak points; it is left out here rather than backfilled.
+        stored = _response_string_list(latest_report.get("weak_knowledge_points", []))
         weak_topics_counter.update(
-            named(_response_string_list(latest_report.get("weak_knowledge_points", [])))
+            named([point for point in stored if curriculum_service.subject_id(point) is None])
         )
 
     activities = []

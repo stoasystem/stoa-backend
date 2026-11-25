@@ -341,7 +341,8 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
     }
     # In the language the parent stored (#450); this parent stored none.
     assert report["summary"].startswith("Diese Woche (1. Juni 2026 bis 7. Juni 2026) hat Student One")
-    assert report["weak_knowledge_points"][:3] == ["math", "fractions", "ratios"]
+    # The subject is not a weak topic (#631).
+    assert report["weak_knowledge_points"] == ["fractions", "ratios"]
     assert len(s3.puts) == 2
     artifact = json.loads(s3.puts[0]["Body"].decode())
     assert artifact["report"]["status"] == "generated"
