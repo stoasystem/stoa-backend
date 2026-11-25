@@ -114,13 +114,20 @@ def _install_push_token_repo(monkeypatch):
     def get_push_token(user_id, token_reference):
         return tokens.get((user_id, token_reference))
 
-    def list_push_tokens(user_id=None, *, status=None, limit=100):
-        values = list(tokens.values())
-        if user_id is not None:
-            values = [token for token in values if token["user_id"] == user_id]
+    def list_user_push_tokens(user_id, *, status=None, table=None):
+        # One person's devices, as their bucket of the index finds them (#624).
+        values = [token for token in tokens.values() if token["user_id"] == user_id]
         if status is not None:
             values = [token for token in values if token["status"] == status]
-        return values[:limit]
+        return values
+
+    def list_device_push_tokens(device_keys, *, table=None):
+        # Every registration of these devices, as their lists in the index find them (#624).
+        return [
+            token
+            for token in tokens.values()
+            if notification_service.notification_repo.push_token_device_key(token) in device_keys
+        ]
 
     def update_push_token(user_id, token_reference, updates):
         item = tokens.get((user_id, token_reference))
@@ -131,7 +138,12 @@ def _install_push_token_repo(monkeypatch):
 
     monkeypatch.setattr(notification_service.notification_repo, "put_push_token", put_push_token)
     monkeypatch.setattr(notification_service.notification_repo, "get_push_token", get_push_token)
-    monkeypatch.setattr(notification_service.notification_repo, "list_push_tokens", list_push_tokens)
+    monkeypatch.setattr(
+        notification_service.notification_repo, "list_user_push_tokens", list_user_push_tokens
+    )
+    monkeypatch.setattr(
+        notification_service.notification_repo, "list_device_push_tokens", list_device_push_tokens
+    )
     monkeypatch.setattr(notification_service.notification_repo, "update_push_token", update_push_token)
     return tokens
 
@@ -381,8 +393,8 @@ def test_admin_delivery_status_reports_live_ready_websocket_without_secrets(monk
     config.install(test_settings)
     monkeypatch.setattr(
         websocket_service.websocket_repo,
-        "list_connections",
-        lambda limit=200: [
+        "list_site_connections",
+        lambda: [
             {
                 "connection_id": "fresh-conn",
                 "expires_at": websocket_service.now_epoch() + 30,
@@ -391,7 +403,7 @@ def test_admin_delivery_status_reports_live_ready_websocket_without_secrets(monk
                 "connection_id": "stale-conn",
                 "expires_at": websocket_service.now_epoch() - 30,
             },
-        ][:limit],
+        ],
     )
     events["notif-live"] = {
         "event_id": "notif-live",

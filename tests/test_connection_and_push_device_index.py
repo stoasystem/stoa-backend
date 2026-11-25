@@ -25,6 +25,7 @@ from stoa import config
 from stoa.config import Settings
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, notification_repo, websocket_repo
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.services import notification_service, websocket_service
 
 STUDENT = "student-1"
@@ -463,3 +464,46 @@ def test_the_backfill_names_no_person_or_device(table, capsys) -> None:
     assert "problems: 0" not in out
     assert STUDENT not in out
     assert _sha("device-token") not in out
+
+
+# -- The readers (#624 step 2) ------------------------------------------------------------
+
+
+def test_registering_someone_elses_device_is_refused_among_more_than_100_of_the_site(table) -> None:
+    """The check looked at the site's first hundred device rows, whoever's they were."""
+    for number in range(120):
+        _register(OTHER_STUDENT, token=f"token-{number:04d}")
+    _register(TEACHER, token="teacher-token")
+    _register(TEACHER, token="teacher-device-2", provider_token_reference="teacher-ref")
+
+    for attempt in (
+        {"token": "teacher-token"},
+        {"token": "teacher-token", "provider_token_reference": "student-ref"},
+        {"provider_token_reference": "teacher-ref"},
+        {"token": "another-token", "provider_token_reference": "teacher-ref"},
+    ):
+        with pytest.raises(SecurityDecisionError) as refused:
+            _register(STUDENT, **attempt)
+        assert refused.value.code is SecurityErrorCode.RESOURCE_NOT_FOUND, attempt
+
+    assert notification_repo.list_user_push_tokens(STUDENT) == []
+    # The device's own person may register it again.
+    assert _register(TEACHER, provider_token_reference="teacher-ref")["status"] == "active"
+
+
+def test_a_token_someone_registered_with_their_reference_may_be_registered_with_another(table) -> None:
+    """The one registration the scan refused and the index does not (#624).
+
+    The provider is sent the reference, so the same raw token registered with a
+    different reference, or with none, reaches a different address: neither
+    person's notifications reach the other's device.
+    """
+    _register(TEACHER, token="shared-token", provider_token_reference="teacher-ref")
+
+    mine = _register(STUDENT, token="shared-token", provider_token_reference="student-ref")
+
+    assert mine["status"] == "active"
+    teacher_row, student_row = (
+        _push_row(table, user_id, mine["tokenReference"]) for user_id in (TEACHER, STUDENT)
+    )
+    assert teacher_row["listing"] != student_row["listing"]

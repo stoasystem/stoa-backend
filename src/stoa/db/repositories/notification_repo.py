@@ -11,7 +11,7 @@ from itertools import islice
 from typing import Protocol, runtime_checkable
 from uuid import uuid4
 
-from boto3.dynamodb.conditions import Attr, ConditionBase, Key
+from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
@@ -1175,20 +1175,6 @@ def get_push_token(user_id: str, token_reference: str) -> NotificationItem | Non
         Key={"PK": push_token_pk(user_id, token_reference), "SK": "META"}
     )
     return _optional_item(response.get("Item"))
-
-
-def list_push_tokens(
-    user_id: str | None = None, *, status: str | None = None, limit: int = 100
-) -> list[NotificationItem]:
-    filters = [Attr("entity_type").eq(PUSH_TOKEN_ENTITY)]
-    if user_id is not None:
-        filters.append(Attr("user_id").eq(user_id))
-    if status is not None:
-        filters.append(Attr("status").eq(status))
-    expression: ConditionBase = filters[0]
-    for filter_expression in filters[1:]:
-        expression = expression & filter_expression
-    return db_table.rows("scan", table=db_table.table(), want=limit, FilterExpression=expression)
 
 
 def update_push_token(
