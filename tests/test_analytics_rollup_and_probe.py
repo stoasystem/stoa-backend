@@ -13,7 +13,7 @@ from stoa import config
 from stoa.config import Settings
 from stoa.db import table as db_table
 from stoa.jobs import analytics_rollup, synthetic_probe
-from stoa.observability import analytics_store, usage_stats
+from stoa.observability import analytics_store, cost_reader, usage_stats
 
 TODAY = datetime.now(UTC).date()
 Y = TODAY - timedelta(days=1)
@@ -32,13 +32,44 @@ class StatsTable(FakeTable):
         return {"Attributes": old} if old else {}
 
 
+class FakeCostExplorer:
+    """Pages of `get_cost_and_usage` answers; an exception instance is raised instead."""
+
+    def __init__(self, *pages: Any) -> None:
+        self.pages = list(pages) or [{"ResultsByTime": []}]
+        self.requests: list[dict[str, Any]] = []
+
+    def get_cost_and_usage(self, **request: Any) -> dict[str, Any]:
+        self.requests.append(request)
+        page = self.pages[min(len(self.requests) - 1, len(self.pages) - 1)]
+        if isinstance(page, Exception):
+            raise page
+        return page
+
+
+def _cost_page(amounts: dict[str, str], token: str | None = None) -> dict[str, Any]:
+    page: dict[str, Any] = {
+        "ResultsByTime": [
+            {"Groups": [
+                {"Keys": [service], "Metrics": {"UnblendedCost": {"Amount": amount, "Unit": "USD"}}}
+                for service, amount in amounts.items()
+            ]}
+        ]
+    }
+    if token:
+        page["NextPageToken"] = token
+    return page
+
+
 @pytest.fixture
 def stats_table():
     table = StatsTable()
     analytics_store.install(table)
+    cost_reader.install(FakeCostExplorer())
     usage_stats.clear_cache()
     yield table
     analytics_store.install(None)
+    cost_reader.install()
     usage_stats.clear_cache()
 
 
@@ -142,11 +173,15 @@ def test_overview_from_rollups(stats_table, fake_table) -> None:
 
     assert body["complete"] is True
     assert body["days"] == 7 and body["role"] == "all"
-    assert body["kpis"] == {
+    kpis = dict(body["kpis"])
+    cost = kpis.pop("costPerActiveUser")
+    assert kpis == {
         "dau": 3, "wau": 3, "mau": 4, "dauChange": 2.0,
         "questionsPerDay": 0.29, "escalationRate": 0.5,
         "aiP50Ms": 3000, "teacherResponseP50Ms": 60000,
+        "wauChange": 0.5, "mauChange": None, "questionsPerDayChange": 1.0,
     }
+    assert cost is not None and cost["totalUsd"] == 0.0
     assert len(body["activeSeries"]) == 7
     assert body["activeSeries"][-1] == {"day": Y.isoformat(), "active": 3}
     ranking = {item["event"]: item for item in body["featureRanking"]}
@@ -200,6 +235,8 @@ def test_a_day_without_rollup_is_computed_and_flagged(stats_table, fake_table) -
 def test_overview_without_any_data_answers_zeros_and_nulls(stats_table) -> None:
     body = usage_stats.overview(30, "all")
     assert body["kpis"]["dau"] == 0 and body["kpis"]["dauChange"] is None
+    assert body["kpis"]["wauChange"] is None and body["kpis"]["mauChange"] is None
+    assert body["kpis"]["questionsPerDayChange"] is None
     assert body["kpis"]["escalationRate"] is None and body["kpis"]["aiP50Ms"] is None
     assert body["complete"] is False
     assert body["retention"] == []
@@ -334,3 +371,112 @@ def test_the_ops_function_hands_each_card_134_job_to_its_own_module(
         ops, "run_pending_deletions", lambda **_: (_ for _ in ()).throw(AssertionError("deletions ran"))
     )
     assert ops.handler({"job": job}, None) == {"ran": job}
+
+
+# ── change and cost per active user ──────────────────────────────────────────
+
+
+def test_change_against_an_empty_window_is_null() -> None:
+    assert usage_stats._change(5, 0) is None
+    assert usage_stats._change(0, 0) is None
+    assert usage_stats._change(3, 2) == 0.5
+    assert usage_stats._change(9, 10) == -0.1
+
+
+def test_service_names_fall_into_three_buckets() -> None:
+    assert cost_reader.service_bucket("Amazon Bedrock") == "ai"
+    assert cost_reader.service_bucket("Claude 3 Haiku (Amazon Bedrock Edition)") == "ai"
+    assert cost_reader.service_bucket("Amazon DynamoDB") == "database"
+    assert cost_reader.service_bucket("Tax") == "other"
+    assert cost_reader.service_bucket("AWS Lambda") == "other"
+
+
+def test_month_to_date_asks_monthly_unblended_by_service_and_follows_pages() -> None:
+    ce = FakeCostExplorer(
+        _cost_page({"Amazon Bedrock": "10.5", "Amazon DynamoDB": "2.25"}, token="t1"),
+        _cost_page({"Claude 3 Haiku (Amazon Bedrock Edition)": "1.5", "Tax": "3", "AWS Lambda": "0.75"}),
+    )
+    cost_reader.install(ce)
+    try:
+        totals = cost_reader.month_to_date(date(2026, 11, 26))
+    finally:
+        cost_reader.install()
+    assert totals == {"ai": 12.0, "database": 2.25, "other": 3.75}
+    first = ce.requests[0]
+    assert first["TimePeriod"] == {"Start": "2026-11-01", "End": "2026-11-27"}
+    assert first["Granularity"] == "MONTHLY" and first["Metrics"] == ["UnblendedCost"]
+    assert first["GroupBy"] == [{"Type": "DIMENSION", "Key": "SERVICE"}]
+    assert ce.requests[1]["NextPageToken"] == "t1"
+
+
+def test_the_cost_explorer_client_is_built_in_us_east_1(monkeypatch) -> None:
+    from stoa import aws
+
+    built: list[tuple[str, str]] = []
+
+    class Session:
+        def client(self, service: str, *, region_name: str, config: Any) -> object:
+            built.append((service, region_name))
+            return object()
+
+    monkeypatch.setattr(aws, "session", lambda: Session())
+    cost_reader._real_client.cache_clear()
+    try:
+        cost_reader._real_client()
+    finally:
+        cost_reader._real_client.cache_clear()
+    assert built == [("ce", "us-east-1")]
+
+
+NOW = datetime(2026, 11, 26, 9, tzinfo=UTC)
+
+
+def _active(table: FakeTable, day: str, role: str, pid: str) -> None:
+    table.seed({"PK": f"ACTIVE#{day}", "SK": f"{role}#{pid}", "role": role, "pid": pid})
+
+
+def test_cost_per_active_user_divides_by_the_month_union(stats_table) -> None:
+    _active(stats_table, "2026-11-01", "student", "A")
+    _active(stats_table, "2026-11-20", "student", "A")
+    _active(stats_table, "2026-11-26", "teacher", "T")
+    _active(stats_table, "2026-11-10", "parent", "P")
+    _active(stats_table, "2026-10-31", "student", "OLD")
+    ce = FakeCostExplorer(_cost_page({"Amazon Bedrock": "6", "Amazon DynamoDB": "1.5", "Tax": "1.5"}))
+    cost_reader.install(ce)
+
+    cost = usage_stats.cost_per_active_user(NOW)
+
+    assert cost == {
+        "amountUsd": 3.0, "totalUsd": 9.0, "activeUsers": 3,
+        "periodStart": "2026-11-01", "periodEnd": "2026-11-26",
+        "breakdown": [
+            {"service": "ai", "amountUsd": 2.0},
+            {"service": "database", "amountUsd": 0.5},
+            {"service": "other", "amountUsd": 0.5},
+        ],
+    }
+    assert usage_stats.cost_per_active_user(NOW) == cost
+    assert len(ce.requests) == 1
+
+
+def test_no_active_user_leaves_the_amount_null_and_the_total(stats_table) -> None:
+    cost_reader.install(FakeCostExplorer(_cost_page({"Amazon Bedrock": "4.567"})))
+    cost = usage_stats.cost_per_active_user(NOW)
+    assert cost is not None
+    assert cost["amountUsd"] is None and cost["totalUsd"] == 4.57 and cost["activeUsers"] == 0
+    assert all(item["amountUsd"] is None for item in cost["breakdown"])
+
+
+def test_a_failed_cost_read_nulls_the_whole_figure(stats_table) -> None:
+    _active(stats_table, "2026-11-02", "student", "A")
+    cost_reader.install(FakeCostExplorer(RuntimeError("AccessDenied")))
+    assert usage_stats.cost_per_active_user(NOW) is None
+    body = usage_stats.overview(7, "all", now=NOW)
+    assert body["kpis"]["costPerActiveUser"] is None
+    assert body["kpis"]["dau"] == 0
+
+
+def test_without_a_statistics_table_the_cost_is_null(stats_table) -> None:
+    analytics_store.install(None)
+    cost_reader.install(FakeCostExplorer(_cost_page({"Amazon Bedrock": "1"})))
+    assert usage_stats.cost_per_active_user(NOW) is None
