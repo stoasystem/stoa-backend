@@ -204,6 +204,136 @@ def test_candidate_pairs_scan_every_page_for_active_parent_sides(world):
     assert world.table.calls["scan"] > 1
 
 
+# --- Many at once (card 133) ----------------------------------------------------
+#
+# The batched entries must answer exactly what `judge`, `children_of` and
+# `parents_of` answer, pair by pair, over the same rows. Each comparison below
+# arranges one table and asks both.
+
+
+def _families(world: LinkRows) -> None:
+    """Every kind of pair at once, several sharing a parent or a student."""
+    for user_id, role in (
+        ("parent-3", "parent"),
+        ("parent-4", "teacher"),
+        ("student-4", "student"),
+        ("student-5", "student"),
+    ):
+        world.account(user_id, role)
+    world.link("parent-1", "student-1")
+    world.link("parent-1", "student-2", status="pending")
+    world.link("parent-1", "student-3")
+    world.account("student-3", "student", status="suspended")
+    world.link("parent-2", "student-1", student_side_status="rejected")
+    world.link("parent-2", "student-2", student_side_stamp=LATER)
+    world.link("parent-2", "student-3", only_parent_side=True)
+    world.link("parent-2", "student-4")
+    # The parent's account is gone; the rows are not.
+    world.link("parent-3", "student-1")
+    world.table.rows.pop(("USER#parent-3", "PROFILE"))
+    # The student's profile is a deletion tombstone.
+    world.link("parent-1", "student-5")
+    world.table.rows[("USER#student-5", "PROFILE")] = {
+        "PK": "USER#student-5",
+        "SK": "PROFILE",
+        "entity_type": "private_row_deletion_tombstone",
+        "status": "deleted",
+        "owner_deletion_generation": 1,
+    }
+    world.link("parent-4", "student-2")
+    world.link("parent-4", "student-4", status="rejected")
+    world.link("parent-3", "student-4")
+
+
+PARENTS = ("parent-1", "parent-2", "parent-3", "parent-4")
+STUDENTS = ("student-1", "student-2", "student-3", "student-4", "student-5")
+
+
+@pytest.mark.parametrize(
+    "arrange", [arrange for _, arrange, _ in JUDGE_CASES], ids=[name for name, _, _ in JUDGE_CASES]
+)
+def test_judge_many_answers_what_judge_answers_for_each_case(world, arrange):
+    arrange(world)
+
+    batched = current_relationship.judge_many([("parent-1", "student-1")], table=world.table)
+
+    assert batched == {
+        ("parent-1", "student-1"): current_relationship.judge(
+            "parent-1", "student-1", table=world.table
+        )
+    }
+
+
+def test_judge_many_answers_what_judge_answers_for_every_pair_at_once(world):
+    _families(world)
+    pairs = [
+        (parent_id, student_id)
+        for parent_id in (*PARENTS, "parent-9", "")
+        for student_id in (*STUDENTS, "student-9", "")
+    ]
+    world.table.calls.clear()
+
+    batched = current_relationship.judge_many(pairs, table=world.table)
+
+    assert world.table.calls["get_item"] == 0
+    assert world.table.calls["batch_get_item"] == 1
+    one_by_one = {
+        pair: current_relationship.judge(*pair, table=world.table) for pair in pairs
+    }
+    assert batched == one_by_one
+    assert {verdict.standing for verdict in batched.values()} == set(Standing)
+
+
+@pytest.mark.parametrize("pair", [(" ", "student-1"), ("parent-1", " ")])
+def test_judge_many_refuses_a_blank_id_as_judge_does(world, pair):
+    with pytest.raises(ValueError):
+        current_relationship.judge(*pair, table=world.table)
+    with pytest.raises(ValueError):
+        current_relationship.judge_many([pair], table=world.table)
+
+
+def test_current_relationships_of_answers_children_of_and_parents_of(world):
+    _families(world)
+    world.table.calls.clear()
+
+    batched = current_relationship.current_relationships_of(
+        parent_ids=[*PARENTS, "parent-9", ""], student_ids=[*STUDENTS, "student-9"],
+        table=world.table,
+    )
+
+    assert world.table.calls["get_item"] == 0
+    assert world.table.calls["batch_get_item"] == 1
+    assert batched.children == {
+        parent_id: current_relationship.children_of(parent_id, table=world.table)
+        for parent_id in (*PARENTS, "parent-9")
+    }
+    assert batched.parents == {
+        student_id: current_relationship.parents_of(student_id, table=world.table)
+        for student_id in (*STUDENTS, "student-9")
+    }
+    assert [verdict.student_id for verdict in batched.children["parent-1"]] == ["student-1"]
+    assert [verdict.parent_id for verdict in batched.parents["student-4"]] == ["parent-2"]
+
+
+def test_current_relationships_of_hands_back_the_profiles_it_read(world):
+    world.link("parent-1", "student-1")
+    world.account("student-1", "student", account_number="S26-0001")
+
+    batched = current_relationship.current_relationships_of(
+        parent_ids=["parent-1"], table=world.table
+    )
+
+    assert batched.profiles["student-1"]["account_number"] == "S26-0001"
+    assert set(batched.profiles) == {"parent-1", "student-1"}
+
+
+def test_current_relationships_of_with_nobody_reads_nothing(world):
+    batched = current_relationship.current_relationships_of(table=world.table)
+
+    assert batched == current_relationship.CurrentRelationships({}, {}, {})
+    assert dict(world.table.calls) == {}
+
+
 # --- Revoking -----------------------------------------------------------------
 
 

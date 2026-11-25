@@ -21,6 +21,7 @@ from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa import config
 from stoa.db.repositories import (
+    account_deletion_repo,
     parent_link_repo,
 )
 from stoa.routers import admin, auth, parents, students
@@ -249,6 +250,9 @@ def _seed_profile(
         # no birthday reads as a minor and is kept off the self-service path.
         **({"date_of_birth": date_of_birth} if date_of_birth else {}),
         "created_at": "2026-03-01T09:00:00+00:00",
+        # Card 133: listed in GSI-Listing, as every profile written now is.
+        "listing": account_deletion_repo.ACCOUNT_LISTING,
+        "listed_at": "2026-03-01T09:00:00+00:00",
         "version": 1,
     }
     table.rows[(f"USER#{user_id}", "ACCOUNT_FENCE")] = {
@@ -972,7 +976,9 @@ def test_分页按limit切页_下一页不重不漏(table: AccountAdminTable) ->
             break
 
     # Counting alone would pass while a page repeated a row the next one dropped.
-    assert seen == sorted(seen)
+    # Newest first (card 133); the same creation time falls back to key order,
+    # reversed, on the double.
+    assert seen == sorted(seen, reverse=True)
     assert len(seen) == len(set(seen))
     assert set(seen) == {f"student-{index:02d}" for index in range(10)}
     assert pages == [3, 3, 3, 1]
