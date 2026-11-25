@@ -15,7 +15,6 @@ from stoa.db.repositories import account_deletion_repo
 
 
 DRAFT_ENTITY = "ai_teacher_draft"
-AI_DRAFT_PRIVATE_ROW_REGISTRY = frozenset({"ai_teacher_draft"})
 AI_DRAFT_WRITER_REGISTRY = frozenset({"put_draft", "update_draft"})
 AI_DRAFT_PRIVATE_FIELDS = frozenset(
     {

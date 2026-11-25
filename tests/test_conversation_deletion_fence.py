@@ -26,31 +26,10 @@ def _contract(name: str) -> Any:
     return value
 
 
-def test_conversation_source_registry_closes_rows_writers_and_private_fields() -> None:
-    rows = _contract("CONVERSATION_PRIVATE_ROW_REGISTRY")
-    writers = _contract("CONVERSATION_WRITER_REGISTRY")
+def test_conversation_private_fields_are_declared() -> None:
+    # Which rows are a conversation's is the data type catalog's to say (#586),
+    # and what their deletion does too (#639).
     private = _contract("CONVERSATION_PRIVATE_FIELDS")
-    assert {
-        "conversation_header",
-        "conversation_message",
-        "teacher_note",
-        "message_command",
-        "chat_quota_operation",
-        "chat_usage_event",
-        "attachment_association",
-        # The conversation's help request is its own row since #189.
-        "help_request",
-    } <= set(rows)
-    assert {
-        "create_conversation",
-        "message_command_claim",
-        "message_attachment_commit",
-        "ai_lease_claim",
-        "ai_lease_renew",
-        "ai_completion",
-        "teacher_help",
-        "usage_event",
-    } <= set(writers)
     assert {
         "content",
         "result_json",

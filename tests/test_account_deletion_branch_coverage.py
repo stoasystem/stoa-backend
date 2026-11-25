@@ -19,39 +19,30 @@ It works by `entity_type`, the name every kind of row is written with:
    string it stands for, and `a if c else b` to both. A writer whose value it
    cannot resolve (an f-string, a parameter) must be in `UNRESOLVED_WRITERS`,
    saying what it writes.
-2. Each type is listed once: in `deleted_by_branch()`, with the branch that
+2. Each type the catalog (`stoa.db.data_catalog`) says points to an account,
+   and does not keep, is listed in `deleted_by_branch()` with the branch that
    picks it and one row of that type belonging to the account, keyed the way
-   its writer keys it; or in `KEPT`, with why no branch picks it. A type in
-   neither fails; a listed type the code no longer writes fails as stale,
-   unless it is in `NO_LONGER_WRITTEN`: rows the code stopped writing but that
-   may still be stored, so their branch still has to delete them. Such a type
-   stays in `deleted_by_branch()` with a row keyed as its old writer keyed it,
-   and fails if anything writes it again.
+   its writer keys it. A type that points to no account, or that the catalog
+   keeps (`Keep`, with its reason), is not listed (#639). A listed type the
+   code no longer writes fails as stale, unless it is in `NO_LONGER_WRITTEN`:
+   rows the code stopped writing but that may still be stored, so their branch
+   still has to delete them. Such a type stays in `deleted_by_branch()` with a
+   row keyed as its old writer keyed it, and fails if anything writes it again.
 3. The `deleted_by_branch()` rows are stored and every branch is run over the
    account the way a registry-path deletion runs it, with the branches' row
    operations replaced by a recorder. Each row must reach the branch it is
    listed under, so a listing cannot name a branch that does not pick the row.
    A branch that acts on rows through an operation the recorder does not
    replace (`picks_by_branch`) records nothing: add the operation there.
+4. What the catalog says a type's deletion does (`DataType.deletion`, #639) is
+   what the branch that picks it does: deletes the row, or replaces it with a
+   tombstone of exactly its family's allowlist (`FAMILY_ACTIONS`).
 
 A new kind of row therefore fails here until someone decides: make a branch
-pick it and list it with a row of its shape, or say in `KEPT` why it stays.
-Rows written with no `entity_type` at all are outside this test.
-
-Reasons in `KEPT`:
-- deletion_flow: rows the deletion machinery writes about its own work
-  (commands, fences, debts, tombstones, the owner registry, release progress).
-- removed_with: no branch picks the row itself; the branch that settles
-  another row removes it too (the comment says which).
-- not_deletion_data: a class the deletion inventory excludes (billing,
-  authored curriculum, teacher applications, privileged identity, security
-  audit), or a row that names no account.
-- expires: a short-lived row that goes by its own `expires_at` TTL, soon
-  enough that deletion leaves it to that (the comment gives how long).
-- no_caller: nothing in `src/stoa` calls its writers. If one gets a caller,
-  decide again.
-- gap: the account's, no branch picks it, and no TTL settles it. Listed so the
-  question is visible rather than silent; see #534.
+pick it and list it with a row of its shape, or say in the catalog that it
+points to no account or why it is kept. Rows written with no `entity_type` at
+all are outside the first three; the fourth covers them by name
+(`HANDLED_UNLISTED`).
 """
 
 from __future__ import annotations
@@ -87,120 +78,15 @@ UNRESOLVED_WRITERS: dict[str, str] = {
 }
 
 
-KEPT: dict[str, str] = {
-    # -- deletion_flow ------------------------------------------------------------
-    "account_deletion_command": "deletion_flow",
-    "account_deletion_pending": "deletion_flow",
-    "account_fence": "deletion_flow",
-    "provider_identity_revoke_debt": "deletion_flow",
-    "identity_deletion_evidence": "deletion_flow",
-    "teacher_session_deletion_tombstone": "deletion_flow",
-    "ai_teacher_draft_deletion_tombstone": "deletion_flow",
-    "practice_deletion_tombstone": "deletion_flow",
-    "practice_accounting_tombstone": "deletion_flow",
-    # Removed by `account_deletion_repo.delete_owner_registry` once the deletion
-    # is final; until then it is how the deletion finds the account's rows.
-    "owner_registry": "deletion_flow",
-    "owner_registry_sweep_run": "deletion_flow",
-    # The record that a resource's attachments were released (owner, resource
-    # id, cursor, status): written by the release, which account deletion runs
-    # too. It holds no content and stays as the release's receipt.
-    "attachment_retention_fence": "deletion_flow",
-    # Written by `reconcile_curriculum_signal` while the curriculum branch runs.
-    "curriculum_signal_reconciliation": "deletion_flow",
-    # -- removed_with -------------------------------------------------------------
-    # Released by the profile's deletion tombstone, in the same transaction
-    # (`account_deletion_repo._email_claim_release`).
-    "account_email_claim": "removed_with",
-    # Reconciled through the owner's `curriculum_signal_owner_manifest` row,
-    # which the curriculum_signal branch picks.
-    "curriculum_analytics_signal": "removed_with",
-    # -- not_deletion_data --------------------------------------------------------
-    # Billing, excluded from deletion as `subscription_billing_accounting`.
-    "allowance_plan": "not_deletion_data",
-    "beneficiary_grant": "not_deletion_data",
-    "billing_activation_receipt": "not_deletion_data",
-    "billing_event_inbox": "not_deletion_data",
-    "billing_object_fact": "not_deletion_data",
-    "billing_projection": "not_deletion_data",
-    "billing_reconciliation_lease": "not_deletion_data",
-    "billing_semantic_dedupe": "not_deletion_data",
-    "checkout_command": "not_deletion_data",
-    "checkout_open_guard": "not_deletion_data",
-    "checkout_public_lookup": "not_deletion_data",
-    "paid_grant_history": "not_deletion_data",
-    "paid_transition": "not_deletion_data",
-    "subscription_billing": "not_deletion_data",
-    "subscription_billing_event": "not_deletion_data",
-    "subscription_billing_event_dedupe": "not_deletion_data",
-    "subscription_billing_provider_lookup": "not_deletion_data",
-    "subscription_billing_refund_idempotency": "not_deletion_data",
-    "subscription_payment_rollout": "not_deletion_data",
-    "subscription_request": "not_deletion_data",
-    "subscription_request_event": "not_deletion_data",
-    "subscription_request_open_guard": "not_deletion_data",
-    # Authored curriculum, excluded as `authored_public_curriculum`.
-    "curriculum_audit_event": "not_deletion_data",
-    "curriculum_migration_evidence": "not_deletion_data",
-    "curriculum_pointer": "not_deletion_data",
-    "curriculum_publish_manifest": "not_deletion_data",
-    "curriculum_version": "not_deletion_data",
-    "practice_challenge_pointer": "not_deletion_data",
-    # Teacher applications, excluded as `teacher_application`.
-    "teacher_activation_command": "not_deletion_data",
-    "teacher_activation_invitation": "not_deletion_data",
-    "teacher_application_review": "not_deletion_data",
-    "teacher_application_version": "not_deletion_data",
-    # Excluded as `privileged_identity_admin`.
-    "privileged_identity_command": "not_deletion_data",
-    # The security audit trail.
-    "security_audit_event": "not_deletion_data",
-    "authorization_probe_aggregate": "not_deletion_data",
-    # Names no account: a count per curriculum item; the next free number per
-    # role and year; a count per subject and knowledge point, personal-looking
-    # names refused (`knowledge_gap_repo.looks_personal`), 180 days; an
-    # anonymous visitor's event by client session id, 90 days; a hashed request
-    # source's attempts; a weekly count under a digest of the support scope.
-    "curriculum_analytics_metric": "not_deletion_data",
-    "account_number_sequence": "not_deletion_data",
-    "knowledge_gap": "not_deletion_data",
-    "analytics_event": "not_deletion_data",
-    "invitation_claim_throttle": "not_deletion_data",
-    "source_rate_window": "not_deletion_data",
-    "teacher_support_counter": "not_deletion_data",
-    # An invitation id and token digest only; once the invitation row is gone
-    # (identity_cross_account) it leads nowhere, which reads as no invitation.
-    "account_invitation_pointer": "not_deletion_data",
-    # A number is claimed for good so it is never handed to another account;
-    # the row holds the number, role, year and the (now unused) account id.
-    "account_number": "not_deletion_data",
-    # -- expires ------------------------------------------------------------------
-    "password_change_code": "expires",  # 10 minutes
-    "password_change_send_quota": "expires",  # 1 hour
-    "parent_link_request_quota": "expires",  # 2 days
-    "teacher_seen": "expires",  # 1 day
-    # Keyed by the provider identity; expires when the sign-in would have.
-    "auth_sign_in_revocation": "expires",
-    # -- no_caller (see test_owner_registry_unfenced_writers) ---------------------
-    "AUDIT_RETENTION_EVENT": "no_caller",
-    "AUDIT_RETENTION_IMMUTABLE_MANIFEST": "no_caller",
-    "LEGAL_HOLD_AUDIT_EVENT": "no_caller",
-    "LEGAL_HOLD_METADATA": "no_caller",
-    "LEGAL_HOLD_REVIEW_METADATA": "no_caller",
-    "REPORT_ARTIFACT_EDIT_DRAFT": "no_caller",
-    "REPORT_ARTIFACT_ROLLBACK_PREVIEW": "no_caller",
-    "REPORT_EDIT_DRAFT": "no_caller",
-    "RETENTION_APPROVAL_AUDIT_EVENT": "no_caller",
-    "RETENTION_APPROVAL_METADATA": "no_caller",
-    "SUPPORT_CRM_MESSAGE_EVENT": "no_caller",
-    "SUPPORT_CRM_MESSAGE_FEED": "no_caller",
-    "SUPPORT_HANDOFF_AUDIT_EVENT": "no_caller",
-    "SUPPORT_HANDOFF_DELIVERY": "no_caller",
-    "SUPPORT_HANDOFF_DELIVERY_AUDIT_EVENT": "no_caller",
-    "SUPPORT_HANDOFF_DELIVERY_FEED": "no_caller",
-}
+def kept_or_unowned() -> set[str]:
+    """Types no branch picks: the catalog says they point to no account, or keeps them."""
+    from stoa.db import data_catalog
 
-_REASONS = {"deletion_flow", "removed_with", "not_deletion_data", "expires", "no_caller", "gap"}
+    return {
+        name
+        for name, entry in data_catalog.CATALOG.items()
+        if entry.deletion is None or isinstance(entry.deletion.owner, data_catalog.Keep)
+    }
 
 
 # Types nothing writes any more whose stored rows may still be in the table:
@@ -575,18 +461,18 @@ def picks_by_branch(
 
 def test_every_written_entity_type_is_deleted_by_a_branch_or_kept():
     found, _ = written_entity_types(ROOT)
-    listed = deleted_by_branch().keys() | KEPT.keys()
+    listed = deleted_by_branch().keys() | kept_or_unowned()
     new = {entity_type: sorted(found[entity_type]) for entity_type in sorted(found.keys() - listed)}
     assert not new, (
         "rows written with an entity_type no deletion branch is listed for: make a branch "
-        "pick it and add a row of it to deleted_by_branch(), or list it in KEPT with "
-        f"its reason: {new}"
+        "pick it and add a row of it to deleted_by_branch(), or say in the data type catalog "
+        f"that it points to no account or why it is kept (Keep): {new}"
     )
 
 
 def test_the_lists_name_only_entity_types_the_code_writes():
     found, _ = written_entity_types(ROOT)
-    listed = deleted_by_branch().keys() | KEPT.keys()
+    listed = deleted_by_branch().keys()
     stale = sorted(listed - found.keys() - NO_LONGER_WRITTEN.keys())
     assert not stale, (
         "no longer written anywhere in src/stoa: remove from the lists, or, if rows of it "
@@ -608,9 +494,8 @@ def test_a_type_no_longer_written_is_not_written_and_is_still_deleted():
     )
 
 
-def test_no_entity_type_is_both_deleted_and_kept_and_every_reason_is_known():
-    assert not deleted_by_branch().keys() & KEPT.keys()
-    assert {reason for reason in KEPT.values()} <= _REASONS
+def test_no_entity_type_is_both_deleted_and_kept():
+    assert sorted(deleted_by_branch().keys() & kept_or_unowned()) == []
 
 
 def test_every_unresolved_writer_is_reviewed():
@@ -693,3 +578,132 @@ def test_the_scan_sees_a_new_entity_type(tmp_path):
     found, unresolved = written_entity_types(tmp_path)
     assert set(found) == {"literal_row", "constant_row", "shared_row", "updated_row"}
     assert unresolved == {"src/stoa/new_repo.py::tombstone"}
+
+
+# -- 4. the catalog's deletion is the branch's ------------------------------------------
+
+
+def _identity_evidence_fields() -> frozenset[str]:
+    """The fields `terminalize_identity_row` writes in place of an identity or grant."""
+    from stoa.db.repositories import account_deletion_repo
+
+    written: list[dict[str, Any]] = []
+
+    class _Recorder:
+        def replace_with_deletion_tombstone(self, _item, evidence, *_args) -> None:
+            written.append(evidence)
+
+    account_deletion_repo.terminalize_identity_row(
+        {"PK": "IDENTITY#i#s", "SK": "BINDING", "user_id": ACCOUNT, "version": 1},
+        user_id=ACCOUNT, generation=1, now_iso="2026-11-25T00:00:00+00:00", table=_Recorder(),
+    )
+    return frozenset(written[0])
+
+
+def family_actions() -> dict[str, Any]:
+    """Each branch's action on the rows it picks: "delete", or its tombstone's allowlist."""
+    from stoa.db.repositories import (
+        account_deletion_repo,
+        adaptive_learning_repo,
+        ai_teacher_tools_repo,
+        attachment_repo,
+        moderation_repo,
+        notification_repo,
+        practice_repo,
+        report_repo,
+    )
+
+    return {
+        "account_profile": "delete",
+        "identity_cross_account": "delete",
+        "capability_scope": _identity_evidence_fields(),
+        "question_ocr_session": account_deletion_repo.QUESTION_TOMBSTONE_ALLOWLIST,
+        "attachments": "delete",
+        "moderation": moderation_repo.MODERATION_TOMBSTONE_ALLOWLIST,
+        "report_records": report_repo.REPORT_TOMBSTONE_ALLOWLIST,
+        "report_artifacts": report_repo.REPORT_TOMBSTONE_ALLOWLIST,
+        "conversation_messages": attachment_repo.CONVERSATION_TOMBSTONE_ALLOWLIST,
+        "practice_progress": practice_repo.PRACTICE_TOMBSTONE_ALLOWLIST,
+        "adaptive_assignment": adaptive_learning_repo.ADAPTIVE_TOMBSTONE_ALLOWLIST,
+        "learning_memory": adaptive_learning_repo.ADAPTIVE_TOMBSTONE_ALLOWLIST,
+        "ai_teacher_draft": ai_teacher_tools_repo.AI_DRAFT_TOMBSTONE_ALLOWLIST,
+        "curriculum_signal": "delete",
+        "notification_device_realtime": notification_repo.NOTIFICATION_TOMBSTONE_ALLOWLIST,
+    }
+
+
+# Within a branch, rows handled unlike the rest of it.
+BRANCH_EXCEPTIONS: dict[str, str] = {
+    # `terminalize_identity_row`, after the sign-in provider's user is revoked.
+    "identity_binding": "capability_scope",
+    "user_identity_inventory": "capability_scope",
+    "public_identity_command": "capability_scope",
+    # `revoke_account_connection` deletes the connection.
+    "websocket_connection": "account_profile",
+}
+
+# Kinds the branches handle that `deleted_by_branch()` does not list: written with
+# no `entity_type`, or legacy kinds nothing writes. The branch whose action they get.
+HANDLED_UNLISTED: dict[str, str] = {
+    # The profile's own deletion tombstone, which has the question allowlist.
+    "user_profile": "question_ocr_session",
+    "question": "question_ocr_session",
+    "teacher_escalation_intent": "question_ocr_session",
+    "attachment_storage_usage": "attachments",
+    "report_summary": "report_records",
+    "usage_counter": "practice_progress",
+    "practice_attempt": "practice_progress",
+    **{
+        f"legacy_untyped_{suffix}": "practice_progress"
+        for suffix in (
+            "progress", "review", "activity", "quiz", "usage_ledger",
+            "practice", "practice_attempt", "practice_progress",
+        )
+    },
+}
+
+
+def _action(deletion: Any) -> Any:
+    from stoa.db import data_catalog
+
+    owner = deletion.owner
+    if isinstance(owner, data_catalog.Delete):
+        return "delete"
+    if isinstance(owner, data_catalog.Tombstone):
+        return owner.keeps
+    return owner
+
+
+def test_the_catalog_says_what_the_branch_that_picks_a_type_does():
+    from stoa.db import data_catalog
+    from stoa.db.repositories import account_deletion_repo
+
+    actions = family_actions()
+    expected = {
+        name: actions[BRANCH_EXCEPTIONS.get(name, branch)]
+        for name, (branch, _) in deleted_by_branch().items()
+    }
+    expected.update({name: actions[branch] for name, branch in HANDLED_UNLISTED.items()})
+    # A teacher session is tombstoned with the session allowlist, whichever side is deleted.
+    expected["teacher_session"] = account_deletion_repo.SESSION_TOMBSTONE_ALLOWLIST
+    entries = {entry.name: entry for entry in (*data_catalog.CATALOG.values(), *data_catalog.UNTYPED)}
+    wrong = {
+        name: {"branch": want if isinstance(want, str) else sorted(want),
+               "catalog": _action(entries[name].deletion)}
+        for name, want in sorted(expected.items())
+        if _action(entries[name].deletion) != want
+    }
+    assert not wrong, wrong
+
+
+def test_every_type_the_deletion_handles_is_checked_against_its_branch():
+    from stoa.db import data_catalog
+
+    handled = {
+        entry.name
+        for entry in (*data_catalog.CATALOG.values(), *data_catalog.UNTYPED)
+        if entry.deletion is not None and not isinstance(entry.deletion.owner, data_catalog.Keep)
+    }
+    checked = deleted_by_branch().keys() | HANDLED_UNLISTED.keys() | {"teacher_session"}
+    assert sorted(handled - checked) == [], "add the type to deleted_by_branch() or HANDLED_UNLISTED"
+    assert sorted(checked - handled) == [], "the catalog keeps it, or it points to no account"

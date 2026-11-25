@@ -49,7 +49,7 @@ How code in this repository is usually written. Moved from the old `.planning/co
 Every kind of row the code writes has one entry in the data type catalog, `src/stoa/db/data_catalog.py` (#586). When you add a new `entity_type` - or a writer starts putting a new attribute that holds an account id on an existing one - give its entry three things:
 
 - **The account pointers**: every place the row names an account (`Field`, `Ids`, `Summaries`, `KeyId` for an account in the key, `ScopeId`), each with its role: `owner` when deleting that account removes or tombstones the row, `reference` when it only scrubs the name out. A type that points to no account declares `accounts=()`. An attribute that looks like an account id but is deliberately not handled (an administrator's `updated_by`) goes in `not_pointers`, with its reason.
-- **The deletion handling**: the `deletion` slot, empty until candidate I fills it (see #586).
+- **The deletion handling** (`DELETIONS`, #639): for a type that points to an account, what deleting that account does - for an owned row `Delete`, `Tombstone` (with the fields the tombstone keeps) or `Keep` (with why); for a row that only names the account `Scrub` or `Keep` - and any `Effect` outside the row (an S3 object, the sign-in provider, attachments). A type that points to no account has none. Until #641 the deletion branches still decide this in their own code, so a new type also needs its branch to do what the entry says.
 - **The owning module**: where its rows are written.
 
 Nothing else decides which accounts a row names: read it through `data_catalog.mentions` / `names` / `owns` / `role_of`, not a field list of your own. Account deletion does (#588): every deletion scan asks the catalog whose a row is and keeps only its own choice of which kinds it handles and how, so a row the catalog does not know is one no deletion takes. So does the owner registry (#589): a write registers its partition under every account the catalog says its rows name, and under nobody else. A row written without an `entity_type` is matched by its key (`UNTYPED`); prefer giving new rows an `entity_type`.
@@ -59,7 +59,8 @@ Write such rows through `db_table.fenced` (behind the owner's account fence) or,
 What fails if you don't:
 
 - `tests/test_data_catalog.py`: a written `entity_type` with no entry, an entry nothing writes, an entry naming the wrong module, an account-looking attribute a writer writes that the entry neither declares nor lists in `not_pointers`, a writer whose fields the scan cannot read that is not in `FIELDS_READ_BY_HAND`, and a declared pointer the catalog does not read.
-- `tests/test_account_deletion_branch_coverage.py`: the same `entity_type` with no deletion branch and no `KEPT` reason (#534).
+- `tests/test_data_catalog.py` also: a type that points to an account in a role with no action for it in `DELETIONS`, or one that points to none and has one.
+- `tests/test_account_deletion_branch_coverage.py`: an `entity_type` that points to an account, is not kept, and has no deletion branch (#534); and an entry whose deletion is not what its branch does (#639).
 - `tests/test_owner_registry_unfenced_writers.py`: a function that writes to the table without calling `db_table.fenced` or `db_table.registered`, unless it is listed with its reason.
 
 The daily owner registry sweep (`stoa.services.owner_registry_sweep`) checks the stored rows against the same catalog: a missing registration or a leftover of a deleted account is a finding, and rows of a kind the catalog does not know are counted on their own line (`rows_unknown_to_catalog`).

@@ -15,7 +15,6 @@ from stoa.db.repositories import account_deletion_repo
 
 MEMORY_ENTITY = "learning_memory_snapshot"
 ASSIGNMENT_ENTITY = "learning_assignment"
-ADAPTIVE_PRIVATE_ROW_REGISTRY = frozenset({"assignment", "learning_memory"})
 ADAPTIVE_WRITER_REGISTRY = frozenset(
     {
         "put_assignment",

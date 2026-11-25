@@ -294,38 +294,6 @@ class ConversationPrivatePage:
     scanned_count: int = 0
 
 
-CONVERSATION_PRIVATE_ROW_REGISTRY = frozenset(
-    {
-        "conversation_header",
-        "conversation_message",
-        "teacher_note",
-        "message_command",
-        "chat_quota_operation",
-        "chat_usage_event",
-        "attachment_association",
-        # What a new Ask question asked about (#143).
-        "asked_knowledge_points",
-        # The conversation's request for a teacher (#189).
-        "help_request",
-    }
-)
-CONVERSATION_WRITER_REGISTRY = frozenset(
-    {
-        "create_conversation",
-        "message_command_claim",
-        "message_attachment_commit",
-        "ai_lease_claim",
-        "ai_lease_renew",
-        "ai_completion",
-        "ai_failure",
-        "ai_invocation_record",
-        "ai_result_record",
-        "generation_context_record",
-        "allowance_settlement",
-        "teacher_help",
-        "usage_event",
-    }
-)
 CONVERSATION_PRIVATE_FIELDS = frozenset(
     {
         "content",
