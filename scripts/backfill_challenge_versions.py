@@ -24,6 +24,7 @@ import boto3
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from stoa.db.repositories import practice_repo  # noqa: E402
+from stoa.services import curriculum_cache  # noqa: E402
 
 
 def stored_challenges(table) -> list[dict]:
@@ -91,6 +92,7 @@ def main() -> int:
         # challenge without one cannot be answered at all.
         table.put_item(Item=practice_repo.challenge_pointer(versioned))
         written += 1
+    curriculum_cache.touch_catalog_stamp(table)
     print(f"\nwrote {written} versions and their pointers")
 
     after = stored_challenges(table)

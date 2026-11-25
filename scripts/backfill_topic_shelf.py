@@ -42,6 +42,7 @@ for folder in (ROOT, ROOT / "src"):
 
 from stoa.db.repositories import practice_repo  # noqa: E402
 from stoa.security.aws_operator_identity import require_sso_operator_session  # noqa: E402
+from stoa.services import curriculum_cache  # noqa: E402
 
 DEFAULT_AWS_ACCOUNT_ID = "562923011260"
 
@@ -155,6 +156,7 @@ def apply(table: Any, planned: Plan) -> Counter[str]:
             outcome["changed meanwhile, skipped"] += 1
             continue
         outcome["written"] += 1
+    curriculum_cache.touch_catalog_stamp(table)
     return outcome
 
 

@@ -692,6 +692,7 @@ _ENTRIES: tuple[DataType, ...] = (
     ),
     DataType("curriculum_signal_reconciliation", _repo("curriculum_analytics_repo"), ()),
     DataType("curriculum_audit_event", _repo("curriculum_ops_repo"), ()),
+    DataType("curriculum_catalog_stamp", "stoa.services.curriculum_cache", ()),
     DataType("curriculum_migration_evidence", _repo("curriculum_ops_repo"), ()),
     DataType("curriculum_pointer", _repo("curriculum_ops_repo"), (), _not(_ADMIN, "updated_by")),
     DataType("curriculum_publish_manifest", _repo("curriculum_ops_repo"), ()),

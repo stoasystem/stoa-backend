@@ -71,8 +71,7 @@ def test_a_skill_point_appears_once_an_exercise_trains_it_and_lights_when_answer
     assert not set(NEW_SKILLS) & set(before)
 
     _publish(_payload(_exercise(1, skills=["brueche-ganzes-bestimmen"])))
-    # The publish writes no catalog stamp, so the kept curriculum holds for its TTL.
-    now[0] += curriculum_cache.UNSTAMPED_TTL
+    # The clock stands still: the publish's catalog stamp alone makes the new exercise seen.
 
     after = _skill_points(table)
     assert after["brueche-ganzes-bestimmen"] is False

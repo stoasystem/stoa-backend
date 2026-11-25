@@ -207,6 +207,7 @@ REVIEWED: dict[str, str] = {
     "src/stoa/db/repositories/curriculum_ops_repo.py::put_published_projection": "not_deletion_data",
     "src/stoa/db/repositories/curriculum_ops_repo.py::put_version": "not_deletion_data",
     "src/stoa/db/repositories/curriculum_ops_repo.py::set_practice_attributes": "not_deletion_data",
+    "src/stoa/services/curriculum_cache.py::touch_catalog_stamp": "not_deletion_data",
     "src/stoa/db/repositories/curriculum_ops_repo.py::set_published_pointer": "not_deletion_data",
     "src/stoa/db/repositories/identity_repo.py::record_sign_in_revocation": "not_deletion_data",
     "src/stoa/db/repositories/notification_repo.py::put_event": "not_deletion_data",

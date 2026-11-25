@@ -12,6 +12,7 @@ from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.services import (
     answer_judging,
     curriculum_analytics_service,
+    curriculum_cache,
     curriculum_service,
     curriculum_translations,
     error_causes,
@@ -362,6 +363,7 @@ def publish(
         raise RuleViolation(CurriculumErrorCode.STALE_POINTER) from exc
 
     curriculum_ops_repo.put_published_projection(version, manifest)
+    curriculum_cache.touch_catalog_stamp()
     updated = _with_state(version, "published", user)
     updated["published_at"] = now
     curriculum_ops_repo.put_version(updated)
@@ -407,6 +409,7 @@ def rollback(
     except curriculum_ops_repo.StalePointerError as exc:
         raise RuleViolation(CurriculumErrorCode.STALE_POINTER) from exc
     curriculum_ops_repo.put_published_projection(version, manifest)
+    curriculum_cache.touch_catalog_stamp()
     curriculum_analytics_service.record_publish_event(version, operation="publish")
     published_version_id = pointer.get("published_version_id")
     if not isinstance(published_version_id, str):
@@ -437,6 +440,7 @@ def archive(public_id: str, version_id: str, user: dict[str, Any], *, reason: st
     updated = _with_state(version, "archived", user)
     updated["archive_reason"] = reason
     curriculum_ops_repo.put_version(updated)
+    curriculum_cache.touch_catalog_stamp()
     curriculum_analytics_service.record_publish_event(updated, operation="archive")
     _audit(public_id, user, "archive", version.get("state"), "archived", version_id, reason)
     return _version_response(updated)

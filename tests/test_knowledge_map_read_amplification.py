@@ -15,7 +15,15 @@ from typing import Any
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.services import curriculum_cache
+from test_curriculum_publish_projection import (
+    LESSON_ID,
+    _exercise,
+    _payload,
+    _publish,
+    install_seeded_table,
+)
 from test_curriculum_reads import SMALL, _client, _get, _table
 
 #: The profile, read by the authorization dependency and by the reader's locale.
@@ -262,3 +270,66 @@ class _WireClient:
                 "LastEvaluatedKey": {"PK": {"S": "P"}, "SK": {"S": "LESSON#a"}},
             }
         return {"Items": [{"PK": {"S": "P"}, "SK": {"S": "LESSON#b"}}]}
+
+
+# -- a publish writes the stamp ---------------------------------------------------------
+
+
+def _published_table(monkeypatch: pytest.MonkeyPatch) -> Any:
+    table = install_seeded_table(monkeypatch)
+    table.seed(
+        {
+            "PK": "USER#student-1",
+            "SK": "PROFILE",
+            "user_id": "student-1",
+            "role": "student",
+            "account_status": "active",
+            "grade": "Grade 6",
+        }
+    )
+    return table
+
+
+def _practice_set_ids() -> list[str]:
+    response = _client("student").get(
+        "/practice/knowledge-map/stars", params={"subjectId": "math", "around": "brueche-u2"}
+    )
+    assert response.status_code == 200, response.text
+    focus = next(star for star in response.json()["stars"] if star["unitId"] == "brueche-u2")
+    return [item["lessonId"] for item in focus["practiceSets"]]
+
+
+def test_a_published_lesson_is_seen_at_once_by_every_container(
+    monkeypatch: pytest.MonkeyPatch, clock: list[float]
+) -> None:
+    """The clock stands still: only the stamp the publish writes can show the lesson."""
+    table = _published_table(monkeypatch)
+    assert LESSON_ID not in _practice_set_ids()
+    other_container = curriculum_cache._kept
+
+    _publish(_payload(_exercise(1)))
+
+    stamp = table.get_item(Key=dict(curriculum_cache.STAMP_KEY))["Item"]
+    assert stamp["entity_type"] == curriculum_cache.STAMP_ENTITY
+    monkeypatch.setattr(curriculum_cache, "_kept", other_container)
+    assert LESSON_ID in _practice_set_ids()
+
+
+def test_a_publish_stands_when_its_stamp_cannot_be_written(
+    monkeypatch: pytest.MonkeyPatch, clock: list[float]
+) -> None:
+    table = _published_table(monkeypatch)
+    real_put = db_table.put
+
+    def refuse_the_stamp(**request: Any) -> Any:
+        if request["Item"]["PK"] == curriculum_cache.STAMP_KEY["PK"]:
+            raise db_table.TableUnavailable("stamp")
+        return real_put(**request)
+
+    monkeypatch.setattr(curriculum_cache.db_table, "put", refuse_the_stamp)
+
+    _publish(_payload(_exercise(1)))
+
+    assert "Item" not in table.get_item(Key=dict(curriculum_cache.STAMP_KEY))
+    assert table.get_item(Key={"PK": "PRACTICE", "SK": f"LESSON#{LESSON_ID}"}).get("Item")
+    assert LESSON_ID in _practice_set_ids()

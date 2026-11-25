@@ -145,7 +145,7 @@ def test_no_write_names_a_position_field(monkeypatch: pytest.MonkeyPatch) -> Non
             for field in POSITION_FIELDS:
                 assert field not in request["UpdateExpression"]
         elif operation == "put_item":
-            assert request["Item"]["SK"] == "CURRICULUM_SEED"
+            assert request["Item"]["SK"] in {"CURRICULUM_SEED", "STAMP"}
             assert not set(request["Item"]) & POSITION_FIELDS
 
 
@@ -162,6 +162,7 @@ def test_the_seed_writes_its_stamp(monkeypatch: pytest.MonkeyPatch) -> None:
     assert stamp["knowledge_base"] == "preview"
     assert "knowledge_base_prerequisites" not in stamp
     assert stamp["seeded_at"]
+    assert table.rows[("PRACTICE_CATALOG", "STAMP")]["stamp"]
 
 
 def test_the_stamp_is_written_after_every_row(monkeypatch: pytest.MonkeyPatch) -> None:

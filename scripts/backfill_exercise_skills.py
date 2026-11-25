@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from stoa.db import table as db_table  # noqa: E402
 from stoa.db.repositories import practice_repo  # noqa: E402
-from stoa.services import curriculum_translations  # noqa: E402
+from stoa.services import curriculum_cache, curriculum_translations  # noqa: E402
 
 import seed_practice  # noqa: E402
 
@@ -125,6 +125,7 @@ def main() -> int:
         canonical, pointer = rewritten(row, skills)
         table.put_item(Item=canonical)
         table.put_item(Item=pointer)
+    curriculum_cache.touch_catalog_stamp(table)
     print(f"Done! {len(pending)} challenges written to {args.table}.")
     return 0
 
