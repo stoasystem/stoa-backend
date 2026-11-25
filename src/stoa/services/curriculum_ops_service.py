@@ -126,7 +126,12 @@ EXERCISE_FIELD_ALIASES = {
 
 
 def list_worklist(status: str | None = None, limit: int = 100) -> dict[str, Any]:
-    rows = curriculum_ops_repo.list_worklist()
+    def shown(version: dict[str, Any], published: dict[str, str]) -> bool:
+        if not status:
+            return True
+        return _effective_state(version, published.get(str(version.get("public_id")))) == status
+
+    rows = curriculum_ops_repo.list_worklist(want=limit, keep=shown)
     items = [
         _lesson_version_response(
             version, rows.published_version_ids.get(str(version.get("public_id")))

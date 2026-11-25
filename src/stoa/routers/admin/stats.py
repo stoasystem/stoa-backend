@@ -37,14 +37,15 @@ class StatsResponse(BaseModel):
     counts_complete: bool = True
 
 
-# Each census below walks the whole table one megabyte at a time. The budget is
-# what stops a runaway table turning the dashboard into a timeout.
+# The budget on each census's pages: what stops a runaway read turning the
+# dashboard into a timeout. Questions and help requests are read through
+# GSI-Listing (card 133), so their pages follow how many there are.
 ADMIN_STATS_MAX_PAGES = 50
 
 
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats(actor: Actor = Depends(admin_operation)):
-    """Return aggregate platform metrics (full-table scan — small scale only)."""
+    """Return aggregate platform metrics."""
     table = db_table.table()
 
     # Count user profiles
@@ -72,7 +73,7 @@ async def get_stats(actor: Actor = Depends(admin_operation)):
 
     # A help request is not a question row since #189; it is counted, and its
     # response times measured, from its own record.
-    help_metrics = [help_requests.sla_metrics(record) for record in help_requests.list_all(table=table)]
+    help_metrics = [help_requests.sla_metrics(record) for record in help_requests.list_listed(table=table)]
     ai_resolved = sum(1 for q in questions if q.get("status") == QuestionStatus.AI_ANSWERED.value)
     teacher_resolved = sum(
         1 for q in (*questions, *help_metrics) if q.get("status") == QuestionStatus.RESOLVED.value

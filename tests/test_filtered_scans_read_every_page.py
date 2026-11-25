@@ -127,15 +127,22 @@ def test_an_active_assignment_is_found_wherever_its_row_falls(table) -> None:
     assert [item["PK"] for item in refs] == ["ASSIGNMENT#a-1"]
 
 
+def _listed(row: dict) -> dict:
+    # The worklist reads GSI-Listing since card 133; the keys every writer sets.
+    return {**row, **curriculum_ops_repo.listing_fields(row)}
+
+
 def test_a_curriculum_version_is_found_wherever_its_row_falls(table) -> None:
     table.seed(
-        {
-            "PK": "CURRICULUM#c-1",
-            "SK": "V1",
-            "entity_type": curriculum_ops_repo.VERSION_ENTITY,
-            "state": "draft",
-            "updated_at": "2026-10-08T00:00:00Z",
-        }
+        _listed(
+            {
+                "PK": "CURRICULUM#c-1",
+                "SK": "V1",
+                "entity_type": curriculum_ops_repo.VERSION_ENTITY,
+                "state": "draft",
+                "updated_at": "2026-10-08T00:00:00Z",
+            }
+        )
     )
     _bury(table)
 
@@ -145,13 +152,15 @@ def test_a_curriculum_version_is_found_wherever_its_row_falls(table) -> None:
 def test_a_lesson_pointer_is_found_wherever_its_row_falls(table) -> None:
     # The worklist names each lesson's live version from these rows (#111).
     table.seed(
-        {
-            "PK": "CURRICULUM_POINTER#l-1",
-            "SK": "META",
-            "entity_type": curriculum_ops_repo.POINTER_ENTITY,
-            "public_id": "l-1",
-            "published_version_id": "v-2",
-        }
+        _listed(
+            {
+                "PK": "CURRICULUM_POINTER#l-1",
+                "SK": "META",
+                "entity_type": curriculum_ops_repo.POINTER_ENTITY,
+                "public_id": "l-1",
+                "published_version_id": "v-2",
+            }
+        )
     )
     _bury(table)
 
