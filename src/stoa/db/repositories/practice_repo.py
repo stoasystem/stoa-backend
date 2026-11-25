@@ -1095,6 +1095,12 @@ def record_study_day(
     A day is written once and then only touched, so the streak does not depend
     on which kind of work was done - finishing a lesson and clearing a review
     both count.
+
+    Every answer of the day writes this one row, so overlapping answers meet on
+    it (#628). The write is one upsert that reads nothing first: whether the
+    day already stood does not change what is written, so an answer whose day
+    another answer wrote a moment earlier still writes it, and a transaction
+    cancelled because the other one held the row is sent again as it was.
     """
     target = table or db_table.table()
     generation = _write_generation(student_id, account_fence_generation, target)
@@ -1108,31 +1114,31 @@ def record_study_day(
         "last_kind": kind,
         "last_seen_at": at or datetime.now(timezone.utc).isoformat(),
     }
-    existing = None
-    if _atomic_table(target):
-        existing = _get_item(
-            target, Key={"PK": item["PK"], "SK": item["SK"]}, ConsistentRead=True
-        ).get("Item")
-    operations = build_practice_write_transaction(
-        item=item,
-        owner_id=student_id,
-        generation=generation,
-        mode="update" if existing else "put",
-        updates={key: value for key, value in item.items() if key not in {"PK", "SK"}}
-        if existing
-        else None,
-    )
-    if _atomic_table(target):
-        db_table.fenced(
-            student_id,
-            operations,
-            generation=generation,
-            rows=owner_registry.rows_after(existing or item, operations),
-            table=target,
-        )
-    else:
-        _put_item(target, Item=operations[0]["Put"]["Item"])
     item.update(owner_id=student_id, account_fence_generation=generation)
+    if not _atomic_table(target):
+        _put_item(target, Item=item)
+        return item
+    fields = {key: value for key, value in item.items() if key not in {"PK", "SK"}}
+    operations = [
+        {
+            "Update": {
+                "Key": {"PK": item["PK"], "SK": item["SK"]},
+                "UpdateExpression": "SET " + ", ".join(f"#{key}=:{key}" for key in fields),
+                # A new day, or this student's own: never another account's row.
+                "ConditionExpression": "attribute_not_exists(PK) OR owner_id=:owner_id",
+                "ExpressionAttributeNames": {f"#{key}": key for key in fields},
+                "ExpressionAttributeValues": {f":{key}": value for key, value in fields.items()},
+            }
+        }
+    ]
+    db_table.fenced(
+        student_id,
+        operations,
+        generation=generation,
+        rows=owner_registry.rows_after({"PK": item["PK"], "SK": item["SK"]}, operations),
+        resend_own_conflicts=True,
+        table=target,
+    )
     return item
 
 
