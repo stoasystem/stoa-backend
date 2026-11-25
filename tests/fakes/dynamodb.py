@@ -704,6 +704,22 @@ class FakeTable:
             item = self.rows.get(key)
             return {"Item": deepcopy(item)} if item is not None else {}
 
+    def batch_get_item(self, **kwargs: Any) -> dict[str, Any]:
+        """Every requested table's keys in one round trip; nothing is left unprocessed."""
+        with self.lock:
+            self._record("batch_get_item", kwargs)
+            responses: dict[str, list[dict[str, Any]]] = {}
+            for name, request in kwargs["RequestItems"].items():
+                keys = request["Keys"]
+                if len(keys) > 100:
+                    raise ValueError("BatchGetItem takes at most 100 keys")
+                responses[name] = [
+                    deepcopy(item)
+                    for key in keys
+                    if (item := self.rows.get((str(key["PK"]), str(key["SK"])))) is not None
+                ]
+            return {"Responses": responses, "UnprocessedKeys": {}}
+
     def put_item(self, **kwargs: Any) -> dict[str, Any]:
         with self.lock:
             self._record("put_item", kwargs)

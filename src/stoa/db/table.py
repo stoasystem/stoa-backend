@@ -71,12 +71,15 @@ _installed: object | None = None
 
 
 @lru_cache
+def _resource() -> Any:
+    resource = boto3.resource("dynamodb", region_name=config.settings().aws_region)
+    _metered(resource.meta.client)
+    return resource
+
+
+@lru_cache
 def _real_table() -> object:
-    real = boto3.resource("dynamodb", region_name=config.settings().aws_region).Table(
-        config.settings().dynamodb_table_name
-    )
-    _metered(real.meta.client)
-    return real
+    return _resource().Table(config.settings().dynamodb_table_name)
 
 
 def _metered(boto_client: Any) -> Any:
@@ -300,6 +303,66 @@ def get(*, table: object | None = None, **request: object) -> dict[str, Any] | N
     if not isinstance(response, Mapping):
         raise TableUnavailable("malformed_response")
     return _attributes(response.get("Item"), absent=None)
+
+
+BATCH_GET_KEY_LIMIT = 100
+BATCH_GET_ATTEMPTS = 3
+
+type RowKey = tuple[str, str]
+
+
+def get_many(
+    keys: Iterable[Mapping[str, object]],
+    *,
+    table: object | None = None,
+    consistent: bool = False,
+) -> dict[RowKey, dict[str, Any]]:
+    """The items `keys` name, by `(PK, SK)`; a key the table holds nothing for is absent.
+
+    One `BatchGetItem` per hundred keys instead of one `GetItem` per key. Keys left
+    unprocessed are asked again, and still unprocessed after the last attempt is
+    `TableUnavailable("unprocessed_keys")` rather than a silently short answer.
+    A double without `batch_get_item` is read one key at a time.
+    """
+    wanted: list[dict[str, str]] = []
+    seen: set[RowKey] = set()
+    for key in keys:
+        pair = (str(key["PK"]), str(key["SK"]))
+        if pair not in seen:
+            seen.add(pair)
+            wanted.append({"PK": pair[0], "SK": pair[1]})
+    found: dict[RowKey, dict[str, Any]] = {}
+    if not wanted:
+        return found
+    target = table if table is not None else _installed if _installed is not None else None
+    if target is None:
+        batch = _resource().batch_get_item
+        name = config.settings().dynamodb_table_name
+    else:
+        batch = getattr(target, "batch_get_item", None)
+        name = str(getattr(target, "name", "") or "table")
+        if not callable(batch):
+            for key in wanted:
+                item = get(table=target, Key=key, ConsistentRead=consistent)
+                if item is not None:
+                    found[(str(item["PK"]), str(item["SK"]))] = item
+            return found
+    for start in range(0, len(wanted), BATCH_GET_KEY_LIMIT):
+        pending: list[dict[str, str]] = wanted[start : start + BATCH_GET_KEY_LIMIT]
+        for _attempt in range(BATCH_GET_ATTEMPTS):
+            response = batch(RequestItems={name: {"Keys": pending, "ConsistentRead": consistent}})
+            if not isinstance(response, Mapping):
+                raise TableUnavailable("malformed_response")
+            for item in (response.get("Responses") or {}).get(name) or []:
+                row = _attributes(item, absent=None)
+                if row is not None:
+                    found[(str(row["PK"]), str(row["SK"]))] = row
+            pending = list(((response.get("UnprocessedKeys") or {}).get(name) or {}).get("Keys") or [])
+            if not pending:
+                break
+        if pending:
+            raise TableUnavailable("unprocessed_keys")
+    return found
 
 
 def put(*, table: object | None = None, **request: object) -> dict[str, Any]:
