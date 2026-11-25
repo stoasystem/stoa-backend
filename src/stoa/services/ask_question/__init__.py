@@ -23,8 +23,10 @@ failures carry an `AskQuestionErrorCode`.
 """
 import logging
 from collections.abc import Callable, Mapping
+from contextlib import suppress
 from datetime import UTC, datetime, timezone
 
+from stoa.observability import telemetry
 from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.security.identity import Actor
 from stoa.services.ask_question import _answering, _store, _sweep, dispatch
@@ -113,8 +115,38 @@ def submit(
     )
     if isinstance(committed, SendMessageResponse):
         return committed
-    answered = dispatch.dispatch(conversation_id, body.idempotencyKey, committed)
+    if command_context["existing"] is None:
+        with suppress(Exception):
+            telemetry.record(
+                "question_asked",
+                actor_user_id=actor.user_id,
+                role=actor.role.value,
+                subject=subject,
+                voice=False,
+                has_image=any(str(item.media_type).startswith("image/") for item in committed.attachments),
+            )
+    try:
+        answered = dispatch.dispatch(conversation_id, body.idempotencyKey, committed)
+    except AttachmentDecisionError as error:
+        if error.code is not AskQuestionErrorCode.MESSAGE_IN_PROGRESS:
+            with suppress(Exception):
+                telemetry.record(
+                    "ai_answered",
+                    actor_user_id=actor.user_id,
+                    role=actor.role.value,
+                    latency_ms=telemetry.since_ms(committed.command.get("created_at")),
+                    refused=True,
+                )
+        raise
     if answered is not None:
+        with suppress(Exception):
+            telemetry.record(
+                "ai_answered",
+                actor_user_id=actor.user_id,
+                role=actor.role.value,
+                latency_ms=telemetry.since_ms(committed.command.get("created_at")),
+                refused=False,
+            )
         return answered
     command = committed.command
     return MessageAcceptedResponse(
@@ -171,7 +203,23 @@ def answer(conversation_id: str, idempotency_key: str) -> str:
         if error.code is AskQuestionErrorCode.MESSAGE_IN_PROGRESS:
             return "held"
         logger.warning("conversation_generation_failed code=%s", error.code.value)
+        with suppress(Exception):
+            telemetry.record(
+                "ai_answered",
+                actor_user_id=owner_id,
+                role="student",
+                latency_ms=telemetry.since_ms(command.get("created_at")),
+                refused=True,
+            )
         return "failed"
+    with suppress(Exception):
+        telemetry.record(
+            "ai_answered",
+            actor_user_id=owner_id,
+            role="student",
+            latency_ms=telemetry.since_ms(command.get("created_at")),
+            refused=False,
+        )
     return "completed"
 
 

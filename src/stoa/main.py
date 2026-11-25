@@ -6,6 +6,7 @@ from mangum import Mangum
 
 from stoa import config
 from stoa.db.read_metering import ReadMeteringMiddleware
+from stoa.observability.request_metrics import RequestMetricsMiddleware
 from stoa.operator_calls.catalog import OPERATOR_CALL_KEY
 from stoa.rule_violation import CorrelationMiddleware, install_rule_violation_handler
 from stoa.security.errors import redacted_validation_errors
@@ -23,6 +24,7 @@ from stoa.routers import (
     billing,
     conversations,
     files,
+    monitoring,
     notifications,
     parents,
     practice,
@@ -123,6 +125,11 @@ app.add_middleware(CorrelationMiddleware)
 # through. Outside everything but CORS, so the time it logs is the request's.
 app.add_middleware(ReadMeteringMiddleware)
 
+# One EMF metric line per request by feature (card 134), unless
+# REQUEST_METRICS=false. Outside the read metering, so its latency is the
+# request's as CORS hands it on.
+app.add_middleware(RequestMetricsMiddleware)
+
 # Every rule violation, raised by a route or a dependency, is rendered here.
 install_rule_violation_handler(app)
 
@@ -149,6 +156,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+app.include_router(monitoring.router, prefix="/monitoring", tags=["monitoring"])
 app.include_router(conversations.router, prefix="/conversations", tags=["conversations"])
 app.include_router(conversations.teacher_help_router, prefix="/teacher-help", tags=["teacher-help"])
 app.include_router(practice.router, prefix="/practice", tags=["practice"])
