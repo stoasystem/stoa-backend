@@ -31,6 +31,23 @@ FEATURES: tuple[Feature, ...] = (
 FEATURE_KEYS = frozenset(feature.key for feature in FEATURES)
 OTHER = "other"
 
+# p95 ceiling per feature in milliseconds; same values as
+# stoa-infra/stacks/monitoring_stack.py FEATURE_P95_LIMIT_MS.
+FEATURE_P95_LIMIT_MS: dict[str, int] = {
+    "auth": 1500,
+    "practice": 1500,
+    "ask_ai": 20000,
+    "teacher_help": 1500,
+    "voice": 15000,
+    "notifications": 1000,
+    "parent_reports": 3000,
+    "admin": 5000,
+}
+# The features the health page watches, in FEATURES order.
+HEALTH_FEATURE_KEYS: tuple[str, ...] = tuple(
+    feature.key for feature in FEATURES if feature.key in FEATURE_P95_LIMIT_MS
+)
+
 # Routes that belong to no feature on purpose.
 OTHER_ROUTES = frozenset(
     {
