@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from stoa.deps import get_actor, get_authorization_audit_sink
+from stoa.main import RequestLocaleMiddleware
 from stoa.routers import students
 from stoa.security import declared_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
@@ -290,6 +292,70 @@ def test_practice_history_names_the_lesson_not_its_topic(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["items"][0]["summary"] == "Brüche lesen und kürzen"
+
+
+@pytest.mark.parametrize(
+    ("accept_language", "maths", "physics", "practice"),
+    [
+        ("de-CH", "Mathematik", "Physik", "Übung"),
+        ("en", "Mathematics", "Physics", "Practice"),
+        ("fr-CH", "Mathématiques", "Physique", "Exercices"),
+        ("it", "Matematica", "Fisica", "Esercizi"),
+    ],
+    ids=["de", "en", "fr", "it"],
+)
+def test_learning_history_names_subjects_in_the_readers_language(
+    monkeypatch, accept_language, maths, physics, practice
+):
+    """Practice stores `mathematics` and questions store `math`; a German
+    reader was shown the first as it is stored (#630)."""
+    _profiles(monkeypatch)
+    monkeypatch.setattr(
+        students.question_repo,
+        "list_by_student",
+        lambda *_args, **_kwargs: {"Items": MIXED_STUDENT_INDEX_ROWS},
+    )
+    fake_evidence.install(
+        monkeypatch,
+        fake_evidence.evidence(
+            "student-1",
+            progress=[
+                {
+                    "status": "completed",
+                    "lesson_id": "brueche-l1",
+                    "title": "Brüche lesen",
+                    "topic_id": "brueche",
+                    "subject_id": "mathematics",
+                    "completed_at": "2026-08-25T10:00:00+00:00",
+                },
+                {
+                    "status": "completed",
+                    "lesson_id": "ohne-fach-l1",
+                    "title": "Ohne Fach",
+                    "topic_id": "ohne-fach",
+                    "completed_at": "2026-08-24T10:00:00+00:00",
+                },
+            ],
+        ),
+    )
+    app = FastAPI()
+    app.include_router(students.router, prefix="/students")
+    app.add_middleware(RequestLocaleMiddleware)
+    app.dependency_overrides[get_actor] = lambda: _actor(CanonicalRole.STUDENT, "student-1")
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
+
+    response = TestClient(app).get(
+        "/students/me/learning-history", headers={"Accept-Language": accept_language}
+    )
+
+    assert response.status_code == 200
+    subjects = {item["id"]: item["subject"] for item in response.json()["items"]}
+    assert subjects == {
+        "brueche-l1": maths,
+        "ohne-fach-l1": practice,
+        "c-1": physics,
+        "q-1": maths,
+    }
 
 
 def test_a_student_can_read_their_own_plan(monkeypatch):

@@ -323,8 +323,7 @@ def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
             items.append(
                 LearningHistoryItem(
                     id=_history_text(row.get("conversation_id")) or f"conversation-{created_at}",
-                    subject=_history_text(row.get("subject"))
-                    or message_catalog.text("activity.subject.unknown", locale),
+                    subject=learning_profile_service.subject_name(row.get("subject"), locale),
                     title=message_catalog.text(
                         "activity.teacher_help_requested"
                         if escalated
@@ -347,8 +346,7 @@ def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
             items.append(
                 LearningHistoryItem(
                     id=_history_text(row.get("question_id")) or f"question-{created_at}",
-                    subject=_history_text(row.get("subject"))
-                    or message_catalog.text("activity.subject.unknown", locale),
+                    subject=learning_profile_service.subject_name(row.get("subject"), locale),
                     title=message_catalog.text(
                         "activity.question_answered"
                         if answered
@@ -398,10 +396,12 @@ def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
         items.append(
             LearningHistoryItem(
                 id=lesson.lesson_id,
+                # The subject a reader says, not the stored id: German has no
+                # title translation of `mathematics` (#630).
                 subject=(
-                    translated_title(lesson.subject_id, lesson.subject_id, locale)
+                    learning_profile_service.subject_name(lesson.subject_id, locale)
                     if lesson.subject_id
-                    else "Practice"
+                    else message_catalog.text("activity.subject.practice", locale)
                 ),
                 title=message_catalog.text("activity.practice_path_lesson", locale),
                 # The lesson name is curriculum content, so it gets the same

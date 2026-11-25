@@ -431,6 +431,13 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "Général",
         "it": "Generale",
     },
+    # A finished lesson whose progress row names no subject (#630).
+    "activity.subject.practice": {
+        "de": "Übung",
+        "en": "Practice",
+        "fr": "Exercices",
+        "it": "Esercizi",
+    },
     # ── what a student is told after a practice answer (#128) ───────────
     #
     # Only for an exercise that brings no feedback of its own; an exercise's
