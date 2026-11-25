@@ -691,6 +691,70 @@ def test_the_bedrock_adapter_reads_the_cache_counts_off_the_wire() -> None:
     assert json.loads(body)["system"][0]["cache_control"] == {"type": "ephemeral"}
 
 
+@pytest.mark.parametrize(
+    "end_usage",
+    [
+        # Bedrock today: the end of the message reports only the output.
+        {"output_tokens": 21},
+        # The Messages API's newer shape: the end repeats every count, and a
+        # provider may send a cache count it does not track there as 0 ...
+        {
+            "input_tokens": 37,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "output_tokens": 21,
+        },
+        # ... or as null.
+        {
+            "input_tokens": None,
+            "cache_creation_input_tokens": None,
+            "cache_read_input_tokens": None,
+            "output_tokens": 21,
+        },
+    ],
+    ids=["output-only", "cache-as-zero", "cache-as-null"],
+)
+def test_a_cache_read_survives_the_end_of_a_bedrock_stream(end_usage: dict[str, Any]) -> None:
+    """#612, on the wire: a reply that read the cache, streamed as Bedrock
+    streams it (usage at `message_start`, usage again at `message_delta`, the
+    invocation metrics at `message_stop`), is recorded with the counts it was
+    billed at, whatever the end of the message repeats."""
+    client = runtime()
+    events = [
+        {"type": "message_start", "message": {
+            "id": "msg_bdrk_3", "type": "message", "role": "assistant",
+            "model": "claude-sonnet-4-6", "content": [], "stop_reason": None,
+            "stop_sequence": None, "usage": {
+                "input_tokens": 37,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 2186,
+                "output_tokens": 1,
+            }}},
+        *_STREAMED[1:5],
+        {"type": "message_delta",
+         "delta": {"stop_reason": "tool_use", "stop_sequence": None},
+         "usage": end_usage},
+        {"type": "message_stop", "amazon-bedrock-invocationMetrics": {
+            "inputTokenCount": 37,
+            "outputTokenCount": 21,
+            "invocationLatency": 1830,
+            "firstByteLatency": 640,
+            "cacheReadInputTokenCount": 2186,
+            "cacheWriteInputTokenCount": 0,
+        }},
+    ]
+    streaming(client, events, [])
+    model_call.install(bedrock.BedrockAdapter(client))
+
+    result = _call()
+
+    assert isinstance(result, model_call.Answered)
+    assert result.tool_input == '{"text": "Hallo"}'
+    assert result.usage.cache_read_input_tokens == 2186
+    assert result.usage.cache_write_input_tokens == 0
+    assert (result.usage.input_tokens, result.usage.output_tokens) == (37 + 2186, 21)
+
+
 def test_the_body_counted_keeps_the_cache_point() -> None:
     """CountTokens takes `cache_control` and counts the same with it (measured, #442)."""
     model = FakeAdapter(answer=INPUT)
