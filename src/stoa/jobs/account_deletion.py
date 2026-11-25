@@ -229,6 +229,16 @@ def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, Any]:
         from stoa.jobs import upload_cleanup
 
         return upload_cleanup.handler(event, _context)
+    if event.get("job") == "analytics_rollup":
+        # Daily (card 134): yesterday's usage events folded into rollup rows.
+        from stoa.jobs import analytics_rollup
+
+        return analytics_rollup.handler(event, _context)
+    if event.get("job") == "synthetic_probe":
+        # Every five minutes (card 134): the read-only paths, signed in as the probe.
+        from stoa.jobs import synthetic_probe
+
+        return synthetic_probe.handler(event, _context)
     remaining = getattr(_context, "get_remaining_time_in_millis", None)
     remaining_seconds = (
         (lambda: float(remaining()) / 1000.0) if callable(remaining) else None

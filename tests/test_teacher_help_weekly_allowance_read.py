@@ -232,8 +232,10 @@ def test_a_read_failing_in_an_unexpected_way_still_leaves_the_indicator_working(
     def unreachable(*_args, **_kwargs):
         raise RuntimeError("counter read failed")
 
-    # Not every read on the way is wrapped: the week's counter, say.
+    # Not every step on the way is wrapped: finding the week's counter, say,
+    # whether it is read alone or in a batch.
     monkeypatch.setattr(weekly_counter, "read", unreachable)
+    monkeypatch.setattr(weekly_counter, "key", unreachable)
 
     response = _student().get("/teacher-help/availability")
 

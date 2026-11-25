@@ -369,6 +369,24 @@
         "title": "AccountVerificationSupportResponse",
         "type": "object"
       },
+      "ActivePoint": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "integer"
+          },
+          "day": {
+            "title": "Day",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "active"
+        ],
+        "title": "ActivePoint",
+        "type": "object"
+      },
       "AddNoteRequest": {
         "properties": {
           "attachmentIds": {
@@ -1073,6 +1091,60 @@
         "title": "AdminStatusCommand",
         "type": "object"
       },
+      "Alarm": {
+        "properties": {
+          "feature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "feature",
+          "state",
+          "since",
+          "reason"
+        ],
+        "title": "Alarm",
+        "type": "object"
+      },
       "AnalyticsEventIn": {
         "additionalProperties": false,
         "properties": {
@@ -1116,6 +1188,81 @@
           "createdAt"
         ],
         "title": "AnalyticsEventIn",
+        "type": "object"
+      },
+      "AnalyticsOverviewResponse": {
+        "properties": {
+          "activeSeries": {
+            "items": {
+              "$ref": "#/components/schemas/ActivePoint"
+            },
+            "title": "Activeseries",
+            "type": "array"
+          },
+          "complete": {
+            "title": "Complete",
+            "type": "boolean"
+          },
+          "days": {
+            "enum": [
+              7,
+              30,
+              90
+            ],
+            "title": "Days",
+            "type": "integer"
+          },
+          "featureRanking": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureRank"
+            },
+            "title": "Featureranking",
+            "type": "array"
+          },
+          "funnel": {
+            "items": {
+              "$ref": "#/components/schemas/FunnelStep"
+            },
+            "title": "Funnel",
+            "type": "array"
+          },
+          "generatedAt": {
+            "title": "Generatedat",
+            "type": "string"
+          },
+          "kpis": {
+            "$ref": "#/components/schemas/Kpis"
+          },
+          "retention": {
+            "items": {
+              "$ref": "#/components/schemas/RetentionCohort"
+            },
+            "title": "Retention",
+            "type": "array"
+          },
+          "role": {
+            "enum": [
+              "all",
+              "student",
+              "parent",
+              "teacher"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "generatedAt",
+          "days",
+          "role",
+          "complete",
+          "kpis",
+          "activeSeries",
+          "featureRanking",
+          "funnel",
+          "retention"
+        ],
+        "title": "AnalyticsOverviewResponse",
         "type": "object"
       },
       "AskQuestionErrorCode": {
@@ -4296,6 +4443,31 @@
         "title": "CurriculumWorklistResponse",
         "type": "object"
       },
+      "Deploy": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "release": {
+            "title": "Release",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "release"
+        ],
+        "title": "Deploy",
+        "type": "object"
+      },
       "EmailSubscriptionResponse": {
         "properties": {
           "kind": {
@@ -4396,6 +4568,206 @@
         "title": "EmailVerificationResponse",
         "type": "object"
       },
+      "FeatureDetailResponse": {
+        "properties": {
+          "alarms": {
+            "items": {
+              "$ref": "#/components/schemas/Alarm"
+            },
+            "title": "Alarms",
+            "type": "array"
+          },
+          "feature": {
+            "$ref": "#/components/schemas/FeatureHealth"
+          },
+          "frontendErrors": {
+            "items": {
+              "$ref": "#/components/schemas/FrontendErrorGroup"
+            },
+            "title": "Frontenderrors",
+            "type": "array"
+          },
+          "generatedAt": {
+            "title": "Generatedat",
+            "type": "string"
+          },
+          "partial": {
+            "default": false,
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "probes": {
+            "items": {
+              "$ref": "#/components/schemas/ProbeStep"
+            },
+            "title": "Probes",
+            "type": "array"
+          },
+          "recentErrors": {
+            "items": {
+              "$ref": "#/components/schemas/RecentError"
+            },
+            "title": "Recenterrors",
+            "type": "array"
+          },
+          "routes": {
+            "items": {
+              "$ref": "#/components/schemas/RouteStats"
+            },
+            "title": "Routes",
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/SeriesPoint"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "usage": {
+            "items": {
+              "$ref": "#/components/schemas/UsageCount"
+            },
+            "title": "Usage",
+            "type": "array"
+          },
+          "window": {
+            "enum": [
+              "1h",
+              "24h",
+              "7d"
+            ],
+            "title": "Window",
+            "type": "string"
+          }
+        },
+        "required": [
+          "generatedAt",
+          "window",
+          "feature",
+          "series",
+          "routes",
+          "recentErrors",
+          "frontendErrors",
+          "probes",
+          "alarms",
+          "usage"
+        ],
+        "title": "FeatureDetailResponse",
+        "type": "object"
+      },
+      "FeatureHealth": {
+        "properties": {
+          "errorRate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorrate"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "openAlarms": {
+            "title": "Openalarms",
+            "type": "integer"
+          },
+          "p95LimitMs": {
+            "title": "P95Limitms",
+            "type": "integer"
+          },
+          "p95Ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95Ms"
+          },
+          "probe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProbeSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requests": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requests"
+          },
+          "spark": {
+            "items": {
+              "$ref": "#/components/schemas/SparkPoint"
+            },
+            "title": "Spark",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "warn",
+              "bad",
+              "unknown"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "status",
+          "requests",
+          "errorRate",
+          "p95Ms",
+          "p95LimitMs",
+          "spark",
+          "probe",
+          "openAlarms"
+        ],
+        "title": "FeatureHealth",
+        "type": "object"
+      },
+      "FeatureRank": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "event": {
+            "title": "Event",
+            "type": "string"
+          },
+          "uniqueUsers": {
+            "title": "Uniqueusers",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "event",
+          "count",
+          "uniqueUsers"
+        ],
+        "title": "FeatureRank",
+        "type": "object"
+      },
       "FirstMessageRefusalBody": {
         "additionalProperties": false,
         "description": "A new conversation's first message was refused; the conversation exists (#61).\n\nThe refusal is the allowance's (`action`) or an attachment decision's\n(`correlationId`) body, with the id of the conversation already made, so a\nclient sends the message again into it under the key `initial-<id>`.",
@@ -4469,6 +4841,196 @@
           "email"
         ],
         "title": "ForgotPasswordRequest",
+        "type": "object"
+      },
+      "FrontendErrorGroup": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "lastAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastat"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "messageHash": {
+            "title": "Messagehash",
+            "type": "string"
+          },
+          "release": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          }
+        },
+        "required": [
+          "messageHash",
+          "message",
+          "route",
+          "release",
+          "count",
+          "lastAt"
+        ],
+        "title": "FrontendErrorGroup",
+        "type": "object"
+      },
+      "FrontendErrorIn": {
+        "properties": {
+          "appEnv": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Appenv",
+            "type": "string"
+          },
+          "componentStack": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Componentstack"
+          },
+          "errorId": {
+            "default": "",
+            "maxLength": 128,
+            "title": "Errorid",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "maxLength": 512,
+            "title": "Name",
+            "type": "string"
+          },
+          "route": {
+            "default": "",
+            "maxLength": 2048,
+            "title": "Route",
+            "type": "string"
+          },
+          "source": {
+            "default": "manual",
+            "maxLength": 64,
+            "title": "Source",
+            "type": "string"
+          },
+          "stack": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stack"
+          },
+          "timestamp": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "title": "FrontendErrorIn",
+        "type": "object"
+      },
+      "FrontendErrorTotal": {
+        "properties": {
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "total"
+        ],
+        "title": "FrontendErrorTotal",
+        "type": "object"
+      },
+      "FunnelStep": {
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "step": {
+            "enum": [
+              "invited",
+              "activated",
+              "first_question",
+              "first_exercise",
+              "week2_active"
+            ],
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "count"
+        ],
+        "title": "FunnelStep",
         "type": "object"
       },
       "GenerationProgressResponse": {
@@ -4849,6 +5411,82 @@
           "name"
         ],
         "title": "KnowledgePoint",
+        "type": "object"
+      },
+      "Kpis": {
+        "properties": {
+          "aiP50Ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aip50Ms"
+          },
+          "dau": {
+            "title": "Dau",
+            "type": "integer"
+          },
+          "dauChange": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dauchange"
+          },
+          "escalationRate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalationrate"
+          },
+          "mau": {
+            "title": "Mau",
+            "type": "integer"
+          },
+          "questionsPerDay": {
+            "title": "Questionsperday",
+            "type": "number"
+          },
+          "teacherResponseP50Ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Teacherresponsep50Ms"
+          },
+          "wau": {
+            "title": "Wau",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dau",
+          "wau",
+          "mau",
+          "dauChange",
+          "questionsPerDay",
+          "escalationRate",
+          "aiP50Ms",
+          "teacherResponseP50Ms"
+        ],
+        "title": "Kpis",
         "type": "object"
       },
       "LearningHistoryItem": {
@@ -9808,6 +10446,85 @@
         "title": "PrivilegedPracticeAnswer",
         "type": "object"
       },
+      "ProbeStep": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "latencyMs": {
+            "title": "Latencyms",
+            "type": "integer"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          }
+        },
+        "required": [
+          "at",
+          "ok",
+          "latencyMs",
+          "step"
+        ],
+        "title": "ProbeStep",
+        "type": "object"
+      },
+      "ProbeSummary": {
+        "properties": {
+          "lastRunAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastrunat"
+          },
+          "latencyMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latencyms"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "lastRunAt",
+          "latencyMs"
+        ],
+        "title": "ProbeSummary",
+        "type": "object"
+      },
       "ProfileChoice": {
         "description": "One value a list-chosen profile field may take, named for the reader.",
         "properties": {
@@ -9978,6 +10695,53 @@
           "exerciseId"
         ],
         "title": "QuizAnswerSubmission",
+        "type": "object"
+      },
+      "RecentError": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "route": {
+            "title": "Route",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "at",
+          "method",
+          "route",
+          "status",
+          "count"
+        ],
+        "title": "RecentError",
         "type": "object"
       },
       "RecoveryJobCreateRequest": {
@@ -11714,6 +12478,39 @@
         "title": "ResetPasswordRequest",
         "type": "object"
       },
+      "RetentionCohort": {
+        "properties": {
+          "cohortWeek": {
+            "title": "Cohortweek",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "weeks": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Weeks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cohortWeek",
+          "size",
+          "weeks"
+        ],
+        "title": "RetentionCohort",
+        "type": "object"
+      },
       "ReviewCard": {
         "additionalProperties": false,
         "description": "A question due to be attempted again, without its answer.",
@@ -11935,6 +12732,58 @@
           }
         },
         "title": "ReviewSummaryResponse",
+        "type": "object"
+      },
+      "RouteStats": {
+        "properties": {
+          "errorRate": {
+            "title": "Errorrate",
+            "type": "number"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "p50Ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50Ms"
+          },
+          "p95Ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95Ms"
+          },
+          "requests": {
+            "title": "Requests",
+            "type": "integer"
+          },
+          "route": {
+            "title": "Route",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "route",
+          "requests",
+          "errorRate",
+          "p50Ms",
+          "p95Ms"
+        ],
+        "title": "RouteStats",
         "type": "object"
       },
       "RuleViolationBody": {
@@ -12283,6 +13132,90 @@
           "assistantMessage"
         ],
         "title": "SendMessageResponse",
+        "type": "object"
+      },
+      "SeriesPoint": {
+        "properties": {
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "p50Ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50Ms"
+          },
+          "p95Ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95Ms"
+          },
+          "requests": {
+            "title": "Requests",
+            "type": "integer"
+          },
+          "t": {
+            "title": "T",
+            "type": "string"
+          }
+        },
+        "required": [
+          "t",
+          "requests",
+          "errors",
+          "p50Ms",
+          "p95Ms"
+        ],
+        "title": "SeriesPoint",
+        "type": "object"
+      },
+      "SparkPoint": {
+        "properties": {
+          "p95Ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95Ms"
+          },
+          "requests": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requests"
+          },
+          "t": {
+            "title": "T",
+            "type": "string"
+          }
+        },
+        "required": [
+          "t",
+          "requests",
+          "p95Ms"
+        ],
+        "title": "SparkPoint",
         "type": "object"
       },
       "StarQuizAnswer": {
@@ -13568,6 +14501,62 @@
           "weak_knowledge_points"
         ],
         "title": "SummaryResponse",
+        "type": "object"
+      },
+      "SystemHealthResponse": {
+        "properties": {
+          "alarms": {
+            "items": {
+              "$ref": "#/components/schemas/Alarm"
+            },
+            "title": "Alarms",
+            "type": "array"
+          },
+          "deploys": {
+            "items": {
+              "$ref": "#/components/schemas/Deploy"
+            },
+            "title": "Deploys",
+            "type": "array"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureHealth"
+            },
+            "title": "Features",
+            "type": "array"
+          },
+          "frontendErrors": {
+            "$ref": "#/components/schemas/FrontendErrorTotal"
+          },
+          "generatedAt": {
+            "title": "Generatedat",
+            "type": "string"
+          },
+          "partial": {
+            "default": false,
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "window": {
+            "enum": [
+              "1h",
+              "24h",
+              "7d"
+            ],
+            "title": "Window",
+            "type": "string"
+          }
+        },
+        "required": [
+          "generatedAt",
+          "window",
+          "features",
+          "alarms",
+          "deploys",
+          "frontendErrors"
+        ],
+        "title": "SystemHealthResponse",
         "type": "object"
       },
       "TargetUnit": {
@@ -15277,6 +16266,24 @@
         ],
         "title": "UploadStatus",
         "type": "string"
+      },
+      "UsageCount": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "event": {
+            "title": "Event",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event",
+          "count"
+        ],
+        "title": "UsageCount",
+        "type": "object"
       },
       "UsageEventListResponse": {
         "properties": {
@@ -17467,6 +18474,108 @@
           "identifiers": [
             "user_id"
           ]
+        }
+      }
+    },
+    "/admin/analytics/overview": {
+      "get": {
+        "description": "Actives, feature use, funnel and retention over the last `days` complete days.",
+        "operationId": "get_analytics_overview_admin_analytics_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "enum": [
+                7,
+                30,
+                90
+              ],
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "student",
+                "parent",
+                "teacher"
+              ],
+              "title": "Role",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsOverviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Analytics Overview",
+        "tags": [
+          "admin"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": "platform_operations_reader",
+              "purpose": "global_operations",
+              "resource_type": "operator_resource"
+            }
+          ],
+          "classification": "admin-capability",
+          "identifiers": []
         }
       }
     },
@@ -22977,7 +24086,7 @@
     },
     "/admin/stats": {
       "get": {
-        "description": "Return aggregate platform metrics (full-table scan — small scale only).",
+        "description": "Return aggregate platform metrics.",
         "operationId": "get_stats_admin_stats_get",
         "responses": {
           "200": {
@@ -24065,6 +25174,187 @@
         }
       }
     },
+    "/admin/system/features/{feature}": {
+      "get": {
+        "description": "One feature's health in detail: series, routes, errors, probes, usage.",
+        "operationId": "get_feature_health_admin_system_features__feature__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "feature",
+            "required": true,
+            "schema": {
+              "title": "Feature",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "default": "24h",
+              "enum": [
+                "1h",
+                "24h",
+                "7d"
+              ],
+              "title": "Window",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Feature Health",
+        "tags": [
+          "admin"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": "platform_operations_reader",
+              "purpose": "global_operations",
+              "resource_type": "operator_resource"
+            }
+          ],
+          "classification": "admin-capability",
+          "identifiers": []
+        }
+      }
+    },
+    "/admin/system/health": {
+      "get": {
+        "description": "Every watched feature's health over the window.",
+        "operationId": "get_system_health_admin_system_health_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "default": "24h",
+              "enum": [
+                "1h",
+                "24h",
+                "7d"
+              ],
+              "title": "Window",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemHealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get System Health",
+        "tags": [
+          "admin"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": "platform_operations_reader",
+              "purpose": "global_operations",
+              "resource_type": "operator_resource"
+            }
+          ],
+          "classification": "admin-capability",
+          "identifiers": []
+        }
+      }
+    },
     "/admin/teacher-support/allowances/{student_id}": {
       "get": {
         "description": "How many teacher-support cases this student has in a week, and from where.\n\n`weeklyCases` is text answers, `weeklyClassroomCases` online classrooms.",
@@ -24652,7 +25942,7 @@
     },
     "/admin/users": {
       "get": {
-        "description": "One page of accounts, grouped by role, with their confirmed parent links.\n\nCard 002 #7: the links are resolved one account at a time, so the cost of a\npage is the page size times the links behind it, not the page size. Measured\non a full page of parents with three children each: 3201 DynamoDB round trips,\nagainst a 29 second API Gateway ceiling. The number is pinned by\ntests/test_admin_user_list_read_amplification.py so it cannot grow unnoticed;\nbatching it down needs `current_relationship.judge`, not this file.",
+        "description": "One page of accounts, grouped by role, with their confirmed parent links.\n\nCard 133: the accounts are a query of GSI-Listing, and their links one link\nquery per account plus one batched read of every link row and profile behind\nthem (`current_relationship.current_relationships_of`). Measured on a full page\nof parents with three children each: 221 DynamoDB round trips, down from 3207.\nThe number is pinned by tests/test_admin_user_list_read_amplification.py.",
         "operationId": "list_users_admin_users_get",
         "parameters": [
           {
@@ -25827,7 +27117,7 @@
     },
     "/analytics/events": {
       "post": {
-        "description": "Record one client analytics event for later CloudWatch Logs Insights / table queries.",
+        "description": "Record one client analytics event in the statistics table.",
         "operationId": "ingest_event_analytics_events_post",
         "requestBody": {
           "content": {
@@ -28711,6 +30001,61 @@
           }
         },
         "summary": "Health Check",
+        "x-stoa-authorization": {
+          "authorization": [],
+          "classification": "public",
+          "identifiers": []
+        }
+      }
+    },
+    "/monitoring/frontend-errors": {
+      "post": {
+        "description": "Record one frontend error report.",
+        "operationId": "report_frontend_error_monitoring_frontend_errors_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FrontendErrorIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "summary": "Report Frontend Error",
+        "tags": [
+          "monitoring"
+        ],
         "x-stoa-authorization": {
           "authorization": [],
           "classification": "public",

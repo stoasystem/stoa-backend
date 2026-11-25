@@ -183,7 +183,11 @@ def test_a_students_bell_is_no_heartbeat(table) -> None:
 
 
 def _reads(table: FakeTable) -> list[str]:
-    return [name for name, _call in table.requests if name in {"scan", "query", "get_item"}]
+    return [
+        name
+        for name, _call in table.requests
+        if name in {"scan", "query", "get_item", "batch_get_item"}
+    ]
 
 
 def test_the_heartbeat_row_carries_its_place_in_the_index(table) -> None:
@@ -216,8 +220,8 @@ def test_listing_the_teachers_scans_nothing_and_does_not_grow_with_the_table(tab
     assert all(profile["dispatch_seen_at"] == at() for profile in listed)
     small = _reads(table)
     assert "scan" not in small
-    # One query of the index, then each teacher's profile and fence by key.
-    assert sorted(small) == ["get_item"] * 4 + ["query"]
+    # One query of the index, then every teacher's profile and fence in one batch.
+    assert sorted(small) == ["batch_get_item", "query"]
 
     for index in range(300):
         table.seed({"PK": f"PRACTICE#{index:03d}", "SK": "ROW", "entity_type": "filler"})

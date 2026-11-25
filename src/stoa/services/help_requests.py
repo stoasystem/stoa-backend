@@ -135,6 +135,13 @@ _HOLDER_INDEX_KEY = ("PK", "SK", "teacher_id", HOLDER_INDEX_FIELD)
 # What a record whose own times cannot be read is filed under: first in the
 # index, so it is read early rather than hidden, and the same on every write.
 _INDEX_TIME_UNKNOWN = "1970-01-01T00:00:00Z"
+# Every request, ended ones too, is also in GSI-Listing (card 133), for the
+# admin statistics: `listing` names the list and `listed_at` is when it was
+# asked. Set once by `ask`; no later write moves them, and a tombstone keeps neither.
+LISTING_INDEX = "GSI-Listing"
+LISTING_NAME = "help_request"
+LISTING_INDEX_FIELDS = ("listing", "listed_at")
+_LISTING_INDEX_KEY = ("PK", "SK", *LISTING_INDEX_FIELDS)
 
 # The question words a request's state is told in. Their one reader is
 # `sla_metrics`: the admin stats count requests beside the legacy question rows,
@@ -350,6 +357,29 @@ def list_all(*, table: Any | None = None) -> list[dict[str, Any]]:
             raise HelpRequestUnavailable("scan did not advance") from exc
         raise
     raise HelpRequestUnavailable("scan page limit reached")
+
+
+def list_listed(*, table: Any | None = None) -> list[dict[str, Any]]:
+    """Every request, ended ones included: one query of GSI-Listing (card 133).
+
+    What it reads follows how many requests there are, not the size of the
+    table. Eventually consistent. For the admin statistics; the backfills read
+    `list_all`, which also finds a request written before it had the keys.
+    """
+    return _indexed_records(
+        table,
+        key=_LISTING_INDEX_KEY,
+        IndexName=LISTING_INDEX,
+        KeyConditionExpression=Key("listing").eq(LISTING_NAME),
+    )
+
+
+def listing_fields(record: Mapping[str, Any]) -> dict[str, str]:
+    """The GSI-Listing keys of a request: filed under when it was asked."""
+    return {
+        "listing": LISTING_NAME,
+        "listed_at": _index_time(record.get("created_at"), record.get("escalated_at")),
+    }
 
 
 def list_open(*, table: Any | None = None) -> list[dict[str, Any]]:
@@ -913,6 +943,7 @@ def ask(
     if note:
         record["escalation_message"] = note
     record.update(index_fields(record))
+    record.update(listing_fields(record))
     # The system message that opens the request in the conversation; its id
     # is the conversation's, so a conversation has one.
     system_message_put = learning_session.append(

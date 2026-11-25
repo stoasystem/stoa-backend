@@ -270,6 +270,22 @@
     "authorization": [
       {
         "action": "read",
+        "capability": "platform_operations_reader",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/analytics/overview",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
         "capability": "billing_operations_reader",
         "purpose": "billing_operations",
         "resource_type": "operator_resource"
@@ -790,6 +806,38 @@
     ],
     "method": "GET",
     "path": "/admin/subscriptions/requests/{request_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "platform_operations_reader",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/system/features/{feature}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "platform_operations_reader",
+        "purpose": "global_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/system/health",
     "sensitive": true
   },
   {
@@ -3656,6 +3704,15 @@
     "serviceEnforced": [
       "uploads.sign_part"
     ]
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "monitoring",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/monitoring/frontend-errors",
+    "sensitive": false
   },
   {
     "authorization": [

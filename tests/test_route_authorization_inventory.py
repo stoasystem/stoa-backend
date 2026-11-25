@@ -578,6 +578,8 @@ GATEWAY_PUBLIC_PATHS = {
     ("POST", "/auth/register"),
     ("POST", "/auth/reset-password"),
     ("POST", "/billing/webhooks/stripe"),
+    # The error boundary reports a crash whether or not anyone is signed in (card 134).
+    ("POST", "/monitoring/frontend-errors"),
     # The unsubscribe link in a notification email, and the RFC 8058 one-click
     # POST a mail client sends to `List-Unsubscribe` (#363). The signed token in
     # the query is the credential; nobody clicking it is signed in.

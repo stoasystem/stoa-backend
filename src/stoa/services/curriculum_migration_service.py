@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from stoa.db.repositories import curriculum_ops_repo
 from stoa.rule_violation import RuleViolation
-from stoa.services import curriculum_analytics_service, curriculum_ops_service
+from stoa.services import curriculum_analytics_service, curriculum_cache, curriculum_ops_service
 from stoa.services.curriculum_errors import CurriculumErrorCode
 
 
@@ -240,6 +240,7 @@ def _apply_row(row: dict[str, Any], user: dict[str, Any], now: str, migration_id
             raise RuleViolation(CurriculumErrorCode.STALE_POINTER) from exc
         published = {**version, "state": "published", "published_at": now}
         curriculum_ops_repo.put_published_projection(published, manifest)
+        curriculum_cache.touch_catalog_stamp()
         curriculum_ops_repo.put_version(published)
         curriculum_analytics_service.record_publish_event(published, operation="migration_publish")
         _append_audit(

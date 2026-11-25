@@ -516,6 +516,23 @@ def ensure_active_account_fence(
     return require_active_account_fence(user_id, table=target)
 
 
+# Every profile is listed in GSI-Listing under one name, by when it was created,
+# so the console's account list is a query and not a table scan (card 133). A
+# profile with no creation time is listed among the oldest. The deletion
+# tombstone keeps neither key, so a closed account leaves the list with it.
+ACCOUNT_LISTING = "account_profile"
+ACCOUNT_LISTED_AT_UNKNOWN = "1970-01-01T00:00:00+00:00"
+ACCOUNT_LISTING_FIELDS = ("listing", "listed_at")
+
+
+def account_listing_fields(profile: Mapping[str, Any]) -> dict[str, str]:
+    """The GSI-Listing keys a profile row carries; never empty."""
+    created_at = profile.get("created_at")
+    if isinstance(created_at, str) and created_at:
+        return {"listing": ACCOUNT_LISTING, "listed_at": created_at}
+    return {"listing": ACCOUNT_LISTING, "listed_at": ACCOUNT_LISTED_AT_UNKNOWN}
+
+
 def materialize_profile_with_fence(
     profile: dict[str, Any], *, now_iso: str
 ) -> list[dict[str, Any]]:
@@ -531,6 +548,7 @@ def materialize_profile_with_fence(
         "PK": f"USER#{user_id}",
         "SK": "PROFILE",
         **profile,
+        **account_listing_fields(profile),
         "version": 1,
     }
     fence = {

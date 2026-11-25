@@ -22,7 +22,7 @@ A student profile's `parent_id` is not a relationship and is never read here.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -128,6 +128,7 @@ def _judge_rows(
     reverse: Mapping[str, Any] | None,
     *,
     table: Any | None,
+    profile_of: Callable[[str], Mapping[str, Any] | None] | None = None,
 ) -> Verdict:
     if not _about_pair(forward, parent_id, student_id) or not _about_pair(
         reverse, parent_id, student_id
@@ -136,16 +137,15 @@ def _judge_rows(
     assert forward is not None and reverse is not None
     if not _rows_current(forward, reverse):
         return _verdict_from_rows(Standing.KNOWN, parent_id, student_id, forward)
+    if profile_of is None:
+        def profile_of(user_id: str) -> Mapping[str, Any] | None:
+            return user_repo.get_user(user_id, table=table)
     # The rows first, then the parent, then the student: a pair refused early
     # never reads the next profile, so a failure reading it cannot turn that
     # refusal into an error (#85).
-    if not usable_account(
-        user_repo.get_user(parent_id, table=table), parent_id, ROLE_PARENT
-    ):
+    if not usable_account(profile_of(parent_id), parent_id, ROLE_PARENT):
         return _verdict_from_rows(Standing.KNOWN, parent_id, student_id, forward)
-    if not usable_account(
-        user_repo.get_user(student_id, table=table), student_id, ROLE_STUDENT
-    ):
+    if not usable_account(profile_of(student_id), student_id, ROLE_STUDENT):
         return _verdict_from_rows(Standing.KNOWN, parent_id, student_id, forward)
     return _verdict_from_rows(Standing.CURRENT, parent_id, student_id, forward)
 
@@ -163,15 +163,170 @@ def judge(parent_id: str, student_id: str, *, table: Any | None = None) -> Verdi
     return _judge_rows(parent_id, student_id, forward, reverse, table=table)
 
 
-def _judged(pairs: list[tuple[str, str]], *, table: Any | None) -> list[Verdict]:
+def _judged(
+    pairs: list[tuple[str, str]],
+    *,
+    table: Any | None,
+    verdict_of: Callable[[str, str], Verdict] | None = None,
+) -> list[Verdict]:
     verdicts: list[Verdict] = []
     seen: set[tuple[str, str]] = set()
     for parent_id, student_id in pairs:
         if not parent_id or not student_id or (parent_id, student_id) in seen:
             continue
         seen.add((parent_id, student_id))
-        verdicts.append(judge(parent_id, student_id, table=table))
+        if verdict_of is None:
+            verdicts.append(judge(parent_id, student_id, table=table))
+        else:
+            verdicts.append(verdict_of(parent_id, student_id))
     return verdicts
+
+
+def _profile_key(user_id: str) -> dict[str, str]:
+    return {"PK": f"USER#{user_id}", "SK": "PROFILE"}
+
+
+def _link_keys(parent_id: str, student_id: str) -> tuple[dict[str, str], dict[str, str]]:
+    """The two rows `judge` reads for a pair, keyed as `parent_link_repo` keys them."""
+    if not parent_id.strip():
+        raise ValueError("parent_id is required")
+    if not student_id.strip():
+        raise ValueError("student_id is required")
+    parent_id, student_id = parent_id.strip(), student_id.strip()
+    return (
+        parent_link_repo.parent_side_key(parent_id, student_id),
+        parent_link_repo.student_side_key(student_id, parent_id),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _BatchRead:
+    """The link rows and profiles of many pairs, read in one batched round."""
+
+    rows: dict[tuple[str, str], dict[str, Any]]
+
+    def row(self, key: Mapping[str, str]) -> dict[str, Any] | None:
+        return self.rows.get((key["PK"], key["SK"]))
+
+    def profile(self, user_id: str) -> dict[str, Any] | None:
+        return self.row(_profile_key(user_id))
+
+    def verdict(self, parent_id: str, student_id: str, *, table: Any | None) -> Verdict:
+        """What `judge` answers for this pair, from the rows read here."""
+        if not parent_id or not student_id:
+            return Verdict(Standing.UNKNOWN, parent_id or "", student_id or "")
+        forward_key, reverse_key = _link_keys(parent_id, student_id)
+        return _judge_rows(
+            parent_id,
+            student_id,
+            self.row(forward_key),
+            self.row(reverse_key),
+            table=table,
+            profile_of=self.profile,
+        )
+
+
+def _read_pairs(
+    pairs: Iterable[tuple[str, str]], *, table: Any | None, also: Iterable[str] = ()
+) -> _BatchRead:
+    keys: list[dict[str, str]] = []
+    for parent_id, student_id in pairs:
+        if not parent_id or not student_id:
+            continue
+        keys += [
+            *_link_keys(parent_id, student_id),
+            _profile_key(parent_id),
+            _profile_key(student_id),
+        ]
+    keys += [_profile_key(user_id) for user_id in also if user_id]
+    # Consistent, as `judge`'s own reads are.
+    return _BatchRead(db_table.get_many(keys, table=table, consistent=True))
+
+
+def judge_many(
+    pairs: Iterable[tuple[str, str]], *, table: Any | None = None
+) -> dict[tuple[str, str], Verdict]:
+    """`judge` for many pairs at once, by pair.
+
+    The same rules over the same rows: each verdict is the one `judge` gives its
+    pair, but every row and profile is read in one batched round instead of up to
+    four reads per pair. Unlike `judge`, the profiles are read whether or not a
+    pair's rows already refuse it, so a failure reading any of them fails the batch.
+    """
+    wanted = list(dict.fromkeys(pairs))
+    read = _read_pairs(wanted, table=table)
+    return {
+        (parent_id, student_id): read.verdict(parent_id, student_id, table=table)
+        for parent_id, student_id in wanted
+    }
+
+
+@dataclass(frozen=True, slots=True)
+class CurrentRelationships:
+    """`children_of` and `parents_of` for many accounts, and the profiles read for them.
+
+    `profiles` holds every profile the batch read, by user id: both sides of every
+    pair judged, and any account named in `also`.
+    """
+
+    children: dict[str, list[Verdict]]
+    parents: dict[str, list[Verdict]]
+    profiles: dict[str, dict[str, Any]]
+
+
+def current_relationships_of(
+    *,
+    parent_ids: Iterable[str] = (),
+    student_ids: Iterable[str] = (),
+    also: Iterable[str] = (),
+    table: Any | None = None,
+) -> CurrentRelationships:
+    """`children_of` each parent and `parents_of` each student, from one batched read.
+
+    One link query per account, as each of those makes, then every pair's two
+    rows and two profiles in one `db_table.get_many`. Each list is the one
+    `children_of` / `parents_of` answers for that account.
+    """
+    parent_pairs = {
+        parent_id: _parent_side_pairs(parent_id, table=table, active_only=True)
+        for parent_id in dict.fromkeys(parent_ids)
+        if parent_id
+    }
+    student_pairs = {
+        student_id: [
+            (str(row.get("parent_id") or ""), student_id)
+            for row in parent_link_repo.list_links_for_student(student_id, table=table)
+            if row.get("status") == parent_link_repo.STATUS_ACTIVE
+        ]
+        for student_id in dict.fromkeys(student_ids)
+        if student_id
+    }
+    every_pair = [
+        pair
+        for pairs in (*parent_pairs.values(), *student_pairs.values())
+        for pair in pairs
+    ]
+    read = _read_pairs(every_pair, table=table, also=also)
+
+    def verdict_of(parent_id: str, student_id: str) -> Verdict:
+        return read.verdict(parent_id, student_id, table=table)
+
+    def current(pairs: list[tuple[str, str]]) -> list[Verdict]:
+        return [
+            verdict
+            for verdict in _judged(pairs, table=table, verdict_of=verdict_of)
+            if verdict.is_current
+        ]
+
+    return CurrentRelationships(
+        children={parent_id: current(pairs) for parent_id, pairs in parent_pairs.items()},
+        parents={student_id: current(pairs) for student_id, pairs in student_pairs.items()},
+        profiles={
+            pk.removeprefix("USER#"): row
+            for (pk, sk), row in read.rows.items()
+            if sk == "PROFILE" and pk.startswith("USER#")
+        },
+    )
 
 
 def _parent_side_pairs(

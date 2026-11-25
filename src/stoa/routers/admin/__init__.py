@@ -9,6 +9,7 @@ from fastapi import APIRouter
 
 from stoa.routers.admin import (
     account_support,
+    analytics,
     curriculum,
     moderation,
     privileged_identities,
@@ -16,6 +17,7 @@ from stoa.routers.admin import (
     reports,
     stats,
     subscriptions,
+    system_health,
     teacher_support,
     usage,
     usage_periods,
@@ -39,5 +41,7 @@ for _domain in (
     stats,
     reports,
     recovery_jobs,
+    system_health,
+    analytics,
 ):
     router.include_router(_domain.router)

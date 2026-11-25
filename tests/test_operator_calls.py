@@ -70,6 +70,9 @@ def _profile(user_id: str, role: str, number: str, **fields: Any) -> dict[str, A
         "email": f"{user_id}@stoa.test",
         "name": f"Name {user_id}",
         "created_at": "2026-01-01T00:00:00+00:00",
+        # Card 133: listed in GSI-Listing, as every profile written now is.
+        "listing": "account_profile",
+        "listed_at": "2026-01-01T00:00:00+00:00",
         # Stored fields that must never leave through an operator call.
         "cognito_sub": "sub-secret",
         "activation_token_hash": "hash-secret",

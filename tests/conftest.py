@@ -112,7 +112,11 @@ def _fresh_gateway_clients():
 
     # Held now: a test may patch `db_table.client` itself, and the patch can
     # still be in place when this fixture is torn down.
-    clears = (db_table.client.cache_clear, db_table._real_table.cache_clear)
+    clears = (
+        db_table.client.cache_clear,
+        db_table._real_table.cache_clear,
+        db_table._resource.cache_clear,
+    )
     for clear in clears:
         clear()
     yield

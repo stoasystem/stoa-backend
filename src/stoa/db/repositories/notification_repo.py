@@ -593,6 +593,9 @@ INBOX_INDEX_FIELDS = ("sweep_bucket", "sweep_due_at")
 INBOX_SOURCE_FIELDS = frozenset({"recipient_id", "recipient_role", "created_at"})
 _INBOX_INDEX_KEY = ("PK", "SK", *INBOX_INDEX_FIELDS)
 _INBOX_BUCKET = "notification_inbox"
+# A capped inbox read asks for twice the rows it shows, and never fewer than
+# this, so the archived and read rows it skips rarely cost a second round trip.
+_INBOX_PAGE_FLOOR = 25
 
 # The administrators' list is every notification of the site, whoever it is for,
 # newest first. A row is in one bucket of GSI-SweepPending - its recipient's - so
@@ -954,15 +957,25 @@ def list_site_events(
 
 
 def list_inbox(
-    *, user_id: str = "", role: str = "", table: object | None = None
+    *,
+    user_id: str = "",
+    role: str = "",
+    want: int | None = None,
+    keep: Callable[[Mapping[str, object]], bool] | None = None,
+    table: object | None = None,
 ) -> list[NotificationItem]:
     """The notifications for this person and for everyone in this role (#613).
 
     One query of the index per inbox, so what it reads follows how many
     notifications the person has, not the size of the table or how many the
-    whole site has. Every page is read: there is no cap that could leave a
-    person's own notification out. Unordered across the two inboxes; eventually
-    consistent, so a notification written in the last moment may be missing.
+    whole site has. Eventually consistent, so a notification written in the
+    last moment may be missing.
+
+    Without `want` every page is read and the two inboxes come back unordered.
+    With it, each inbox is read newest first, a page of twice `want` rows at a time,
+    and stops once it holds `want` rows `keep` admits; the newest `want` of the two
+    together are always among those, so sorting by `created_at` and cutting to
+    `want` gives what reading everything would (card 133).
     """
     target = table or db_table.table()
     found: list[NotificationItem] = []
@@ -972,25 +985,39 @@ def list_inbox(
     ):
         if not bucket:
             continue
-        for item in db_table.rows(
-            "query",
-            table=target,
-            key=_INBOX_INDEX_KEY,
-            IndexName=INBOX_INDEX,
-            KeyConditionExpression=Key("sweep_bucket").eq(bucket),
-            ScanIndexForward=False,
+        request: dict[str, object] = {
+            "IndexName": INBOX_INDEX,
+            "KeyConditionExpression": Key("sweep_bucket").eq(bucket),
+            "ScanIndexForward": False,
+        }
+        if want is not None:
+            if want <= 0:
+                return []
+            request["Limit"] = max(2 * want, _INBOX_PAGE_FLOOR)
+        kept = 0
+        for page in islice(
+            db_table.pages("query", table=target, key=_INBOX_INDEX_KEY, **request),
+            db_table.SCAN_PAGE_BUDGET,
         ):
-            if item.get("entity_type") != NOTIFICATION_ENTITY:
-                continue
-            # The row itself says who it is for; the bucket only found it.
-            recipient_id = item.get("recipient_id")
-            if for_person and recipient_id != user_id:
-                continue
-            if not for_person and (
-                recipient_id not in {None, ""} or item.get("recipient_role") != role
-            ):
-                continue
-            found.append(dict(item))
+            for item in page.items:
+                if item.get("entity_type") != NOTIFICATION_ENTITY:
+                    continue
+                # The row itself says who it is for; the bucket only found it.
+                recipient_id = item.get("recipient_id")
+                if for_person and recipient_id != user_id:
+                    continue
+                if not for_person and (
+                    recipient_id not in {None, ""} or item.get("recipient_role") != role
+                ):
+                    continue
+                if keep is not None and not keep(item):
+                    continue
+                found.append(dict(item))
+                kept += 1
+            if page.last_key is None or (want is not None and kept >= want):
+                break
+        else:
+            raise db_table.TableUnavailable("page_budget_spent")
     return found
 
 

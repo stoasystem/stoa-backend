@@ -2,6 +2,7 @@
 import logging
 
 from collections.abc import Mapping
+from contextlib import suppress
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal, NamedTuple, Protocol, runtime_checkable
@@ -20,6 +21,7 @@ from stoa.db.repositories import (
     user_repo,
 )
 from stoa.db import table as db_table
+from stoa.observability import telemetry
 from stoa.deps import get_actor
 from stoa.models.attachment import AttachmentSummary, ReplyImageReference
 from stoa.models.classroom import ClassroomEntry
@@ -967,4 +969,11 @@ async def add_note(
         now=_now(),
         table=db_table.table(),
     )
+    with suppress(Exception):
+        telemetry.record(
+            "teacher_replied",
+            actor_user_id=teacher_id,
+            role="teacher",
+            response_ms=telemetry.since_ms(conv.get("escalated_at")),
+        )
     return _note_out(written, written.attachments)

@@ -43,13 +43,16 @@ def _install_notification_repo(monkeypatch):
             item["account_fence_generation"] = 1
         return item
 
-    def list_inbox(*, user_id="", role="", table=None):
+    def list_inbox(*, user_id="", role="", want=None, keep=None, table=None):
         # One person's notifications and their role's, as the index finds them (#613).
         return [
             dict(event)
             for event in events.values()
-            if event.get("recipient_id") == user_id
-            or (event.get("recipient_id") in {None, ""} and event.get("recipient_role") == role)
+            if (
+                event.get("recipient_id") == user_id
+                or (event.get("recipient_id") in {None, ""} and event.get("recipient_role") == role)
+            )
+            and (keep is None or keep(event))
         ]
 
     def list_site_events(*, want, keep=None, table=None):

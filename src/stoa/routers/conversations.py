@@ -11,6 +11,7 @@ Implements the frontend chat API contract:
 import json
 import logging
 from collections.abc import Mapping
+from contextlib import suppress
 from datetime import datetime, timezone
 from typing import Any, Literal, cast
 
@@ -19,6 +20,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.db import table as db_table
+from stoa.observability import telemetry
 from stoa.deps import get_actor
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -818,7 +820,7 @@ async def get_teacher_help_availability(
     Also the caller's own teacher-support week, so an "ask a teacher" button
     can be greyed with its reason before the student presses it (#144).
     """
-    summary = teacher_dispatch_service.teacher_availability_summary()
+    summary = teacher_dispatch_service.student_availability_summary()
     now = _now()
     try:
         standing = teacher_support_allowance_service.get_student_teacher_support_standing(
@@ -924,6 +926,9 @@ async def request_teacher_help(
         raise help_requests.HelpRequestViolation(HelpCode.TEACHER_SUPPORT_ADMISSION_RECOVERABLE)
 
     record_help_usage(outcome.record)
+    if outcome.created:
+        with suppress(Exception):
+            telemetry.record("help_escalated", actor_user_id=student_id, role="student", wait_ms=None)
     return _teacher_help_response(outcome.record, fallback_created_at=now)
 
 

@@ -16,6 +16,7 @@ let an offer lapse off dispatch.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -44,6 +45,13 @@ ONLINE_WINDOW_SECONDS = 5 * 60
 SEEN_WRITE_INTERVAL_SECONDS = 60
 # How long a heartbeat row is kept: long past any use, then the table drops it.
 SEEN_ROW_LIFETIME_SECONDS = 24 * 60 * 60
+# How long a Lambda instance answers the students' "is a teacher there" from
+# the last reading (card 133). The heartbeat itself is written once a minute and
+# the online window is five, so ten seconds adds little to how stale it already
+# is; every student's indicator polls it, and it is the same for all of them.
+# Dispatch never reads it: `plan_dispatch` reads the profiles each time.
+STUDENT_SUMMARY_TTL_SECONDS = 10
+_student_summary: tuple[object, float, dict[str, Any]] | None = None
 
 
 def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
@@ -60,37 +68,64 @@ def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
     if limit <= 0:
         return []
     table = db_table.table()
-
-    def eligible_profile(profile: dict[str, Any]) -> dict[str, Any] | None:
-        teacher_id = str(profile.get("user_id") or "")
-        if (
-            not teacher_id
-            or str(profile.get("role") or "").lower() not in ELIGIBLE_ROLES
-            or profile.get("account_status") != "active"
-            or _int(profile.get("version"), 0) <= 0
-        ):
-            return None
-        try:
-            fence = account_deletion_repo.require_active_account_fence(
-                teacher_id, table=table
-            )
-            generation = int(fence["generation"])
-        except (KeyError, TypeError, ValueError, account_deletion_repo.AccountDeletionConflict):
-            return None
-        return {**profile, "account_fence_generation": generation}
-
+    # A heartbeat row with no account id names nobody; it was skipped before.
+    seen = {
+        teacher_id: seen_at
+        for teacher_id, seen_at in user_repo.list_teachers_seen(table=table).items()
+        if str(teacher_id or "").strip()
+    }
+    # Every seen account's profile and fence in one batch, read strongly as the
+    # fence always was, instead of two reads per teacher (card 133).
+    rows = db_table.get_many(
+        (
+            key
+            for teacher_id in seen
+            for key in (_profile_key(teacher_id), account_deletion_repo.account_fence_key(teacher_id))
+        ),
+        table=table,
+        consistent=True,
+    )
     profiles: list[dict[str, Any]] = []
-    for teacher_id, seen_at in user_repo.list_teachers_seen(table=table).items():
-        stored = db_table.get(table=table, Key={"PK": f"USER#{teacher_id}", "SK": "PROFILE"})
+    for teacher_id, seen_at in seen.items():
+        stored = rows.get(_row_key(_profile_key(teacher_id)))
         if stored is None or stored.get("user_id") != teacher_id:
             continue
-        profile = eligible_profile(stored)
+        fence = rows.get(_row_key(account_deletion_repo.account_fence_key(teacher_id)))
+        profile = _eligible_profile(stored, fence)
         if profile is None:
             continue
         profiles.append({**profile, "dispatch_seen_at": seen_at})
         if len(profiles) >= limit:
             break
     return profiles
+
+
+def _profile_key(user_id: str) -> dict[str, str]:
+    return {"PK": f"USER#{user_id}", "SK": "PROFILE"}
+
+
+def _row_key(key: dict[str, str]) -> tuple[str, str]:
+    return (key["PK"], key["SK"])
+
+
+def _eligible_profile(
+    profile: dict[str, Any], fence: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """The profile with its fence generation, when the account can take dispatch.
+
+    The fence is judged as `account_deletion_repo.require_active_account_fence` judges it.
+    """
+    if (
+        not profile.get("user_id")
+        or str(profile.get("role") or "").lower() not in ELIGIBLE_ROLES
+        or profile.get("account_status") != "active"
+        or _int(profile.get("version"), 0) <= 0
+    ):
+        return None
+    generation = 0 if fence is None else _int(fence.get("generation"), 0)
+    if fence is None or fence.get("status") != "active" or generation <= 0:
+        return None
+    return {**profile, "account_fence_generation": generation}
 
 
 def plan_dispatch(
@@ -204,6 +239,23 @@ def teacher_availability_summary(
             else "Teacher support will review requests when a qualified teacher is available."
         ),
     }
+
+
+def student_availability_summary() -> dict[str, Any]:
+    """`teacher_availability_summary`, kept for `STUDENT_SUMMARY_TTL_SECONDS` per table.
+
+    Only for what a student is shown. Keyed by the table it was read from, so a
+    table put in its place is read afresh.
+    """
+    global _student_summary
+    table = db_table.table()
+    now = time.monotonic()
+    cached = _student_summary
+    if cached is not None and cached[0] is table and now < cached[1]:
+        return dict(cached[2])
+    summary = teacher_availability_summary()
+    _student_summary = (table, now + STUDENT_SUMMARY_TTL_SECONDS, dict(summary))
+    return summary
 
 
 def record_teacher_seen(user_id: str, *, now: str | None = None) -> None:

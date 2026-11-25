@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Iterator, Mapping
 from decimal import Decimal
 from itertools import islice
 from typing import NamedTuple, Protocol, SupportsInt, runtime_checkable
@@ -19,6 +19,15 @@ POINTER_ENTITY = "curriculum_pointer"
 MANIFEST_ENTITY = "curriculum_publish_manifest"
 AUDIT_ENTITY = "curriculum_audit_event"
 MIGRATION_ENTITY = "curriculum_migration_evidence"
+
+# The worklist reads versions and pointers through GSI-Listing (card 133), not a
+# scan: a version is listed under when it was last touched, a pointer in a
+# list of its own. Every write of either row sets the keys.
+LISTING_INDEX = "GSI-Listing"
+VERSION_LISTING = "curriculum_version"
+POINTER_LISTING = "curriculum_pointer"
+_LISTING_INDEX_KEY = ("PK", "SK", "listing", "listed_at")
+_LISTED_AT_UNKNOWN = "1970-01-01T00:00:00Z"
 
 
 type CurriculumItem = dict[str, object]
@@ -131,17 +140,31 @@ def _integer(value: object) -> int:
     raise RuntimeError("curriculum dependency unavailable")
 
 
+def _listed_at(item: Mapping[str, object]) -> str:
+    # `updated_at`, the worklist's order; one without it sorts last, as before.
+    value = item.get("updated_at")
+    return value if isinstance(value, str) and value else _LISTED_AT_UNKNOWN
+
+
+def listing_fields(item: Mapping[str, object]) -> dict[str, str]:
+    """The GSI-Listing keys a version or pointer row carries; none for any other row."""
+    entity_type = item.get("entity_type")
+    if entity_type == VERSION_ENTITY:
+        return {"listing": VERSION_LISTING, "listed_at": _listed_at(item)}
+    if entity_type == POINTER_ENTITY:
+        return {"listing": POINTER_LISTING, "listed_at": _listed_at(item)}
+    return {}
+
+
 def put_version(item: CurriculumItem) -> None:
     table = db_table.table()
-    _put_item(
-        table,
-        Item={
-            "PK": f"CURRICULUM_VERSION#{item['public_id']}",
-            "SK": f"VERSION#{item['version_id']}",
-            "entity_type": VERSION_ENTITY,
-            **item,
-        },
-    )
+    row: CurriculumItem = {
+        "PK": f"CURRICULUM_VERSION#{item['public_id']}",
+        "SK": f"VERSION#{item['version_id']}",
+        "entity_type": VERSION_ENTITY,
+        **item,
+    }
+    _put_item(table, Item={**row, **listing_fields(row)})
 
 
 # Every read of a lesson's versions, pointer and manifests is strongly consistent.
@@ -210,6 +233,7 @@ def put_pointer(item: CurriculumItem) -> None:
         "entity_type": POINTER_ENTITY,
         **{key: value for key, value in item.items() if value is not None},
     }
+    fields.update(listing_fields(fields))
     names = {f"#f{index}": key for index, key in enumerate(sorted(fields))}
     values: CurriculumItem = {f":f{index}": fields[key] for index, key in enumerate(sorted(fields))}
     _update_item(
@@ -238,6 +262,8 @@ def set_published_pointer(
         "#updated_by": "updated_by",
         "#entity_type": "entity_type",
         "#public_id": "public_id",
+        "#listing": "listing",
+        "#listed_at": "listed_at",
     }
     values: CurriculumItem = {
         ":version_id": version_id,
@@ -246,6 +272,8 @@ def set_published_pointer(
         ":updated_by": actor_id,
         ":entity_type": POINTER_ENTITY,
         ":public_id": public_id,
+        ":listing": POINTER_LISTING,
+        ":listed_at": updated_at or _LISTED_AT_UNKNOWN,
     }
     condition = "attribute_not_exists(#published_version_id)"
     if expected_published_version_id is not None:
@@ -260,7 +288,8 @@ def set_published_pointer(
             UpdateExpression=(
                 "SET #entity_type = :entity_type, #public_id = :public_id, "
                 "#published_version_id = :version_id, #manifest_id = :manifest_id, "
-                "#updated_at = :updated_at, #updated_by = :updated_by"
+                "#updated_at = :updated_at, #updated_by = :updated_by, "
+                "#listing = :listing, #listed_at = :listed_at"
             ),
             ConditionExpression=condition,
             ExpressionAttributeNames=names,
@@ -514,26 +543,59 @@ class WorklistRows(NamedTuple):
     published_version_ids: dict[str, str]
 
 
-def list_worklist() -> WorklistRows:
+def _listed(table: object, listing: str) -> Iterator[CurriculumItem]:
+    """One list of GSI-Listing, newest first, a page at a time."""
+    if not isinstance(table, _QueryTable):
+        raise RuntimeError("curriculum dependency unavailable")
+    for page in islice(
+        db_table.pages(
+            "query",
+            table=table,
+            key=_LISTING_INDEX_KEY,
+            IndexName=LISTING_INDEX,
+            KeyConditionExpression=Key("listing").eq(listing),
+            ScanIndexForward=False,
+        ),
+        db_table.SCAN_PAGE_BUDGET,
+    ):
+        yield from _items(page.items)
+        if page.last_key is None:
+            return
+    raise db_table.TableUnavailable("page_budget_spent")
+
+
+def list_worklist(
+    *,
+    want: int | None = None,
+    keep: Callable[[CurriculumItem, dict[str, str]], bool] | None = None,
+) -> WorklistRows:
+    """The lesson versions newest first, and every lesson's live version.
+
+    Two queries of GSI-Listing (card 133). Every pointer is read; versions are
+    read newest first until `want` of them pass `keep`, which is given the
+    version and the live versions, so a page of the worklist reads about as
+    many versions as it shows. Eventually consistent, as the scan it replaces was.
+    """
     table = db_table.table()
-    # One scan for both: the versions and the pointers that say which one is live.
-    rows = db_table.rows(
-        "scan",
-        table=table,
-        FilterExpression=Attr("entity_type").is_in([VERSION_ENTITY, POINTER_ENTITY]),
-    )
-    versions: list[CurriculumItem] = []
     published_version_ids: dict[str, str] = {}
-    for item in _items(rows):
-        if item.get("entity_type") == POINTER_ENTITY:
-            public_id = item.get("public_id") or str(item.get("PK", "")).removeprefix("CURRICULUM_POINTER#")
-            published = item.get("published_version_id")
-            if isinstance(public_id, str) and public_id and isinstance(published, str):
-                published_version_ids[public_id] = published
-        else:
-            versions.append(item)
-    # Sorted here, cut by the caller: with the cut first the list was whichever
-    # versions came off the front of the table, not the ones last touched.
+    for item in _listed(table, POINTER_LISTING):
+        if item.get("entity_type") != POINTER_ENTITY:
+            continue
+        public_id = item.get("public_id") or str(item.get("PK", "")).removeprefix("CURRICULUM_POINTER#")
+        published = item.get("published_version_id")
+        if isinstance(public_id, str) and public_id and isinstance(published, str):
+            published_version_ids[public_id] = published
+    versions: list[CurriculumItem] = []
+    kept = 0
+    for item in _listed(table, VERSION_LISTING):
+        if item.get("entity_type") != VERSION_ENTITY:
+            continue
+        versions.append(item)
+        if keep is None or keep(item, published_version_ids):
+            kept += 1
+            if want is not None and kept >= want:
+                break
+    # Sorted again: a version listed under the fallback time has no `updated_at`.
     newest = sorted(versions, key=lambda item: str(item.get("updated_at", "")), reverse=True)
     return WorklistRows(newest, published_version_ids)
 

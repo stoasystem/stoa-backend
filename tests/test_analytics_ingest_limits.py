@@ -20,6 +20,7 @@ from dynamodb_expression_assertions import assert_expression_placeholders_closed
 
 from stoa.db import table as db_table
 from stoa import config
+from stoa.observability import analytics_store
 from stoa.routers import analytics
 
 
@@ -56,6 +57,28 @@ class _StubRequest:
     def __init__(self, peer: str, headers: dict[str, str] | None = None) -> None:
         self.client = type("_Peer", (), {"host": peer})()
         self.headers = headers or {}
+
+
+class _StatsTable:
+    """The statistics table (card 134): where an admitted event's row goes."""
+
+    def __init__(self) -> None:
+        self.puts: list[dict[str, Any]] = []
+
+    def put_item(self, *, Item: dict[str, Any], **_kwargs: Any) -> dict[str, Any]:
+        self.puts.append(Item)
+        return {}
+
+    def update_item(self, **_kwargs: Any) -> dict[str, Any]:
+        return {}
+
+
+@pytest.fixture(autouse=True)
+def stats() -> Any:
+    fake = _StatsTable()
+    analytics_store.install(fake)
+    yield fake
+    analytics_store.install(None)
 
 
 @pytest.fixture
@@ -96,14 +119,15 @@ def _tuned(**overrides: Any) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def test_未认证的调用仍然被接受并写一行(table: _AnalyticsTable) -> None:
+def test_未认证的调用仍然被接受并写一行(table: _AnalyticsTable, stats: _StatsTable) -> None:
     response = _client().post("/analytics/events", json=_event())
 
     assert response.status_code == 202, response.text
     assert response.json() == {"status": "accepted"}
-    assert len(table.puts) == 1
-    assert table.puts[0]["name"] == "user_login"
-    assert table.puts[0]["session_id"] == "5f1d1c1e-0b2a-4a1f-8f6e-2b0c9d7e4a31"
+    assert table.puts == []
+    assert len(stats.puts) == 1
+    assert stats.puts[0]["name"] == "user_login"
+    assert stats.puts[0]["sid"] == "5f1d1c1e-0b2a-4a1f-8f6e-2b0c9d7e4a31"
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +160,7 @@ def test_出厂额度放行一整个窗口的正常用量(table: _AnalyticsTable
 
 
 def test_分桶按网关观测到的地址_换sessionId换不来新额度(
-    table: _AnalyticsTable, monkeypatch: pytest.MonkeyPatch
+    table: _AnalyticsTable, stats: _StatsTable, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config.install(_tuned(analytics_ingest_max_events_per_window=2))
     client = _client()
@@ -148,7 +172,7 @@ def test_分桶按网关观测到的地址_换sessionId换不来新额度(
 
     assert statuses == [202, 202, 429]
     assert len(_counter_keys(table)) == 1
-    assert len(table.puts) == 2
+    assert len(stats.puts) == 2
 
 
 def test_不同来源地址各自计数(table: _AnalyticsTable) -> None:
@@ -182,7 +206,7 @@ def test_窗口滚过之后重新放行(
 
 
 def test_超额时拒绝且不写事件行(
-    table: _AnalyticsTable, monkeypatch: pytest.MonkeyPatch
+    table: _AnalyticsTable, stats: _StatsTable, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config.install(_tuned(analytics_ingest_max_events_per_window=1))
     client = _client()
@@ -193,10 +217,10 @@ def test_超额时拒绝且不写事件行(
     assert refused.status_code == 429
     assert refused.json()["detail"]["code"] == "analytics_ingest_rate_limited"
     assert refused.headers["retry-after"] == str(config.settings().analytics_ingest_window_seconds)
-    assert len(table.puts) == 1
+    assert len(stats.puts) == 1
 
 
-def test_计数器写不进去时拒绝而不是放行(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_计数器写不进去时拒绝而不是放行(stats: _StatsTable, monkeypatch: pytest.MonkeyPatch) -> None:
     broken = _AnalyticsTable(update_fails=True)
     db_table.install(broken)
 
@@ -204,6 +228,7 @@ def test_计数器写不进去时拒绝而不是放行(monkeypatch: pytest.Monke
 
     assert response.status_code == 429
     assert broken.puts == []
+    assert stats.puts == []
 
 
 # ---------------------------------------------------------------------------
@@ -211,41 +236,38 @@ def test_计数器写不进去时拒绝而不是放行(monkeypatch: pytest.Monke
 # ---------------------------------------------------------------------------
 
 
-def test_前端形状的载荷原样存下且不标记截断(table: _AnalyticsTable) -> None:
-    payload = {"durationMs": 412, "ok": True, "plan": "free", "attempts": None}
+def test_白名单里的载荷原样存下(table: _AnalyticsTable, stats: _StatsTable) -> None:
+    _client().post(
+        "/analytics/events",
+        json=_event(name="checkout_started", payload={"plan": "free", "mode": "hosted"}),
+    )
 
-    _client().post("/analytics/events", json=_event(payload=payload))
-
-    stored = table.puts[0]
-    assert stored["payload"] == payload
-    assert stored["payload_truncated"] is False
+    assert stats.puts[0]["props"] == {"plan": "free", "mode": "hosted"}
 
 
-def test_嵌套结构与超长字符串与超量字段都被挡在行外(table: _AnalyticsTable) -> None:
+def test_嵌套结构与超长字符串与白名单外字段都被挡在行外(
+    table: _AnalyticsTable, stats: _StatsTable
+) -> None:
     payload: dict[str, Any] = {
         "nested": {"a": 1},
         "listed": [1, 2, 3],
-        "long": "x" * (config.settings().analytics_payload_max_value_length + 50),
+        "plan": "x" * 500,
+        "mode": {"a": 1},
     }
-    payload.update(
-        {f"key{index}": index for index in range(config.settings().analytics_payload_max_entries + 10)}
+    payload.update({f"key{index}": index for index in range(50)})
+
+    _client().post("/analytics/events", json=_event(name="checkout_started", payload=payload))
+
+    assert stats.puts[0]["props"] == {"plan": "x" * 64}
+
+
+def test_浮点数仍然转成Decimal(table: _AnalyticsTable, stats: _StatsTable) -> None:
+    _client().post(
+        "/analytics/events",
+        json=_event(name="login_authenticated", payload={"msSinceSubmit": 0.1}),
     )
 
-    _client().post("/analytics/events", json=_event(payload=payload))
-
-    stored = table.puts[0]
-    assert "nested" not in stored["payload"]
-    assert "listed" not in stored["payload"]
-    assert len(stored["payload"]["long"]) == config.settings().analytics_payload_max_value_length
-    assert len(stored["payload"]) <= config.settings().analytics_payload_max_entries
-    assert stored["payload_truncated"] is True
-
-
-def test_浮点数仍然转成Decimal且不算截断(table: _AnalyticsTable) -> None:
-    _client().post("/analytics/events", json=_event(payload={"score": 0.1}))
-
-    assert table.puts[0]["payload"]["score"] == Decimal("0.1")
-    assert table.puts[0]["payload_truncated"] is False
+    assert stats.puts[0]["props"]["msSinceSubmit"] == Decimal("0.1")
 
 
 # ---------------------------------------------------------------------------

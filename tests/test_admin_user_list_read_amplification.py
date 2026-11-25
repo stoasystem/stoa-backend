@@ -1,10 +1,12 @@
 """Card 002 #7: what one page of GET /admin/users costs in DynamoDB round trips.
 
-The endpoint answers from one scan and then resolves every listed account's
-parent/child links one account at a time, so its cost is not the page size but
-the page size times the links behind it. API Gateway cuts the request off at 29
-seconds, which makes that multiplier a correctness property rather than a
-performance note - past some page this route stops answering at all.
+The endpoint used to answer from a table scan and then resolve every listed
+account's parent/child links one account at a time, five reads per link, so its
+cost was the page size times the links behind it: 3207 round trips for a full
+page, against the 29 seconds API Gateway allows. Card 133 cut that on purpose:
+the accounts are now one query of GSI-Listing, and the links one link query per
+account plus one batched read (`BatchGetItem`, a hundred keys a call) of every
+link row and profile the relationship judge needs. A full page is now 221.
 
 So the multiplier is measured here against a counting table and pinned exactly.
 It is pinned in both directions on purpose: a drop is as much a change to this
@@ -23,7 +25,7 @@ from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable
 
 from stoa.db import table as db_table
-from stoa.db.repositories import parent_link_repo
+from stoa.db.repositories import account_deletion_repo, parent_link_repo
 from stoa.routers import admin
 from stoa.services import account_listing
 
@@ -35,23 +37,26 @@ CountingTable = FakeTable
 """The shared double counts its own round trips, which is all this file needed.
 
 What it does *not* do is hand back rows in the order they were planted. A real
-table reads in key order, so a layout that puts profiles behind other rows costs
-more than one scan however the fixture was written - see the scan counts below.
+index reads in key order: newest `listed_at` first here, so the fixture dates
+the parents after the students to put the parents on the first page.
 """
+
+
+def _profile(row: dict[str, object]) -> dict[str, object]:
+    return {**row, **account_deletion_repo.account_listing_fields(row)}
 
 
 def _seed(table: CountingTable) -> None:
     """Parent profiles first, so a full page is parents and nothing else.
 
-    That is the expensive shape and therefore the one worth holding. Both sides
-    now ask the relationship judge, so a parent row and a student row cost the
-    same: a link query, then per counterpart the two link rows, the two profiles
-    and the counterpart's account number. (A student row used to skip the judge
-    and cost one read per parent; no student reaches the pages pinned here.)
+    That is the expensive shape and therefore the one worth holding. A parent row
+    and a student row cost the same: a link query, and every pair's two link rows
+    and two profiles go into the page's batched read, the counterpart's account
+    number with them.
     """
     for index in range(PARENTS):
         parent_id = f"parent-{index}"
-        table.seed({
+        table.seed(_profile({
             "PK": f"USER#{parent_id}",
             "SK": "PROFILE",
             "user_id": parent_id,
@@ -60,13 +65,13 @@ def _seed(table: CountingTable) -> None:
             "email": f"{parent_id}@stoa.test",
             "name": parent_id,
             "account_number": f"P26-{index:04d}",
-            "created_at": "2026-01-01T00:00:00+00:00",
-        })
+            "created_at": "2026-02-01T00:00:00+00:00",
+        }))
     for index in range(PARENTS):
         parent_id = f"parent-{index}"
         for child in range(CHILDREN_PER_PARENT):
             student_id = f"student-{index}-{child}"
-            table.seed({
+            table.seed(_profile({
                 "PK": f"USER#{student_id}",
                 "SK": "PROFILE",
                 "user_id": student_id,
@@ -76,7 +81,7 @@ def _seed(table: CountingTable) -> None:
                 "name": student_id,
                 "account_number": f"S26-{index:04d}{child}",
                 "created_at": "2026-01-01T00:00:00+00:00",
-            })
+            }))
             # A current link as the link writer stores it: both sides active and
             # agreeing on the relationship and the write that last touched them.
             link = {
@@ -114,66 +119,66 @@ def _client() -> TestClient:
     return TestClient(app)
 
 
-# Six pages of link rows sort ahead of the first profile, so the scan reaches the
-# profiles on its seventh. The count used to be pinned at 1 because the double read
-# rows in the order the fixture planted them; a real table reads in key order, and
-# `PARENT#`/`STUDENT#` sort before `USER#`.
-SCANS_TO_REACH_THE_PROFILES = 7
+# One query of GSI-Listing reads a whole page of profiles, whatever else the
+# table holds. It used to take seven scans to get past the link rows.
+LISTING_QUERIES = 1
 
 
-def test_一页两百个家长账号要打三千两百次数据库(table: CountingTable) -> None:
+def test_一页两百个家长账号只打两百二十一次数据库(table: CountingTable) -> None:
     """The measured cost of the largest page this route accepts.
 
-    Seven scans + one link query per row + five reads per link: the two link rows,
-    the two profiles the relationship judge checks, and the counterpart profile read
-    a second time for its account number. The parent's own profile is read once per
-    child although the scan already returned it. 200 parents x 3 links x 5 = 3000.
+    One listing query + one link query per parent + the batched read: 200 parents
+    x 3 links x 2 link rows, plus 800 profiles, is 2000 keys, 20 `BatchGetItem`
+    calls. It was 3207 (7 scans + 200 queries + 3000 `GetItem`) before card 133.
     """
     response = _client().get("/admin/users?limit=200")
 
     assert response.status_code == 200, response.text
     body = response.json()
     assert len(body["items"]) == PARENTS
+    assert {item["role"] for item in body["items"]} == {"parent"}
+    assert all(len(item["linkedAccounts"]) == CHILDREN_PER_PARENT for item in body["items"])
+    assert body["items"][0]["linkedAccounts"][0]["accountNumber"].startswith("S26-")
     assert dict(table.calls) == {
-        "scan": SCANS_TO_REACH_THE_PROFILES,
-        "query": PARENTS,
-        "get_item": 3000,
+        "query": LISTING_QUERIES + PARENTS,
+        "batch_get_item": 20,
     }
-    assert sum(table.calls.values()) == 3207
+    assert sum(table.calls.values()) == 221
 
 
-def test_不取关联时同一页只剩扫描(
+def test_不取关联时同一页只剩一次索引查询(
     table: CountingTable, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Negative control: the count above is the link resolution, not the harness.
-
-    Without it the same page is the walk to the profiles and nothing else, which is
-    also what the numbers above have to beat if this route is ever made to batch its
-    reads.
-    """
-    monkeypatch.setattr(account_listing, "_linked_counterparts", lambda profile: [])
+    """Negative control: the count above is the link resolution, not the harness."""
+    monkeypatch.setattr(
+        account_listing, "_linked_counterparts", lambda profile, relationships: []
+    )
+    monkeypatch.setattr(
+        account_listing.current_relationship,
+        "current_relationships_of",
+        lambda **kwargs: account_listing.current_relationship.CurrentRelationships({}, {}, {}),
+    )
 
     response = _client().get("/admin/users?limit=200")
 
     assert response.status_code == 200, response.text
     assert len(response.json()["items"]) == PARENTS
-    assert dict(table.calls) == {"scan": SCANS_TO_REACH_THE_PROFILES}
+    assert dict(table.calls) == {"query": LISTING_QUERIES}
 
 
 def test_默认页大小的代价是满页的四分之一(table: CountingTable) -> None:
     """The default page is what production actually serves, so hold it separately.
 
-    The scan count does not fall with the page size: the walk to the first profile
-    costs the same whether 50 or 200 of them are wanted.
+    50 parents: 50 link queries, and 50 x 3 x 2 link rows + 200 profiles = 500 keys
+    in 5 batches. It was 807 round trips before card 133.
     """
     response = _client().get("/admin/users")
 
     assert response.status_code == 200, response.text
     assert len(response.json()["items"]) == 50
     assert dict(table.calls) == {
-        "scan": SCANS_TO_REACH_THE_PROFILES,
-        "query": 50,
-        "get_item": 750,
+        "query": LISTING_QUERIES + 50,
+        "batch_get_item": 5,
     }
 
 
@@ -191,7 +196,7 @@ def _seed_noise_first(table: CountingTable, *, noise_rows: int) -> None:
         })
     for index in range(4):
         user_id = f"student-{index}"
-        table.seed({
+        table.seed(_profile({
             "PK": f"USER#{user_id}",
             "SK": "PROFILE",
             "user_id": user_id,
@@ -201,7 +206,7 @@ def _seed_noise_first(table: CountingTable, *, noise_rows: int) -> None:
             "name": user_id,
             "account_number": f"S26-{index:04d}",
             "created_at": "2026-01-01T00:00:00+00:00",
-        })
+        }))
 
 
 def test_账号藏在扫描页之后也照样答200(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -248,8 +253,22 @@ def test_统计走不完时说明数字是下限(monkeypatch: pytest.MonkeyPatch
     real pages is 50 MB of rows, which is not a fixture. The old double invented a
     `Limit` of 50 when none was sent, which is a row count no real scan applies.
     """
+    # Since card 133 the census reads the profiles' partition of GSI-Listing, so
+    # what has to outrun the page budget is profiles, not unrelated rows.
     counting = CountingTable(page_size_bytes=512)
-    _seed_noise_first(counting, noise_rows=800)
+    for index in range(400):
+        user_id = f"student-{index}"
+        counting.seed(_profile({
+            "PK": f"USER#{user_id}",
+            "SK": "PROFILE",
+            "user_id": user_id,
+            "role": "student",
+            "account_status": "active",
+            "email": f"{user_id}@stoa.test",
+            "name": user_id,
+            "account_number": f"S26-{index:04d}",
+            "created_at": "2026-01-01T00:00:00+00:00",
+        }))
     db_table.install(counting)
 
     response = _client().get("/admin/stats")

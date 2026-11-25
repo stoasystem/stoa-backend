@@ -554,6 +554,7 @@ def knowledge_map(
     `chosen_subject_ids` are the subjects the student ticked on their profile:
     taken as much as a subject they have progress in (#321).
     """
+    evidence.read_all()
     catalog = evidence.content.catalog
     # Blank is absent, whether it arrived as no parameter at all or as one with
     # nothing in it; either way the first galaxy takes the focus as it always has.
@@ -605,6 +606,8 @@ def knowledge_map(
 NEIGHBOURS_EACH_SIDE = 2
 #: The most stars one neighbourhood sends.
 MAX_NEIGHBOURHOOD = 15
+#: What a neighbourhood judges its stars by; read side by side before it starts.
+NEIGHBOURHOOD_PARTITIONS = ("progress", "attempts", "star_quiz_outcomes", "review_cards")
 
 
 def neighbourhood(
@@ -620,6 +623,7 @@ def neighbourhood(
     (its prerequisites), the stars that need it, and its neighbours in its
     nebula, so the client loads what the student is about to look at rather than
     the whole sky."""
+    evidence.read_all(NEIGHBOURHOOD_PARTITIONS)
     catalog = evidence.content.catalog
     requested = str(subject_id or "").strip()
     _require_known_subject(requested, catalog)

@@ -41,6 +41,7 @@ import json
 import logging
 import random
 import re
+import threading
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -71,12 +72,46 @@ _installed: object | None = None
 
 
 @lru_cache
+def _resource() -> Any:
+    resource = boto3.resource("dynamodb", region_name=config.settings().aws_region)
+    _metered(resource.meta.client)
+    return resource
+
+
+@lru_cache
 def _real_table() -> object:
-    real = boto3.resource("dynamodb", region_name=config.settings().aws_region).Table(
+    return _resource().Table(config.settings().dynamodb_table_name)
+
+
+_worker_tables = threading.local()
+
+
+def _new_worker_table(name: str) -> object:
+    resource = boto3.session.Session().resource(
+        "dynamodb", region_name=config.settings().aws_region
+    )
+    _metered(resource.meta.client)
+    return resource.Table(name)
+
+
+def worker_table() -> object | None:
+    """A table of the calling thread's own, for reads fanned out over threads.
+
+    A boto3 resource is not thread safe, so each worker thread gets a session
+    and a table of its own, metered as the shared one is. `None` while a double
+    is installed: a double is shared as it is.
+    """
+    installed = _installed
+    if installed is not None and not _is_boto_table(installed):
+        return None
+    name = str(getattr(installed, "name", "")) if installed is not None else (
         config.settings().dynamodb_table_name
     )
-    _metered(real.meta.client)
-    return real
+    tables: dict[str, object] = getattr(_worker_tables, "by_name", None) or {}
+    if name not in tables:
+        tables[name] = _new_worker_table(name)
+        _worker_tables.by_name = tables
+    return tables[name]
 
 
 def _metered(boto_client: Any) -> Any:
@@ -300,6 +335,79 @@ def get(*, table: object | None = None, **request: object) -> dict[str, Any] | N
     if not isinstance(response, Mapping):
         raise TableUnavailable("malformed_response")
     return _attributes(response.get("Item"), absent=None)
+
+
+BATCH_GET_KEY_LIMIT = 100
+BATCH_GET_ATTEMPTS = 3
+
+type RowKey = tuple[str, str]
+
+
+def _is_boto_table(target: object) -> bool:
+    return (
+        not callable(getattr(target, "batch_get_item", None))
+        and callable(getattr(target, "get_item", None))
+        and getattr(getattr(target, "meta", None), "client", None) is not None
+        and isinstance(getattr(target, "name", None), str)
+    )
+
+
+def get_many(
+    keys: Iterable[Mapping[str, object]],
+    *,
+    table: object | None = None,
+    consistent: bool = False,
+) -> dict[RowKey, dict[str, Any]]:
+    """The items `keys` name, by `(PK, SK)`; a key the table holds nothing for is absent.
+
+    One `BatchGetItem` per hundred keys instead of one `GetItem` per key. Keys left
+    unprocessed are asked again, and still unprocessed after the last attempt is
+    `TableUnavailable("unprocessed_keys")` rather than a silently short answer.
+    A double without `batch_get_item` is read one key at a time.
+    """
+    wanted: list[dict[str, str]] = []
+    seen: set[RowKey] = set()
+    for key in keys:
+        pair = (str(key["PK"]), str(key["SK"]))
+        if pair not in seen:
+            seen.add(pair)
+            wanted.append({"PK": pair[0], "SK": pair[1]})
+    found: dict[RowKey, dict[str, Any]] = {}
+    if not wanted:
+        return found
+    target = table if table is not None else _installed if _installed is not None else None
+    if target is None:
+        batch = _resource().batch_get_item
+        name = config.settings().dynamodb_table_name
+    elif _is_boto_table(target):
+        # A boto3 Table has no `batch_get_item`; its service resource does.
+        batch = _resource().batch_get_item
+        name = str(getattr(target, "name"))
+    else:
+        batch = getattr(target, "batch_get_item", None)
+        name = str(getattr(target, "name", "") or "table")
+        if not callable(batch):
+            for key in wanted:
+                item = get(table=target, Key=key, ConsistentRead=consistent)
+                if item is not None:
+                    found[(str(item["PK"]), str(item["SK"]))] = item
+            return found
+    for start in range(0, len(wanted), BATCH_GET_KEY_LIMIT):
+        pending: list[dict[str, str]] = wanted[start : start + BATCH_GET_KEY_LIMIT]
+        for _attempt in range(BATCH_GET_ATTEMPTS):
+            response = batch(RequestItems={name: {"Keys": pending, "ConsistentRead": consistent}})
+            if not isinstance(response, Mapping):
+                raise TableUnavailable("malformed_response")
+            for item in (response.get("Responses") or {}).get(name) or []:
+                row = _attributes(item, absent=None)
+                if row is not None:
+                    found[(str(row["PK"]), str(row["SK"]))] = row
+            pending = list(((response.get("UnprocessedKeys") or {}).get(name) or {}).get("Keys") or [])
+            if not pending:
+                break
+        if pending:
+            raise TableUnavailable("unprocessed_keys")
+    return found
 
 
 def put(*, table: object | None = None, **request: object) -> dict[str, Any]:

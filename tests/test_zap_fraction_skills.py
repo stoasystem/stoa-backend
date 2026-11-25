@@ -16,7 +16,12 @@ from __future__ import annotations
 import pytest
 
 from fakes.dynamodb import FakeTable
-from stoa.services import curriculum_service, knowledge_mastery_service, student_evidence
+from stoa.services import (
+    curriculum_cache,
+    curriculum_service,
+    knowledge_mastery_service,
+    student_evidence,
+)
 from test_curriculum_publish_projection import (
     LESSON_ID,
     _exercise,
@@ -57,13 +62,16 @@ def _skill_points(table: FakeTable) -> dict[str, bool]:
 
 
 def test_a_skill_point_appears_once_an_exercise_trains_it_and_lights_when_answered(
-    table: FakeTable,
+    table: FakeTable, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    now = [0.0]
+    monkeypatch.setattr(curriculum_cache, "_clock", lambda: now[0])
     before = _skill_points(table)
     assert "brueche-addieren" in before
     assert not set(NEW_SKILLS) & set(before)
 
     _publish(_payload(_exercise(1, skills=["brueche-ganzes-bestimmen"])))
+    # The clock stands still: the publish's catalog stamp alone makes the new exercise seen.
 
     after = _skill_points(table)
     assert after["brueche-ganzes-bestimmen"] is False

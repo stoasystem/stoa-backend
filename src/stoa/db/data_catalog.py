@@ -676,7 +676,7 @@ _ENTRIES: tuple[DataType, ...] = (
     # -- security audit and analytics (no account's data) ------------------------------
     DataType("security_audit_event", _repo("security_audit_repo"), ()),
     DataType("authorization_probe_aggregate", _repo("security_audit_repo"), ()),
-    DataType("analytics_event", "stoa.routers.analytics", ()),
+    DataType("analytics_event", "stoa.observability.analytics_store", ()),
     DataType("knowledge_gap", _repo("knowledge_gap_repo"), ()),
     # -- curriculum ---------------------------------------------------------------------
     DataType("curriculum_analytics_metric", _repo("curriculum_analytics_repo"), ()),
@@ -692,6 +692,7 @@ _ENTRIES: tuple[DataType, ...] = (
     ),
     DataType("curriculum_signal_reconciliation", _repo("curriculum_analytics_repo"), ()),
     DataType("curriculum_audit_event", _repo("curriculum_ops_repo"), ()),
+    DataType("curriculum_catalog_stamp", "stoa.services.curriculum_cache", ()),
     DataType("curriculum_migration_evidence", _repo("curriculum_ops_repo"), ()),
     DataType("curriculum_pointer", _repo("curriculum_ops_repo"), (), _not(_ADMIN, "updated_by")),
     DataType("curriculum_publish_manifest", _repo("curriculum_ops_repo"), ()),
