@@ -166,6 +166,19 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
     (German since #547), so a run uses the bare `--knowledge-base-live`; naming
     subjects is only for a new subject whose practice is not published yet.
 
+### Letter names in formulas
+
+The practice page renders `$...$` with KaTeX, so a point, event, set or body named
+`$B$` is an italic B. A name left as plain text beside it ("A and $B$ are
+independent") shows as an upright A among italic letters. Before a content round
+that writes formulas goes to a dry run, check its manifest:
+`uv run python scripts/check_letter_names.py manifest.json --allow allow.txt` lists
+every lone capital letter joined to a formula by a comma or an "and" (in any of the
+four languages) but left outside it, and every `$P$(A)$=...$`
+(stoa-backend#603). Units after a number, the English article and coordinates such as
+`A(3 ; 2)` are not reported. `--allow` names the exercises whose letters stay plain on
+purpose, each with its reason - figure labels, for example.
+
 ## German as a first language
 
 German (#498) has no upstream. Its stars - 52 in the eight `deutsch-*` nebulae of
