@@ -1275,11 +1275,17 @@ def list_user_events(
     locale = locale_service.reader_locale(user_id)
     # This person's own inbox and their role's, read from the index (#613): the
     # bell polls this, and a scan of the table read every row of it each time
-    # and saw only the first hundred notifications of the whole site.
+    # and saw only the first hundred notifications of the whole site. Only the
+    # newest `limit` that are shown are read, not the whole history (card 133).
+    def shown(item: Mapping[str, Any]) -> bool:
+        return _visible_to_user(dict(item), user_id=user_id, role=role) and (
+            status is None and item.get("status") != "archived" or status == item.get("status")
+        )
+
     items = [
-        item for item in notification_repo.list_inbox(user_id=user_id, role=role)
-        if _visible_to_user(item, user_id=user_id, role=role)
-        and (status is None and item.get("status") != "archived" or status == item.get("status"))
+        item
+        for item in notification_repo.list_inbox(user_id=user_id, role=role, want=limit, keep=shown)
+        if shown(item)
     ]
     return [event_response(item, locale=locale) for item in _sort_events(items)[:limit]]
 
