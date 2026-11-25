@@ -26,7 +26,7 @@ from typing import Any
 from boto3.dynamodb.conditions import Key
 
 from stoa.db import table as db_table
-from stoa.observability import analytics_store, features
+from stoa.observability import analytics_store, cost_reader, features
 
 logger = logging.getLogger(__name__)
 
@@ -246,11 +246,69 @@ def rollup_rows(day: date | str, *, target: Any) -> tuple[list[dict[str, Any]], 
 _cache_lock = threading.Lock()
 _cache: dict[Any, tuple[float, Any]] = {}
 CACHE_SECONDS = 60.0
+COST_CACHE_SECONDS = 6 * 3600.0
 
 
 def clear_cache() -> None:
     with _cache_lock:
         _cache.clear()
+
+
+def _change(current: float, previous: float) -> float | None:
+    return round((current - previous) / previous, 4) if previous else None
+
+
+def _month_active_users(start: date, end: date) -> int:
+    """Distinct pseudonyms in the raw `ACTIVE#<day>` partitions from `start` through `end`."""
+    target = analytics_store.table()
+    if target is None:
+        raise LookupError("no statistics table")
+    pids: set[str] = set()
+    day = start
+    while day <= end:
+        rows, _complete = _partition(target, f"ACTIVE#{day.isoformat()}")
+        for row in rows:
+            pid = row.get("pid") or str(row.get("SK", "")).split("#", 1)[-1]
+            if pid:
+                pids.add(str(pid))
+        day += timedelta(days=1)
+    return len(pids)
+
+
+def cost_per_active_user(moment: datetime) -> dict[str, Any] | None:
+    """Month-to-date cost over month-to-date active users; `None` when either read fails."""
+    today = moment.astimezone(UTC).date()
+    start = today.replace(day=1)
+    key = ("cost", start)
+    with _cache_lock:
+        hit = _cache.get(key)
+        if hit and time.monotonic() - hit[0] < COST_CACHE_SECONDS:
+            return hit[1]
+    try:
+        totals = cost_reader.month_to_date(today)
+        users = _month_active_users(start, today)
+    except Exception as error:
+        logger.warning("analytics_cost_per_active_user_failed error=%s", type(error).__name__)
+        return None
+
+    def per_user(amount: float) -> float | None:
+        return round(amount / users, 4) if users else None
+
+    total = sum(totals.values())
+    result = {
+        "amountUsd": per_user(total),
+        "totalUsd": round(total, 2),
+        "activeUsers": users,
+        "periodStart": start.isoformat(),
+        "periodEnd": today.isoformat(),
+        "breakdown": [
+            {"service": service, "amountUsd": per_user(totals[service])}
+            for service in cost_reader.SERVICES
+        ],
+    }
+    with _cache_lock:
+        _cache[key] = (time.monotonic(), result)
+    return result
 
 
 def _role_ok(role: str, wanted: str) -> bool:
@@ -316,7 +374,8 @@ def overview(days: int, role: str, *, now: datetime | None = None) -> dict[str, 
 def _overview(days: int, role: str, moment: datetime) -> dict[str, Any]:
     target = analytics_store.table()
     last = moment.date() - timedelta(days=1)
-    loaded = max(days, 30)
+    # Twice the longest window, for the change against the window before it.
+    loaded = max(2 * days, 60)
     window = [last - timedelta(days=offset) for offset in range(days - 1, -1, -1)]
     span = [last - timedelta(days=offset) for offset in range(loaded - 1, -1, -1)]
     complete = True
@@ -346,7 +405,11 @@ def _overview(days: int, role: str, moment: datetime) -> dict[str, Any]:
 
     dau = len(active.get(last, set()))
     before = len(active.get(last - timedelta(days=7), set()))
-    dau_change = round((dau - before) / before, 4) if before else None
+    dau_change = _change(dau, before)
+    wau = len(union(last - timedelta(days=offset) for offset in range(7)))
+    wau_before = len(union(last - timedelta(days=offset) for offset in range(7, 14)))
+    mau = len(union(last - timedelta(days=offset) for offset in range(30)))
+    mau_before = len(union(last - timedelta(days=offset) for offset in range(30, 60)))
 
     counts: dict[str, int] = {}
     uniques: dict[str, set[str]] = {}
@@ -384,6 +447,11 @@ def _overview(days: int, role: str, moment: datetime) -> dict[str, Any]:
         key=lambda item: (-item["count"], item["event"]),
     )
     questions = counts.get("question_asked", 0)
+    questions_before = 0
+    for offset in range(days, 2 * days):
+        for row in by_day.get(last - timedelta(days=offset), []):
+            if row.get("event") == "question_asked" and _role_ok(str(row.get("role") or ""), role):
+                questions_before += _int(row.get("count"))
     escalations = counts.get("help_escalated", 0)
 
     invited, activated, profiles_complete = _profile_funnel(window[0], last, role)
@@ -425,13 +493,17 @@ def _overview(days: int, role: str, moment: datetime) -> dict[str, Any]:
         "complete": complete,
         "kpis": {
             "dau": dau,
-            "wau": len(union(last - timedelta(days=offset) for offset in range(7))),
-            "mau": len(union(last - timedelta(days=offset) for offset in range(30))),
+            "wau": wau,
+            "mau": mau,
             "dauChange": dau_change,
             "questionsPerDay": round(questions / days, 2),
             "escalationRate": round(escalations / questions, 4) if questions else None,
             "aiP50Ms": _median(values.get("ai_answered", [])),
             "teacherResponseP50Ms": _median(values.get("teacher_replied", [])),
+            "wauChange": _change(wau, wau_before),
+            "mauChange": _change(mau, mau_before),
+            "questionsPerDayChange": _change(questions, questions_before),
+            "costPerActiveUser": cost_per_active_user(moment),
         },
         "activeSeries": [{"day": day.isoformat(), "active": len(active.get(day, set()))} for day in window],
         "featureRanking": ranking,

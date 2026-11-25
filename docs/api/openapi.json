@@ -1093,6 +1093,17 @@
       },
       "Alarm": {
         "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
           "feature": {
             "anyOf": [
               {
@@ -2618,6 +2629,84 @@
           "updatedAt"
         ],
         "title": "ConversationSummary",
+        "type": "object"
+      },
+      "CostPerActiveUser": {
+        "properties": {
+          "activeUsers": {
+            "title": "Activeusers",
+            "type": "integer"
+          },
+          "amountUsd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amountusd"
+          },
+          "breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/CostShare"
+            },
+            "title": "Breakdown",
+            "type": "array"
+          },
+          "periodEnd": {
+            "title": "Periodend",
+            "type": "string"
+          },
+          "periodStart": {
+            "title": "Periodstart",
+            "type": "string"
+          },
+          "totalUsd": {
+            "title": "Totalusd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "amountUsd",
+          "totalUsd",
+          "activeUsers",
+          "periodStart",
+          "periodEnd",
+          "breakdown"
+        ],
+        "title": "CostPerActiveUser",
+        "type": "object"
+      },
+      "CostShare": {
+        "properties": {
+          "amountUsd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amountusd"
+          },
+          "service": {
+            "enum": [
+              "ai",
+              "database",
+              "other"
+            ],
+            "title": "Service",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "amountUsd"
+        ],
+        "title": "CostShare",
         "type": "object"
       },
       "CreateConversationRequest": {
@@ -4456,6 +4545,17 @@
             ],
             "title": "At"
           },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
           "release": {
             "title": "Release",
             "type": "string"
@@ -4676,6 +4776,17 @@
           "openAlarms": {
             "title": "Openalarms",
             "type": "integer"
+          },
+          "p50Ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P50Ms"
           },
           "p95LimitMs": {
             "title": "P95Limitms",
@@ -4983,6 +5094,14 @@
       },
       "FrontendErrorTotal": {
         "properties": {
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FrontendErrorGroup"
+            },
+            "title": "Items",
+            "type": "array"
+          },
           "total": {
             "anyOf": [
               {
@@ -5426,6 +5545,16 @@
             ],
             "title": "Aip50Ms"
           },
+          "costPerActiveUser": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CostPerActiveUser"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "dau": {
             "title": "Dau",
             "type": "integer"
@@ -5456,9 +5585,31 @@
             "title": "Mau",
             "type": "integer"
           },
+          "mauChange": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mauchange"
+          },
           "questionsPerDay": {
             "title": "Questionsperday",
             "type": "number"
+          },
+          "questionsPerDayChange": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Questionsperdaychange"
           },
           "teacherResponseP50Ms": {
             "anyOf": [
@@ -5474,6 +5625,17 @@
           "wau": {
             "title": "Wau",
             "type": "integer"
+          },
+          "wauChange": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wauchange"
           }
         },
         "required": [
@@ -5484,7 +5646,11 @@
           "questionsPerDay",
           "escalationRate",
           "aiP50Ms",
-          "teacherResponseP50Ms"
+          "teacherResponseP50Ms",
+          "wauChange",
+          "mauChange",
+          "questionsPerDayChange",
+          "costPerActiveUser"
         ],
         "title": "Kpis",
         "type": "object"

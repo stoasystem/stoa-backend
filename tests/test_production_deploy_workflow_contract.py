@@ -160,6 +160,8 @@ def test_mutation_is_bounded_to_the_two_known_functions() -> None:
     assert "--dry-run" in commands
     assert "aws lambda wait function-updated" in commands
     assert "aws lambda publish-version" in commands
+    # Card 134: each published version carries the deploy's label for the health page.
+    assert '--description "$release_label"' in commands
     assert "aws lambda update-alias" in commands
     referenced = set(re.findall(r"stoa-(?:api|weekly-report)", commands))
     assert referenced == set(FUNCTIONS)

@@ -18,6 +18,20 @@ router = APIRouter()
 ANALYTICS_DAYS = (7, 30, 90)
 
 
+class CostShare(BaseModel):
+    service: Literal["ai", "database", "other"]
+    amountUsd: float | None
+
+
+class CostPerActiveUser(BaseModel):
+    amountUsd: float | None
+    totalUsd: float
+    activeUsers: int
+    periodStart: str
+    periodEnd: str
+    breakdown: list[CostShare]
+
+
 class Kpis(BaseModel):
     dau: int
     wau: int
@@ -27,6 +41,10 @@ class Kpis(BaseModel):
     escalationRate: float | None
     aiP50Ms: int | None
     teacherResponseP50Ms: int | None
+    wauChange: float | None
+    mauChange: float | None
+    questionsPerDayChange: float | None
+    costPerActiveUser: CostPerActiveUser | None
 
 
 class ActivePoint(BaseModel):

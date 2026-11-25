@@ -508,7 +508,7 @@ def test_a_frontend_error_is_hashed_cut_and_counted(main_table: MainTable, stats
     props = row["props"]
     assert props["message_hash"] == monitoring.message_hash("x" * 503)
     assert len(props["message_hash"]) == 12
-    assert props["message"] == "x" * 200
+    assert props["message"] == "TypeError"
     assert props["release"] == "rel-9"
     frames = props["stack"].split("\n")
     assert len(frames) == 8 and all("?" not in frame for frame in frames)
@@ -532,3 +532,34 @@ def test_frontend_errors_are_charged_to_their_own_source_window(main_table: Main
         "FRONTEND-ERRORS",
         "ANALYTICS-EVENTS",
     }
+
+
+
+def test_a_frontend_error_keeps_no_text_a_person_wrote(main_table: MainTable, stats: StatsTable):
+    """Card 134 audit: the message, and a stack's first line, can carry an email or a child's words."""
+    secret = 'Unexpected token, "Mein Sohn versteht Brüche nicht" from anna.muster@schule.ch'
+    body = {
+        "message": secret,
+        "name": "SyntaxError",
+        "route": "/teacher/requests/abc",
+        "source": "app-error-boundary",
+        "stack": f"SyntaxError: {secret}\n    at parse (https://app.stoaedu.ch/assets/a.js?x=1:1:2)\nreader@https://app.stoaedu.ch/assets/b.js:3:4",
+    }
+
+    assert _app().post("/monitoring/frontend-errors", json=body).status_code == 202
+
+    (row,) = stats.with_prefix("DAY#")
+    stored = repr(row)
+    assert "anna" not in stored and "Mein Sohn" not in stored and "schule" not in stored
+    assert row["props"]["message"] == "SyntaxError"
+    assert row["props"]["message_hash"] == monitoring.message_hash(secret)
+    assert row["props"]["stack"].split("\n") == [
+        "at parse (https://app.stoaedu.ch/assets/a.js)",
+        "reader@https://app.stoaedu.ch/assets/b.js:3:4",
+    ]
+
+
+def test_a_name_that_is_not_a_class_name_is_kept_as_error() -> None:
+    assert monitoring.error_kind("TypeError") == "TypeError"
+    assert monitoring.error_kind("anna.muster@schule.ch") == "Error"
+    assert monitoring.error_kind("") == "Error"

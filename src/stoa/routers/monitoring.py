@@ -29,8 +29,13 @@ router = APIRouter()
 _INGEST_SCOPE = "frontend-errors"
 _MAX_FRAMES = 8
 _MAX_FRAME_LENGTH = 300
-_MESSAGE_LENGTH = 200
 _QUERY = re.compile(r"\?[^\s)]*")
+# What a report keeps of its error: the kind, never the text. A message can hold
+# an email, a child's words or an address the browser was on (card 134 audit);
+# its hash still groups the reports.
+_ERROR_KIND = re.compile(r"^[A-Z][A-Za-z]{0,63}$")
+# A frame names code: Chrome's "at fn (url:1:2)", Firefox's and Safari's "fn@url:1:2".
+_FRAME = re.compile(r"^\s*at\s|@\S+:\d+:\d+")
 
 
 class FrontendErrorIn(BaseModel):
@@ -52,6 +57,12 @@ def message_hash(message: str) -> str:
     return hashlib.sha256(message.encode("utf-8")).hexdigest()[:12]
 
 
+def error_kind(name: str) -> str:
+    """The error's class name when it is one, else "Error"."""
+    name = name.strip()
+    return name if _ERROR_KIND.fullmatch(name) else "Error"
+
+
 def trimmed_stack(stack: str | None) -> str | None:
     """The first eight frames, each without a query string and cut to 300."""
     if not stack:
@@ -59,7 +70,7 @@ def trimmed_stack(stack: str | None) -> str | None:
     frames = [
         _QUERY.sub("", line).strip()[:_MAX_FRAME_LENGTH]
         for line in stack.splitlines()
-        if line.strip()
+        if _FRAME.search(line)
     ][:_MAX_FRAMES]
     return "\n".join(frames) or None
 
@@ -94,7 +105,7 @@ async def report_frontend_error(body: FrontendErrorIn, request: Request):
             "route": route,
             "message_hash": message_hash(message),
             "release": release,
-            "message": message[:_MESSAGE_LENGTH],
+            "message": error_kind(body.name),
             "name": body.name,
             "source": body.source,
             "stack": trimmed_stack(body.stack),
