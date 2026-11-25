@@ -1,5 +1,8 @@
 import hashlib
 
+from fakes.dynamodb import FakeTable
+
+from stoa.db import table as db_table
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa import config
 
@@ -124,12 +127,19 @@ def _install_websocket_repo(monkeypatch):
     def delete_connection(connection_id):
         connections.pop(connection_id, None)
 
-    def list_connections(limit=200):
-        return list(connections.values())[:limit]
+    # One person's connections and one role's, as the indexes find them (#624).
+    def list_user_connections(user_id, *, table=None):
+        return [item for item in connections.values() if item.get("user_id") == user_id]
 
-    def delete_stale_connections(*, now_epoch, limit=200):
+    def list_role_connections(role, *, table=None):
+        return [item for item in connections.values() if item.get("role") == role]
+
+    def list_site_connections(*, table=None):
+        return list(connections.values())
+
+    def delete_stale_connections(*, now_epoch):
         removed = []
-        for connection_id, item in list(connections.items())[:limit]:
+        for connection_id, item in list(connections.items()):
             if int(item.get("expires_at") or 0) <= now_epoch:
                 removed.append(connection_id)
                 connections.pop(connection_id, None)
@@ -139,7 +149,8 @@ def _install_websocket_repo(monkeypatch):
     monkeypatch.setattr(websocket_service.websocket_repo, "get_connection", get_connection)
     monkeypatch.setattr(websocket_service.websocket_repo, "update_connection", update_connection)
     monkeypatch.setattr(websocket_service.websocket_repo, "delete_connection", delete_connection)
-    monkeypatch.setattr(websocket_service.websocket_repo, "list_connections", list_connections)
+    for reader in (list_user_connections, list_role_connections, list_site_connections):
+        monkeypatch.setattr(websocket_service.websocket_repo, reader.__name__, reader)
     monkeypatch.setattr(
         websocket_service.websocket_repo,
         "delete_stale_connections",
@@ -235,7 +246,8 @@ def test_direct_user_fanout_records_delivery_attempt_metadata(monkeypatch):
     websocket_service.fanout_notification_event(event, post_func=lambda connection, envelope: None)
 
     attempts = events["notif-2"]["metadata"]["websocket_delivery_attempts"]
-    assert attempts[0]["target_channels"] == ["role:student", "user:student-1"]
+    # The person's channel only: not every student's (#624).
+    assert attempts[0]["target_channels"] == ["user:student-1"]
     assert attempts[0]["results"] == [
         {"connection_id": _connection_ref("student-conn"), "status": "delivered"}
     ]
@@ -246,6 +258,8 @@ def test_fanout_skips_malformed_persisted_channel_records(monkeypatch):
     connections = _install_websocket_repo(monkeypatch)
     connections["malformed"] = {
         "connection_id": "malformed",
+        "user_id": "student-1",
+        "role": "student",
         "subscribed_channels": "user:student-1",
         "expires_at": 4_102_444_800,
     }
@@ -355,3 +369,141 @@ def test_readiness_status_distinguishes_live_rollout_modes(monkeypatch):
         status = websocket_service.readiness_status()
 
         assert status["mode"] == expected_mode
+
+
+def test_a_persons_notification_is_not_sent_to_others_of_their_role(monkeypatch):
+    """Every connection subscribes to its role's channel; a person's notification is theirs (#624)."""
+    events = _install_notification_repo(monkeypatch)
+    _install_websocket_repo(monkeypatch)
+    for connection_id, user_id in (("mine", "student-1"), ("theirs", "student-2")):
+        websocket_service.register_connection(
+            connection_id=connection_id, user={"sub": user_id, "role": "student"}
+        )
+    event = {
+        "event_id": "notif-personal",
+        "recipient_id": "student-1",
+        "recipient_role": "student",
+        "event_type": "teacher_reply",
+        "target_type": "question",
+        "target_id": "question-1",
+        "title": "Teacher replied",
+        "summary": "Your teacher added a reply.",
+        "created_at": "2026-11-25T10:00:00+00:00",
+        "metadata": {},
+    }
+    events[event["event_id"]] = dict(event)
+    sent: list[str] = []
+
+    websocket_service.fanout_notification_event(
+        event, post_func=lambda connection, _envelope: sent.append(connection["connection_id"])
+    )
+
+    assert sent == ["mine"]
+
+
+def test_a_role_broadcast_reaches_every_connection_of_the_role_and_no_other(monkeypatch):
+    events = _install_notification_repo(monkeypatch)
+    _install_websocket_repo(monkeypatch)
+    for connection_id, user_id, role in (
+        ("t1", "teacher-1", "teacher"),
+        ("t2", "teacher-2", "teacher"),
+        ("s1", "student-1", "student"),
+    ):
+        websocket_service.register_connection(
+            connection_id=connection_id, user={"sub": user_id, "role": role}
+        )
+    event = {
+        "event_id": "notif-broadcast",
+        "recipient_id": None,
+        "recipient_role": "teacher",
+        "event_type": "teacher_requested",
+        "target_type": "question",
+        "target_id": "question-1",
+        "title": "Teacher help requested",
+        "summary": "A student requested help.",
+        "created_at": "2026-11-25T10:00:00+00:00",
+        "metadata": {},
+    }
+    events[event["event_id"]] = dict(event)
+    sent: list[str] = []
+
+    websocket_service.fanout_notification_event(
+        event, post_func=lambda connection, _envelope: sent.append(connection["connection_id"])
+    )
+
+    assert sorted(sent) == ["t1", "t2"]
+
+
+def _seed_connection(table, connection_id, user_id, role, *, expires_at=4_102_444_800):
+    row = {
+        "PK": websocket_service.websocket_repo.connection_pk(connection_id),
+        "SK": "META",
+        "entity_type": websocket_service.websocket_repo.CONNECTION_ENTITY,
+        "connection_id": connection_id,
+        "user_id": user_id,
+        "owner_id": user_id,
+        "role": role,
+        "subscribed_channels": [f"user:{user_id}", f"role:{role}"],
+        "connected_at": "2026-11-25T10:00:00+00:00",
+        "expires_at": expires_at,
+    }
+    table.seed({**row, **websocket_service.websocket_repo.index_fields(row)})
+
+
+def test_a_persons_notification_reaches_them_among_more_than_500_connections(monkeypatch):
+    """The scan kept the site's first 500 connection rows; the rest were never pushed to (#624)."""
+    events = _install_notification_repo(monkeypatch)
+    table = FakeTable()
+    for number in range(520):
+        _seed_connection(table, f"a-{number:04d}", f"student-{number + 100}", "student")
+    # Sorts after all of them, where the scan never got to.
+    _seed_connection(table, "z-mine", "student-1", "student")
+    event = {
+        "event_id": "notif-crowded",
+        "recipient_id": "student-1",
+        "recipient_role": "student",
+        "event_type": "teacher_reply",
+        "target_type": "question",
+        "target_id": "question-1",
+        "title": "Teacher replied",
+        "summary": "Your teacher added a reply.",
+        "created_at": "2026-11-25T10:00:00+00:00",
+        "metadata": {},
+    }
+    events[event["event_id"]] = dict(event)
+    sent: list[str] = []
+    db_table.install(table)
+    try:
+        result = websocket_service.fanout_notification_event(
+            event, post_func=lambda connection, _envelope: sent.append(connection["connection_id"])
+        )
+    finally:
+        db_table.install(None)
+
+    assert sent == ["z-mine"]
+    assert result["results"] == [{"connection_id": _connection_ref("z-mine"), "status": "delivered"}]
+
+
+def test_readiness_counts_every_connection_of_every_role(monkeypatch):
+    table = FakeTable()
+    now = websocket_service.now_epoch()
+    for number, role in enumerate(("student", "parent", "teacher", "admin")):
+        _seed_connection(table, f"live-{role}", f"{role}-1", role, expires_at=now + 60)
+        _seed_connection(table, f"old-{role}", f"{role}-2", role, expires_at=now - 60 - number)
+    db_table.install(table)
+    try:
+        status = websocket_service.readiness_status()["connectionStatus"]
+        removed = websocket_service.cleanup_stale_connections()
+    finally:
+        db_table.install(None)
+
+    assert status == {"activeConnectionCount": 4, "staleConnectionCount": 4, "error": None}
+    assert sorted(removed["removedConnectionIds"]) == [
+        "old-admin", "old-parent", "old-student", "old-teacher"
+    ]
+
+
+def test_every_role_a_user_can_have_has_its_list_of_connections():
+    from stoa.models.user import UserRole
+
+    assert set(websocket_service.websocket_repo.CONNECTION_ROLES) == {role.value for role in UserRole}

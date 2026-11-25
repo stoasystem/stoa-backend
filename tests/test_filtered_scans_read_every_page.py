@@ -15,6 +15,7 @@ of rows that sort before it, which is where a new row is in a growing table.
 from __future__ import annotations
 
 import pytest
+from boto3.dynamodb.conditions import Attr
 from fakes.dynamodb import FakeTable
 
 from stoa.db import table as db_table
@@ -41,23 +42,26 @@ def _bury(table: FakeTable) -> None:
     table.page_item_cap = PAGE
 
 
-def test_a_push_token_is_found_wherever_its_row_falls(table) -> None:
-    # The worst of these: nothing is sent, and nothing says so.
-    table.seed(
-        {
-            "PK": notification_repo.push_token_pk("u-1", "tok-1"),
+def test_a_push_token_is_found_on_whichever_page_of_its_person_it_falls(table) -> None:
+    # The worst of these: nothing is sent, and nothing says so. It is read from
+    # its person's bucket now (#624), every page of it.
+    for index in range(FILLER_PAGES * PAGE + 1):
+        row = {
+            "PK": notification_repo.push_token_pk("u-1", f"tok-{index:02d}"),
             "SK": "META",
             "entity_type": notification_repo.PUSH_TOKEN_ENTITY,
             "user_id": "u-1",
-            "token_reference": "tok-1",
-            "status": "active",
+            "token_reference": f"tok-{index:02d}",
+            "token_hash": f"hash-{index:02d}",
+            "status": "active" if index == FILLER_PAGES * PAGE else "revoked",
+            "created_at": f"2026-11-25T10:{index:02d}:00Z",
         }
-    )
+        table.seed({**row, **notification_repo.push_token_index_fields(row)})
     _bury(table)
 
-    tokens = notification_repo.list_push_tokens("u-1")
+    tokens = notification_repo.list_user_push_tokens("u-1", status="active")
 
-    assert [item["token_reference"] for item in tokens] == ["tok-1"]
+    assert [item["token_reference"] for item in tokens] == [f"tok-{FILLER_PAGES * PAGE:02d}"]
 
 
 def test_a_notification_event_is_found_wherever_its_row_falls(table) -> None:
@@ -76,22 +80,25 @@ def test_a_notification_event_is_found_wherever_its_row_falls(table) -> None:
     assert [item["notification_id"] for item in notification_repo.list_all_events()] == ["n-1"]
 
 
-def test_a_connection_is_found_wherever_its_row_falls(table) -> None:
-    # `delete_stale_connections` sweeps what this returns: a connection it
-    # never reads is one that is never cleaned up.
-    table.seed(
-        {
-            "PK": "WSCONN#c-1",
+def test_a_connection_is_found_on_whichever_page_of_its_role_it_falls(table) -> None:
+    # `delete_stale_connections` sweeps what the role lists return (#624): a
+    # connection it never reads is one it never cleans up.
+    for index in range(FILLER_PAGES * PAGE + 1):
+        row = {
+            "PK": websocket_repo.connection_pk(f"c-{index:02d}"),
             "SK": "META",
             "entity_type": websocket_repo.CONNECTION_ENTITY,
-            "connection_id": "c-1",
-            "expires_at": 10,
+            "connection_id": f"c-{index:02d}",
+            "user_id": f"u-{index:02d}",
+            "role": "student",
+            "connected_at": f"2026-11-25T10:{index:02d}:00Z",
+            "expires_at": 10 if index == FILLER_PAGES * PAGE else 30,
         }
-    )
+        table.seed({**row, **websocket_repo.index_fields(row)})
     _bury(table)
 
-    assert [item["connection_id"] for item in websocket_repo.list_connections()] == ["c-1"]
-    assert websocket_repo.delete_stale_connections(now_epoch=20) == ["c-1"]
+    assert len(websocket_repo.list_site_connections()) == FILLER_PAGES * PAGE + 1
+    assert websocket_repo.delete_stale_connections(now_epoch=20) == [f"c-{FILLER_PAGES * PAGE:02d}"]
 
 
 def test_a_moderation_case_is_found_wherever_its_row_falls(table) -> None:
@@ -165,18 +172,14 @@ def test_a_cap_on_matches_is_a_cap_on_matches(table) -> None:
     # `want` is what the old `Limit=` meant. Without it, reading every page
     # turns "at most N" into "all of them".
     for index in range(5):
-        table.seed(
-            {
-                "PK": notification_repo.push_token_pk("u-1", f"tok-{index}"),
-                "SK": "META",
-                "entity_type": notification_repo.PUSH_TOKEN_ENTITY,
-                "user_id": "u-1",
-                "token_reference": f"tok-{index}",
-            }
-        )
+        table.seed({"PK": f"MODERATION#m-{index}", "SK": "META", "entity_type": "moderation_case"})
     table.page_item_cap = PAGE
 
-    assert len(notification_repo.list_push_tokens("u-1", limit=2)) == 2
+    found = db_table.rows(
+        "scan", want=2, FilterExpression=Attr("entity_type").eq("moderation_case")
+    )
+
+    assert len(found) == 2
 
 
 def test_no_row_limit_reaches_the_table() -> None:

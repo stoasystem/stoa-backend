@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Key
 
 from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
@@ -149,6 +149,9 @@ ROLE_INDEX = "GSI-Listing"
 ROLE_INDEX_FIELDS = ("listing", "listed_at")
 INDEX_FIELDS = (*USER_INDEX_FIELDS, *ROLE_INDEX_FIELDS)
 INDEX_SOURCE_FIELDS = frozenset({"user_id", "role", "connected_at"})
+# The roles a user has (`stoa.models.user.UserRole`): every role's list together
+# is every connection of the site.
+CONNECTION_ROLES = ("student", "parent", "teacher", "admin")
 _USER_INDEX_KEY = ("PK", "SK", *USER_INDEX_FIELDS)
 _ROLE_INDEX_KEY = ("PK", "SK", *ROLE_INDEX_FIELDS)
 
@@ -382,18 +385,20 @@ def list_role_connections(role: str, *, table: object | None = None) -> list[Con
     ]
 
 
-def list_connections(limit: int = 200) -> list[ConnectionItem]:
-    return db_table.rows(
-        "scan",
-        table=db_table.table(),
-        want=limit,
-        FilterExpression=Attr("entity_type").eq(CONNECTION_ENTITY),
-    )
+def list_site_connections(*, table: object | None = None) -> list[ConnectionItem]:
+    """Every connection of the site, expired ones included: each role's list in turn.
+
+    What it reads follows how many connections there are, not the size of the
+    table. A connection names one of the roles a user can have.
+    """
+    target = table or db_table.table()
+    return [item for role in CONNECTION_ROLES for item in list_role_connections(role, table=target)]
 
 
-def delete_stale_connections(*, now_epoch: int, limit: int = 200) -> list[str]:
+def delete_stale_connections(*, now_epoch: int) -> list[str]:
+    """Delete the expired connections the table's TTL has not removed yet."""
     removed: list[str] = []
-    for item in list_connections(limit=limit):
+    for item in list_site_connections():
         connection_id = str(item.get("connection_id") or "")
         if not connection_id:
             continue

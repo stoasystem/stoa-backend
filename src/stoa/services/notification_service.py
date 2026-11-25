@@ -1742,8 +1742,14 @@ def register_push_token(
     token_reference = f"push-{token_hash[:16]}"
     # A provider/body alias is itself an ownership coordinate.  Resolve any
     # existing canonical token before the put so one actor cannot adopt or
-    # rotate another actor's device reference.
-    for existing in notification_repo.list_push_tokens(limit=100):
+    # rotate another actor's device reference. The candidates are every
+    # registration of the device the token or the reference names (#624).
+    for existing in notification_repo.list_device_push_tokens(
+        notification_repo.push_token_lookup_keys(
+            token_hash=token_hash,
+            provider_token_reference=clean_provider_reference or None,
+        )
+    ):
         same_material = (
             existing.get("token_hash") == token_hash
             or (
@@ -1824,7 +1830,7 @@ def attempt_push_delivery(
     canonical = batch.events[0] if batch is not None else {}
     recipient_id = str(canonical.get("recipient_id") or "")
     tokens = (
-        notification_repo.list_push_tokens(recipient_id, status="active")
+        notification_repo.list_user_push_tokens(recipient_id, status="active")
         if batch is not None and recipient_id
         else []
     )

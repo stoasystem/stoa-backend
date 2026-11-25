@@ -110,7 +110,7 @@ def cleanup_stale_connections(*, current_epoch: int | None = None) -> dict[str, 
     return {"removedConnectionIds": removed, "count": len(removed)}
 
 
-def readiness_status(*, connection_limit: int = 200) -> dict[str, Any]:
+def readiness_status() -> dict[str, Any]:
     endpoint = str(config.settings().websocket_api_endpoint or "").strip()
     routes_configured = bool(config.settings().websocket_live_routes_configured)
     deployed = bool(config.settings().websocket_live_deployed)
@@ -121,7 +121,7 @@ def readiness_status(*, connection_limit: int = 200) -> dict[str, Any]:
     connection_status_error: str | None = None
 
     try:
-        connections = websocket_repo.list_connections(limit=connection_limit)
+        connections = websocket_repo.list_site_connections()
     except Exception:
         connections = []
         connection_status_error = "connection_repository_unavailable"
@@ -203,7 +203,7 @@ def fanout_notification_event(
     target_channels = _target_channels(canonical)
     results: list[dict[str, Any]] = []
 
-    for connection in websocket_repo.list_connections(limit=500):
+    for connection in _reachable_connections(canonical):
         connection_id = str(connection.get("connection_id") or "")
         if not connection_id:
             continue
@@ -377,14 +377,36 @@ def _role_channels(role: str) -> set[str]:
 
 
 def _target_channels(item: dict[str, Any]) -> set[str]:
-    channels: set[str] = set()
+    """The one channel a notification goes out on: its person's, else its role's.
+
+    Who may see it, as the bell reads it (`notification_service._visible_to_user`):
+    a notification with a `recipient_id` is that person's alone, and one without
+    is for everyone in its `recipient_role`. A person's notification is not sent
+    to their role's channel, which every connection of the role subscribes to.
+    """
     recipient_id = str(item.get("recipient_id") or "")
-    recipient_role = str(item.get("recipient_role") or "")
     if recipient_id:
-        channels.add(user_channel(recipient_id))
+        return {user_channel(recipient_id)}
+    recipient_role = str(item.get("recipient_role") or "")
     if recipient_role:
-        channels.add(role_channel(recipient_role))
-    return channels
+        return {role_channel(recipient_role)}
+    return set()
+
+
+def _reachable_connections(item: dict[str, Any]) -> list[dict[str, Any]]:
+    """The connections that can subscribe to the notification's channel (#624).
+
+    A connection subscribes only to its own person's channel and its own role's
+    (`_authorize_channels`), so these are the recipient's connections, or the
+    role's: one query of an index, whatever the size of the table.
+    """
+    recipient_id = str(item.get("recipient_id") or "")
+    if recipient_id:
+        return websocket_repo.list_user_connections(recipient_id)
+    recipient_role = str(item.get("recipient_role") or "")
+    if recipient_role:
+        return websocket_repo.list_role_connections(recipient_role)
+    return []
 
 
 def _is_expired(connection: dict[str, Any]) -> bool:
