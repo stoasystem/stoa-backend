@@ -29,11 +29,14 @@ call into its worker through a copy of the request's context.
 from __future__ import annotations
 
 import contextvars
+import logging
 import threading
 import time
+import uuid
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 from boto3.dynamodb.conditions import ConditionExpressionBuilder
@@ -45,10 +48,13 @@ from stoa.db.repositories import practice_repo
 from stoa.services import practice_projection_service
 
 STAMP_KEY = {"PK": "PRACTICE_CATALOG", "SK": "STAMP"}
+STAMP_ENTITY = "curriculum_catalog_stamp"
 STAMPED_TTL = 300.0
 UNSTAMPED_TTL = 60.0
 
 _clock: Callable[[], float] = time.monotonic
+
+logger = logging.getLogger(__name__)
 
 
 # -- reading side by side ----------------------------------------------------------------
@@ -240,6 +246,26 @@ def forget() -> None:
     global _kept
     with _kept_lock:
         _kept = None
+
+
+def touch_catalog_stamp(table: object | None = None) -> None:
+    """Write a new catalog stamp after the student curriculum changed.
+
+    A failed write is logged, never raised: the change itself has landed.
+    """
+    forget()
+    try:
+        db_table.put(
+            table=table,
+            Item={
+                **STAMP_KEY,
+                "entity_type": STAMP_ENTITY,
+                "stamp": uuid.uuid4().hex,
+                "updated_at": datetime.now(UTC).isoformat(),
+            },
+        )
+    except Exception:  # noqa: BLE001 - the stamp must not fail the write it follows
+        logger.warning("curriculum_catalog_stamp_failed", exc_info=True)
 
 
 def read() -> Snapshot:

@@ -58,7 +58,7 @@ from itertools import combinations
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from stoa.db.repositories import curriculum_ops_repo  # noqa: E402
-from stoa.services import curriculum_service, practice_projection_service  # noqa: E402
+from stoa.services import curriculum_cache, curriculum_service, practice_projection_service  # noqa: E402
 
 
 SEED = 20260928
@@ -1140,6 +1140,7 @@ def run(subject_id: str = "math", *, apply: bool = False, relayout: bool = False
     if apply and not report.problems:
         for sort_key, attributes in report.writes:
             curriculum_ops_repo.set_practice_attributes(sort_key, attributes)
+        curriculum_cache.touch_catalog_stamp()
         report.applied = True
     return report
 

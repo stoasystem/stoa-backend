@@ -35,7 +35,7 @@ from pathlib import Path
 from stoa.db.repositories import practice_repo
 from stoa.models.practice import DirectionalHintTemplateId
 from stoa.security.aws_operator_identity import require_sso_operator_session
-from stoa.services import knowledge_base_catalog, practice_projection_service
+from stoa.services import curriculum_cache, knowledge_base_catalog, practice_projection_service
 
 
 DEFAULT_AWS_ACCOUNT_ID = "562923011260"
@@ -1420,6 +1420,7 @@ def seed(
     # One update per row: a batch write can only replace rows whole.
     for request in requests:
         table.update_item(**request)
+    curriculum_cache.touch_catalog_stamp(table)
 
     commit, dirty = git_state()
     table.put_item(Item={
