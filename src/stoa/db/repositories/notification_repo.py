@@ -678,15 +678,24 @@ def build_notification_write_transaction(
         return operations
     if mode != "update" or not updates:
         raise ValueError("notification write mode is invalid")
+    # A field updated to `None` leaves the row, as a `None` in a put is never
+    # written: the gateway drops `None` values from the request, so a `SET` of
+    # one would name a value that is not there and the table refuses it.
+    assigned = [key for key, value in updates.items() if value is not None]
+    removed = [key for key, value in updates.items() if value is None]
+    clauses = []
+    if assigned:
+        clauses.append("SET " + ", ".join(f"#{key}=:{key}" for key in assigned))
+    if removed:
+        clauses.append("REMOVE " + ", ".join(f"#{key}" for key in removed))
     names = {f"#{key}": key for key in updates}
-    values = {f":{key}": value for key, value in updates.items()}
+    values: dict[str, object] = {f":{key}": updates[key] for key in assigned}
     values[":owner"] = owner_id
     operations.append(
         {
             "Update": {
                 "Key": {"PK": stored["PK"], "SK": stored["SK"]},
-                "UpdateExpression": "SET "
-                + ", ".join(f"#{key}=:{key}" for key in updates),
+                "UpdateExpression": " ".join(clauses),
                 "ConditionExpression": (
                     "attribute_exists(PK) AND attribute_exists(SK) AND owner_id=:owner"
                 ),
