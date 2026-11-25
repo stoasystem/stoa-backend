@@ -676,7 +676,7 @@ _ENTRIES: tuple[DataType, ...] = (
     # -- security audit and analytics (no account's data) ------------------------------
     DataType("security_audit_event", _repo("security_audit_repo"), ()),
     DataType("authorization_probe_aggregate", _repo("security_audit_repo"), ()),
-    DataType("analytics_event", "stoa.routers.analytics", ()),
+    DataType("analytics_event", "stoa.observability.analytics_store", ()),
     DataType("knowledge_gap", _repo("knowledge_gap_repo"), ()),
     # -- curriculum ---------------------------------------------------------------------
     DataType("curriculum_analytics_metric", _repo("curriculum_analytics_repo"), ()),

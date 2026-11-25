@@ -4471,6 +4471,78 @@
         "title": "ForgotPasswordRequest",
         "type": "object"
       },
+      "FrontendErrorIn": {
+        "properties": {
+          "appEnv": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Appenv",
+            "type": "string"
+          },
+          "componentStack": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Componentstack"
+          },
+          "errorId": {
+            "default": "",
+            "maxLength": 128,
+            "title": "Errorid",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "maxLength": 512,
+            "title": "Name",
+            "type": "string"
+          },
+          "route": {
+            "default": "",
+            "maxLength": 2048,
+            "title": "Route",
+            "type": "string"
+          },
+          "source": {
+            "default": "manual",
+            "maxLength": 64,
+            "title": "Source",
+            "type": "string"
+          },
+          "stack": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stack"
+          },
+          "timestamp": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "title": "FrontendErrorIn",
+        "type": "object"
+      },
       "GenerationProgressResponse": {
         "properties": {
           "assistantMessageId": {
@@ -22977,7 +23049,7 @@
     },
     "/admin/stats": {
       "get": {
-        "description": "Return aggregate platform metrics (full-table scan — small scale only).",
+        "description": "Return aggregate platform metrics.",
         "operationId": "get_stats_admin_stats_get",
         "responses": {
           "200": {
@@ -25827,7 +25899,7 @@
     },
     "/analytics/events": {
       "post": {
-        "description": "Record one client analytics event for later CloudWatch Logs Insights / table queries.",
+        "description": "Record one client analytics event in the statistics table.",
         "operationId": "ingest_event_analytics_events_post",
         "requestBody": {
           "content": {
@@ -28711,6 +28783,61 @@
           }
         },
         "summary": "Health Check",
+        "x-stoa-authorization": {
+          "authorization": [],
+          "classification": "public",
+          "identifiers": []
+        }
+      }
+    },
+    "/monitoring/frontend-errors": {
+      "post": {
+        "description": "Record one frontend error report.",
+        "operationId": "report_frontend_error_monitoring_frontend_errors_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FrontendErrorIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleViolationResponse"
+                }
+              }
+            },
+            "description": "A rule violation (`stoa.rule_violation`)"
+          }
+        },
+        "summary": "Report Frontend Error",
+        "tags": [
+          "monitoring"
+        ],
         "x-stoa-authorization": {
           "authorization": [],
           "classification": "public",
