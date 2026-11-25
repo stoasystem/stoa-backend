@@ -163,12 +163,25 @@ jobs:
           echo "Lambda functions updated successfully"
 
       - name: Point production aliases at the new versions
+        env:
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
           # API Gateway and the weekly-report schedule bind aliases once infra
           # has created them. Only a genuine ResourceNotFoundException means the
           # alias is still absent; any other failure must stop the deploy rather
           # than silently leave the alias on the previous version.
+          # Card 134: the console's health page names each deploy by this, not by
+          # the bare version number. A merge commit's subject is "Merge pull
+          # request #N ..."; its PR title is the body's first line.
+          subject="$(printf '%s\n' "$HEAD_MESSAGE" | head -n1)"
+          case "$subject" in
+            "Merge pull request"*)
+              title="$(printf '%s\n' "$HEAD_MESSAGE" | sed -n '3p')"
+              if [ -n "$title" ]; then subject="$title"; fi
+              ;;
+          esac
+          release_label="$(printf '%s %s' "${GITHUB_SHA:0:8}" "$subject" | tr -d '\r' | cut -c1-250)"
           for function_name in stoa-api stoa-weekly-report stoa-dispatch-reconciler stoa-account-deletion stoa-conversation-generation; do
             if ! alias_lookup="$(
               aws lambda get-alias \
@@ -187,6 +200,7 @@ jobs:
             version="$(
               aws lambda publish-version \
                 --function-name "$function_name" \
+                --description "$release_label" \
                 --region eu-central-2 \
                 --query Version \
                 --output text
