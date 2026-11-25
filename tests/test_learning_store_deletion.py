@@ -54,10 +54,9 @@ def _sent(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sent[0]
 
 
-def test_source_registry_closes_learning_rows_writers_and_private_fields() -> None:
-    practice_rows = _contract(practice_repo, "PRACTICE_PRIVATE_ROW_REGISTRY")
-    adaptive_rows = _contract(adaptive_learning_repo, "ADAPTIVE_PRIVATE_ROW_REGISTRY")
-    draft_rows = _contract(ai_teacher_tools_repo, "AI_DRAFT_PRIVATE_ROW_REGISTRY")
+def test_source_registry_closes_learning_writers_and_private_fields() -> None:
+    # Which rows are a student's is the data type catalog's to say (#586), and
+    # what their deletion does too (#639).
     writers = (
         set(_contract(practice_repo, "PRACTICE_WRITER_REGISTRY"))
         | set(_contract(adaptive_learning_repo, "ADAPTIVE_WRITER_REGISTRY"))
@@ -70,10 +69,6 @@ def test_source_registry_closes_learning_rows_writers_and_private_fields() -> No
         | set(_contract(ai_teacher_tools_repo, "AI_DRAFT_PRIVATE_FIELDS"))
         | set(_contract(curriculum_analytics_repo, "CURRICULUM_SIGNAL_PRIVATE_FIELDS"))
     )
-    assert {"progress", "attempt", "legacy_mistake", "usage"} <= set(practice_rows)
-    assert {"quiz_paper", "quiz_credential", "star_quiz_cooldown", "star_quiz_pass"} <= set(
-        practice_rows
-    )
     assert {
         "put_quiz_paper",
         "update_quiz_paper",
@@ -81,8 +76,6 @@ def test_source_registry_closes_learning_rows_writers_and_private_fields() -> No
         "put_star_quiz_cooldown",
         "put_star_quiz_pass",
     } <= writers
-    assert {"assignment", "learning_memory"} <= set(adaptive_rows)
-    assert {"ai_teacher_draft"} <= set(draft_rows)
     assert {
         "put_attempt",
         "mark_lesson_completed",

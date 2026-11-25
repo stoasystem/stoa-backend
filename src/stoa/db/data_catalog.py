@@ -26,7 +26,13 @@ entry declares:
   link: usually an administrator, whose deletion must not sweep the links they
   issued), each with its reason. The writer gate fails on an account-looking
   attribute in neither list, so a new field name cannot slip past.
-- **The deletion handling.** Empty for now; candidate I fills it (see #586).
+- **The deletion handling** (`DELETIONS`, #634): for a type that points to an
+  account, what deleting that account does to the row - for an owned row,
+  `Delete`, `Tombstone` (with the fields the tombstone keeps) or `Keep` (with
+  why); for a row that only names the account, `Scrub` or `Keep` - and what it
+  does outside the row first (`Effect`: an S3 object, the sign-in provider,
+  attachments, a curriculum count). Written down from what the deletion
+  branches do (#639); the branches do not read it yet.
 - **The owning module** - where the type's rows are written.
 
 `mentions(row)` and `names(row, account)` read one row against its entry and
@@ -57,7 +63,7 @@ a leftover is a row that still points to a deleted account.
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final, Literal
 
 type Role = Literal["owner", "reference"]
@@ -219,6 +225,94 @@ class KeyShape:
         return self.sk_prefix is None or sk.startswith(self.sk_prefix)
 
 
+# -- what account deletion does to a row (#634) -------------------------------------------
+
+type Effect = Literal[
+    "release_email_claim",
+    "revoke_provider_identity",
+    "release_attachments",
+    "delete_stored_object",
+    "reconcile_curriculum_signal",
+    "cancel_inflight_question",
+    "count_external_delivery",
+]
+"""Something a deletion does outside the row itself, before it changes the row:
+
+- `release_email_claim`: the account's claim on its email address is deleted, in
+  the profile tombstone's own transaction;
+- `revoke_provider_identity`: the sign-in provider's user is signed out and
+  deleted, under a revoke debt row that records it was done;
+- `release_attachments`: the attachments the row holds lose that reference, and
+  an attachment no longer referenced is deleted;
+- `delete_stored_object`: the S3 object the row stands for is deleted and proven
+  absent (an attachment, an upload, a moderated image, a report file);
+- `reconcile_curriculum_signal`: the curriculum signal the row registers is
+  deleted and its counts taken back off the metric;
+- `cancel_inflight_question`: an Ask question still being answered is stopped;
+- `count_external_delivery`: a push or email already handed to a provider is
+  counted as delivered outside the backend's reach.
+"""
+
+type KeptBecause = Literal["deletion_flow", "expires", "not_deletion_data"]
+"""Why a row of the account's outlives its deletion:
+
+- `deletion_flow`: the deletion's own bookkeeping (its command, the fence, debts);
+- `expires`: a short-lived row its TTL removes soon enough;
+- `not_deletion_data`: a class kept by policy (billing, teacher applications).
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class Delete:
+    """The row is deleted."""
+
+    effects: tuple[Effect, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Tombstone:
+    """The row is replaced, under the same key, by a record of only these fields.
+
+    `keeps` is every field the replacement may hold; the deletion sets its own
+    status, generation and timestamps among them, and drops the rest.
+    """
+
+    keeps: frozenset[str]
+    effects: tuple[Effect, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Keep:
+    """The row stays as it is."""
+
+    because: KeptBecause
+    note: str
+
+
+@dataclass(frozen=True, slots=True)
+class Scrub:
+    """The account's id is taken out of the row; the row stays."""
+
+    note: str = ""
+
+
+type OwnerAction = Delete | Tombstone | Keep
+type ReferenceAction = Scrub | Keep
+
+
+@dataclass(frozen=True, slots=True)
+class Deletion:
+    """What deleting an account does to a row of this type that points to it.
+
+    `owner` applies when the row is the account's own, `reference` when it only
+    names the account. A type has the one for each role its pointers declare,
+    and none for a role they do not.
+    """
+
+    owner: OwnerAction | None = None
+    reference: ReferenceAction | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class DataType:
     """One kind of row: where it is written, and which accounts it points to."""
@@ -229,8 +323,9 @@ class DataType:
     """Where its rows are written (or, for a legacy kind, read)."""
     accounts: tuple[Pointer, ...]
     not_pointers: tuple[NotPointer, ...] = ()
-    deletion: None = None
-    """How account deletion handles it: filled by candidate I (see #586)."""
+    deletion: Deletion | None = None
+    """What account deletion does to it (`DELETIONS`, #634); None for a type that
+    points to no account."""
     lifecycle: Lifecycle = "written"
     untyped_key: KeyShape | None = None
     """Set only for a kind written with no `entity_type`."""
@@ -963,6 +1058,201 @@ UNTYPED: tuple[DataType, ...] = (
         untyped_key=KeyShape("REPORT#", sk="SUMMARY"),
     ),
 )
+
+
+# -- what account deletion does to each type (#634) ----------------------------------
+#
+# Every type that points to an account says here what its deletion does, for each
+# role its pointers declare; a type that points to none is not listed. Written down
+# from what the deletion branches do (#639); the tombstone fields are each family's
+# allowlist, which `tests/test_account_deletion_branch_coverage.py` holds them to.
+
+_KEEPS_QUESTION: Final = frozenset(
+    {"PK", "SK", "entity_type", "schema_version", "question_id", "status",
+     "owner_deletion_generation", "created_at", "deleted_at"}
+)
+_KEEPS_SESSION: Final = _KEEPS_QUESTION | {"session_id"}
+# `terminalize_identity_row`: keyed evidence that an identity or grant existed.
+_KEEPS_IDENTITY_EVIDENCE: Final = frozenset(
+    {"PK", "SK", "entity_type", "status", "owner_deletion_generation", "deleted_at", "version"}
+)
+_KEEPS_PRACTICE: Final = frozenset(
+    {"PK", "SK", "entity_type", "schema_version", "status", "action", "quantity", "count",
+     "quota_period", "expires_at", "retention_basis", "owner_deletion_generation",
+     "created_at", "deleted_at"}
+)
+_KEEPS_ADAPTIVE: Final = frozenset(
+    {"PK", "SK", "entity_type", "schema_version", "assignment_id", "status",
+     "owner_deletion_generation", "created_at", "deleted_at"}
+)
+_KEEPS_AI_DRAFT: Final = frozenset(
+    {"PK", "SK", "entity_type", "schema_version", "draft_id", "status",
+     "owner_deletion_generation", "created_at", "deleted_at"}
+)
+_KEEPS_NOTIFICATION: Final = frozenset(
+    {"PK", "SK", "entity_type", "schema_version", "status", "event_id", "summary_id",
+     "operation_id", "channel", "created_at", "accepted_at", "updated_at", "deleted_at",
+     "owner_deletion_generation"}
+)
+# Keeps `owner_id` / `student_id`: the conversation tombstone still names its owner.
+_KEEPS_CONVERSATION: Final = frozenset(
+    {"PK", "SK", "entity_type", "schema_version", "conversation_id", "message_id",
+     "command_id", "owner_id", "student_id", "role", "status", "action", "quantity",
+     "quota_period", "counter_value", "counter_value_after", "count", "expires_at",
+     "created_at", "updated_at", "deleted_at", "owner_deletion_generation",
+     "account_fence_generation"}
+)
+_KEEPS_MODERATION: Final = frozenset(
+    {"PK", "SK", "entity_type", "schema_version", "case_id", "event_id", "question_id",
+     "event_type", "status", "privacy_deleted", "privacy_generation", "created_at",
+     "updated_at", "deleted_at"}
+)
+_KEEPS_REPORT: Final = frozenset(
+    {"PK", "SK", "entity_type", "schema_version", "report_id", "job_id", "target_id",
+     "manifest_id", "package_id", "delivery_id", "message_id", "event_id", "operation_id",
+     "artifact_kind", "status", "state", "owner_deletion_generation", "privacy_deleted",
+     "created_at", "updated_at", "deleted_at", "accepted_at", "provider_acceptance",
+     "policy_authority", "policy_scope", "hold_expires_at"}
+)
+
+_DELETE: Final = Deletion(Delete())
+
+
+def _tombstone(keeps: frozenset[str], *effects: Effect) -> Deletion:
+    return Deletion(Tombstone(keeps, effects))
+
+
+def _kept(because: KeptBecause, note: str) -> Deletion:
+    return Deletion(Keep(because, note))
+
+
+DELETIONS: Final[Mapping[str, Deletion]] = {
+    # -- the deletion's own bookkeeping, and rows kept by policy -----------------------
+    "account_deletion_command": _kept("deletion_flow", "the command itself, the deletion's receipt"),
+    "account_fence": _kept("deletion_flow", "closes the account to writes for good"),
+    "provider_identity_revoke_debt": _kept(
+        "deletion_flow", "records that the sign-in provider's user was revoked"
+    ),
+    "attachment_retention_fence": _kept(
+        "deletion_flow", "the record that a resource's attachments were released; no content"
+    ),
+    "teacher_seen": _kept("expires", "one day"),
+    "subscription_request": _kept(
+        "not_deletion_data", "billing, excluded as subscription_billing_accounting"
+    ),
+    "teacher_activation_command": _kept(
+        "not_deletion_data", "teacher applications, excluded as teacher_application"
+    ),
+    # -- the profile and its links -------------------------------------------------------
+    "user_profile": Deletion(
+        Tombstone(_KEEPS_QUESTION, ("release_email_claim",)),
+        Scrub("a parent's profile: the child taken out of its fields and summaries"),
+    ),
+    "parent_student_link": _DELETE,
+    "usage_period_record": _DELETE,
+    "voice_question_consent": _DELETE,
+    "voice_question_consent_change": _DELETE,
+    "voice_transcription_day": _DELETE,
+    "allowance_counter": _DELETE,
+    "allowance_effect": _DELETE,
+    "provider_usage_evidence": _DELETE,
+    "teacher_support_admission": _DELETE,
+    "teacher_support_assigned_allowance": _DELETE,
+    # -- identity and grants ---------------------------------------------------------------
+    "account_invitation": _DELETE,
+    "auth_sign_in_session": _DELETE,
+    "identity_binding": _tombstone(_KEEPS_IDENTITY_EVIDENCE, "revoke_provider_identity"),
+    "user_identity_inventory": _tombstone(_KEEPS_IDENTITY_EVIDENCE, "revoke_provider_identity"),
+    "public_identity_command": _tombstone(_KEEPS_IDENTITY_EVIDENCE, "revoke_provider_identity"),
+    "capability_grant_current": _tombstone(_KEEPS_IDENTITY_EVIDENCE),
+    "capability_grant_revision": _tombstone(_KEEPS_IDENTITY_EVIDENCE),
+    # -- legacy questions and sessions -----------------------------------------------------
+    "question": Deletion(
+        Tombstone(_KEEPS_QUESTION),
+        Scrub("the teacher's claim and dispatch fields; open again if the teacher held it"),
+    ),
+    "teacher_session": _tombstone(_KEEPS_SESSION),
+    "teacher_escalation_intent": _tombstone(_KEEPS_QUESTION),
+    # -- attachments and uploads -----------------------------------------------------------
+    "attachment": Deletion(Delete(("delete_stored_object",))),
+    "attachment_association": Deletion(Delete(("release_attachments",))),
+    "upload_intent": Deletion(Delete(("delete_stored_object",))),
+    "upload_code": _DELETE,
+    "attachment_storage_usage": _DELETE,
+    # -- moderation ----------------------------------------------------------------------------
+    "moderation_case": _tombstone(_KEEPS_MODERATION, "delete_stored_object"),
+    "moderation_event": _tombstone(_KEEPS_MODERATION),
+    # -- reports -------------------------------------------------------------------------------
+    "REPORT_AUDIT_EVENT": _tombstone(_KEEPS_REPORT),
+    "REPORT_RECOVERY_JOB": _tombstone(_KEEPS_REPORT),
+    "REPORT_RECOVERY_JOB_AUDIT_EVENT": _tombstone(_KEEPS_REPORT),
+    "REPORT_RECOVERY_JOB_TARGET": _tombstone(_KEEPS_REPORT),
+    "report_email_intent": _tombstone(_KEEPS_REPORT),
+    "report_summary": _tombstone(_KEEPS_REPORT),
+    "report_object_intent": _tombstone(_KEEPS_REPORT, "delete_stored_object"),
+    # -- conversations -------------------------------------------------------------------------
+    "conversation": _tombstone(_KEEPS_CONVERSATION, "release_attachments"),
+    "conversation_message": _tombstone(_KEEPS_CONVERSATION, "release_attachments"),
+    "conversation_teacher_note": _tombstone(_KEEPS_CONVERSATION),
+    "message_command": _tombstone(_KEEPS_CONVERSATION, "cancel_inflight_question"),
+    "chat_quota_operation": _tombstone(_KEEPS_CONVERSATION),
+    "help_request": Deletion(
+        Tombstone(_KEEPS_CONVERSATION),
+        Scrub("the teacher's claim and dispatch fields; open again if the teacher held it"),
+    ),
+    "asked_knowledge_points": _tombstone(_KEEPS_CONVERSATION),
+    "usage_ledger_event": _tombstone(_KEEPS_CONVERSATION),
+    # -- practice and usage counters -----------------------------------------------------------
+    **{
+        name: _tombstone(_KEEPS_PRACTICE)
+        for name in (
+            "rate_admission_operation",
+            "rate_counter",
+            "usage_counter",
+            "practice_progress",
+            "study_day",
+            "lit_unit",
+            "lit_ledger",
+            "practice_quiz_paper",
+            "practice_quiz_credential",
+            "practice_star_quiz_cooldown",
+            "practice_star_quiz_pass",
+            "review_card",
+            "practice_attempt",
+            *(
+                f"legacy_untyped_{suffix}"
+                for suffix in (
+                    "progress", "review", "activity", "quiz", "usage_ledger",
+                    "practice", "practice_attempt", "practice_progress",
+                )
+            ),
+        )
+    },
+    # -- adaptive learning, drafts, curriculum signals -----------------------------------------
+    "learning_assignment": _tombstone(_KEEPS_ADAPTIVE),
+    "learning_memory_snapshot": _tombstone(_KEEPS_ADAPTIVE),
+    "ai_teacher_draft": _tombstone(_KEEPS_AI_DRAFT),
+    "curriculum_signal_owner_manifest": Deletion(Delete(("reconcile_curriculum_signal",))),
+    # -- notifications and connections ---------------------------------------------------------
+    "notification_event": Deletion(
+        Tombstone(_KEEPS_NOTIFICATION),
+        Scrub("the account's id taken out of `actor_id` and `metadata`"),
+    ),
+    "notification_preference": _tombstone(_KEEPS_NOTIFICATION),
+    "notification_push_token": _tombstone(_KEEPS_NOTIFICATION),
+    "notification_delivery_intent": _tombstone(_KEEPS_NOTIFICATION, "count_external_delivery"),
+    "payment_expiry_reminder": _tombstone(_KEEPS_NOTIFICATION),
+    "teacher_assistance_summary_seed": _tombstone(_KEEPS_NOTIFICATION),
+    "websocket_connection": _DELETE,
+}
+
+
+def _with_deletion(entry: DataType) -> DataType:
+    return replace(entry, deletion=DELETIONS.get(entry.name))
+
+
+_ENTRIES = tuple(_with_deletion(entry) for entry in _ENTRIES)
+UNTYPED = tuple(_with_deletion(entry) for entry in UNTYPED)
 
 # What a deletion leaves in place of a row and names after it,
 # `{entity_type}_deletion_tombstone`: a status, a generation and timestamps,

@@ -45,18 +45,6 @@ _MAX_CHALLENGE_PAGES = 1000
 #: for a grid drawing (#594), the drawing as `grid_drawing.Drawing.stored` gives it.
 SUBMITTED_ANSWER_SCHEMA_VERSION = 1
 
-PRACTICE_PRIVATE_ROW_REGISTRY = frozenset(
-    {
-        "progress",
-        "attempt",
-        "legacy_mistake",
-        "usage",
-        "quiz_paper",
-        "quiz_credential",
-        "star_quiz_cooldown",
-        "star_quiz_pass",
-    }
-)
 #: Every writer of a practice row. The quiz ones are all of `QUIZ#{student}`:
 #: the paper (`put_quiz_paper`, `update_quiz_paper`), the lesson quiz's
 #: credential, and what a star quiz decided (cooldown, pass).

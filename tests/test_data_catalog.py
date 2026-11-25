@@ -140,9 +140,43 @@ def test_untyped_kinds_are_recognized_by_key_and_never_shadow_a_type():
     assert data_catalog.data_type_of({**tagged, "SK": "OTHER"}) is None
 
 
-def test_every_deletion_slot_is_still_empty():
-    """Candidate I (see #586) fills `deletion`; until then nothing may read one."""
-    assert all(entry.deletion is None for entry in (*CATALOG.values(), *UNTYPED))
+def test_every_type_that_points_to_an_account_says_what_its_deletion_does():
+    """One action for each role a type's pointers declare, none for the others (#639).
+
+    A type that points to no account has no deletion; one whose rows can be an
+    account's own says what happens to them (`Delete`, `Tombstone`, `Keep`);
+    one whose rows can name an account says what happens to the name (`Scrub`,
+    `Keep`). What each action is checked against the branches in
+    `tests/test_account_deletion_branch_coverage.py`.
+    """
+    wrong = {}
+    for entry in (*CATALOG.values(), *UNTYPED):
+        roles = {pointer.role for pointer in entry.accounts}
+        deletion = entry.deletion
+        owner = deletion.owner if deletion else None
+        reference = deletion.reference if deletion else None
+        if not roles and deletion is not None:
+            wrong[entry.name] = "points to no account, yet has a deletion"
+        elif (OWNER in roles) != (owner is not None):
+            wrong[entry.name] = f"owner role {OWNER in roles}, owner action {owner}"
+        elif (REFERENCE in roles) != (reference is not None):
+            wrong[entry.name] = f"reference role {REFERENCE in roles}, reference action {reference}"
+        elif owner is not None and not isinstance(
+            owner, (data_catalog.Delete, data_catalog.Tombstone, data_catalog.Keep)
+        ):
+            wrong[entry.name] = f"not an owner action: {owner}"
+        elif reference is not None and not isinstance(
+            reference, (data_catalog.Scrub, data_catalog.Keep)
+        ):
+            wrong[entry.name] = f"not a reference action: {reference}"
+    assert not wrong, wrong
+    assert sorted(data_catalog.DELETIONS.keys() - {e.name for e in (*CATALOG.values(), *UNTYPED)}) == []
+
+
+def test_a_tombstone_keeps_its_key_and_says_what_it_is():
+    for name, deletion in data_catalog.DELETIONS.items():
+        if isinstance(deletion.owner, data_catalog.Tombstone):
+            assert {"PK", "SK", "entity_type", "status"} <= deletion.owner.keeps, name
 
 
 # -- 2. writer fields -----------------------------------------------------------------------
