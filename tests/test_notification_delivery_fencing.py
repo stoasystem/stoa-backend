@@ -107,7 +107,7 @@ def test_private_push_rejects_missing_malformed_or_stale_persisted_generation(
     monkeypatch.setattr(notification_repo, "update_event", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         notification_repo,
-        "list_push_tokens",
+        "list_user_push_tokens",
         lambda *_args, **_kwargs: [
             {
                 "provider_token_reference": "opaque-provider-reference",
@@ -330,7 +330,7 @@ def test_websocket_invalid_persisted_scope_lists_no_connections_and_posts_nothin
     listed: list[str] = []
     posted: list[tuple[dict[str, Any], dict[str, Any]]] = []
 
-    def list_connections(**_kwargs: object) -> list[dict[str, Any]]:
+    def list_connections(*_args: object, **_kwargs: object) -> list[dict[str, Any]]:
         listed.append("listed")
         return []
 
@@ -340,11 +340,8 @@ def test_websocket_invalid_persisted_scope_lists_no_connections_and_posts_nothin
         lambda _event_id: deepcopy(persisted),
         raising=False,
     )
-    monkeypatch.setattr(
-        websocket_service.websocket_repo,
-        "list_connections",
-        list_connections,
-    )
+    for reader in ("list_user_connections", "list_role_connections"):
+        monkeypatch.setattr(websocket_service.websocket_repo, reader, list_connections)
 
     result = websocket_service.fanout_notification_event(
         {**persisted, "account_fence_generation": GENERATION},
