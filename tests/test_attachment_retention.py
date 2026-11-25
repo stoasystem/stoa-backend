@@ -104,7 +104,18 @@ class _RetentionRepository:
             }
             self.items[(association["PK"], association["SK"])] = association
 
-    def list_owner_attachment_items(self, owner_id):
+    def activate_retention_fence(self, owner_id, *, resource_type, resource_id, now_iso):
+        return {
+            **attachment_repo.retention_fence_key(
+                owner_id, resource_type=resource_type, resource_id=resource_id
+            ),
+            "owner_id": owner_id,
+            "status": "active",
+            "generation": 1,
+            "updated_at": now_iso,
+        }
+
+    def list_owner_attachment_items(self, owner_id, *, fence=None):
         return [dict(item) for item in self.items.values() if item.get("student_id") == owner_id]
 
     def transact(self, operations):

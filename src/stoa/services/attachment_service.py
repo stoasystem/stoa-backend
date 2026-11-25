@@ -1218,23 +1218,20 @@ def release_resource_attachments(
 ) -> RetentionResult:
     """Release references and retain a retryable tombstone for last-byte deletion."""
     now = (now or datetime.now(UTC)).astimezone(UTC)
-    fence: dict[str, Any] | None = None
-    activate_fence = getattr(repository, "activate_retention_fence", None)
-    if callable(activate_fence):
-        try:
-            fence = activate_fence(
-                owner_id,
-                resource_type=resource_type,
-                resource_id=resource_id,
-                now_iso=now.isoformat(),
-            )
-        except attachment_repo.AttachmentRepositoryConflict as exc:
-            disposition = (
-                RetentionDisposition.INCOMPLETE_RETRYABLE
-                if exc.category == "dependency_failure"
-                else RetentionDisposition.CONFLICT
-            )
-            return RetentionResult(disposition, RetentionStage.FENCED)
+    try:
+        fence: dict[str, Any] = repository.activate_retention_fence(
+            owner_id,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            now_iso=now.isoformat(),
+        )
+    except attachment_repo.AttachmentRepositoryConflict as exc:
+        disposition = (
+            RetentionDisposition.INCOMPLETE_RETRYABLE
+            if exc.category == "dependency_failure"
+            else RetentionDisposition.CONFLICT
+        )
+        return RetentionResult(disposition, RetentionStage.FENCED)
     try:
         items = _list_owner_retention_items(repository, owner_id, fence)
     except attachment_repo.AttachmentRepositoryConflict as exc:
@@ -1385,14 +1382,8 @@ def purge_student_attachments(
             return AttachmentPurgeBranchResult(
                 AttachmentPurgeBranchStatus.CONFLICT, cursors=progress
             )
-        key_builder = getattr(repository, "retention_fence_key", None)
-        key = (
-            key_builder(student_id)
-            if callable(key_builder)
-            else attachment_repo.retention_fence_key(student_id)
-        )
         fence = {
-            **key,
+            **attachment_repo.retention_fence_key(student_id),
             "owner_id": student_id,
             "status": "deletion_pending",
             "generation": account_fence_generation,
@@ -1582,10 +1573,9 @@ def purge_student_attachments(
             released=released,
             deleted=deleted,
         )
-    delete_usage = getattr(repository, "delete_empty_storage_usage", None)
-    if account_fence_generation is not None and callable(delete_usage):
+    if account_fence_generation is not None:
         try:
-            if not delete_usage(
+            if not repository.delete_empty_storage_usage(
                 student_id,
                 account_fence_generation=account_fence_generation,
             ):

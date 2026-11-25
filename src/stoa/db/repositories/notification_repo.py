@@ -1180,10 +1180,6 @@ def put_payment_expiry_reminder(
         "owner_id": parent_id,
         "account_fence_generation": generation,
     }
-    hook = getattr(target, "put_payment_expiry_reminder", None)
-    if callable(hook):
-        persisted = hook(stored)
-        return stored if persisted is None else _dependency_mapping(persisted)
     try:
         db_table.fenced(
             parent_id,
@@ -1248,10 +1244,6 @@ def resolve_payment_expiry_reminder(
     table: object | None = None,
 ) -> NotificationItem | None:
     target = table or db_table.table()
-    hook = getattr(target, "resolve_payment_expiry_reminder", None)
-    if callable(hook):
-        value = hook(parent_id, reminder_identity, resolved_at)
-        return None if value is None else _dependency_mapping(value)
     return _update_payment_expiry_reminder(
         parent_id,
         reminder_identity,
@@ -1268,10 +1260,6 @@ def mark_payment_expiry_reminder_notified(
     table: object | None = None,
 ) -> NotificationItem | None:
     target = table or db_table.table()
-    hook = getattr(target, "mark_payment_expiry_reminder_notified", None)
-    if callable(hook):
-        value = hook(parent_id, reminder_identity, notified_at)
-        return None if value is None else _dependency_mapping(value)
     return _update_payment_expiry_reminder(
         parent_id,
         reminder_identity,
@@ -1331,10 +1319,6 @@ def register_delivery_intent(
         )
     else:
         item["classification_seal"] = scope.classification_seal
-    hook = getattr(target, "register_delivery_intent", None)
-    if callable(hook):
-        persisted = hook(item)
-        return item if not persisted else _dependency_mapping(persisted)
     if scope.kind == "private_owner":
         db_table.fenced(
             str(scope.owner_id),
@@ -1394,20 +1378,6 @@ def claim_delivery_intent(
     opaque_owner = str(lease_owner or f"delivery-lease-{uuid4().hex}").strip()
     if not opaque_owner:
         raise account_deletion_repo.AccountDeletionConflict("delivery lease owner is invalid")
-    hook = getattr(target, "claim_delivery_intent", None)
-    if callable(hook):
-        value = hook(
-            scope,
-            operation_id,
-            digest,
-            now_epoch,
-            opaque_owner,
-            lease_expires_at,
-            now_iso,
-        )
-        if value is None:
-            return None
-        return value if isinstance(value, DeliveryIntentClaim) else _intent_claim(value)
     if scope.kind == "private_owner":
         account_deletion_repo.require_active_account_fence(
             str(scope.owner_id), int(scope.generation or 0), table=target
@@ -1510,20 +1480,6 @@ def begin_delivery_effect(
     if claim.scope_digest != scope.digest:
         return DeliveryBeginResult(DeliveryBeginDisposition.CLAIM_LOST)
     target = table or db_table.table()
-    hook = getattr(target, "begin_delivery_effect", None)
-    if callable(hook):
-        try:
-            value = hook(scope, claim, now_iso)
-            begun = value if isinstance(value, DeliveryIntentClaim) else _intent_claim(value)
-            return DeliveryBeginResult(DeliveryBeginDisposition.BEGUN, begun)
-        except Exception as exc:
-            return classify_delivery_transaction_failure(
-                exc,
-                scope=scope,
-                claim=claim,
-                operation_count=1 if scope.kind == "private_owner" else 2,
-                table=target,
-            )
     condition_expression = (
         "#effect=:pre_effect AND lease_owner=:lease AND "
         "intent_version=:version AND scope_digest=:scope AND "
@@ -1761,9 +1717,6 @@ def complete_delivery_intent(
         if item is None or item.get("lease_owner") != lease_owner:
             raise account_deletion_repo.AccountDeletionConflict("stale delivery claim")
         claim = _intent_claim(item)
-    hook = getattr(target, "complete_delivery_intent", None)
-    if callable(hook):
-        return _dependency_mapping(hook(scope, claim, status, now_iso))
     return _finish_delivery_intent(
         scope=scope,
         claim=claim,
@@ -1788,14 +1741,6 @@ def _finish_delivery_intent(
     table: object | None,
 ) -> NotificationItem:
     target = table or db_table.table()
-    hook_name = (
-        "cancel_delivery_intent"
-        if status == "canceled_account_deletion" and expected_state == "claimed_pre_effect"
-        else None
-    )
-    hook = getattr(target, hook_name, None) if hook_name else None
-    if callable(hook):
-        return _dependency_mapping(hook(scope, claim, now_iso))
     response = _update_item(
         target,
         Key=_delivery_key(scope, claim.operation_id),
@@ -1977,7 +1922,8 @@ def scrub_notification_identity_references(
             "notification metadata is malformed"
         )
     metadata_snapshot = _dependency_mapping(metadata)
-    metadata_digest = _notification_metadata_digest(metadata_snapshot)
+    # Only its refusal is wanted: metadata that does not encode is malformed.
+    _notification_metadata_digest(metadata_snapshot)
     # Where the catalog says the row mentions the account: fields in
     # `metadata`, and on the row itself its `actor_id`.
     paths = data_catalog.referenced_paths(item, owner_id)
@@ -1999,17 +1945,6 @@ def scrub_notification_identity_references(
     direct_match = "actor_id" in direct_fields
 
     target = table or db_table.table()
-    hook = getattr(target, "scrub_notification_identity_references", None)
-    if callable(hook):
-        hook(
-            dict(item),
-            clean_metadata,
-            owner_id,
-            generation,
-            metadata_digest,
-        )
-        return
-
     condition = (
         "PK=:pk AND SK=:sk AND entity_type=:entity AND schema_version=:schema "
         "AND event_version=:version AND #status=:status AND metadata=:metadata"
