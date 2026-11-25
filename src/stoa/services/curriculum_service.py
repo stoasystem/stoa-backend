@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
-from stoa.services import practice_projection_service
+from stoa.services import curriculum_cache, practice_projection_service
 from stoa.services import curriculum_translations
 from stoa.services.curriculum_translations import translated_title
 from stoa.services.practice_errors import PracticeErrorCode, PracticeViolation
@@ -125,33 +125,98 @@ def list_catalog(
     include_preview: bool = False,
     locale: str = "de",
     lesson_rows: Sequence[Mapping[str, Any]] | None = None,
+    snapshot: curriculum_cache.Snapshot | None = None,
 ) -> dict[str, Any]:
     """The catalog: subjects, topics, units and lessons, each kind read once.
 
+    The student view comes from the kept curriculum (`curriculum_cache`), or
+    from `snapshot` when the caller holds one; a preview reader's is read now.
     `lesson_rows` are every lesson row (`practice_repo.get_lessons()`) when the
-    caller has already read them for something else (`student_evidence.Content`).
+    caller has already read them for something else.
     """
-    if lesson_rows is None:
-        lesson_rows = practice_repo.get_lessons()
+    if include_preview or lesson_rows is not None:
+        return _catalog(
+            subject_id=subject_id,
+            grade_level=grade_level,
+            rollout_state=rollout_state,
+            include_preview=include_preview,
+            locale=locale,
+            subject_rows=practice_repo.get_subjects(),
+            topic_rows=practice_repo.get_topics(subject_id),
+            unit_rows=practice_repo.get_all_units(),
+            lesson_rows=practice_repo.get_lessons() if lesson_rows is None else lesson_rows,
+            challenges=lambda lesson_id: practice_repo.get_challenges(lesson_id),
+        )
+    rows = snapshot if snapshot is not None else curriculum_cache.current()
+    key = ("catalog", subject_id, grade_level, rollout_state, locale)
+    built = rows.once(
+        key,
+        lambda: _catalog(
+            subject_id=subject_id,
+            grade_level=grade_level,
+            rollout_state=rollout_state,
+            include_preview=False,
+            locale=locale,
+            subject_rows=rows.subjects,
+            topic_rows=[
+                topic for topic in rows.topics
+                if not subject_id or same_subject(topic.get("subject_id", ""), subject_id)
+            ],
+            unit_rows=rows.units,
+            lesson_rows=rows.lessons,
+            challenges=lambda lesson_id: _kept_or_read(rows, lesson_id),
+        ),
+    )
+    return _handed_out(built)
+
+
+def _kept_or_read(rows: curriculum_cache.Snapshot, lesson_id: str) -> list[dict[str, Any]]:
+    kept = rows.lesson_challenges(lesson_id)
+    return practice_repo.get_challenges(lesson_id) if kept is None else kept
+
+
+def _handed_out(catalog: Mapping[str, Any]) -> dict[str, Any]:
+    """A kept catalog as a caller may change it without changing what is kept."""
+    return {
+        key: [dict(item) if isinstance(item, Mapping) else item for item in value]
+        if isinstance(value, list)
+        else value
+        for key, value in catalog.items()
+    }
+
+
+def _catalog(
+    *,
+    subject_id: str | None,
+    grade_level: str | None,
+    rollout_state: str | None,
+    include_preview: bool,
+    locale: str,
+    subject_rows: Iterable[Mapping[str, Any]],
+    topic_rows: Iterable[Mapping[str, Any]],
+    unit_rows: Iterable[Mapping[str, Any]],
+    lesson_rows: Iterable[Mapping[str, Any]],
+    challenges: Callable[[str], list[dict[str, Any]]],
+) -> dict[str, Any]:
     subjects = [
         _build_subject(subject, locale)
-        for subject in sorted(practice_repo.get_subjects(), key=lambda item: _as_int(item.get("order", 0)))
+        for subject in sorted(subject_rows, key=lambda item: _as_int(item.get("order", 0)))
         if _subject_matches(subject, subject_id, grade_level)
         and _matches_state(subject, rollout_state, include_preview)
         and subject_key(subject.get("subject_id", "")) in SUPPORTED_SUBJECTS
     ]
     topics = [
         _build_topic(topic, locale)
-        for topic in sorted(practice_repo.get_topics(subject_id), key=lambda item: _as_int(item.get("order", 0)))
+        for topic in sorted(topic_rows, key=lambda item: _as_int(item.get("order", 0)))
         if _topic_matches(topic, subject_id, grade_level) and _matches_state(topic, rollout_state, include_preview)
     ]
     units = [
         _build_unit(unit, locale)
-        for unit in sorted(_all_units(topics), key=lambda item: (subject_key(item.get("subject_id", "")), item.get("topic_id", ""), _as_int(item.get("order", 0))))
+        for unit in sorted(_all_units(topics, unit_rows), key=lambda item: (subject_key(item.get("subject_id", "")), item.get("topic_id", ""), _as_int(item.get("order", 0))))
         if _matches_state(unit, rollout_state, include_preview)
     ]
     lessons = [
-        _build_lesson(lesson, exercise_count=_exercise_count(lesson, include_preview), locale=locale)
+        _build_lesson(lesson, exercise_count=_exercise_count(lesson, include_preview, challenges), locale=locale)
         for lesson in sorted(lesson_rows, key=lambda item: (item.get("topic_id", ""), item.get("unit_id", ""), _as_int(item.get("order", 0))))
         if _lesson_matches(lesson, subject_id, grade_level) and _matches_state(lesson, rollout_state, include_preview)
     ]
@@ -321,13 +386,15 @@ def can_preview(user: dict[str, Any]) -> bool:
     return str(user.get("role", "")).lower() in PREVIEW_ROLES
 
 
-def _all_units(topics: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _all_units(
+    topics: list[dict[str, Any]], unit_rows: Iterable[Mapping[str, Any]] | None = None
+) -> list[dict[str, Any]]:
     """The units of these topics, topic by topic, from one read of the unit rows.
 
     Read once per topic before, all 237 rows each time: 27 reads per catalog
     with the knowledge base published (#496)."""
     by_topic: dict[Any, list[dict[str, Any]]] = {}
-    for unit in practice_repo.get_all_units():
+    for unit in practice_repo.get_all_units() if unit_rows is None else unit_rows:
         by_topic.setdefault(unit.get("topic_id"), []).append(unit)
     units: list[dict[str, Any]] = []
     for topic in topics:
@@ -335,13 +402,23 @@ def _all_units(topics: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return units
 
 
-def _exercise_count(lesson: dict[str, Any], include_preview: bool) -> int:
+def _exercise_count(
+    lesson: dict[str, Any],
+    include_preview: bool,
+    challenges: Callable[[str], list[dict[str, Any]]] | None = None,
+) -> int:
     """From the lesson's own exercise index where it has one; a preview reader also
     sees exercises not yet live, which only the challenge rows know of."""
     index = practice_repo.indexed_exercises(lesson)
     if index is not None and not include_preview:
         return len(index)
-    return len(_active_exercises_for_lesson(lesson["lesson_id"], include_preview))
+    return len(
+        [
+            challenge
+            for challenge in (challenges or practice_repo.get_challenges)(lesson["lesson_id"])
+            if _is_visible(challenge, include_preview)
+        ]
+    )
 
 
 def _active_exercises_for_lesson(lesson_id: str, include_preview: bool) -> list[dict[str, Any]]:

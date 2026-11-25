@@ -541,15 +541,15 @@ def topic_challenges(topic_id: str, *, page_size: int | None = None) -> Iterator
     raise ValueError("challenge pagination exceeded the bounded page limit")
 
 
-def get_subjects() -> list[dict]:
-    table = db_table.table()
+def get_subjects(*, table: Any | None = None) -> list[dict]:
+    table = table or db_table.table()
     return _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("SUBJECT#"))
     )
 
 
-def get_topics(subject_id: str | None = None) -> list[dict]:
-    table = db_table.table()
+def get_topics(subject_id: str | None = None, *, table: Any | None = None) -> list[dict]:
+    table = table or db_table.table()
     items = _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("TOPIC#"))
     )
@@ -564,13 +564,15 @@ def get_topic(topic_id: str) -> dict | None:
     return _optional_item(resp.get("Item"))
 
 
-def get_lessons(topic_id: str | None = None, unit_id: str | None = None) -> list[dict]:
+def get_lessons(
+    topic_id: str | None = None, unit_id: str | None = None, *, table: Any | None = None
+) -> list[dict]:
     """Every lesson row, or one topic's, read through its shelf (#513)."""
     if topic_id:
         items = _topic_shelf_rows("LESSON", topic_id)
     else:
         items = _query_all_challenge_pages(
-            db_table.table(),
+            table or db_table.table(),
             KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("LESSON#")),
         )
     if unit_id:
@@ -584,8 +586,8 @@ def get_lesson(lesson_id: str) -> dict | None:
     return _optional_item(resp.get("Item"))
 
 
-def get_challenges(lesson_id: str) -> list[dict]:
-    table = db_table.table()
+def get_challenges(lesson_id: str, *, table: Any | None = None) -> list[dict]:
+    table = table or db_table.table()
     items = _query_all_challenge_pages(
         table,
         KeyConditionExpression=(
@@ -661,9 +663,9 @@ def get_units(topic_id: str) -> list[dict]:
     return _topic_shelf_rows("UNIT", topic_id)
 
 
-def get_all_units() -> list[dict]:
+def get_all_units(*, table: Any | None = None) -> list[dict]:
     """Every unit row, in key order; `get_units` is one topic's of these."""
-    table = db_table.table()
+    table = table or db_table.table()
     return _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("UNIT#"))
     )
@@ -672,8 +674,10 @@ def get_all_units() -> list[dict]:
 # ── Progress read / write ─────────────────────────────────────────────────
 
 
-def get_progress(user_id: str, subject_id: str | None = None) -> list[dict]:
-    table = db_table.table()
+def get_progress(
+    user_id: str, subject_id: str | None = None, *, table: Any | None = None
+) -> list[dict]:
+    table = table or db_table.table()
     items = _query_all_challenge_pages(
         table,
         KeyConditionExpression=(
@@ -864,7 +868,7 @@ def get_attempt(student_id: str, attempt_id: str) -> dict | None:
     return _optional_item(response.get("Item"))
 
 
-def list_attempts(student_id: str) -> list[dict]:
+def list_attempts(student_id: str, *, table: Any | None = None) -> list[dict]:
     """Every answer this student has given, from every page, strongly consistent.
 
     One read of the partition for everything the student evidence derives from
@@ -873,7 +877,7 @@ def list_attempts(student_id: str) -> list[dict]:
     out stars the student earned, and do so more the more they practise; a
     stale one would miss the answer saved a moment before the page was asked.
     """
-    table = db_table.table()
+    table = table or db_table.table()
     return _query_all_challenge_pages(
         table,
         KeyConditionExpression=(
