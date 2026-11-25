@@ -33,6 +33,7 @@ class FeatureHealth(BaseModel):
     status: Literal["ok", "warn", "bad", "unknown"]
     requests: int | None
     errorRate: float | None
+    p50Ms: int | None = None
     p95Ms: int | None
     p95LimitMs: int
     spark: list[SparkPoint]
@@ -46,15 +47,27 @@ class Alarm(BaseModel):
     state: str
     since: str | None
     reason: str | None
+    description: str | None = None
 
 
 class Deploy(BaseModel):
     at: str | None
     release: str
+    label: str | None = None
+
+
+class FrontendErrorGroup(BaseModel):
+    messageHash: str
+    message: str | None
+    route: str | None
+    release: str | None
+    count: int
+    lastAt: str | None
 
 
 class FrontendErrorTotal(BaseModel):
     total: int | None
+    items: list[FrontendErrorGroup] = []
 
 
 class SystemHealthResponse(BaseModel):
@@ -90,15 +103,6 @@ class RecentError(BaseModel):
     route: str
     status: int | None
     count: int
-
-
-class FrontendErrorGroup(BaseModel):
-    messageHash: str
-    message: str | None
-    route: str | None
-    release: str | None
-    count: int
-    lastAt: str | None
 
 
 class ProbeStep(BaseModel):

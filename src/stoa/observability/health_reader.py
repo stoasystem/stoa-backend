@@ -10,7 +10,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from itertools import islice
 from typing import Any
@@ -45,6 +45,8 @@ VERSION_PAGE_BUDGET = 20
 PROBE_PAGE_BUDGET = 5
 FRONTEND_PAGE_BUDGET = 20
 ERROR_RATE_WARN = 0.01
+PROBE_FRESH_SECONDS = 900
+FRONTEND_TOP = 5
 
 _READ_CONFIG = Config(connect_timeout=2, read_timeout=5, retries={"mode": "standard", "total_max_attempts": 2})
 
@@ -267,6 +269,7 @@ def alarms() -> list[dict[str, Any]]:
                     "state": str(alarm.get("StateValue") or "INSUFFICIENT_DATA"),
                     "since": _iso_or_none(alarm.get("StateUpdatedTimestamp")),
                     "reason": alarm.get("StateReason"),
+                    "description": alarm.get("AlarmDescription") or None,
                 }
             )
         token = response.get("NextToken")
@@ -294,13 +297,15 @@ def deploys() -> list[dict[str, Any]]:
             if not marker:
                 break
             request["Marker"] = marker
-        versions.sort(key=lambda version: int(version.get("Version") or 0), reverse=True)
+        unique = {str(version.get("Version")): version for version in versions}
+        ordered = sorted(unique.values(), key=lambda version: int(version.get("Version") or 0), reverse=True)
         return [
             {
                 "at": _iso_or_none(version.get("LastModified")),
-                "release": str(version.get("Description") or f"v{version.get('Version')}"),
+                "release": f"v{version.get('Version')}",
+                "label": str(version.get("Description") or "").strip() or None,
             }
-            for version in versions[:DEPLOYS_SHOWN]
+            for version in ordered[:DEPLOYS_SHOWN]
         ]
 
     return _cached(("deploys",), DEPLOY_CACHE_SECONDS, build)
@@ -338,15 +343,26 @@ def _runs(rows: list[dict[str, Any]], feature: str) -> list[tuple[str, list[dict
     return sorted(runs.items(), key=lambda run: run[0], reverse=True)
 
 
-def probe_summary(rows: list[dict[str, Any]], feature: str) -> tuple[dict[str, Any] | None, bool]:
-    """The feature's latest probe run, and whether its last two runs both failed."""
+def probe_summary(
+    rows: list[dict[str, Any]], feature: str, fresh_since: datetime | None = None
+) -> tuple[dict[str, Any] | None, bool]:
+    """The feature's latest probe run, and whether its last two fresh runs both failed."""
     runs = _runs(rows, feature)
     if not runs:
         return None, False
-    ok = [all(bool(step.get("ok")) for step in steps) for _, steps in runs[:2]]
     at, steps = runs[0]
     latency = sum(_number(step.get("latency_ms")) or 0 for step in steps)
-    summary = {"ok": ok[0], "lastRunAt": _iso_or_none(at), "latencyMs": int(round(latency))}
+    summary = {
+        "ok": all(bool(step.get("ok")) for step in steps),
+        "lastRunAt": _iso_or_none(at),
+        "latencyMs": int(round(latency)),
+    }
+    fresh = [
+        (stamp, run)
+        for stamp, run in runs
+        if fresh_since is None or ((moment := _parse_time(stamp)) is not None and moment >= fresh_since)
+    ]
+    ok = [all(bool(step.get("ok")) for step in run) for _, run in fresh[:2]]
     return summary, len(ok) == 2 and not any(ok)
 
 
@@ -369,6 +385,7 @@ def _health(window: str, now: datetime | None) -> dict[str, Any]:
         queries += [
             _metric_query(f"req_{key}", ns, "Requests", key, "Sum", seconds),
             _metric_query(f"err_{key}", ns, "Errors5xx", key, "Sum", seconds),
+            _metric_query(f"p50_{key}", ns, "Latency", key, "p50", seconds),
             _metric_query(f"p95_{key}", ns, "Latency", key, "p95", seconds),
             _metric_query(f"sreq_{key}", ns, "Requests", key, "Sum", spark_period),
             _metric_query(f"sp95_{key}", ns, "Latency", key, "p95", spark_period),
@@ -398,16 +415,24 @@ def _health(window: str, now: datetime | None) -> dict[str, Any]:
         logger.warning("system_health_probes_failed error=%s", type(error).__name__)
         probes, partial = [], True
 
+    try:
+        frontend_items = frontend_error_groups(moment, start, limit=FRONTEND_TOP)
+    except Exception as error:
+        logger.warning("system_health_frontend_failed error=%s", type(error).__name__)
+        frontend_items, partial = [], True
+
+    fresh_since = moment - timedelta(seconds=PROBE_FRESH_SECONDS)
     buckets = _buckets(moment, seconds, spark_period)
     items = []
     for key in features.HEALTH_FEATURE_KEYS:
         limit = features.FEATURE_P95_LIMIT_MS[key]
         if points is None:
-            requests = errors = p95 = None
+            requests = errors = p50 = p95 = None
             spark = [{"t": iso(bucket), "requests": None, "p95Ms": None} for bucket in buckets]
         else:
             requests = _sum(points[f"req_{key}"])
             errors = _sum(points[f"err_{key}"])
+            p50 = _peak(points[f"p50_{key}"])
             p95 = _peak(points[f"p95_{key}"])
             spark_requests = _bucketed(points[f"sreq_{key}"], buckets, spark_period)
             spark_p95 = _bucketed(points[f"sp95_{key}"], buckets, spark_period, max)
@@ -420,7 +445,7 @@ def _health(window: str, now: datetime | None) -> dict[str, Any]:
                 for index, bucket in enumerate(buckets)
             ]
         error_rate = round(errors / requests, 4) if requests else None
-        probe, failed_twice = probe_summary(probes, key)
+        probe, failed_twice = probe_summary(probes, key, fresh_since)
         last_run = _parse_time(probe["lastRunAt"]) if probe else None
         open_alarms = sum(1 for alarm in alarm_list if alarm["feature"] == key and alarm["state"] == "ALARM")
         items.append(
@@ -433,10 +458,11 @@ def _health(window: str, now: datetime | None) -> dict[str, Any]:
                     error_rate=error_rate,
                     p95_ms=p95,
                     p95_limit_ms=limit,
-                    probe_in_window=bool(last_run and last_run >= start),
+                    probe_in_window=bool(last_run and last_run >= max(start, fresh_since)),
                 ),
                 "requests": None if requests is None else int(requests),
                 "errorRate": error_rate,
+                "p50Ms": None if p50 is None else int(round(p50)),
                 "p95Ms": None if p95 is None else int(round(p95)),
                 "p95LimitMs": limit,
                 "spark": spark,
@@ -453,7 +479,7 @@ def _health(window: str, now: datetime | None) -> dict[str, Any]:
         "features": items,
         "alarms": alarm_list,
         "deploys": deploy_list,
-        "frontendErrors": {"total": frontend_total},
+        "frontendErrors": {"total": frontend_total, "items": frontend_items},
     }
     if partial:
         result["partial"] = True
@@ -526,12 +552,21 @@ def logs_insights(
     return results, True
 
 
-def _frontend_errors(feature: str, now: datetime) -> list[dict[str, Any]]:
+def _window_days(now: datetime, start: datetime) -> list[date]:
+    """The DAY# partitions a window touches; at least today and yesterday."""
+    first = min(start.date(), now.date() - timedelta(days=1))
+    return [now.date() - timedelta(days=offset) for offset in range((now.date() - first).days + 1)]
+
+
+def frontend_error_groups(
+    now: datetime, start: datetime, *, feature: str | None = None, limit: int = 50
+) -> list[dict[str, Any]]:
+    """Frontend errors since `start`, grouped by message hash, most frequent first."""
     target = analytics_store.table()
     if target is None:
         return []
     grouped: dict[str, dict[str, Any]] = {}
-    for day in (now.date(), now.date() - timedelta(days=1)):
+    for day in _window_days(now, start):
         for page in islice(
             db_table.pages(
                 "query",
@@ -544,20 +579,23 @@ def _frontend_errors(feature: str, now: datetime) -> list[dict[str, Any]]:
             FRONTEND_PAGE_BUDGET,
         ):
             for row in page.items:
+                at = str(row.get("SK", "")).rsplit("#", 1)[0]
+                moment = _parse_time(at)
+                if moment is None or moment < start or moment > now + timedelta(minutes=1):
+                    continue
                 props = row.get("props") if isinstance(row.get("props"), Mapping) else {}
                 route = str(props.get("route") or row.get("route") or "")
-                if features.feature_for_frontend_route(route) != feature:
+                if feature is not None and features.feature_for_frontend_route(route) != feature:
                     continue
                 digest = str(props.get("message_hash") or "")
-                at = str(row.get("SK", "")).rsplit("#", 1)[0]
                 entry = grouped.setdefault(
                     digest,
                     {"messageHash": digest, "message": None, "route": None, "release": None, "count": 0, "lastAt": None},
                 )
                 entry["count"] += 1
-                if entry["lastAt"] is None or at > entry["lastAt"]:
+                if entry["lastAt"] is None or moment > entry["lastAt"]:
                     entry.update(
-                        lastAt=at,
+                        lastAt=moment,
                         message=props.get("message"),
                         route=route,
                         release=props.get("release") or row.get("release"),
@@ -565,8 +603,8 @@ def _frontend_errors(feature: str, now: datetime) -> list[dict[str, Any]]:
             if page.last_key is None:
                 break
     for entry in grouped.values():
-        entry["lastAt"] = _iso_or_none(entry["lastAt"])
-    return sorted(grouped.values(), key=lambda entry: (-entry["count"], entry["messageHash"]))[:50]
+        entry["lastAt"] = iso(entry["lastAt"])
+    return sorted(grouped.values(), key=lambda entry: (-entry["count"], entry["messageHash"]))[:limit]
 
 
 def feature_detail(
@@ -671,7 +709,7 @@ def _feature_detail(
         partial = True
 
     try:
-        frontend = _frontend_errors(feature, moment)
+        frontend = frontend_error_groups(moment, start, feature=feature)
     except Exception as error:
         logger.warning("feature_detail_frontend_failed error=%s", type(error).__name__)
         frontend, partial = [], True

@@ -78,7 +78,8 @@ class FakeLambda:
             "Versions": [
                 {"Version": "$LATEST", "LastModified": "2026-11-25T10:00:00.000+0000"},
                 {"Version": "41", "LastModified": "2026-11-24T09:00:00.000+0000", "Description": ""},
-                {"Version": "42", "LastModified": "2026-11-25T08:30:00.000+0000", "Description": "abc123"},
+                {"Version": "42", "LastModified": "2026-11-25T08:30:00.000+0000", "Description": "abc123 Gzip answers"},
+                {"Version": "42", "LastModified": "2026-11-25T08:30:00.000+0000", "Description": "abc123 Gzip answers"},
             ]
         }
 
@@ -288,6 +289,7 @@ def test_health_answers_the_agreed_shape_and_statuses(classified, stats_table) -
             values={
                 "req_practice": 3100,
                 "err_practice": 6,
+                "p50_practice": 320,
                 "p95_practice": 1900,
                 "sreq_practice": 120,
                 "sp95_practice": 1800,
@@ -306,6 +308,7 @@ def test_health_answers_the_agreed_shape_and_statuses(classified, stats_table) -
                     "StateValue": "ALARM",
                     "StateUpdatedTimestamp": now - timedelta(minutes=5),
                     "StateReason": "threshold crossed",
+                    "AlarmDescription": "voice: error rate above 1% for 15 minutes",
                 },
                 {"AlarmName": "stoa-api-5xx", "StateValue": "OK", "StateUpdatedTimestamp": now},
             ],
@@ -325,8 +328,9 @@ def test_health_answers_the_agreed_shape_and_statuses(classified, stats_table) -
     by_key = {item["key"]: item for item in body["features"]}
     practice = by_key["practice"]
     assert set(practice) == {
-        "key", "status", "requests", "errorRate", "p95Ms", "p95LimitMs", "spark", "probe", "openAlarms"
+        "key", "status", "requests", "errorRate", "p50Ms", "p95Ms", "p95LimitMs", "spark", "probe", "openAlarms"
     }
+    assert practice["p50Ms"] == 320 and by_key["auth"]["p50Ms"] is None
     assert practice["requests"] == 3100
     assert practice["errorRate"] == round(6 / 3100, 4)
     assert practice["p95Ms"] == 1900 and practice["p95LimitMs"] == 1500
@@ -351,11 +355,14 @@ def test_health_answers_the_agreed_shape_and_statuses(classified, stats_table) -
         "state": "ALARM",
         "since": health_reader.iso(now - timedelta(minutes=5)),
         "reason": "threshold crossed",
+        "description": "voice: error rate above 1% for 15 minutes",
     }
-    assert body["alarms"][1]["feature"] is None
-    assert body["deploys"][0] == {"at": "2026-11-25T08:30:00Z", "release": "abc123"}
-    assert body["deploys"][1]["release"] == "v41"
-    assert body["frontendErrors"] == {"total": 7}
+    assert body["alarms"][1]["feature"] is None and body["alarms"][1]["description"] is None
+    assert body["deploys"] == [
+        {"at": "2026-11-25T08:30:00Z", "release": "v42", "label": "abc123 Gzip answers"},
+        {"at": "2026-11-24T09:00:00Z", "release": "v41", "label": None},
+    ]
+    assert body["frontendErrors"] == {"total": 7, "items": []}
     assert len(cloudwatch.calls) == 1
 
 
@@ -506,3 +513,70 @@ def test_the_console_query_string_reaches_the_overview(days, classified, stats_t
 
 def test_an_unknown_day_span_is_refused(classified, stats_table) -> None:
     assert _app(ADMIN).get("/admin/analytics/overview?days=8").status_code == 422
+
+
+# ── 134-R1: stale probes, frontend error top five ────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "ages,expected",
+    [((20, 25), "ok"), ((16, 120), "ok"), ((5, 10), "bad"), ((5, 20), "ok")],
+    ids=["both-stale", "just-stale", "both-fresh", "one-fresh"],
+)
+def test_only_fresh_probe_failures_turn_a_feature_red(ages, expected, classified, stats_table) -> None:
+    now = datetime.now(UTC).replace(second=0, microsecond=0)
+    _install(FakeCloudWatch(values={"req_auth": 50, "err_auth": 0, "p95_auth": 100}))
+    for minutes in ages:
+        _probe(stats_table, now - timedelta(minutes=minutes), "auth", "login", False, 300)
+
+    body = _app(ADMIN).get("/admin/system/health").json()
+    auth = next(item for item in body["features"] if item["key"] == "auth")
+
+    assert auth["status"] == expected
+    assert auth["probe"]["ok"] is False
+    assert auth["probe"]["lastRunAt"] == health_reader.iso(now - timedelta(minutes=ages[0]))
+
+
+def _frontend_error(table: FakeTable, at: datetime, digest: str, route: str = "/map", index: int = 0) -> None:
+    table.seed(
+        {
+            "PK": f"DAY#{at.date().isoformat()}",
+            "SK": f"{at.isoformat()}#{digest}{index}",
+            "name": "frontend_error",
+            "route": route,
+            "props": {"route": route, "message_hash": digest, "message": f"boom {digest}", "release": "r9"},
+        }
+    )
+
+
+def test_health_lists_the_five_most_frequent_frontend_errors(classified, stats_table) -> None:
+    now = datetime.now(UTC).replace(second=0, microsecond=0)
+    _install()
+    for rank, digest in enumerate(["a", "b", "c", "d", "e", "f"]):
+        for index in range(6 - rank):
+            _frontend_error(stats_table, now - timedelta(minutes=10 + index), digest, index=index)
+    _frontend_error(stats_table, now - timedelta(hours=3), "old")
+    _frontend_error(stats_table, now - timedelta(hours=3), "old", index=1)
+    stats_table.seed({"PK": f"DAY#{now.date().isoformat()}", "SK": f"{now.isoformat()}#x", "name": "page_viewed"})
+
+    items = _app(ADMIN).get("/admin/system/health?window=1h").json()["frontendErrors"]["items"]
+
+    assert [item["messageHash"] for item in items] == ["a", "b", "c", "d", "e"]
+    assert items[0] == {
+        "messageHash": "a", "message": "boom a", "route": "/map", "release": "r9", "count": 6,
+        "lastAt": health_reader.iso(now - timedelta(minutes=10)),
+    }
+
+
+def test_frontend_errors_read_only_the_window_days(stats_table) -> None:
+    now = datetime(2026, 11, 26, 12, 0, tzinfo=UTC)
+    _frontend_error(stats_table, now - timedelta(days=6), "week")
+    _frontend_error(stats_table, now - timedelta(days=8), "too-old")
+
+    for window, partitions in (("1h", 2), ("24h", 2), ("7d", 8)):
+        stats_table.requests.clear()
+        start = now - timedelta(seconds=health_reader.WINDOWS[window][0])
+        found = health_reader.frontend_error_groups(now, start)
+        queries = [request for operation, request in stats_table.requests if operation == "query"]
+        assert len(queries) == partitions
+        assert [item["messageHash"] for item in found] == (["week"] if window == "7d" else [])
