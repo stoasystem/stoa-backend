@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from fakes.dynamodb import FakeTable, without_owner_registry
 from stoa.db import table as db_table
+from stoa.db.repositories import question_repo
 from stoa.routers import admin, teachers
 from stoa.services import help_requests
 from actor_helpers import install_actor_overrides
@@ -39,43 +40,38 @@ def _help_requests_table(*records: dict) -> FakeTable:
     return table
 
 
-class FakeAdminTable:
-    def scan(self, **kwargs):
-        projection = kwargs.get("ProjectionExpression", "")
-        if projection == "#role":
-            return {
-                "Items": [
-                    {"role": "student"},
-                    {"role": "teacher"},
-                    {"role": "parent"},
-                ]
-            }
-        return {
-            "Items": [
-                {
-                    "status": "resolved",
-                    "teacher_requested_at": "2026-06-08T08:00:00+00:00",
-                    "teacher_first_replied_at": "2026-06-08T08:10:00+00:00",
-                    "sla_request_to_takeover_seconds": 300,
-                    "sla_request_to_first_reply_seconds": 600,
-                    "sla_request_to_resolved_seconds": 1200,
-                    "teacher_first_reply_sla_bucket": "within_target",
-                },
-                {
-                    "status": "teacher_active",
-                    "teacher_requested_at": "2026-06-08T08:00:00+00:00",
-                    "teacher_first_replied_at": "2026-06-08T08:35:00+00:00",
-                    "sla_request_to_takeover_seconds": 900,
-                    "sla_request_to_first_reply_seconds": 2100,
-                    "teacher_first_reply_sla_bucket": "breached",
-                },
-                {"status": "ai_answered"},
-            ]
-        }
+def _question_table() -> FakeTable:
+    """Legacy question rows, in GSI-Listing as the census reads them (card 133)."""
+    table = FakeTable()
+    for index, row in enumerate(
+        (
+            {
+                "status": "resolved",
+                "teacher_requested_at": "2026-06-08T08:00:00+00:00",
+                "teacher_first_replied_at": "2026-06-08T08:10:00+00:00",
+                "sla_request_to_takeover_seconds": 300,
+                "sla_request_to_first_reply_seconds": 600,
+                "sla_request_to_resolved_seconds": 1200,
+                "teacher_first_reply_sla_bucket": "within_target",
+            },
+            {
+                "status": "teacher_active",
+                "teacher_requested_at": "2026-06-08T08:00:00+00:00",
+                "teacher_first_replied_at": "2026-06-08T08:35:00+00:00",
+                "sla_request_to_takeover_seconds": 900,
+                "sla_request_to_first_reply_seconds": 2100,
+                "teacher_first_reply_sla_bucket": "breached",
+            },
+            {"status": "ai_answered"},
+        )
+    ):
+        stored = {"PK": f"QUESTION#q-{index}", "SK": "META", "entity_type": "question", **row}
+        table.seed({**stored, **question_repo.listing_fields(stored)})
+    return table
 
 
 def test_admin_stats_exposes_aggregate_teacher_sla_without_content(monkeypatch):
-    db_table.install(FakeAdminTable())
+    db_table.install(_question_table())
 
     client = _app(admin.router, "/admin", {"sub": "admin-1", "role": "admin"})
     response = client.get("/admin/stats")

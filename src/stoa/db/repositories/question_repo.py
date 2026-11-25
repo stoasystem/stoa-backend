@@ -104,23 +104,44 @@ QUESTION_CENSUS_FIELDS = (
 )
 
 
+# The legacy question rows are found through GSI-Listing (card 133): `listing`
+# names the list and `listed_at` is when the question was created. Nothing
+# writes a question any more, so the keys come from the one-off backfill
+# (`scripts/backfill_listing_index_admin.py`); a tombstone keeps neither.
+LISTING_INDEX = "GSI-Listing"
+LISTING_NAME = "question_meta"
+_LISTING_INDEX_KEY = ("PK", "SK", "listing", "listed_at")
+_LISTED_AT_UNKNOWN = "1970-01-01T00:00:00Z"
+
+
+def listing_fields(row: Mapping[str, object]) -> dict[str, str]:
+    """The GSI-Listing keys a legacy question row carries; none for any other row."""
+    if row.get("SK") != "META" or not str(row.get("PK", "")).startswith("QUESTION#"):
+        return {}
+    created_at = row.get("created_at")
+    listed_at = created_at if isinstance(created_at, str) and created_at else _LISTED_AT_UNKNOWN
+    return {"listing": LISTING_NAME, "listed_at": listed_at}
+
+
 def question_meta_census(
     *, page_budget: int, table: object | None = None
 ) -> tuple[list[QuestionItem], bool]:
-    """Status and response times of every `META` row, and whether the walk finished.
+    """Status and response times of every legacy question, and whether the read finished.
 
-    `META` is not only questions (an invitation is a `META` row too), so a caller
-    keeps the rows whose status is a question status. A walk that ran out of pages
+    One query of the question list in GSI-Listing, so what it reads follows how
+    many questions there are, not the size of the table. A caller keeps the
+    rows whose status is a question status. A read that ran out of pages
     answers False: counting from it would be a sample presented as a total.
     """
     target = _table(table)
     rows: list[QuestionItem] = []
     for page in islice(
         _pages(
-            "scan",
+            "query",
             target,
-            FilterExpression="SK = :meta",
-            ExpressionAttributeValues={":meta": "META"},
+            key=_LISTING_INDEX_KEY,
+            IndexName=LISTING_INDEX,
+            KeyConditionExpression=Key("listing").eq(LISTING_NAME),
             ProjectionExpression=", ".join(["#s", *QUESTION_CENSUS_FIELDS]),
             ExpressionAttributeNames={"#s": "status"},
         ),
