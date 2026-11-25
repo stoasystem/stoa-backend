@@ -373,6 +373,11 @@ class _PurgeRepository:
     ) -> list[dict[str, Any]]:
         return []
 
+    def delete_empty_storage_usage(
+        self, _owner_id: str, *, account_fence_generation: int
+    ) -> bool:
+        return True
+
 
 def test_purge_hook_returns_typed_independent_progress_without_aggregate_authority(
     monkeypatch,

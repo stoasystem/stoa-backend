@@ -1640,10 +1640,6 @@ def create_provider_revoke_debt(
         "created_at": now_iso,
     }
     target = table or db_table.table()
-    hook = getattr(target, "create_provider_revoke_debt", None)
-    if callable(hook):
-        hook(item)
-        return
     try:
         _transact(
             [
@@ -1687,10 +1683,6 @@ def complete_provider_revoke_debt(
     now_iso = _valid_lifecycle_timestamp(now_iso)
     target = table or db_table.table()
     key = {"PK": f"USER#{user_id}", "SK": f"PROVIDER_REVOKE#{generation:020d}"}
-    hook = getattr(target, "complete_provider_revoke_debt", None)
-    if callable(hook):
-        hook(key, user_id, generation, now_iso)
-        return
     try:
         _transact(
             [
@@ -1759,10 +1751,6 @@ def close_unused_provider_revoke_debt(
         or existing.get("status") != "pending"
     ):
         return False
-    hook = getattr(target, "close_unused_provider_revoke_debt", None)
-    if callable(hook):
-        hook(key, user_id, generation, closed_at)
-        return True
     _transact(
         [
             deletion_fence_condition(user_id, generation),
