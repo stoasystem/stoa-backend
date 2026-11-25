@@ -1230,17 +1230,20 @@ def _rank_weak_topics(
     mistakes: list[dict[str, Any]],
     asked: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
+    """The week's weak topics, most often met first.
+
+    Only knowledge points and topics count. A question's subject and a
+    mistake's subject are not topics (#631): practice rows store `mathematics`,
+    which then headed the list. A mistake without a topic is not counted.
+    """
     counter: Counter[str] = Counter()
     for record in asked or []:
         counter.update(topic for topic in record.get("knowledge_points", []) if topic)
     for question in questions:
         counter.update(topic for topic in question.get("knowledge_points", []) if topic)
-        if question.get("subject"):
-            counter[question["subject"]] += 1
     for mistake in mistakes:
-        for key in ("topic_id", "subject_id"):
-            if mistake.get(key):
-                counter[mistake[key]] += 1
+        if mistake.get("topic_id"):
+            counter[mistake["topic_id"]] += 1
     return [
         {"topic": topic, "count": count}
         for topic, count in sorted(counter.items(), key=lambda item: (-item[1], item[0]))

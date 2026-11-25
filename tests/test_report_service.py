@@ -315,11 +315,48 @@ def test_mixed_weekly_activity_aggregates_metrics_and_topics(monkeypatch):
         "practiceLessonsCompleted": 1,
         "mistakesLogged": 1,
     }
-    assert payload["weakTopics"][:2] == [
+    # The subject is not a weak topic (#631).
+    assert payload["weakTopics"] == [
         {"topic": "fractions", "count": 3},
-        {"topic": "math", "count": 3},
+        {"topic": "ratios", "count": 1},
     ]
     assert [activity["id"] for activity in payload["activities"]][:2] == ["conv-1", "challenge-1"]
+
+
+def test_weak_topics_count_knowledge_points_and_mistake_topics_only():
+    # Practice rows store the lesson's subject as `mathematics`; a question
+    # carries `math`. Neither is a topic, and a mistake with no topic is not
+    # counted at all (#631).
+    ranked = report_service._rank_weak_topics(
+        questions=[
+            {"subject": "math", "knowledge_points": ["fractions", "ratios"]},
+            {"subject": "math", "knowledge_points": ["fractions", ""]},
+            {"subject": "physics"},
+        ],
+        mistakes=[
+            {"subject_id": "mathematics", "topic_id": "geometry"},
+            {"subject_id": "mathematics", "topic_id": "fractions"},
+            {"subject_id": "mathematics"},
+            {"subject_id": "mathematics", "topic_id": ""},
+        ],
+        asked=[{"knowledge_points": ["geometry", "percentages"]}],
+    )
+
+    assert ranked == [
+        {"topic": "fractions", "count": 3},
+        {"topic": "geometry", "count": 2},
+        {"topic": "percentages", "count": 1},
+        {"topic": "ratios", "count": 1},
+    ]
+
+
+def test_weak_topics_of_a_week_with_only_subjects_are_empty():
+    ranked = report_service._rank_weak_topics(
+        questions=[{"subject": "math", "knowledge_points": []}],
+        mistakes=[{"subject_id": "mathematics"}],
+    )
+
+    assert ranked == []
 
 
 def test_unlinked_student_raises(monkeypatch):

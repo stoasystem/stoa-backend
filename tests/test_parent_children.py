@@ -962,6 +962,58 @@ def test_parent_child_summary_empty_state(monkeypatch):
     }
 
 
+def test_parent_child_summary_weak_topics_leave_subjects_out(monkeypatch):
+    """A subject is not a weak topic: not a mistake's, and not one an older
+    weekly report stored among its weak points (#631)."""
+    monkeypatch.setattr(
+        parents.question_repo,
+        "list_by_student",
+        lambda child_id, limit=20, last_key=None: {
+            "Items": [
+                {
+                    "PK": "QUESTION#q-1",
+                    "SK": "META",
+                    "question_id": "q-1",
+                    "status": "ai_answered",
+                    "subject": "math",
+                    "knowledge_points": ["fractions"],
+                    "created_at": "2026-06-02T10:00:00+00:00",
+                }
+            ]
+        },
+    )
+    fake_evidence.install(
+        monkeypatch,
+        fake_evidence.evidence(
+            "child-1",
+            attempts=[
+                # Practice rows store the lesson's subject as `mathematics`.
+                {
+                    "challenge_id": "m-1",
+                    "topic_id": "geometry",
+                    "subject_id": "mathematics",
+                    "created_at": "2026-06-02T08:30:00+00:00",
+                },
+                {
+                    "challenge_id": "m-2",
+                    "subject_id": "mathematics",
+                    "created_at": "2026-06-02T08:40:00+00:00",
+                },
+            ],
+        ),
+    )
+    monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
+    report = _report()
+    report["weak_knowledge_points"] = ["mathematics", "fractions", "Mathematik", "math"]
+    monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: report)
+
+    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
+    response = client.get("/parents/me/children/child-1/summary")
+
+    assert response.status_code == 200
+    assert response.json()["weakTopics"] == ["fractions", "geometry"]
+
+
 def test_parent_child_summary_rejects_unlinked_before_data_reads(monkeypatch):
 
     def fail(*args, **kwargs):
