@@ -154,6 +154,9 @@ def put_usage_event(
                     },
                 ],
                 generation=account_fence_generation,
+                # The event's key is its idempotency key: sent again, it is
+                # the same event, or refused as one already there (#628).
+                resend_own_conflicts=True,
                 table=target,
             )
             return True

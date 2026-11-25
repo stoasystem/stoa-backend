@@ -324,6 +324,35 @@ def test_anything_but_a_busy_shared_row_is_not_sent_again(pauses, reasons):
     assert pauses == []
 
 
+@pytest.mark.parametrize(
+    "reasons",
+    [["None", "TransactionConflict", "None"], ["TransactionConflict", "TransactionConflict", "None"]],
+    ids=["own-conflict", "fence-and-own"],
+)
+def test_a_write_that_reads_nothing_first_is_sent_again_when_its_own_row_is_busy(
+    pauses, reasons
+):
+    """Sent again, a write built from no read is the same write (#628)."""
+    busy = _BusyFor(reasons, times=1)
+
+    db_table.fenced(OWNER, [_create()], resend_own_conflicts=True, table=busy)
+
+    assert busy.rows[("THING#1", "META")]["value"] == "v"
+    assert busy.sent == 2
+    assert busy.attempts[0] == busy.attempts[1]
+
+
+def test_a_write_that_may_be_sent_again_still_stops_at_its_own_condition(pauses):
+    busy = _BusyFor(["None", "ConditionalCheckFailed", "None"], times=1)
+
+    with pytest.raises(db_table.WriteRefused) as refused:
+        db_table.fenced(OWNER, [_create()], resend_own_conflicts=True, table=busy)
+
+    assert refused.value.failed_conditions == (0,)
+    assert busy.sent == 1
+    assert pauses == []
+
+
 def test_a_closed_fence_is_not_sent_again(pauses):
     busy = _BusyFor(["ConditionalCheckFailed", "None", "None"], times=1)
 

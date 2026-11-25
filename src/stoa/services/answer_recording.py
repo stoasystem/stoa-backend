@@ -33,8 +33,10 @@ from datetime import datetime, timezone
 import logging
 from typing import Any
 
+from stoa.db import table as db_table
 from stoa.db.repositories import practice_repo
 from stoa.models.practice import PracticeAttemptResult
+from stoa.rule_violation import current_correlation_id
 from stoa.services import (
     answer_judging,
     curriculum_analytics_service,
@@ -186,8 +188,15 @@ def answer_practice(
         )
         result = practice_projection_service.build_attempt_result(receipt)
     except Exception as error:  # noqa: BLE001
-        # The type only: the error's text may quote the answer or the provider.
-        logger.warning("Practice attempt persistence failed error=%s", type(error).__name__)
+        # The type and the table's codes only: the error's text may quote the
+        # answer or the provider. The correlation id is the one the 503 carries,
+        # so a refusal the student saw can be found here (#628).
+        logger.warning(
+            "Practice attempt persistence failed error=%s reasons=%s correlation_id=%s",
+            type(error).__name__,
+            _refusal_reasons(error),
+            current_correlation_id(),
+        )
         raise ReceiptUnavailable from error
 
     curriculum_analytics_service.record_practice_attempt(
@@ -278,6 +287,15 @@ def record_practice_usage(
         )
     except Exception:  # noqa: BLE001
         logger.warning("Practice usage ledger write failed", exc_info=True)
+
+
+def _refusal_reasons(error: Exception) -> str:
+    """The table's own code per operation of a refused write, or `-` for anything else."""
+    if isinstance(error, db_table.WriteRefused) and error.reasons:
+        return ",".join(f"{index}:{reason.code}" for index, reason in enumerate(error.reasons))
+    if isinstance(error, (db_table.WriteRefused, db_table.TableUnavailable)):
+        return error.code
+    return "-"
 
 
 def _asked_ai(student_id: str, challenge_id: str, conversation_id: str | None) -> bool:

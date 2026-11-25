@@ -377,6 +377,7 @@ def fenced(
     any_generation: bool = False,
     also: Mapping[str, int | None] | None = None,
     rows: Iterable[Mapping[str, Any]] = (),
+    resend_own_conflicts: bool = False,
     table: object | None = None,
 ) -> None:
     """Commit `operations` only while `owner`'s account fence is active.
@@ -397,13 +398,16 @@ def fenced(
       each with its generation or `None` to read it.
     - `rows`: rows as they will stand after the write, for the owner registry
       (below). Required for an Update that sets an account pointer.
+    - `resend_own_conflicts`: the caller's operations were built without a read
+      they depend on, so sending them again later is the same write. A
+      conflict on one of them is then waited out like a busy fence (#628).
 
     Every write of an account checks the same fence row, so two of its writes at
     the same moment can cancel each other (`TransactionConflict` on the fence or
     on a registry row). Nothing was written then, and the same transaction is sent
     again after a short random pause, up to `FENCE_CONFLICT_ATTEMPTS` times in
     all (#563). A conflict on one of the caller's own operations is the caller's
-    to handle and is not retried here.
+    to handle and is not retried here, unless it says `resend_own_conflicts`.
 
     The write also registers where it went (#397): for every partition a Put
     or Update touches that is not one of the account's own derived partitions,
@@ -455,7 +459,9 @@ def fenced(
     own_positions = range(len(conditions), len(conditions) + len(own))
     try:
         _transact_through_shared_conflicts(
-            [*conditions, *own_and_registry], own_positions, table=table
+            [*conditions, *own_and_registry],
+            range(0) if resend_own_conflicts else own_positions,
+            table=table,
         )
     except WriteRefused as exc:
         fence_reasons = exc.reasons[: len(conditions)]
@@ -524,10 +530,11 @@ def _transact_through_shared_conflicts(
 ) -> None:
     """`transact`, sent again while the only cause is a busy shared row.
 
-    `own_positions` are the caller's operations; every other position is a fence
-    condition or a registry row that each write of the account touches. The
-    transaction is resent unchanged: a cancelled one wrote nothing, and its
-    conditions are evaluated afresh.
+    `own_positions` are the caller's operations, whose conflicts are the caller's
+    to handle; every other position is a fence condition or a registry row that
+    each write of the account touches - or a caller's operation it may be sent
+    again for (`resend_own_conflicts`). The transaction is resent unchanged: a
+    cancelled one wrote nothing, and its conditions are evaluated afresh.
     """
     for attempt in range(1, FENCE_CONFLICT_ATTEMPTS + 1):
         try:
