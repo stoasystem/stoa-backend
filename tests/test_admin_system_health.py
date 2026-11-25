@@ -494,3 +494,15 @@ def test_routes_do_not_touch_the_main_table(classified, stats_table) -> None:
     _app(ADMIN).get("/admin/system/health")
     _app(ADMIN).get("/admin/system/features/auth")
     assert main.calls["put_item"] == 0 and main.calls["scan"] == 0
+
+
+@pytest.mark.parametrize("days", ["7", "30", "90"])
+def test_the_console_query_string_reaches_the_overview(days, classified, stats_table) -> None:
+    """Card 134: `days` arrives as text; as `Literal[7, 30, 90]` every request was a 422."""
+    response = _app(ADMIN).get(f"/admin/analytics/overview?days={days}&role=student")
+    assert response.status_code == 200, response.text
+    assert response.json()["days"] == int(days)
+
+
+def test_an_unknown_day_span_is_refused(classified, stats_table) -> None:
+    assert _app(ADMIN).get("/admin/analytics/overview?days=8").status_code == 422
