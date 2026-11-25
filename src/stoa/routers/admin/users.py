@@ -136,12 +136,11 @@ async def list_users(
 ):
     """One page of accounts, grouped by role, with their confirmed parent links.
 
-    Card 002 #7: the links are resolved one account at a time, so the cost of a
-    page is the page size times the links behind it, not the page size. Measured
-    on a full page of parents with three children each: 3201 DynamoDB round trips,
-    against a 29 second API Gateway ceiling. The number is pinned by
-    tests/test_admin_user_list_read_amplification.py so it cannot grow unnoticed;
-    batching it down needs `current_relationship.judge`, not this file.
+    Card 133: the accounts are a query of GSI-Listing, and their links one link
+    query per account plus one batched read of every link row and profile behind
+    them (`current_relationship.current_relationships_of`). Measured on a full page
+    of parents with three children each: 221 DynamoDB round trips, down from 3207.
+    The number is pinned by tests/test_admin_user_list_read_amplification.py.
     """
     del actor
     return account_listing.account_page(

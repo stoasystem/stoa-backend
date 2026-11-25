@@ -206,14 +206,17 @@ class AccountPage:
     next_cursor: str | None
 
 
-# One scan page is rows read, not accounts found: `Limit` is applied before the
-# filter, so on a table whose lessons and attempts outnumber its profiles a page
-# can hold no account at all. The walk follows the continuation key until the
-# requested page is full, and stops at a budget so it cannot become a table walk.
+# Card 133: the list is a query of the profiles' own partition of GSI-Listing,
+# newest first, not a scan of the table. One page is still rows read and not
+# accounts kept - the status and keyword filters run afterwards - so the walk
+# follows the continuation key until the page is full, within a budget.
 ACCOUNT_LIST_SCAN_PAGE_SIZE = 200
 ACCOUNT_LIST_SCAN_MAX_PAGES = 25
 
+ACCOUNT_LIST_INDEX = "GSI-Listing"
+ACCOUNT_LIST_INDEX_KEY = ("PK", "SK", *account_deletion_repo.ACCOUNT_LISTING_FIELDS)
 
+# A cursor from the scan this replaced holds the base key alone and is refused.
 ACCOUNT_LIST_SCOPE = "admin_accounts"
 
 
@@ -238,6 +241,27 @@ def _within_created_range(
     return True
 
 
+def _cursor_within(
+    position: Mapping[str, object], created_from: str | None, created_to: str | None
+) -> bool:
+    """A cursor's position lies in the partition and range this read asks for."""
+    listed_at = position.get("listed_at")
+    if position.get("listing") != account_deletion_repo.ACCOUNT_LISTING:
+        return False
+    if not isinstance(listed_at, str):
+        return False
+    return not (created_from and listed_at < created_from) and not (
+        created_to and listed_at > created_to
+    )
+
+
+def _check_account_cursor(cursor: str) -> None:
+    try:
+        db_table.read_page_token(cursor, ACCOUNT_LIST_SCOPE, key=ACCOUNT_LIST_INDEX_KEY)
+    except db_table.PageTokenInvalid as exc:
+        raise InvalidAccountCursor("account list cursor is not readable") from exc
+
+
 def list_accounts(
     *,
     limit: int,
@@ -249,31 +273,48 @@ def list_accounts(
     cursor: str | None = None,
     table: object | None = None,
 ) -> AccountPage:
-    """Up to `limit` profiles that pass every filter given, in table order.
+    """Up to `limit` profiles that pass every filter given, newest first.
 
+    Read from GSI-Listing, which is eventually consistent: an account opened a
+    moment ago can be missing from the list for that moment. `created_from` and
+    `created_to` bound the index's sort key, inclusive, as they bound `created_at`.
     `next_cursor` resumes right after the last profile returned, so a page neither
-    repeats a profile nor skips the rest of the scan page it came from. It is also
-    set when the scan budget runs out before the page is full, at the point the walk
+    repeats a profile nor skips the rest of the index page it came from. It is also
+    set when the page budget runs out before the page is full, at the point the walk
     stopped: a short page with a cursor means "keep going", not "that was all".
-    Raises `InvalidAccountCursor` for a cursor this function did not produce.
+    Raises `InvalidAccountCursor` for a cursor this function did not produce, the
+    scan's cursors from before card 133 included.
     """
     target = table or db_table.table()
-    filter_expr = "#entity = :profile"
-    attr_names = {"#entity": "SK"}
-    attr_values: dict[str, object] = {":profile": "PROFILE"}
-    if role:
-        filter_expr += " AND #role = :role"
-        attr_names["#role"] = "role"
-        attr_values[":role"] = role
-    scan_kwargs: dict[str, object] = {
-        "FilterExpression": filter_expr,
-        "ExpressionAttributeNames": attr_names,
-        "ExpressionAttributeValues": attr_values,
+    if created_from and created_to and created_from > created_to:
+        # An empty range is no query: the table refuses a `between` that runs backwards.
+        if cursor:
+            _check_account_cursor(cursor)
+        return AccountPage([], None)
+    key_condition = Key("listing").eq(account_deletion_repo.ACCOUNT_LISTING)
+    if created_from and created_to:
+        key_condition &= Key("listed_at").between(created_from, created_to)
+    elif created_from:
+        key_condition &= Key("listed_at").gte(created_from)
+    elif created_to:
+        key_condition &= Key("listed_at").lte(created_to)
+    query_kwargs: dict[str, object] = {
+        "IndexName": ACCOUNT_LIST_INDEX,
+        "KeyConditionExpression": key_condition,
+        "ScanIndexForward": False,
         "Limit": ACCOUNT_LIST_SCAN_PAGE_SIZE,
     }
+    if role:
+        query_kwargs["FilterExpression"] = Attr("role").eq(role)
     try:
         walk = db_table.pages(
-            "scan", token=cursor or None, scope=ACCOUNT_LIST_SCOPE, table=target, **scan_kwargs
+            "query",
+            token=cursor or None,
+            scope=ACCOUNT_LIST_SCOPE,
+            key=ACCOUNT_LIST_INDEX_KEY,
+            within=lambda position: _cursor_within(position, created_from, created_to),
+            table=target,
+            **query_kwargs,
         )
     except db_table.PageTokenInvalid as exc:
         raise InvalidAccountCursor("account list cursor is not readable") from exc
@@ -282,7 +323,9 @@ def list_accounts(
     page_key: UserItem | None = None
     for page in islice(walk, ACCOUNT_LIST_SCAN_MAX_PAGES):
         for row in page.items:
-            row_key = {"PK": row.pop("PK", None), "SK": row.pop("SK", None)}
+            row_key = {name: row.pop(name, None) for name in ACCOUNT_LIST_INDEX_KEY}
+            if row_key["SK"] != "PROFILE":
+                continue
             if status and str(row.get("account_status") or "") != status:
                 continue
             if keyword and not _keyword_matches(row, keyword):
@@ -308,16 +351,23 @@ def profile_role_census(
     A single scan answers from at most one megabyte of rows read, so on any table
     past that size one call is a sample and not a census. Counting from a sample
     produces a number that looks like an answer, which is worse than no number.
+    Since card 133 the walk is the profiles' partition of GSI-Listing, not the table.
     """
     rows: list[UserItem] = []
     for page in islice(
         db_table.pages(
-            "scan",
+            "query",
             table=table or db_table.table(),
+            key=ACCOUNT_LIST_INDEX_KEY,
+            IndexName=ACCOUNT_LIST_INDEX,
+            KeyConditionExpression="#listing = :listing",
             FilterExpression="SK = :profile",
-            ExpressionAttributeValues={":profile": "PROFILE"},
+            ExpressionAttributeValues={
+                ":listing": account_deletion_repo.ACCOUNT_LISTING,
+                ":profile": "PROFILE",
+            },
             ProjectionExpression="#role",
-            ExpressionAttributeNames={"#role": "role"},
+            ExpressionAttributeNames={"#role": "role", "#listing": "listing"},
         ),
         page_budget,
     ):
@@ -404,6 +454,44 @@ def record_sign_in(
         ],
         any_generation=True,
     )
+
+
+def add_listing_fields(profile: Mapping[str, object], *, table: object | None = None) -> bool:
+    """Give a profile written before card 133 the GSI-Listing keys it now carries.
+
+    For the one-off backfill (`scripts/backfill_account_listing_index.py`). True
+    when this call wrote them, False when the row already carries both. Written
+    behind the account's fence, on the version that was read, and only while
+    neither key is there: it adds, never overwrites. An account whose deletion
+    began is refused (`AccountDeletionConflict`); its tombstone is in no list.
+    """
+    user_id = str(profile.get("user_id") or "")
+    if not user_id or profile.get("PK") != f"USER#{user_id}" or profile.get("SK") != "PROFILE":
+        raise ValueError("not a profile row")
+    fields = account_deletion_repo.account_listing_fields(profile)
+    if all(name in profile for name in fields):
+        return False
+    db_table.fenced(
+        user_id,
+        [
+            profile_update_operation(
+                user_id,
+                update_expression="SET #listing = :listing, #listed_at = :listed_at",
+                expression_attribute_names={"#listing": "listing", "#listed_at": "listed_at"},
+                expression_attribute_values={
+                    ":listing": fields["listing"],
+                    ":listed_at": fields["listed_at"],
+                },
+                expected_version=_optional_profile_version(profile.get("version")),
+                additional_condition_expression=(
+                    "attribute_not_exists(#listing) AND attribute_not_exists(#listed_at)"
+                ),
+            )
+        ],
+        any_generation=True,
+        table=table,
+    )
+    return True
 
 
 #: The row beside a teacher's profile that says when they last had STOA open

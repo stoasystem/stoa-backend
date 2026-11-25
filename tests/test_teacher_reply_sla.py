@@ -40,6 +40,12 @@ def _help_requests_table(*records: dict) -> FakeTable:
 
 
 class FakeAdminTable:
+    def query(self, **kwargs):
+        # Card 133: the role census reads the profiles' partition of GSI-Listing.
+        assert kwargs.get("IndexName") == "GSI-Listing"
+        assert kwargs.get("ProjectionExpression") == "#role"
+        return {"Items": [{"role": "student"}, {"role": "teacher"}, {"role": "parent"}]}
+
     def scan(self, **kwargs):
         projection = kwargs.get("ProjectionExpression", "")
         if projection == "#role":

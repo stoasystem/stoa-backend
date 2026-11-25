@@ -19,12 +19,9 @@ from stoa.services import current_relationship, usage_period
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
 
 
-def _account_number_of(user_id: str) -> str:
-    profile = user_repo.get_user(user_id)
-    return str((profile or {}).get("account_number") or "")
-
-
-def _linked_counterparts(profile: Mapping[str, object]) -> list[dict[str, str]]:
+def _linked_counterparts(
+    profile: Mapping[str, object], relationships: current_relationship.CurrentRelationships
+) -> list[dict[str, str]]:
     """Current relationships only, as the judge sees them; a pending request is not one."""
     role = str(profile.get("role") or "")
     user_id = str(profile.get("user_id") or "")
@@ -32,23 +29,42 @@ def _linked_counterparts(profile: Mapping[str, object]) -> list[dict[str, str]]:
         return []
     if role == "parent":
         counterparts = [
-            verdict.student_id for verdict in current_relationship.children_of(user_id)
+            verdict.student_id for verdict in relationships.children.get(user_id, [])
         ]
     elif role == "student":
         counterparts = [
-            verdict.parent_id for verdict in current_relationship.parents_of(user_id)
+            verdict.parent_id for verdict in relationships.parents.get(user_id, [])
         ]
     else:
         return []
     return [
         {
             "userId": counterpart_id,
-            "accountNumber": _account_number_of(counterpart_id),
+            "accountNumber": str(
+                (relationships.profiles.get(counterpart_id) or {}).get("account_number") or ""
+            ),
             "status": parent_link_repo.STATUS_ACTIVE,
         }
         for counterpart_id in counterparts
         if counterpart_id
     ]
+
+
+def _relationships_of(
+    profiles: list[Mapping[str, object]], *, table: object
+) -> current_relationship.CurrentRelationships:
+    """Every listed parent's and student's current relationships, in one batched read (card 133)."""
+
+    def ids(role: str) -> list[str]:
+        return [
+            str(profile.get("user_id") or "")
+            for profile in profiles
+            if str(profile.get("role") or "") == role and profile.get("user_id")
+        ]
+
+    return current_relationship.current_relationships_of(
+        parent_ids=ids("parent"), student_ids=ids("student"), table=table
+    )
 
 
 # Card 002-D / B2: this list answers `student_support_lookup`, the support desk
@@ -124,6 +140,7 @@ def listed_accounts(
         table=table,
     )
 
+    relationships = _relationships_of(profiles, table=table)
     items: list[dict[str, object]] = []
     groups: dict[str, int] = {}
     for profile in profiles:
@@ -133,7 +150,7 @@ def listed_accounts(
             profile, account_status=str(profile.get("account_status") or "")
         )
         item["role"] = row_role
-        item["linkedAccounts"] = _linked_counterparts(profile)
+        item["linkedAccounts"] = _linked_counterparts(profile, relationships)
         # #239: the console lists each account's own end date. Named here on
         # purpose, as `ACCOUNT_LIST_FIELDS` names the rest; null without one.
         item["usagePeriodEndsAt"] = _listed_usage_period_end(profile)
