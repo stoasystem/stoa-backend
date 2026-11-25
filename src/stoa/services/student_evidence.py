@@ -35,11 +35,13 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from types import MappingProxyType
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
 from stoa.db.repositories import practice_repo, review_repo
 from stoa.services import (
+    curriculum_cache,
     curriculum_service,
     error_causes,
     knowledge_mastery_service,
@@ -92,11 +94,13 @@ def indexed_lessons(
     return out
 
 
-def _active_exercise_entries(lesson_id: str) -> list[dict[str, Any]]:
+def _active_exercise_entries(
+    lesson_id: str, challenges: Sequence[Mapping[str, Any]] | None = None
+) -> list[dict[str, Any]]:
     """A lesson's live exercises read through its challenges, for a row with no index."""
     return practice_repo.exercise_index(
         challenge
-        for challenge in practice_repo.get_challenges(lesson_id)
+        for challenge in (practice_repo.get_challenges(lesson_id) if challenges is None else challenges)
         if practice_projection_service.content_state(challenge) != "archived"
     )
 
@@ -104,9 +108,10 @@ def _active_exercise_entries(lesson_id: str) -> list[dict[str, Any]]:
 class Content:
     """The student catalog and its lesson index, each built at most once.
 
-    Either may be handed in already built. Both are built from the lesson rows,
-    which are read once for the two (#496). A lesson the index does not carry
-    is read through its challenges, once.
+    Either may be handed in already built. Both come from the kept student
+    curriculum (`curriculum_cache`), asked for once for the two. A lesson the
+    index does not carry is read through its challenges, once - kept with the
+    curriculum when it was read with it.
     """
 
     def __init__(
@@ -120,12 +125,12 @@ class Content:
         self._catalog = catalog
         self._indexed = indexed
         self._read_through: dict[str, list[dict[str, Any]]] = {}
-        self._lesson_rows: list[dict[str, Any]] | None = None
+        self._snapshot: curriculum_cache.Snapshot | None = None
 
-    def _lessons_read(self) -> list[dict[str, Any]]:
-        if self._lesson_rows is None:
-            self._lesson_rows = practice_repo.get_lessons()
-        return self._lesson_rows
+    def _kept(self) -> curriculum_cache.Snapshot:
+        if self._snapshot is None:
+            self._snapshot = curriculum_cache.current()
+        return self._snapshot
 
     def built(self) -> Content:
         """This content with the catalog and the lesson index both built now."""
@@ -137,14 +142,17 @@ class Content:
     def catalog(self) -> Mapping[str, Any]:
         if self._catalog is None:
             self._catalog = curriculum_service.list_catalog(
-                locale=self.locale, lesson_rows=self._lessons_read()
+                locale=self.locale, snapshot=self._kept()
             )
         return self._catalog
 
     @property
     def indexed(self) -> Mapping[str, Sequence[Mapping[str, Any]]]:
         if self._indexed is None:
-            self._indexed = indexed_lessons(self._lessons_read())
+            kept = self._kept()
+            self._indexed = MappingProxyType(
+                kept.once(("indexed",), lambda: indexed_lessons(kept.lessons))
+            )
         return self._indexed
 
     def rows(self, key: str) -> list[Mapping[str, Any]]:
@@ -163,7 +171,10 @@ class Content:
         if lesson_id in self.indexed:
             return list(self.indexed[lesson_id])
         if lesson_id not in self._read_through:
-            self._read_through[lesson_id] = _active_exercise_entries(lesson_id)
+            kept = (
+                self._snapshot.lesson_challenges(lesson_id) if self._snapshot is not None else None
+            )
+            self._read_through[lesson_id] = _active_exercise_entries(lesson_id, kept)
         return self._read_through[lesson_id]
 
     def exercise_ids(self, lesson_id: str) -> list[str]:
@@ -190,22 +201,30 @@ class Source(Protocol):
 
 
 class _Repositories:
-    """The table, through the repositories; every page of every partition."""
+    """The table, through the repositories; every page of every partition.
+
+    Read on a worker thread (`StudentEvidence.read_all`), each through that
+    thread's own table.
+    """
 
     def progress(self, student_id: str) -> list[dict[str, Any]]:
-        return practice_repo.get_progress(student_id)
+        return curriculum_cache.with_table(practice_repo.get_progress, student_id)
 
     def attempts(self, student_id: str) -> list[dict[str, Any]]:
-        return practice_repo.list_attempts(student_id)
+        return curriculum_cache.with_table(practice_repo.list_attempts, student_id)
 
     def activity(self, student_id: str) -> list[dict[str, Any]]:
-        return practice_repo.list_activity(student_id)
+        return curriculum_cache.with_table(practice_repo.list_activity, student_id)
 
     def star_quiz_outcomes(self, student_id: str) -> list[dict[str, Any]]:
-        return practice_repo.list_star_quiz_outcomes(student_id)
+        return curriculum_cache.with_table(practice_repo.list_star_quiz_outcomes, student_id)
 
     def review_cards(self, student_id: str) -> list[dict[str, Any]]:
-        return review_repo.list_cards(student_id)
+        return curriculum_cache.with_table(review_repo.list_cards, student_id)
+
+
+#: Every partition a `Source` reads.
+PARTITIONS = ("progress", "attempts", "activity", "star_quiz_outcomes", "review_cards")
 
 
 REPOSITORIES: Source = _Repositories()
@@ -425,20 +444,37 @@ class StudentEvidence:
 
     # -- reading ----------------------------------------------------------
 
+    def _read(self, partition: str) -> list[dict[str, Any]] | _Failed:
+        reader: Callable[[str], list[dict[str, Any]]] = getattr(self.source, partition)
+        try:
+            return [dict(row) for row in reader(self.student_id) if isinstance(row, Mapping)]
+        except Exception as error:  # noqa: BLE001
+            return _Failed(error)
+
     def _rows(self, partition: str) -> list[dict[str, Any]]:
         """Every row of one partition, read on first use and then kept."""
         if partition not in self._partitions:
-            reader: Callable[[str], list[dict[str, Any]]] = getattr(self.source, partition)
-            try:
-                self._partitions[partition] = [
-                    dict(row) for row in reader(self.student_id) if isinstance(row, Mapping)
-                ]
-            except Exception as error:  # noqa: BLE001
-                self._partitions[partition] = _Failed(error)
+            self._partitions[partition] = self._read(partition)
         kept = self._partitions[partition]
         if isinstance(kept, _Failed):
             raise kept.error
         return kept  # type: ignore[return-value]
+
+    def read_all(self, partitions: Sequence[str] = PARTITIONS) -> StudentEvidence:
+        """Read these partitions now, side by side, and the content with them.
+
+        What a read would have raised is kept and raised where the partition is
+        asked for, exactly as a partition read on first use.
+        """
+        wanted = [partition for partition in partitions if partition not in self._partitions]
+        outcomes = curriculum_cache.run_all(
+            [self.content.built, *((lambda p=partition: self._read(p)) for partition in wanted)]
+        )
+        for partition, outcome in zip(wanted, outcomes[1:], strict=True):
+            self._partitions[partition] = outcome
+        if isinstance(outcomes[0], Exception):
+            raise outcomes[0]
+        return self
 
     def _once(self, name: str, build: Callable[[], Any]) -> Any:
         if name not in self._derived:
