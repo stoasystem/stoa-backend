@@ -24,20 +24,47 @@ from stoa.db import table as db_table
 from test_account_deletion_branch_coverage import ACCOUNT, WRITER, deleted_by_branch
 
 
-class LiveTable:
-    """The production table as the comparison sees it: a scan, and nothing else."""
+class LiveTable(FakeTable):
+    """The production table as the comparison sees it: once frozen, a scan and nothing else."""
 
-    def __init__(self, table: FakeTable) -> None:
-        self.table = table
-        self.calls: list[str] = []
+    def __init__(self) -> None:
+        super().__init__()
+        self.frozen = False
+        self.asked: list[str] = []
+
+    def _only_scans(self, name: str) -> None:
+        if self.frozen:
+            self.asked.append(name)
+            raise AssertionError(f"the comparison asked the live table for {name}")
 
     def scan(self, **kwargs: Any) -> dict[str, Any]:
-        self.calls.append("scan")
-        return self.table.scan(**kwargs)
+        if self.frozen:
+            self.asked.append("scan")
+        return super().scan(**kwargs)
 
-    def __getattr__(self, name: str) -> Any:
-        self.calls.append(name)
-        raise AssertionError(f"the comparison asked the live table for {name}")
+    def query(self, **kwargs: Any) -> dict[str, Any]:
+        self._only_scans("query")
+        return super().query(**kwargs)
+
+    def get_item(self, **kwargs: Any) -> dict[str, Any]:
+        self._only_scans("get_item")
+        return super().get_item(**kwargs)
+
+    def put_item(self, **kwargs: Any) -> dict[str, Any]:
+        self._only_scans("put_item")
+        return super().put_item(**kwargs)
+
+    def update_item(self, **kwargs: Any) -> dict[str, Any]:
+        self._only_scans("update_item")
+        return super().update_item(**kwargs)
+
+    def delete_item(self, **kwargs: Any) -> dict[str, Any]:
+        self._only_scans("delete_item")
+        return super().delete_item(**kwargs)
+
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        self._only_scans("transact_write_items")
+        super().transact_write_items(TransactItems=TransactItems)
 
 
 class LiveS3:
@@ -62,9 +89,9 @@ class LiveS3:
         raise AssertionError(f"the comparison sent s3:{name}")
 
 
-def _production_like_table() -> FakeTable:
+def _production_like_table() -> LiveTable:
     """One account with a profile and a row of every kind a branch deletes, registered."""
-    table = FakeTable()
+    table = LiveTable()
     table.seed_active_account(ACCOUNT)
     table.seed_active_account(WRITER)
     profile = {
@@ -77,19 +104,19 @@ def _production_like_table() -> FakeTable:
     }
     for row in [profile, *(row for _, row in deleted_by_branch().values())]:
         db_table.fenced(WRITER, [{"Put": {"Item": row}}], table=table)
+    table.frozen = True
     return table
 
 
 def test_the_comparison_only_reads_the_table_and_s3():
-    stored = _production_like_table()
-    before = deepcopy(stored.rows)
-    live, s3 = LiveTable(stored), LiveS3()
+    live, s3 = _production_like_table(), LiveS3()
+    before = deepcopy(live.rows)
 
     with compare.read_only_aws():
         report = compare.run(live, s3, settings=Settings())
 
-    assert set(live.calls) == {"scan"}
-    assert stored.rows == before
+    assert set(live.asked) == {"scan"}
+    assert live.rows == before
     assert set(s3.calls) <= LiveS3.READS
     assert report["accounts_compared"] == 1
     assert report["rows_compared"] >= len(deleted_by_branch())
@@ -99,7 +126,7 @@ def test_the_comparison_only_reads_the_table_and_s3():
 
 def test_every_difference_names_its_row_and_both_actions():
     with compare.read_only_aws():
-        report = compare.run(LiveTable(_production_like_table()), LiveS3(), settings=Settings())
+        report = compare.run(_production_like_table(), LiveS3(), settings=Settings())
 
     for row in report["difference_rows"]:
         assert {"PK", "SK", "type", "old", "new", "reason"} <= row.keys()
