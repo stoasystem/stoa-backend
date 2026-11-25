@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from mangum import Mangum
 
@@ -145,6 +146,11 @@ async def handle_validation_error(_request: Request, exc: RequestValidationError
         status_code=422,
         content={"detail": redacted_validation_errors(exc.errors())},
     )
+
+# Outermost but for CORS: every answer over a kilobyte leaves gzipped when the
+# client accepts it. The student curriculum catalog was 1.08 MB of plain JSON
+# (card 133); Mangum base64-encodes the compressed body for API Gateway.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
 app.add_middleware(
     CORSMiddleware,
