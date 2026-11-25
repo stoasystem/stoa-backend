@@ -121,13 +121,13 @@ def run(
             status, _payload, latency = _attempt(send, base + step.path, step, auth, None)
             results.append({"step": step, "ok": 200 <= status < 300, "status": status, "latency_ms": latency})
 
-    _record(results, moment, emit)
+    _store_probe_results(results, moment, emit)
     failed = [result["step"].step for result in results if not result["ok"]]
     logger.info("synthetic_probe_done steps=%s failed=%s", len(results), ",".join(failed) or "-")
     return {"status": "completed", "steps": len(results), "failed": failed}
 
 
-def _record(results: list[dict[str, Any]], moment: datetime, emit: Callable[[str], None]) -> None:
+def _store_probe_results(results: list[dict[str, Any]], moment: datetime, emit: Callable[[str], None]) -> None:
     at = moment.strftime("%Y-%m-%dT%H:%M:%SZ")
     day = moment.date().isoformat()
     ttl = int(moment.timestamp() + PROBE_TTL.total_seconds())

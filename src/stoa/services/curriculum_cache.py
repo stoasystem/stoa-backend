@@ -21,8 +21,8 @@ table every time.
 The rows are shared: what is handed out is built from them, never them.
 
 `run_all` reads partitions side by side. The boto3 resource is not thread
-safe, so a worker thread reads the real table through the gateway's low-level
-client, which is (`thread_table`); the read meter of the request follows each
+safe, so a worker thread reads the real table through a session of its own
+(`db_table.worker_table`); the read meter of the request follows each
 call into its worker through a copy of the request's context.
 """
 
@@ -39,9 +39,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from boto3.dynamodb.conditions import ConditionExpressionBuilder
-from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
-from boto3.resources.base import ServiceResource
 
 from stoa.db import table as db_table
 from stoa.db.repositories import practice_repo
@@ -86,58 +83,7 @@ def thread_table() -> Any | None:
     """
     if not getattr(_local, "worker", False):
         return None
-    shared = db_table.table()
-    if not isinstance(shared, ServiceResource):
-        return None
-    return ClientTable(db_table.client(), str(getattr(shared, "name", "")))
-
-
-class ClientTable:
-    """`query` as the boto3 table takes and answers it, sent on the gateway's client.
-
-    A low-level client is thread safe where the resource is not, and the
-    gateway's is the metered one.
-    """
-
-    def __init__(self, client: Any, name: str) -> None:
-        self.client = client
-        self.name = name
-
-    def query(self, **request: Any) -> dict[str, Any]:
-        params = dict(request, TableName=self.name)
-        names = dict(params.pop("ExpressionAttributeNames", None) or {})
-        values = dict(params.pop("ExpressionAttributeValues", None) or {})
-        builder = ConditionExpressionBuilder()
-        for name, is_key in (("KeyConditionExpression", True), ("FilterExpression", False)):
-            condition = params.get(name)
-            if condition is not None and not isinstance(condition, str):
-                built = builder.build_expression(condition, is_key_condition=is_key)
-                params[name] = built.condition_expression
-                names.update(built.attribute_name_placeholders)
-                values.update(built.attribute_value_placeholders)
-        if names:
-            params["ExpressionAttributeNames"] = names
-        if values:
-            params["ExpressionAttributeValues"] = _wire(values)
-        if params.get("ExclusiveStartKey") is not None:
-            params["ExclusiveStartKey"] = _wire(params["ExclusiveStartKey"])
-        response = dict(self.client.query(**params))
-        response["Items"] = [_plain(item) for item in response.get("Items") or []]
-        if response.get("LastEvaluatedKey"):
-            response["LastEvaluatedKey"] = _plain(response["LastEvaluatedKey"])
-        return response
-
-
-_serializer = TypeSerializer()
-_deserializer = TypeDeserializer()
-
-
-def _wire(values: Mapping[str, Any]) -> dict[str, Any]:
-    return {key: _serializer.serialize(value) for key, value in values.items()}
-
-
-def _plain(item: Mapping[str, Any]) -> dict[str, Any]:
-    return {key: _deserializer.deserialize(value) for key, value in item.items()}
+    return db_table.worker_table()
 
 
 def with_table(read: Callable[..., Any], *args: Any) -> Any:

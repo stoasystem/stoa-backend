@@ -41,6 +41,7 @@ import json
 import logging
 import random
 import re
+import threading
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -80,6 +81,37 @@ def _resource() -> Any:
 @lru_cache
 def _real_table() -> object:
     return _resource().Table(config.settings().dynamodb_table_name)
+
+
+_worker_tables = threading.local()
+
+
+def _new_worker_table(name: str) -> object:
+    resource = boto3.session.Session().resource(
+        "dynamodb", region_name=config.settings().aws_region
+    )
+    _metered(resource.meta.client)
+    return resource.Table(name)
+
+
+def worker_table() -> object | None:
+    """A table of the calling thread's own, for reads fanned out over threads.
+
+    A boto3 resource is not thread safe, so each worker thread gets a session
+    and a table of its own, metered as the shared one is. `None` while a double
+    is installed: a double is shared as it is.
+    """
+    installed = _installed
+    if installed is not None and not _is_boto_table(installed):
+        return None
+    name = str(getattr(installed, "name", "")) if installed is not None else (
+        config.settings().dynamodb_table_name
+    )
+    tables: dict[str, object] = getattr(_worker_tables, "by_name", None) or {}
+    if name not in tables:
+        tables[name] = _new_worker_table(name)
+        _worker_tables.by_name = tables
+    return tables[name]
 
 
 def _metered(boto_client: Any) -> Any:

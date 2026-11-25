@@ -96,6 +96,7 @@ def build_app_without_analytics() -> FastAPI:
         billing,
         conversations,
         files,
+        monitoring,
         notifications,
         practice,
         questions,
@@ -106,6 +107,7 @@ def build_app_without_analytics() -> FastAPI:
 
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
+    app.include_router(monitoring.router, prefix="/monitoring")
     app.include_router(conversations.router, prefix="/conversations")
     app.include_router(conversations.teacher_help_router, prefix="/teacher-help")
     app.include_router(practice.router, prefix="/practice")

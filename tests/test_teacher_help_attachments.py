@@ -361,6 +361,15 @@ class _BatchReads:
 
     def batch_get_item(self, RequestItems: dict[str, Any]) -> dict[str, Any]:
         keys = RequestItems[self.name]["Keys"]
+        rows = [
+            dict(self.table.rows[(key["PK"], key["SK"])])
+            for key in keys
+            if (key["PK"], key["SK"]) in self.table.rows
+        ]
+        if not any(str(key["PK"]).startswith("ATTACHMENT#") for key in keys):
+            # Card 133: dispatch reads teachers' profiles and fences in a batch too;
+            # only the attachment reads are this double's subject.
+            return {"Responses": {self.name: rows}, "UnprocessedKeys": {}}
         self.calls.append(len(keys))
         if self.fail:
             raise RuntimeError("ProvisionedThroughputExceededException")

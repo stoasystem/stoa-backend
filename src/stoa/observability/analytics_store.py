@@ -73,14 +73,6 @@ def dropped(reason: str, name: str) -> None:
     logger.info("event_category=analytics_event_dropped reason=%s name=%s", reason, safe or "-")
 
 
-def _is_condition_failure(error: Exception) -> bool:
-    response = getattr(error, "response", None)
-    code = (response or {}).get("Error", {}).get("Code") if isinstance(response, dict) else None
-    return code == "ConditionalCheckFailedException" or type(error).__name__ == (
-        "ConditionalCheckFailedException"
-    )
-
-
 def write_event(
     name: str,
     *,
@@ -167,7 +159,8 @@ def _mark_active(target: Any, role: str, pid: str, moment: datetime, day: str, e
 
 def _mark_first(target: Any, role: str, pid: str, day: str, epoch: int) -> None:
     try:
-        target.put_item(
+        db_table.put(
+            table=target,
             Item={
                 "PK": f"FIRST#{pid}",
                 "SK": "FIRST",
@@ -177,6 +170,6 @@ def _mark_first(target: Any, role: str, pid: str, day: str, epoch: int) -> None:
             },
             ConditionExpression="attribute_not_exists(PK)",
         )
-    except Exception as error:
-        if not _is_condition_failure(error):
-            raise
+    except db_table.WriteRefused:
+        # Already marked: the first day stays the first one.
+        return

@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from fakes.dynamodb import FakeTable
 
 from stoa.db import table as db_table
 from stoa.services import curriculum_cache
@@ -214,10 +215,12 @@ def test_a_read_side_by_side_is_metered_for_its_request() -> None:
     assert seen == [meter] * 4
 
 
-def test_a_worker_reads_the_real_table_through_the_gateway_client(
+def test_a_worker_reads_a_table_of_its_own_never_the_shared_resource(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The boto3 resource is not thread safe: a worker never touches the request's."""
+    import threading
+
     import boto3
 
     from stoa.db import table as db_table
@@ -228,8 +231,19 @@ def test_a_worker_reads_the_real_table_through_the_gateway_client(
     ).resource("dynamodb").Table("stoa-main")
     monkeypatch.setattr(shared.meta.client, "query", _refuse_the_shared_resource)
     db_table.install(shared)
-    client = _WireClient()
-    monkeypatch.setattr(db_table, "client", lambda: client)
+    own = FakeTable()
+    own.seed(
+        {"PK": "PROGRESS#student-1", "SK": "LESSON#a", "order": 2},
+        {"PK": "ATTEMPTS#student-1", "SK": "ATTEMPT#a"},
+    )
+    built: list[tuple[str, str]] = []
+
+    def new_worker_table(name: str) -> FakeTable:
+        built.append((name, threading.current_thread().name))
+        return own
+
+    monkeypatch.setattr(db_table, "_new_worker_table", new_worker_table)
+    monkeypatch.setattr(db_table, "_worker_tables", threading.local())
 
     assert curriculum_cache.thread_table() is None
     _here, first, second = curriculum_cache.run_all(
@@ -240,39 +254,15 @@ def test_a_worker_reads_the_real_table_through_the_gateway_client(
         ]
     )
 
-    assert first == second == [{"PK": "P", "SK": "LESSON#a", "order": 2}, {"PK": "P", "SK": "LESSON#b"}]
-    assert [request["TableName"] for request in client.requests] == ["stoa-main"] * 4
-    by_partition: dict[str, list[dict[str, Any]]] = {}
-    for request in client.requests:
-        by_partition.setdefault(request["ExpressionAttributeValues"][":v0"]["S"], []).append(request)
-    progress, attempts = by_partition["PROGRESS#student-1"], by_partition["ATTEMPTS#student-1"]
-    assert progress[0]["KeyConditionExpression"] == "(#n0 = :v0 AND begins_with(#n1, :v1))"
-    assert progress[0]["ExpressionAttributeValues"][":v1"] == {"S": "LESSON#"}
-    assert progress[1]["ExclusiveStartKey"] == {"PK": {"S": "P"}, "SK": {"S": "LESSON#a"}}
-    assert [request.get("ConsistentRead") for request in attempts] == [True, True]
+    assert [row["SK"] for row in first] == ["LESSON#a"]
+    assert [row["SK"] for row in second] == ["ATTEMPT#a"]
+    assert built and all(name == "stoa-main" for name, _thread in built)
+    assert all(thread != threading.main_thread().name for _name, thread in built)
+    assert own.calls["query"] >= 2
 
 
 def _refuse_the_shared_resource(**_request: Any) -> Any:
     raise AssertionError("a worker read through the shared resource")
-
-
-class _WireClient:
-    """A low-level client: wire format in and out, two pages per query."""
-
-    def __init__(self) -> None:
-        self.requests: list[dict[str, Any]] = []
-
-    def query(self, **request: Any) -> dict[str, Any]:
-        self.requests.append(request)
-        if "ExclusiveStartKey" not in request:
-            return {
-                "Items": [{"PK": {"S": "P"}, "SK": {"S": "LESSON#a"}, "order": {"N": "2"}}],
-                "LastEvaluatedKey": {"PK": {"S": "P"}, "SK": {"S": "LESSON#a"}},
-            }
-        return {"Items": [{"PK": {"S": "P"}, "SK": {"S": "LESSON#b"}}]}
-
-
-# -- a publish writes the stamp ---------------------------------------------------------
 
 
 def _published_table(monkeypatch: pytest.MonkeyPatch) -> Any:
