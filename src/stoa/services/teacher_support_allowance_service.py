@@ -161,13 +161,15 @@ def _for_mode(scope: _ResolvedScope, mode: str) -> _ResolvedScope | None:
     if mode == TEXT:
         return replace(scope, mode=TEXT, limit=figure)
     return replace(
-        scope,
-        mode=mode,
-        limit=figure,
-        support_scope_id=_domain_digest(
-            b"stoa.teacher-support.mode-scope.v1", mode, scope.support_scope_id
-        ),
+        scope, mode=mode, limit=figure, support_scope_id=_mode_scope_id(mode, scope.support_scope_id)
     )
+
+
+def _mode_scope_id(mode: str, support_scope_id: str) -> str:
+    """The counter of a mode other than text, beside the scope's own."""
+    if mode == TEXT:
+        return support_scope_id
+    return _domain_digest(b"stoa.teacher-support.mode-scope.v1", mode, support_scope_id)
 
 
 
@@ -565,11 +567,25 @@ def administer_weekly_cases(
     return written.state_version
 
 
+_UNREAD: Any = object()
+
+
+def _assigned_allowance_row_key(beneficiary: str) -> dict[str, str]:
+    return {"PK": f"USER#{beneficiary}", "SK": ASSIGNED_ALLOWANCE_SK}
+
+
+def _assigned_scope_id(beneficiary: str) -> str:
+    # Stable per student: raising the figure must not start the week over, and
+    # the receipt that already spent a case must keep pointing at this scope.
+    return _domain_digest(b"stoa.teacher-support.scope.v1", SUPPORT_SOURCE_ASSIGNED, beneficiary)
+
+
 def _resolve_assigned_scope(
     beneficiary: str,
     student: Mapping[str, object],
     *,
     table: object,
+    raised: dict[str, object] | None = _UNREAD,
 ) -> _ResolvedScope | None:
     """The allowance a student has by being a student here, with no parent in it.
 
@@ -584,7 +600,8 @@ def _resolve_assigned_scope(
     except ValueError:
         return None
 
-    raised = _strong_get(table, {"PK": f"USER#{beneficiary}", "SK": ASSIGNED_ALLOWANCE_SK})
+    if raised is _UNREAD:
+        raised = _strong_get(table, _assigned_allowance_row_key(beneficiary))
     allowance_version: int | None = None
     if raised is not None:
         if raised.get("entity_type") != "teacher_support_assigned_allowance" or raised.get(
@@ -597,13 +614,7 @@ def _resolve_assigned_scope(
     if limit <= 0 and classroom <= 0:
         return None
 
-    # Stable per student: raising the figure must not start the week over, and
-    # the receipt that already spent a case must keep pointing at this scope.
-    support_scope_id = _domain_digest(
-        b"stoa.teacher-support.scope.v1",
-        SUPPORT_SOURCE_ASSIGNED,
-        beneficiary,
-    )
+    support_scope_id = _assigned_scope_id(beneficiary)
     return _ResolvedScope(
         beneficiary_id=beneficiary,
         parent_id="",
@@ -983,6 +994,12 @@ def _read_counter(
         )
     except weekly_counter.CounterUnavailable as exc:
         raise _DependencyFailure(str(exc)) from None
+    return _checked_counter(scope, counter)
+
+
+def _checked_counter(
+    scope: _ResolvedScope, counter: weekly_counter.Counter | None
+) -> weekly_counter.Counter | None:
     if counter is None:
         return None
     item = counter.item
@@ -1396,13 +1413,21 @@ def get_student_teacher_support_standing(
     week = weekly_counter.zurich_week(observed)
     standings: dict[str, dict[str, object]] = {}
     try:
-        source = _resolve_scope(beneficiary_id, table=target)
+        source, rows = _standing_source(beneficiary_id, week, table=target)
+        scopes = {mode: None if source is None else _for_mode(source, mode) for mode in MODES}
+        wanted = [
+            weekly_counter.key(weekly_counter.CASES, scope.support_scope_id, week)
+            for scope in scopes.values()
+            if scope is not None
+        ]
+        if any(_pair(key) not in rows for key in wanted):
+            rows = {**rows, **_strong_get_many(target, wanted)}
         for mode in MODES:
-            scope = None if source is None else _for_mode(source, mode)
+            scope = scopes[mode]
             if scope is None:
                 standings[mode] = dict(_NOT_INCLUDED)
                 continue
-            admitted = _spent(target, scope, week)
+            admitted = _spent_from(rows, scope, week)
             # An administrator may lower the figure below what the week already spent.
             remaining = max(scope.limit - admitted, 0)
             standings[mode] = {
@@ -1415,6 +1440,77 @@ def get_student_teacher_support_standing(
     except _DependencyFailure:
         raise ValueError("teacher-support standing is temporarily unavailable") from None
     return {**standings[TEXT], "text": standings[TEXT], "classroom": standings[CLASSROOM]}
+
+
+def _pair(key: Mapping[str, str]) -> tuple[str, str]:
+    return (key["PK"], key["SK"])
+
+
+def _strong_get_many(
+    table: object, keys: list[dict[str, str]]
+) -> dict[tuple[str, str], dict[str, object] | None]:
+    """Each key's row read strongly in one batch; a key with no row maps to None."""
+    try:
+        found = db_table.get_many(keys, table=table, consistent=True)
+    except Exception:
+        raise _DependencyFailure("teacher-support persistence is unavailable") from None
+    return {_pair(key): _mapping(found.get(_pair(key))) for key in keys}
+
+
+def _standing_source(
+    beneficiary_id: str, week: ZurichWeek, *, table: object
+) -> tuple[_ResolvedScope | None, dict[tuple[str, str], dict[str, object] | None]]:
+    """`_resolve_scope` for the standing, with the rows it already read by key.
+
+    A student with no paid grant has the assigned allowance, whose row and both
+    counters are known by the student's id alone: one batch reads all three
+    (card 133). The admission keeps `_resolve_scope`.
+    """
+    beneficiary = _required_text(beneficiary_id, "beneficiary_id")
+    student = _active_student(beneficiary)
+    if student is None:
+        return None, {}
+    paid = _resolve_paid_scope(beneficiary, student, table=table)
+    if paid is not None:
+        return paid, {}
+    allowance_key = _assigned_allowance_row_key(beneficiary)
+    scope_id = _assigned_scope_id(beneficiary)
+    rows = _strong_get_many(
+        table,
+        [
+            allowance_key,
+            *(
+                weekly_counter.key(weekly_counter.CASES, _mode_scope_id(mode, scope_id), week)
+                for mode in MODES
+            ),
+        ],
+    )
+    scope = _resolve_assigned_scope(
+        beneficiary, student, table=table, raised=rows.pop(_pair(allowance_key))
+    )
+    return scope, rows
+
+
+def _spent_from(
+    rows: Mapping[tuple[str, str], dict[str, object] | None],
+    scope: _ResolvedScope,
+    week: ZurichWeek,
+) -> int:
+    """`_spent`, from a counter row already read."""
+    key = weekly_counter.key(weekly_counter.CASES, scope.support_scope_id, week)
+    item = rows.get(_pair(key))
+    try:
+        counter = (
+            None
+            if item is None
+            else weekly_counter.validate(
+                weekly_counter.CASES, item, scope_id=scope.support_scope_id, week=week
+            )
+        )
+    except weekly_counter.CounterUnavailable as exc:
+        raise _DependencyFailure(str(exc)) from None
+    checked = _checked_counter(scope, counter)
+    return 0 if checked is None else checked.count("admitted_cases")
 
 
 __all__ = [

@@ -818,7 +818,7 @@ async def get_teacher_help_availability(
     Also the caller's own teacher-support week, so an "ask a teacher" button
     can be greyed with its reason before the student presses it (#144).
     """
-    summary = teacher_dispatch_service.teacher_availability_summary()
+    summary = teacher_dispatch_service.student_availability_summary()
     now = _now()
     try:
         standing = teacher_support_allowance_service.get_student_teacher_support_standing(
