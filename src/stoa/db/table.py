@@ -311,6 +311,15 @@ BATCH_GET_ATTEMPTS = 3
 type RowKey = tuple[str, str]
 
 
+def _is_boto_table(target: object) -> bool:
+    return (
+        not callable(getattr(target, "batch_get_item", None))
+        and callable(getattr(target, "get_item", None))
+        and getattr(getattr(target, "meta", None), "client", None) is not None
+        and isinstance(getattr(target, "name", None), str)
+    )
+
+
 def get_many(
     keys: Iterable[Mapping[str, object]],
     *,
@@ -338,6 +347,10 @@ def get_many(
     if target is None:
         batch = _resource().batch_get_item
         name = config.settings().dynamodb_table_name
+    elif _is_boto_table(target):
+        # A boto3 Table has no `batch_get_item`; its service resource does.
+        batch = _resource().batch_get_item
+        name = str(getattr(target, "name"))
     else:
         batch = getattr(target, "batch_get_item", None)
         name = str(getattr(target, "name", "") or "table")

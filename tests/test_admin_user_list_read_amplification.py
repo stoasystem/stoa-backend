@@ -253,8 +253,22 @@ def test_统计走不完时说明数字是下限(monkeypatch: pytest.MonkeyPatch
     real pages is 50 MB of rows, which is not a fixture. The old double invented a
     `Limit` of 50 when none was sent, which is a row count no real scan applies.
     """
+    # Since card 133 the census reads the profiles' partition of GSI-Listing, so
+    # what has to outrun the page budget is profiles, not unrelated rows.
     counting = CountingTable(page_size_bytes=512)
-    _seed_noise_first(counting, noise_rows=800)
+    for index in range(400):
+        user_id = f"student-{index}"
+        counting.seed(_profile({
+            "PK": f"USER#{user_id}",
+            "SK": "PROFILE",
+            "user_id": user_id,
+            "role": "student",
+            "account_status": "active",
+            "email": f"{user_id}@stoa.test",
+            "name": user_id,
+            "account_number": f"S26-{index:04d}",
+            "created_at": "2026-01-01T00:00:00+00:00",
+        }))
     db_table.install(counting)
 
     response = _client().get("/admin/stats")

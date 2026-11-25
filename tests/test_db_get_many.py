@@ -77,3 +77,41 @@ def test_a_double_without_batch_reads_key_by_key() -> None:
     )
     assert list(found) == [("USER#u1", "PROFILE")]
     assert double.gets == 2
+
+
+class _BotoLikeTable:
+    """What `boto3.resource(...).Table(name)` offers: get_item and meta, no batch."""
+
+    name = "stoa-main"
+
+    class meta:  # noqa: N801
+        client = object()
+
+    def get_item(self, **kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("a real table must be read in batches, not key by key")
+
+
+class _Resource:
+    def __init__(self) -> None:
+        self.requests: list[dict[str, Any]] = []
+
+    def batch_get_item(self, **kwargs: Any) -> dict[str, Any]:
+        self.requests.append(kwargs)
+        keys = kwargs["RequestItems"]["stoa-main"]["Keys"]
+        return {"Responses": {"stoa-main": [dict(key, found=True) for key in keys]}}
+
+
+def test_a_real_table_passed_explicitly_is_read_through_its_resource(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The audit's finding: callers pass `db_table.table()`, a boto3 Table."""
+    resource = _Resource()
+    monkeypatch.setattr(db_table, "_resource", lambda: resource)
+    found = db_table.get_many(
+        [{"PK": "USER#u1", "SK": "PROFILE"}, {"PK": "USER#u2", "SK": "PROFILE"}],
+        table=_BotoLikeTable(),
+        consistent=True,
+    )
+    assert len(found) == 2
+    assert len(resource.requests) == 1
+    assert resource.requests[0]["RequestItems"]["stoa-main"]["ConsistentRead"] is True

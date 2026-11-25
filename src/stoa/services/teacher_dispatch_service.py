@@ -68,7 +68,12 @@ def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
     if limit <= 0:
         return []
     table = db_table.table()
-    seen = user_repo.list_teachers_seen(table=table)
+    # A heartbeat row with no account id names nobody; it was skipped before.
+    seen = {
+        teacher_id: seen_at
+        for teacher_id, seen_at in user_repo.list_teachers_seen(table=table).items()
+        if str(teacher_id or "").strip()
+    }
     # Every seen account's profile and fence in one batch, read strongly as the
     # fence always was, instead of two reads per teacher (card 133).
     rows = db_table.get_many(
