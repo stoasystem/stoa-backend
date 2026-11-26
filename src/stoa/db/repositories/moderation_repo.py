@@ -7,7 +7,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 
-from stoa.db import data_catalog, owner_registry
+from stoa.db import data_catalog, listing_index, owner_registry
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -61,6 +61,24 @@ MODERATION_TOMBSTONE_ALLOWLIST = frozenset(
         "deleted_at",
     }
 )
+
+
+# The admin queue, the image retention and the operator's review count read
+# every live case. A case summary carries the keys of GSI-Listing from its
+# first write, so those reads query this list instead of scanning the table
+# (card 135). An update only SETs its own fields, and a privacy tombstone,
+# which keeps neither key, leaves the list.
+CASE_LISTING = "moderation_case"
+
+
+def listing_fields(item: Mapping[str, Any]) -> dict[str, str]:
+    """The GSI-Listing keys of a live case summary; none for any other row."""
+    if item.get("entity_type") != "moderation_case" or item.get("privacy_deleted") is True:
+        return {}
+    created_at = item.get("created_at")
+    if not isinstance(created_at, str) or not created_at:
+        return {}
+    return {"listing": CASE_LISTING, "listed_at": created_at}
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +142,7 @@ def _summary_item(item: Mapping[str, Any]) -> dict[str, Any]:
         "PK": f"MODERATION#{item['case_id']}",
         "SK": "SUMMARY",
         **dict(item),
+        **listing_fields(item),
     }
 
 
@@ -447,14 +466,37 @@ def list_case_events(case_id: str, limit: int = 100) -> list[dict[str, Any]]:
     ]
 
 
-def list_cases(limit: int | None = 50) -> list[dict[str, Any]]:
-    """Live cases, at most `limit` of them; every one when it is None."""
+def list_cases(
+    limit: int | None = 50, *, table: Any | None = None
+) -> list[dict[str, Any]]:
+    """Live cases, newest first, at most `limit` of them; every one when it is None.
+
+    Read from GSI-Listing once the backfill has put the cases written before
+    card 135 there; until then from the scan this replaced.
+    """
     # The cap is applied after the privacy filter, not before it: a page of
     # deleted cases must not be what a reader gets instead of live ones.
-    rows = db_table.rows(
-        "scan", FilterExpression=Attr("entity_type").eq("moderation_case")
-    )
-    cases = [item for item in rows if item.get("privacy_deleted") is not True]
+    if listing_index.backfilled(CASE_LISTING, table=table):
+        rows = db_table.rows(
+            "query",
+            table=table,
+            key=listing_index.INDEX_KEY,
+            IndexName=listing_index.INDEX,
+            KeyConditionExpression=Key("listing").eq(CASE_LISTING),
+            ScanIndexForward=False,
+        )
+    else:
+        rows = db_table.rows(
+            "scan",
+            table=table,
+            FilterExpression=Attr("entity_type").eq("moderation_case"),
+        )
+    cases = [
+        item
+        for item in rows
+        if item.get("entity_type") == "moderation_case"
+        and item.get("privacy_deleted") is not True
+    ]
     return cases[:limit]
 
 

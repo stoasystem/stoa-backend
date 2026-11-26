@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Put the rows the admin pages count and list in GSI-Listing (card 133).
+"""Put the rows the admin pages count and list in GSI-Listing (cards 133, 135).
 
 `/admin/stats` reads the legacy questions and the help requests, and the
 curriculum worklist reads the lesson versions and pointers, through GSI-Listing
@@ -10,14 +10,24 @@ legacy question is no longer written at all (`question_repo.listing_fields`).
 Rows written before are missing from the index until this script writes them.
 Run it once the release that reads the index is deployed.
 
+Card 135 adds two lists whose readers wait for this script: the moderation
+cases (`moderation_repo.listing_fields`) and the authorization allow stream the
+audit retention archives (`security_audit_repo.listing_fields`). Each keeps its
+old scan until `--apply` has written every row's keys and then, as its last
+step, the list's marker (`listing_index.marker_key`). Run it once the release
+that writes those keys is deployed everywhere, or a row an older release writes
+afterwards would be missing from a list its reader already trusts.
+
     python scripts/backfill_listing_index_admin.py            # dry run: counts, writes nothing
     python scripts/backfill_listing_index_admin.py --apply    # writes the rows the dry run counted
     python scripts/backfill_listing_index_admin.py --verify   # reads the index back, writes nothing
 
-It reads the table with one scan. Each write sets `listing` and `listed_at` on
-the condition that the row is still there and has no `listing`: a row written
-meanwhile by a release that sets them is left as it is, and a second run writes
-nothing. No other attribute is touched.
+It reads the table with one scan, page by page. Each write sets `listing` and
+`listed_at` on the condition that the row is still there and has no `listing`
+(and, for a case, that it is not a privacy tombstone): a row written meanwhile
+by a release that sets them is left as it is, and a second run writes nothing,
+so a run cut short is finished by running it again. No other attribute is
+touched. A marker is written only by a run that raised nothing.
 
 Nothing printed names a person: rows are counted, and named by their key only
 in `--verify`, whose keys hold no account id.
@@ -26,6 +36,7 @@ in `--verify`, whose keys hold no account id.
 from __future__ import annotations
 
 import argparse
+from datetime import UTC, datetime
 import os
 import sys
 from collections import Counter
@@ -40,11 +51,14 @@ for folder in (ROOT, ROOT / "src"):
     if str(folder) not in sys.path:
         sys.path.insert(0, str(folder))
 
+from stoa.db import listing_index  # noqa: E402
 from stoa.db import table as db_table  # noqa: E402
 from stoa.db.repositories import (  # noqa: E402
     account_deletion_repo,
     curriculum_ops_repo,
+    moderation_repo,
     question_repo,
+    security_audit_repo,
 )
 from stoa.models.question import QuestionStatus  # noqa: E402
 from stoa.security.aws_operator_identity import require_sso_operator_session  # noqa: E402
@@ -56,7 +70,19 @@ LISTINGS = (
     help_requests.LISTING_NAME,
     curriculum_ops_repo.VERSION_LISTING,
     curriculum_ops_repo.POINTER_LISTING,
+    moderation_repo.CASE_LISTING,
+    security_audit_repo.ALLOWED_LISTING,
 )
+#: The lists whose readers keep their scan until this script's marker is there.
+MARKED = (moderation_repo.CASE_LISTING, security_audit_repo.ALLOWED_LISTING)
+#: What else a write requires of the row, by list.
+_STILL = {
+    moderation_repo.CASE_LISTING: (
+        " AND (attribute_not_exists(#privacy_deleted) OR #privacy_deleted <> :deleted)",
+        {"#privacy_deleted": "privacy_deleted"},
+        {":deleted": True},
+    ),
+}
 _QUESTION_STATUSES = frozenset(status.value for status in QuestionStatus)
 _INDEX_KEY = ("PK", "SK", "listing", "listed_at")
 
@@ -70,6 +96,10 @@ def listing_fields(item: Mapping[str, Any]) -> dict[str, str]:
         return help_requests.listing_fields(item) if item.get("conversation_id") else {}
     if entity_type in {curriculum_ops_repo.VERSION_ENTITY, curriculum_ops_repo.POINTER_ENTITY}:
         return curriculum_ops_repo.listing_fields(item)
+    if entity_type == "moderation_case":
+        return moderation_repo.listing_fields(item)
+    if entity_type == "security_audit_event":
+        return security_audit_repo.listing_fields(item)
     return question_repo.listing_fields(item)
 
 
@@ -100,16 +130,24 @@ def apply(table: Any, items: Iterable[Mapping[str, Any]]) -> Counter[str]:
         fields = listing_fields(item)
         if not fields or "listing" in item:
             continue
+        condition, names, values = _STILL.get(fields["listing"], ("", {}, {}))
         try:
             db_table.update(
                 table=table,
                 Key={"PK": item["PK"], "SK": item["SK"]},
                 UpdateExpression="SET #listing = :listing, #listed_at = :listed_at",
-                ConditionExpression="attribute_exists(PK) AND attribute_not_exists(#listing)",
-                ExpressionAttributeNames={"#listing": "listing", "#listed_at": "listed_at"},
+                ConditionExpression=(
+                    "attribute_exists(PK) AND attribute_not_exists(#listing)" + condition
+                ),
+                ExpressionAttributeNames={
+                    "#listing": "listing",
+                    "#listed_at": "listed_at",
+                    **names,
+                },
                 ExpressionAttributeValues={
                     ":listing": fields["listing"],
                     ":listed_at": fields["listed_at"],
+                    **values,
                 },
             )
         except db_table.WriteRefused:
@@ -117,6 +155,15 @@ def apply(table: Any, items: Iterable[Mapping[str, Any]]) -> Counter[str]:
             continue
         outcome["written"] += 1
     return outcome
+
+
+def mark(table: Any, *, at: str) -> None:
+    """Tell the readers of `MARKED` that their list now holds every row."""
+    for name in MARKED:
+        db_table.put(
+            table=table,
+            Item={**listing_index.marker_key(name), "complete": True, "completed_at": at},
+        )
 
 
 def _listed_keys(table: Any, listing: str) -> set[tuple[str, str]]:
@@ -141,7 +188,9 @@ def verify(table: Any, items: Iterable[Mapping[str, Any]]) -> list[str]:
         fields = listing_fields(item)
         if fields:
             wanted[fields["listing"]].add(_row_key(item))
-    problems: list[str] = []
+    problems: list[str] = [
+        f"no marker for {name}" for name in MARKED if not listing_index.backfilled(name, table=table)
+    ]
     for name in LISTINGS:
         found = _listed_keys(table, name)
         problems.extend(f"missing from {name}: {pk} {sk}" for pk, sk in sorted(wanted[name] - found))
@@ -152,7 +201,7 @@ def verify(table: Any, items: Iterable[Mapping[str, Any]]) -> list[str]:
 # What `listing_fields` and `count` read; a version's content stays on the table.
 _SCANNED = (
     "PK", "SK", "entity_type", "status", "owner_deletion_generation", "conversation_id",
-    "created_at", "escalated_at", "updated_at", "listing",
+    "created_at", "escalated_at", "updated_at", "listing", "event_type", "privacy_deleted",
 )
 
 
@@ -167,6 +216,10 @@ def scan(table: Any) -> list[dict[str, Any]]:
     ):
         found.extend(dict(item) for item in page.items)
     return found
+
+
+def now() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 def run(
@@ -191,6 +244,8 @@ def run(
         return 0
     outcome = apply(table, items)
     print(" | ".join(f"{name}: {number}" for name, number in sorted(outcome.items())) or "Nothing to write.")
+    mark(table, at=now())
+    print(f"Marked complete: {', '.join(MARKED)}")
     return 0
 
 
