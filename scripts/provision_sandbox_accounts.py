@@ -219,6 +219,9 @@ def dynamo_put_full_identity(
         "version": 1,
         "created_at": now,
         "updated_at": now,
+        # GSI-Listing keys, as account_deletion_repo.account_listing_fields writes them.
+        "listing": "account_profile",
+        "listed_at": now,
         "_sandbox": True,
     }
     if extra:
