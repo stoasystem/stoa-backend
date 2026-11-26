@@ -113,3 +113,57 @@ def test_the_update_names_no_value_it_does_not_send() -> None:
     assert "REMOVE #review_note" in update["UpdateExpression"]
     for token in ("status", "updated_at", "reviewed_by", "reviewed_at", "owner", "generation"):
         assert f":{token}" in sent
+
+
+def test_a_students_drafts_are_read_from_their_index_not_a_scan(
+    table: FakeTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Card 135: the learning memory's draft lookup reads GSI-StudentId.
+
+    Every draft was written with `student_id` and `created_at`, so the index
+    holds each one the scan found for this student.
+    """
+    def refuse(**_kwargs: Any) -> Any:
+        raise AssertionError("list_drafts scanned the table")
+
+    monkeypatch.setattr(table, "scan", refuse)
+    table.page_item_cap = 1
+    for index, (student, draft_type, status) in enumerate(
+        [
+            (STUDENT, "practice_exercise", "accepted"),
+            (STUDENT, "practice_exercise", "draft"),
+            (STUDENT, "teacher_summary", "accepted"),
+            ("student-2", "practice_exercise", "accepted"),
+            (STUDENT, "practice_exercise", "accepted"),
+        ]
+    ):
+        table.seed(
+            {
+                "PK": ai_teacher_tools_repo.draft_pk(f"aitool-{index}"),
+                "SK": "META",
+                "entity_type": ai_teacher_tools_repo.DRAFT_ENTITY,
+                "draft_id": f"aitool-{index}",
+                "draft_type": draft_type,
+                "status": status,
+                "student_id": student,
+                "created_at": f"2026-11-1{index}T09:00:00+00:00",
+            }
+        )
+    # Another kind of row on the same index.
+    table.seed(
+        {
+            "PK": "CONV#c-1",
+            "SK": "HELP",
+            "entity_type": "help_request",
+            "student_id": STUDENT,
+            "status": "accepted",
+            "created_at": "2026-11-19T09:00:00+00:00",
+        }
+    )
+
+    drafts = ai_teacher_tools_repo.list_drafts(
+        student_id=STUDENT, status="accepted", draft_type="practice_exercise", limit=None
+    )
+
+    assert [draft["draft_id"] for draft in drafts] == ["aitool-4", "aitool-0"]
+    assert table.calls["query"] > 1

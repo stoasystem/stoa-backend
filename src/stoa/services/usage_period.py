@@ -43,7 +43,7 @@ from typing import Any, Final
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, user_repo
@@ -738,28 +738,22 @@ def ending_soon(
 ) -> list[EndingAccount]:
     """Students and parents whose period ends within `within_days` or ended in the last 30.
 
-    There are few accounts, so this scans the profiles rather than keep an index
-    (shape decision 11). Soonest first; an ended period sorts before a running one.
+    Read from the account listing (GSI-Listing), not a scan of the table.
+    Soonest first; an ended period sorts before a running one.
     """
     if isinstance(within_days, bool) or not isinstance(within_days, int) or within_days < 0:
         raise ValueError("within_days is a number of days")
     today = zurich_today(now)
     earliest = (today - timedelta(days=RECENTLY_ENDED_DAYS)).isoformat()
     latest = (today + timedelta(days=within_days)).isoformat()
+    filter_expression = Attr("role").is_in(["student", "parent"]) & Attr(PROFILE_FIELD).between(
+        earliest, latest
+    )
     profiles = db_table.rows(
-        "scan",
+        "query",
         table=table,
-        FilterExpression=(
-            "#sk = :profile AND #role IN (:student, :parent) AND #ends BETWEEN :earliest AND :latest"
-        ),
-        ExpressionAttributeNames={"#sk": "SK", "#role": "role", "#ends": PROFILE_FIELD},
-        ExpressionAttributeValues={
-            ":profile": "PROFILE",
-            ":student": "student",
-            ":parent": "parent",
-            ":earliest": earliest,
-            ":latest": latest,
-        },
+        key=user_repo.ACCOUNT_LIST_INDEX_KEY,
+        **user_repo.listed_profiles_request(filter_expression),
     )
     found: list[EndingAccount] = []
     for profile in profiles:

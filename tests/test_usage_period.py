@@ -648,8 +648,12 @@ def test_the_ending_soon_list(admin_table: AccountAdminTable) -> None:
     _seed_profile(admin_table, STUDENT, "student", account_number="S26-0001")
     client = _client()
     _link(client, "ends-in-14", STUDENT)
+    scans_before = admin_table.calls["scan"]
 
     body = client.get("/admin/usage-periods").json()
+
+    # Card 135: read from the account listing, not a scan of the table.
+    assert admin_table.calls["scan"] == scans_before
 
     assert [(row["userId"], row["state"]) for row in body["items"]] == [
         ("ended-30-ago", "expired"),

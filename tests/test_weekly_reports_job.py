@@ -58,16 +58,6 @@ def current_relationships(monkeypatch, link_rows):
     return link_rows
 
 
-class FakeTable:
-    def __init__(self, pages):
-        self.pages = list(pages)
-        self.calls = []
-
-    def scan(self, **kwargs):
-        self.calls.append(kwargs)
-        return self.pages.pop(0)
-
-
 def test_previous_zurich_week_start_from_current_time():
     result = weekly_reports.previous_zurich_week_start(
         datetime(2026, 6, 2, 12, 0, tzinfo=timezone.utc)
@@ -159,49 +149,32 @@ def test_handler_rejects_unknown_report_recovery_job(monkeypatch):
     assert result == {"status": "failed", "detail": "Unsupported report recovery job"}
 
 
-def _parent_side_link(parent_id, student_id):
-    return {
-        "PK": f"PARENT#{parent_id}",
-        "SK": f"CHILD#{student_id}",
-        "entity_type": "parent_student_link",
-        "parent_id": parent_id,
-        "student_id": student_id,
-        "status": "active",
-    }
-
-
-def test_discover_linked_parent_student_pairs_pages(monkeypatch):
-    # A filtered scan can return an empty page that still has a next one.
-    table = FakeTable(
-        [
-            {"Items": [], "LastEvaluatedKey": {"PK": "PARENT#parent-0", "SK": "CHILD#student-0"}},
-            {
-                "Items": [
-                    _parent_side_link("parent-1", "student-1"),
-                    {**_parent_side_link("parent-x", "student-x"), "student_id": None},
-                ],
-                "LastEvaluatedKey": {"PK": "PARENT#parent-1", "SK": "CHILD#student-1"},
-            },
-            {"Items": [_parent_side_link("parent-2", "student-2")]},
-        ]
-    )
-    db_table.install(table)
+def test_discover_linked_parent_student_pairs_pages(link_rows):
+    # Card 135: every page of the account listing is read, and no scan.
+    link_rows.table.page_item_cap = 1
+    for index in (1, 2, 3):
+        link_rows.account(f"parent-{index}", "parent")
+        link_rows.account(f"student-{index}", "student")
+    link_rows.link("parent-3", "student-3")
+    link_rows.link("parent-3", "student-1", status="pending")
+    db_table.install(link_rows.table)
 
     pairs = weekly_reports.discover_linked_parent_student_pairs()
 
-    assert pairs == [
+    assert sorted(pairs, key=lambda pair: pair["parent_id"]) == [
         {"parent_id": "parent-1", "student_id": "student-1"},
         {"parent_id": "parent-2", "student_id": "student-2"},
+        {"parent_id": "parent-3", "student_id": "student-3"},
     ]
-    assert "ExclusiveStartKey" not in table.calls[0]
-    assert table.calls[1]["ExclusiveStartKey"] == {
-        "PK": "PARENT#parent-0",
-        "SK": "CHILD#student-0",
-    }
-    assert table.calls[2]["ExclusiveStartKey"] == {
-        "PK": "PARENT#parent-1",
-        "SK": "CHILD#student-1",
-    }
+    assert link_rows.table.calls["scan"] == 0
+    listing_reads = [
+        request
+        for operation, request in link_rows.table.requests
+        if operation == "query" and request.get("IndexName") == "GSI-Listing"
+    ]
+    assert len(listing_reads) > 3
+    assert "ExclusiveStartKey" not in listing_reads[0]
+    assert all("ExclusiveStartKey" in request for request in listing_reads[1:])
 
 
 def test_discover_linked_parent_student_pairs_ignores_binding_rows_and_profile_pointers(
@@ -236,6 +209,8 @@ def test_discover_linked_parent_student_pairs_ignores_binding_rows_and_profile_p
         },
     )
     link_rows.unlink("parent-2", "student-2")
+    for parent_id in ("parent-1", "parent-2", "parent-9"):
+        link_rows.account(parent_id, "parent")
     db_table.install(link_rows.table)
 
     pairs = weekly_reports.discover_linked_parent_student_pairs()

@@ -116,7 +116,6 @@ HAND_WRITTEN_DOUBLES: dict[str, str] = {
     "test_provision_production_admin.py::FakeTable": "pending",
     "test_report_flow.py::FakeDataTable": "pending",
     "test_report_service.py::FakeTable": "pending",
-    "test_weekly_reports_job.py::FakeTable": "script",
 }
 
 

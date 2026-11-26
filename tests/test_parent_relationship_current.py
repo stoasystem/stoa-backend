@@ -45,7 +45,7 @@ STUDENT = "student-1"
 
 
 def _profile(user_id: str, role: str, *, account_status: str = "active") -> dict[str, Any]:
-    return {
+    profile = {
         # The shape the table actually stores a profile at. The double this
         # fixture used to feed did not need the key, which is how a row that no
         # real scan could return became the thing under test.
@@ -58,6 +58,7 @@ def _profile(user_id: str, role: str, *, account_status: str = "active") -> dict
         "name": user_id,
         "date_of_birth": "2000-01-01",
     }
+    return {**profile, **account_deletion_repo.account_listing_fields(profile)}
 
 
 def _binding(parent_id: str, student_id: str, status: str = "active") -> dict[str, Any]:
@@ -327,6 +328,7 @@ def test_new_admin_assigned_link_is_discovered_for_weekly_reports(
 ) -> None:
     world.link(PARENT, STUDENT)
     rows = [dict(item) for item in world.table.items.values()]
+    rows += [deepcopy(profile) for profile in world.profiles.values()]
     db_table.install(_discovery_table(rows))
 
     assert weekly_reports.eligible_parent_student_pairs() == [
@@ -393,6 +395,7 @@ def test_the_weekly_job_does_not_run_on_a_revoked_pair(
     rows = [
         dict(item) for item in world.table.items.values() if item["PK"].startswith("PARENT#")
     ]
+    rows += [deepcopy(profile) for profile in world.profiles.values()]
     # Revoked after the scan read its rows: still discovered, so what keeps the
     # job off it is the job's own judgement.
     world.revoke(PARENT, STUDENT)
