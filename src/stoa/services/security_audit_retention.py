@@ -30,16 +30,18 @@ import json
 import logging
 from typing import Any
 
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.config import Settings
+from stoa.db import listing_index
 from stoa.db import table as db_table
+from stoa.db.repositories import security_audit_repo
 
 logger = logging.getLogger(__name__)
 
 AUDIT_ENTITY = "security_audit_event"
 #: The one event type this retention archives; every other audit row stays.
-ARCHIVED_EVENT_TYPE = "authorization_sensitive_allowed"
+ARCHIVED_EVENT_TYPE = security_audit_repo.ALLOWED_EVENT_TYPE
 #: How long an allow decision stays queryable in the table before its archive
 #: becomes the only copy. 90 days covers the quarter a question about a
 #: decision is actually asked in; the archive keeps it for good.
@@ -48,9 +50,11 @@ RETENTION = timedelta(days=90)
 #: platform has seen (239 a day at the 2026-11 reading) and a backlog drains
 #: over a few days rather than in one ten-minute function.
 ROWS_PER_RUN = 500
-#: Pages one run reads looking for them. The stream has no index of its own, so
-#: this is a scan; a budget spent without finding a full batch is reported, not
-#: raised, because what it did archive is already safe.
+#: Pages one run reads looking for them. A budget spent without finding a full
+#: batch is reported, not raised, because what it did archive is already safe.
+#: Read from GSI-Listing, oldest first, every row a page holds is due, so the
+#: budget is no longer how far into the table a run can see (card 135); the
+#: scan it replaced still counts against it until the backfill has finished.
 PAGE_BUDGET = 200
 
 
@@ -116,18 +120,34 @@ def due_events(
 ) -> tuple[list[dict[str, Any]], int, bool]:
     """A batch of rows past the cutoff, how many rows were read, and whether more wait.
 
-    The scan is eventually consistent: a row written in the last moment is not
-    one this is after, and each delete states the row it meant (see below).
+    Both reads are eventually consistent: a row written in the last moment is
+    not one this is after, and each delete states the row it meant (see below).
     """
+    if listing_index.backfilled(security_audit_repo.ALLOWED_LISTING, table=table):
+        pages = db_table.pages(
+            "query",
+            table=table,
+            key=listing_index.INDEX_KEY,
+            IndexName=listing_index.INDEX,
+            KeyConditionExpression=(
+                Key("listing").eq(security_audit_repo.ALLOWED_LISTING)
+                & Key("listed_at").lt(security_audit_repo.listed_at(cutoff))
+            ),
+            ScanIndexForward=True,
+            Limit=limit,
+        )
+    else:
+        # Before the backfill the list lacks the rows written earlier.
+        pages = db_table.pages(
+            "scan",
+            table=table,
+            FilterExpression=(
+                Attr("entity_type").eq(AUDIT_ENTITY)
+                & Attr("event_type").eq(ARCHIVED_EVENT_TYPE)
+            ),
+        )
     due: list[dict[str, Any]] = []
     scanned = 0
-    pages = db_table.pages(
-        "scan",
-        table=table,
-        FilterExpression=(
-            Attr("entity_type").eq(AUDIT_ENTITY) & Attr("event_type").eq(ARCHIVED_EVENT_TYPE)
-        ),
-    )
     for page in islice(pages, PAGE_BUDGET):
         scanned += len(page.items)
         for row in page.items:

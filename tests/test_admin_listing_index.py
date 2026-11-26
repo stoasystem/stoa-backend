@@ -22,8 +22,15 @@ from fastapi.testclient import TestClient
 from actor_helpers import install_actor_overrides
 from fakes.dynamodb import DEFAULT_INDEXES, FakeTable, IndexSchema
 from scripts import backfill_listing_index_admin as backfill
+from stoa.db import listing_index
 from stoa.db import table as db_table
-from stoa.db.repositories import curriculum_ops_repo, question_repo, user_repo
+from stoa.db.repositories import (
+    curriculum_ops_repo,
+    moderation_repo,
+    question_repo,
+    security_audit_repo,
+    user_repo,
+)
 from stoa.routers import admin
 from stoa.services import curriculum_ops_service, help_requests
 
@@ -197,7 +204,7 @@ def test_the_lists_are_ones_the_table_carries() -> None:
     assert DEFAULT_INDEXES[question_repo.LISTING_INDEX] == schema
     assert DEFAULT_INDEXES[help_requests.LISTING_INDEX] == schema
     assert DEFAULT_INDEXES[curriculum_ops_repo.LISTING_INDEX] == schema
-    assert len(set(backfill.LISTINGS)) == 4
+    assert len(set(backfill.LISTINGS)) == 6
 
 
 # ── The curriculum worklist ──────────────────────────────────────────────────
@@ -351,3 +358,133 @@ def test_a_tombstone_and_an_unrelated_meta_row_are_in_no_list() -> None:
     assert backfill.listing_fields({"PK": "NOTIFICATION#n-1", "SK": "META", "status": "pending"}) == {}
     counts = backfill.count([{"PK": "NOTIFICATION#n-1", "SK": "META", "status": "pending"}])
     assert counts["not a question, no longer counted"] == 1
+
+
+# ── Card 135: the moderation cases and the allow stream ──────────────────────
+
+OLD = "2026-06-01T08:00:00+00:00"
+
+
+def _case_row(case_id: str, **extra: Any) -> dict[str, Any]:
+    return {
+        "PK": f"MODERATION#{case_id}",
+        "SK": "SUMMARY",
+        "entity_type": "moderation_case",
+        "case_id": case_id,
+        "status": "open",
+        "student_id": "student-1",
+        "privacy_generation": 1,
+        "created_at": OLD,
+        **extra,
+    }
+
+
+def _audit_row(event_id: str, event_type: str = "authorization_sensitive_allowed") -> dict[str, Any]:
+    return {
+        "PK": "SECURITY_AUDIT#fp",
+        "SK": f"EVENT#{event_id}",
+        "entity_type": "security_audit_event",
+        "event_id": event_id,
+        "event_type": event_type,
+        "created_at": OLD,
+    }
+
+
+def _written_before(table: FakeTable) -> None:
+    """Rows as the release before card 135 left them: in no list."""
+    table.seed(
+        _case_row("mod-1"),
+        _case_row("mod-2"),
+        _case_row("mod-gone", privacy_deleted=True),
+        {"PK": "MODERATION#mod-1", "SK": "EVENT#e-1", "entity_type": "moderation_event"},
+        _audit_row("allow-1"),
+        _audit_row("allow-2"),
+        _audit_row("deny-1", "authorization_denied"),
+    )
+
+
+def _listed(table: FakeTable, listing: str) -> set[tuple[str, str]]:
+    return backfill._listed_keys(table, listing)
+
+
+def test_the_queue_keeps_its_scan_until_the_backfill_marks_its_list(fake_table: FakeTable) -> None:
+    _written_before(fake_table)
+
+    assert sorted(case["case_id"] for case in moderation_repo.list_cases(limit=None)) == ["mod-1", "mod-2"]
+    assert fake_table.calls["scan"] == 1 and fake_table.calls["query"] == 0
+
+    # Negative control: a marker before the rows are listed hides them.
+    fake_table.seed({**listing_index.marker_key(moderation_repo.CASE_LISTING), "complete": True})
+    assert moderation_repo.list_cases(limit=None) == []
+
+
+def test_the_backfill_dry_run_writes_no_key_and_no_marker(fake_table: FakeTable, capsys) -> None:
+    _written_before(fake_table)
+    before = {key: dict(row) for key, row in fake_table.rows.items()}
+    fake_table.calls.clear()
+
+    assert backfill.run(fake_table, apply_writes=False, verify_index=False) == 0
+
+    out = capsys.readouterr().out
+    assert "moderation_case: 2 | security_audit_allowed: 2" in out
+    assert "to write: 4" in out
+    assert fake_table.rows == before
+    assert fake_table.calls["update_item"] == 0 and fake_table.calls["put_item"] == 0
+    assert not listing_index.backfilled(moderation_repo.CASE_LISTING, table=fake_table)
+
+
+def test_the_backfill_lists_cases_and_allow_rows_then_marks_them(fake_table: FakeTable, capsys) -> None:
+    _written_before(fake_table)
+    assert backfill.run(fake_table, apply_writes=False, verify_index=True) == 1
+    assert "no marker for moderation_case" in capsys.readouterr().out
+
+    assert backfill.run(fake_table, apply_writes=True, verify_index=False) == 0
+    assert "written: 4" in capsys.readouterr().out
+    assert _listed(fake_table, moderation_repo.CASE_LISTING) == {
+        ("MODERATION#mod-1", "SUMMARY"),
+        ("MODERATION#mod-2", "SUMMARY"),
+    }
+    assert _listed(fake_table, security_audit_repo.ALLOWED_LISTING) == {
+        ("SECURITY_AUDIT#fp", "EVENT#allow-1"),
+        ("SECURITY_AUDIT#fp", "EVENT#allow-2"),
+    }
+    assert fake_table.rows[("SECURITY_AUDIT#fp", "EVENT#allow-1")]["listed_at"] == (
+        "2026-06-01T08:00:00.000000+00:00"
+    )
+    assert all(
+        listing_index.backfilled(name, table=fake_table) for name in backfill.MARKED
+    )
+
+    # A second run writes no row again; it is how a run cut short is finished.
+    assert backfill.run(fake_table, apply_writes=True, verify_index=False) == 0
+    assert "Nothing to write." in capsys.readouterr().out
+    assert backfill.run(fake_table, apply_writes=False, verify_index=True) == 0
+
+    fake_table.calls.clear()
+    assert sorted(case["case_id"] for case in moderation_repo.list_cases(limit=None)) == ["mod-1", "mod-2"]
+    assert fake_table.calls["scan"] == 0
+
+
+def test_a_run_that_fails_writes_no_marker(fake_table: FakeTable, monkeypatch) -> None:
+    _written_before(fake_table)
+
+    def broken(*_args: Any, **_kwargs: Any) -> None:
+        raise db_table.TableUnavailable("throttled")
+
+    monkeypatch.setattr(backfill.db_table, "update", broken)
+    with pytest.raises(db_table.TableUnavailable):
+        backfill.run(fake_table, apply_writes=True, verify_index=False)
+
+    assert not any(
+        listing_index.backfilled(name, table=fake_table) for name in backfill.MARKED
+    )
+
+
+def test_a_case_tombstoned_since_the_scan_is_not_listed(fake_table: FakeTable) -> None:
+    stale = _case_row("mod-1")
+    fake_table.seed(_case_row("mod-1", privacy_deleted=True))
+
+    outcome = backfill.apply(fake_table, [stale])
+
+    assert outcome == {"listed or gone meanwhile, skipped": 1}
+    assert "listing" not in fake_table.rows[("MODERATION#mod-1", "SUMMARY")]

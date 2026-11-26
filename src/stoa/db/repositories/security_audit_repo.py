@@ -537,14 +537,47 @@ def project_audit_event(event: Mapping[str, object]) -> AuditItem:
     return projected
 
 
+# The allow stream leaves the table 90 days on, oldest first, once archived
+# (`security_audit_retention`, card 129). It finds them in GSI-Listing rather
+# than in a scan from the head of the table, which stops finding them once the
+# table is larger than one run's page budget (card 135). Only the allow
+# decisions are listed: the rows that never leave would fill the front of the
+# list and hold the retention back. `listed_at` is `created_at` in UTC, in one
+# fixed format, so the index orders it as time.
+ALLOWED_LISTING = "security_audit_allowed"
+ALLOWED_EVENT_TYPE = "authorization_sensitive_allowed"
+
+
+def listed_at(moment: datetime) -> str:
+    return moment.astimezone(UTC).isoformat(timespec="microseconds")
+
+
+def listing_fields(row: Mapping[str, object]) -> dict[str, str]:
+    """The GSI-Listing keys of an allow decision; none for any other row."""
+    if (
+        row.get("entity_type") != "security_audit_event"
+        or row.get("event_type") != ALLOWED_EVENT_TYPE
+    ):
+        return {}
+    try:
+        moment = datetime.fromisoformat(str(row["created_at"]))
+    except (KeyError, TypeError, ValueError):
+        # An undated row is never due, so it has no place in the list.
+        return {}
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return {"listing": ALLOWED_LISTING, "listed_at": listed_at(moment)}
+
+
 def _event_row(stream_id: str, event: Mapping[str, object]) -> AuditItem:
     safe = project_audit_event(event)
-    return {
+    row: AuditItem = {
         "PK": f"SECURITY_AUDIT#{stream_id}",
         "SK": f"EVENT#{safe['event_id']}",
         "entity_type": "security_audit_event",
         **safe,
     }
+    return {**row, **listing_fields(row)}
 
 
 def append_event_operation(
