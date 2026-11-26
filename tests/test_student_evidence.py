@@ -74,13 +74,24 @@ def _student_rows(student: str = STUDENT) -> list[dict[str, Any]]:
     ]
 
 
-def _table(monkeypatch: pytest.MonkeyPatch, **options: Any) -> FakeTable:
+def _table(
+    monkeypatch: pytest.MonkeyPatch, *, rollups: str = "complete", **options: Any
+) -> FakeTable:
+    """`rollups`: the answer rollups under their marker (`complete`), without it
+    (`unmarked`), or none at all (`none`, as before the backfill)."""
     table = FakeTable(**options)
     table.seed_active_account(STUDENT)
+    rows = _student_rows()
+    if rollups != "none":
+        rows += fake_evidence.rollup_rows(
+            STUDENT,
+            [row for row in rows if str(row["SK"]).startswith("ATTEMPT#")],
+            complete=rollups == "complete",
+        )
     table.seed(
         *({"PK": "PRACTICE", "SK": f"CHALLENGE#{lesson}-c1", "challenge_id": f"{lesson}-c1",
            "lesson_id": lesson, "status": "active"} for lesson in ("l1", "l2", "l3")),
-        *_student_rows(),
+        *rows,
     )
     db_table.install(table)
     monkeypatch.setattr(curriculum_service, "list_catalog", lambda **_k: CATALOG)
@@ -155,6 +166,53 @@ def test_the_full_star_map_queries_each_student_partition_at_most_once(monkeypat
     assert {galaxy["subjectId"]: galaxy["enrolled"] for galaxy in response.json()["galaxies"]} == {
         "math": True
     }
+
+
+def _marker(table: FakeTable) -> dict[str, Any] | None:
+    return table.rows.get((f"ATTEMPTS#{STUDENT}", "ROLLUP#!STATE"))
+
+
+@pytest.mark.parametrize("rollups", ["unmarked", "none"])
+def test_without_the_marker_the_star_map_reads_every_answer(monkeypatch, rollups) -> None:
+    """Card 135: rollups are trusted only under their marker; the sky is the same either way."""
+    def sky(variant: str) -> tuple[FakeTable, list[dict[str, Any]]]:
+        table = _table(monkeypatch, rollups=variant)
+        response = _client(monkeypatch).get("/practice/knowledge-map", params={"view": "full"})
+        assert response.status_code == 200, response.text
+        # When a lighting was first seen is the moment of the request.
+        return table, [{**star, "litAt": None} for star in response.json()["stars"]]
+
+    _marked, expected = sky("complete")
+    table, stars = sky(rollups)
+
+    # The rollups, then every answer: two queries of ATTEMPTS#.
+    assert _student_queries(table)["ATTEMPTS"] == 2
+    assert stars == expected
+    assert {star["unitId"] for star in stars if star["state"] == "lit"} == {"u1", "u3"}
+
+
+def test_rollups_that_agree_with_every_answer_get_their_marker(monkeypatch) -> None:
+    """A student with no marker but rollups that say what the answers say: marked once."""
+    table = _table(monkeypatch, rollups="unmarked")
+    client = _client(monkeypatch)
+
+    assert client.get("/practice/knowledge-map").status_code == 200
+    marker = _marker(table)
+    assert marker is not None
+    assert marker["rollup_version"] == 1
+    assert marker["owner_id"] == STUDENT
+
+    table.requests.clear()
+    assert client.get("/practice/knowledge-map").status_code == 200
+    assert _student_queries(table)["ATTEMPTS"] == 1
+
+
+def test_rollups_missing_an_answer_get_no_marker(monkeypatch) -> None:
+    table = _table(monkeypatch, rollups="none")
+
+    assert _client(monkeypatch).get("/practice/knowledge-map").status_code == 200
+
+    assert _marker(table) is None
 
 
 def test_the_neighbourhood_queries_each_student_partition_at_most_once(monkeypatch) -> None:

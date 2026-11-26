@@ -137,6 +137,24 @@ def list_cards(student_id: str, *, table: Any | None = None) -> list[dict[str, A
     )
 
 
+#: What the due counts read off a card: when it is due and the lesson it counts under.
+DUE_FIELDS = ("PK", "SK", "lesson_id", "due_at")
+
+
+def list_card_dues(student_id: str, *, table: Any | None = None) -> list[dict[str, Any]]:
+    """Every card of this student as `list_cards` reads it, with only `DUE_FIELDS`."""
+    target = table or db_table.table()
+    names = {f"#f{index}": name for index, name in enumerate(DUE_FIELDS)}
+    return _query_all_challenge_pages(
+        target,
+        KeyConditionExpression=(
+            Key("PK").eq(card_partition(student_id)) & Key("SK").begins_with(CARD_PREFIX)
+        ),
+        ProjectionExpression=", ".join(names),
+        ExpressionAttributeNames=names,
+    )
+
+
 def save_card(
     student_id: str,
     challenge_id: str,

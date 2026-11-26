@@ -540,6 +540,11 @@ def acknowledge_lit(student_id: str, unit_ids: Sequence[str]) -> dict[str, Any]:
 MAP_VIEWS = ("full", "skeleton")
 
 
+#: What the whole sky is judged by: the answers as their rollups and the cards
+#: as their due times (card 135), read side by side before it starts.
+MAP_PARTITIONS = ("progress", "attempt_rollups", "activity", "star_quiz_outcomes", "review_due")
+
+
 def knowledge_map(
     evidence: StudentEvidence,
     *,
@@ -554,7 +559,7 @@ def knowledge_map(
     `chosen_subject_ids` are the subjects the student ticked on their profile:
     taken as much as a subject they have progress in (#321).
     """
-    evidence.read_all()
+    evidence.read_all(MAP_PARTITIONS)
     catalog = evidence.content.catalog
     # Blank is absent, whether it arrived as no parameter at all or as one with
     # nothing in it; either way the first galaxy takes the focus as it always has.
@@ -607,7 +612,7 @@ NEIGHBOURS_EACH_SIDE = 2
 #: The most stars one neighbourhood sends.
 MAX_NEIGHBOURHOOD = 15
 #: What a neighbourhood judges its stars by; read side by side before it starts.
-NEIGHBOURHOOD_PARTITIONS = ("progress", "attempts", "star_quiz_outcomes", "review_cards")
+NEIGHBOURHOOD_PARTITIONS = ("progress", "attempt_rollups", "star_quiz_outcomes", "review_due")
 
 
 def neighbourhood(

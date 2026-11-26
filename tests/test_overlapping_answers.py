@@ -143,7 +143,10 @@ def test_two_overlapping_answers_each_keep_every_write(exercises, caplog):
     for exercise in exercises:
         answer_recording.answer_practice(STUDENT, exercise, exercise["correct_answer"], locale="de")
 
-    assert len([row for (pk, _), row in table.rows.items() if pk == f"ATTEMPTS#{STUDENT}"]) == 2
+    assert len([
+        row for (pk, sk), row in table.rows.items()
+        if pk == f"ATTEMPTS#{STUDENT}" and sk.startswith("ATTEMPT#")
+    ]) == 2
     assert len(_rows(table, "study_day")) == 1
     assert {row["SK"] for row in _rows(table, "review_card")} == {
         "CARD#exercise-1",

@@ -35,10 +35,12 @@ class FactSource:
     def __init__(self, partitions: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
         self.partitions = {name: [dict(row) for row in rows] for name, rows in partitions.items()}
         self.reads: list[str] = []
+        self.marked: list[str] = []
 
-    def _read(self, name: str) -> list[dict[str, Any]]:
+    def _read(self, name: str, of: str | None = None) -> list[dict[str, Any]]:
+        """Partition `of` (by default `name`), read as `name`."""
         self.reads.append(name)
-        return [dict(row) for row in self.partitions.get(name, ())]
+        return [dict(row) for row in self.partitions.get(of or name, ())]
 
     def progress(self, student_id: str) -> list[dict[str, Any]]:
         return self._read("progress")
@@ -55,6 +57,56 @@ class FactSource:
     def review_cards(self, student_id: str) -> list[dict[str, Any]]:
         return self._read("review_cards")
 
+    def attempt_rollups(self, student_id: str) -> list[dict[str, Any]]:
+        """The rollups the answers make, under their marker, unless the test gives its own."""
+        if "attempt_rollups" not in self.partitions:
+            self.partitions["attempt_rollups"] = rollup_rows(
+                student_id, self.partitions.get("attempts", ()), complete=True
+            )
+        return self._read("attempt_rollups")
+
+    def attempt_facts(self, student_id: str) -> list[dict[str, Any]]:
+        return self._read("attempt_facts", "attempts")
+
+    def review_due(self, student_id: str) -> list[dict[str, Any]]:
+        return self._read("review_due", "review_cards")
+
+    def mark_attempt_rollups_complete(self, student_id: str) -> None:
+        self.marked.append(student_id)
+
+
+def rollup_rows(
+    student_id: str, attempts: Iterable[Mapping[str, Any]], *, complete: bool
+) -> list[dict[str, Any]]:
+    """The rollup rows `attempts` make, as `practice_repo.put_attempt` writes them.
+
+    With `complete`, the marker the backfill writes once they hold every answer.
+    """
+    rows: list[dict[str, Any]] = []
+    for (lesson_id, unit_id), rollup in student_evidence.expected_attempt_rollups(attempts).items():
+        row: dict[str, Any] = {
+            **practice_repo.attempt_rollup_key(student_id, lesson_id, unit_id),
+            "entity_type": practice_repo.ATTEMPT_ROLLUP_ENTITY,
+            "lesson_id": lesson_id,
+            "unit_id": unit_id,
+            "last_judged_at": rollup.last_judged_at,
+        }
+        if rollup.right_alone:
+            row["right_alone"] = set(rollup.right_alone)
+        if rollup.right_asked:
+            row["right_asked"] = set(rollup.right_asked)
+        rows.append(row)
+    if complete:
+        rows.append(
+            {
+                "PK": f"ATTEMPTS#{student_id}",
+                "SK": practice_repo.ATTEMPT_ROLLUP_STATE_SK,
+                "entity_type": practice_repo.ATTEMPT_ROLLUP_STATE_ENTITY,
+                "rollup_version": practice_repo.ATTEMPT_ROLLUP_VERSION,
+            }
+        )
+    return rows
+
 
 class FailingSource(FactSource):
     """Every read of the named partitions raises, as an unreachable table would."""
@@ -63,11 +115,13 @@ class FailingSource(FactSource):
         super().__init__(partitions)
         self.failing = frozenset(failing)
 
-    def _read(self, name: str) -> list[dict[str, Any]]:
-        if name in self.failing:
+    def _read(self, name: str, of: str | None = None) -> list[dict[str, Any]]:
+        # A lighter read of a partition fails with it.
+        whole = of or {"attempt_rollups": "attempts"}.get(name)
+        if name in self.failing or whole in self.failing:
             self.reads.append(name)
             raise RuntimeError(f"{name} unavailable")
-        return super()._read(name)
+        return super()._read(name, of)
 
 
 def empty_catalog() -> dict[str, Any]:
