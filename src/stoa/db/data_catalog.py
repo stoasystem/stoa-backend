@@ -884,6 +884,18 @@ _ENTRIES: tuple[DataType, ...] = (
         _repo("review_repo"),
         (*_owner("student_id", "user_id"), _owned_by_partition("REVIEW#")),
     ),
+    # One row per lesson and knowledge point of a student's judged answers, and
+    # the marker that every answer is in them (card 135).
+    DataType(
+        "practice_attempt_rollup",
+        _repo("practice_repo"),
+        (*_owner("student_id", "user_id", "owner_id"), _owned_by_partition("ATTEMPTS#")),
+    ),
+    DataType(
+        "practice_attempt_rollup_state",
+        _repo("practice_repo"),
+        (*_owner("student_id", "user_id", "owner_id"), _owned_by_partition("ATTEMPTS#")),
+    ),
     DataType("practice_deletion_tombstone", _repo("practice_repo"), ()),
     DataType("practice_accounting_tombstone", _repo("practice_repo"), ()),
     DataType(
@@ -1220,6 +1232,8 @@ DELETIONS: Final[Mapping[str, Deletion]] = {
             "practice_star_quiz_pass",
             "review_card",
             "practice_attempt",
+            "practice_attempt_rollup",
+            "practice_attempt_rollup_state",
             *(
                 f"legacy_untyped_{suffix}"
                 for suffix in (

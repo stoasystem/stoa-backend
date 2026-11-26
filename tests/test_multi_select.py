@@ -123,7 +123,8 @@ def test_answering_a_sample_records_the_picked_options_and_shows_the_key_after(
     assert result.standard_answer == "2; 11; 17"
     assert result.correct_options == [0, 2, 4]
     [receipt] = [
-        row for key, row in published.rows.items() if key[0] == "ATTEMPTS#student-1"
+        row for key, row in published.rows.items()
+        if key[0] == "ATTEMPTS#student-1" and key[1].startswith("ATTEMPT#")
     ]
     assert receipt["submitted_answer"] == ["2", "11"]
     assert receipt["challenge_type"] == "multi_select"

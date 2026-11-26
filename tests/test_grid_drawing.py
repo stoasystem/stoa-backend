@@ -229,7 +229,7 @@ def test_answering_records_the_drawing_and_shows_the_solution_after(
     assert result.standard_answer == "P(1|1); Q(5|1); R(5|4); S(1|4); PQRS"
     assert result.standard_drawing is not None
     assert result.standard_drawing.model_dump()["points"][1] == {"label": "Q", "x": 5, "y": 1}
-    [receipt] = [row for key, row in published.rows.items() if key[0] == "ATTEMPTS#student-1"]
+    [receipt] = [row for key, row in published.rows.items() if key[0] == "ATTEMPTS#student-1" and key[1].startswith("ATTEMPT#")]
     assert receipt["submitted_answer"]["polygons"] == [["P", "Q", "R", "S"]]
     assert receipt["error_cause"] == {"category": error_causes.UNCLASSIFIED}
     assert result.feedback == practice_projection_service.answer_feedback({}, "it")[1]

@@ -31,8 +31,15 @@ from test_curriculum_reads import SMALL, _client, _get, _table
 PROFILE_READS = 2
 #: Subjects, topics, units and lessons.
 CURRICULUM_QUERIES = 4
-#: Progress, attempts, star quiz outcomes and review cards.
+#: Progress, the answer rollups (`ATTEMPTS#`, `SK begins_with ROLLUP#`, card 135),
+#: star quiz outcomes and the cards' due times: one query each, side by side.
 STUDENT_QUERIES = 4
+#: A student without the rollup marker: the answers are read whole as well, one
+#: more query of `ATTEMPTS#`. This student has no answers, so the rollups agree
+#: and the marker is written: the fence read and one transaction.
+UNMARKED_STUDENT_QUERIES = STUDENT_QUERIES + 1
+MARKER_FENCE_READS = 1
+MARKER_WRITES = 1
 STAMP_READS = 1
 
 
@@ -81,15 +88,28 @@ def test_stars_read_the_curriculum_once_and_then_only_the_stamp(
     warm, warm_queried = _round_trips(table, _stars(lesson))
 
     assert cold == {
-        "get_item": PROFILE_READS + STAMP_READS,
-        "query": CURRICULUM_QUERIES + STUDENT_QUERIES,
+        "get_item": PROFILE_READS + STAMP_READS + MARKER_FENCE_READS,
+        "query": CURRICULUM_QUERIES + UNMARKED_STUDENT_QUERIES,
+        "transact_write_items": MARKER_WRITES,
     }
     assert cold_queried.count("PRACTICE") == CURRICULUM_QUERIES
+    assert cold_queried.count("ATTEMPTS#student-1") == 2
     assert warm == {"get_item": PROFILE_READS + STAMP_READS, "query": STUDENT_QUERIES}
     assert "PRACTICE" not in warm_queried
     assert sorted(warm_queried) == sorted(
         f"{prefix}#student-1" for prefix in ("PROGRESS", "ATTEMPTS", "QUIZ", "REVIEW")
     )
+    rollups, dues = (
+        next(
+            request
+            for operation, request in table.requests
+            if operation == "query" and _partition(request["KeyConditionExpression"]) == pk
+        )
+        for pk in ("ATTEMPTS#student-1", "REVIEW#student-1")
+    )
+    assert "ROLLUP#" in str(rollups["KeyConditionExpression"].get_expression()["values"][1].get_expression()["values"][1])
+    assert rollups["ConsistentRead"] is True
+    assert sorted(dues["ExpressionAttributeNames"].values()) == ["PK", "SK", "due_at", "lesson_id"]
 
 
 def test_the_answer_is_the_same_from_the_kept_curriculum(
