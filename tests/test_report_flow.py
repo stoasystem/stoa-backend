@@ -55,7 +55,7 @@ def _week_holds_the_report(monkeypatch):
 
 
 class FakeDataTable:
-    """The job's discovery scan and the conversation queries, answered here.
+    """The conversation queries, answered here; the job's discovery never scans.
 
     Every other read and write goes to `rest`, the table the link rows live in:
     the relationship judge reads them from the same gateway table.
@@ -76,15 +76,9 @@ class FakeDataTable:
         return self.rest.get_item(**kwargs)
 
     def scan(self, **kwargs):
-        # The job's one discovery scan: active parent-side link rows.
+        # Card 135: the parents come from the account listing, not a table scan.
         self.scans.append(kwargs)
-        names = kwargs["ExpressionAttributeNames"]
-        values = kwargs["ExpressionAttributeValues"]
-        assert names["#entity"] == "entity_type"
-        assert values[":link"] == "parent_student_link"
-        assert values[":active"] == "active"
-        assert values[":child"] == "CHILD#"
-        return {"Items": list(self.candidates)}
+        raise AssertionError("weekly report discovery scanned the table")
 
     def query(self, **kwargs):
         wanted = str(kwargs.get("FilterExpression").get_expression()) if "FilterExpression" in kwargs else ""
@@ -177,8 +171,11 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
     events = []
     reports_by_id = {}
     question_last_keys = []
-    # The relationship the flow rides on: the job finds it by scanning the
-    # parent's side, and the job and the generator both judge it.
+    # The relationship the flow rides on: the job finds the parent in the
+    # account listing and the pair on the parent's side, and the job and the
+    # generator both judge it.
+    link_rows.account("parent-1", "parent")
+    link_rows.account("student-1", "student")
     link_rows.link("parent-1", "student-1")
     data_table = FakeDataTable(
         [link_rows.side("PARENT#parent-1", "CHILD#student-1")], link_rows.table
@@ -316,7 +313,7 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
     # One discovery scan, of the link rows. Report generation no longer
     # re-scans every student carrying this parent's identifier; it judges the
     # relationship instead.
-    assert len(data_table.scans) == 1
+    assert data_table.scans == []
     # One page of conversations, one read of their help requests.
     assert len(data_table.queries) == 2
     assert [event[0] for event in events] == [

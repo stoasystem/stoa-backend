@@ -28,6 +28,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Final
 
+from boto3.dynamodb.conditions import Attr, Key
+
 from stoa.db import table as db_table
 from stoa.db.repositories import parent_link_repo, user_repo
 
@@ -381,28 +383,36 @@ def known_children_of(parent_id: str, *, table: Any | None = None) -> list[Verdi
 def candidate_pairs(*, table: Any | None = None) -> list[tuple[str, str]]:
     """Every (parent, student) pair whose parent side says active, unjudged.
 
-    Candidates, not relationships: a job that runs over every family scans
-    for them here and asks `judge` about each before acting on one.
+    Candidates, not relationships: a job that runs over every family lists
+    them here and asks `judge` about each before acting on one. The parents
+    come from the account listing, then each parent's own `CHILD#` rows: a
+    pair whose parent account is not listed as a parent could never be judged
+    current, so it is no candidate either.
     """
-    request: dict[str, Any] = {
-        "FilterExpression": (
-            "#entity = :link AND #status = :active AND begins_with(#sk, :child)"
-        ),
-        "ExpressionAttributeNames": {
-            "#entity": "entity_type",
-            "#status": "status",
-            "#sk": "SK",
-        },
-        "ExpressionAttributeValues": {
-            ":link": SOURCE_LINK,
-            ":active": parent_link_repo.STATUS_ACTIVE,
-            ":child": "CHILD#",
-        },
-    }
+    target = table or db_table.table()
+    parent_ids = [
+        str(row.get("user_id") or "")
+        for row in db_table.rows(
+            "query",
+            table=target,
+            key=user_repo.ACCOUNT_LIST_INDEX_KEY,
+            **user_repo.listed_profiles_request(Attr("role").eq(ROLE_PARENT)),
+        )
+    ]
     pairs: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    for page in db_table.pages("scan", table=table or db_table.table(), **request):
-        for row in page.items:
+    for listed in dict.fromkeys(parent_ids):
+        if not listed:
+            continue
+        # Every page of the parent's side, as the scan read every page.
+        for row in db_table.rows(
+            "query",
+            table=target,
+            KeyConditionExpression=Key("PK").eq(f"PARENT#{listed}")
+            & Key("SK").begins_with("CHILD#"),
+            FilterExpression=Attr("entity_type").eq(SOURCE_LINK)
+            & Attr("status").eq(parent_link_repo.STATUS_ACTIVE),
+        ):
             parent_id = row.get("parent_id")
             student_id = row.get("student_id")
             if not isinstance(parent_id, str) or not isinstance(student_id, str):

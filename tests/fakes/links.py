@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from fakes.dynamodb import FakeTable
-from stoa.db.repositories import parent_link_repo
+from stoa.db.repositories import account_deletion_repo, parent_link_repo
 
 
 LINKED_AT = "2026-11-01T09:00:00+00:00"
@@ -87,16 +87,16 @@ class LinkRows:
     def account(
         self, user_id: str, role: str, *, status: str = "active", **extra: Any
     ) -> None:
-        self.table.seed(
-            {
-                "PK": f"USER#{user_id}",
-                "SK": "PROFILE",
-                "user_id": user_id,
-                "role": role,
-                "account_status": status,
-                **extra,
-            }
-        )
+        profile = {
+            "PK": f"USER#{user_id}",
+            "SK": "PROFILE",
+            "user_id": user_id,
+            "role": role,
+            "account_status": status,
+            **extra,
+        }
+        # Listed in GSI-Listing as every stored profile is (card 133).
+        self.table.seed({**profile, **account_deletion_repo.account_listing_fields(profile)})
 
     def side(self, pk: str, sk: str) -> dict[str, Any] | None:
         return self.table.rows.get((pk, sk))

@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from boto3.dynamodb.conditions import Attr, ConditionBase
+from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 
 from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
@@ -64,8 +64,8 @@ class _PutTable(Protocol):
 
 
 @runtime_checkable
-class _ScanTable(Protocol):
-    def scan(self, **kwargs: object) -> object: ...
+class _QueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
 
 
 @runtime_checkable
@@ -313,25 +313,41 @@ def update_draft(
     }
 
 
+# GSI-StudentId continues from its own key as well as the table's.
+_STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
+
+
 def list_drafts(
     *,
-    student_id: str | None = None,
+    student_id: str,
     status: str | None = None,
     draft_type: str | None = None,
     limit: int | None = 100,
 ) -> list[AIDraftItem]:
+    """The student's drafts, newest first, read from `GSI-StudentId`.
+
+    Every draft was written with the student and `created_at`, so the index
+    holds them all.
+    """
     filter_expr: ConditionBase = Attr("entity_type").eq(DRAFT_ENTITY)
-    if student_id is not None:
-        filter_expr = filter_expr & Attr("student_id").eq(student_id)
     if status is not None:
         filter_expr = filter_expr & Attr("status").eq(status)
     if draft_type is not None:
         filter_expr = filter_expr & Attr("draft_type").eq(draft_type)
     table = db_table.table()
-    if not isinstance(table, _ScanTable):
+    if not isinstance(table, _QueryTable):
         raise account_deletion_repo.AccountDeletionConflict("AI draft dependency unavailable")
     items = _items(
-        db_table.rows("scan", table=table, want=limit or None, FilterExpression=filter_expr)
+        db_table.rows(
+            "query",
+            table=table,
+            want=limit or None,
+            key=_STUDENT_INDEX_KEY,
+            IndexName="GSI-StudentId",
+            KeyConditionExpression=Key("student_id").eq(student_id),
+            FilterExpression=filter_expr,
+            ScanIndexForward=False,
+        )
     )
     return sorted(items, key=_created_at, reverse=True)
 
