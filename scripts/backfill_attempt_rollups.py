@@ -60,7 +60,7 @@ COUNTED = (
 
 
 def account_ids(table: Any) -> list[str]:
-    """Every account with a profile, from GSI-Listing."""
+    """Every student with a profile, from GSI-Listing."""
     found: list[str] = []
     for row in db_table.rows(
         "query",
@@ -69,11 +69,12 @@ def account_ids(table: Any) -> list[str]:
         page_budget=10_000,
         IndexName=user_repo.ACCOUNT_LIST_INDEX,
         KeyConditionExpression="#listing = :listing",
-        FilterExpression="SK = :profile",
-        ExpressionAttributeNames={"#listing": "listing", "#pk": "PK"},
+        FilterExpression="SK = :profile AND #role = :student",
+        ExpressionAttributeNames={"#listing": "listing", "#pk": "PK", "#role": "role"},
         ExpressionAttributeValues={
             ":listing": account_deletion_repo.ACCOUNT_LISTING,
             ":profile": "PROFILE",
+            ":student": "student",
         },
         ProjectionExpression="#pk",
     ):

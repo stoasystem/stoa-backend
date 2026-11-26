@@ -283,14 +283,14 @@ def test_the_lighter_reads_ask_the_table_for_their_fields_only(table):
 # -- the backfill ---------------------------------------------------------------------------
 
 
-def _profile(table: FakeTable, user_id: str) -> None:
+def _profile(table: FakeTable, user_id: str, role: str = "student") -> None:
     table.seed_active_account(user_id)
     table.seed(
         {
             "PK": f"USER#{user_id}",
             "SK": "PROFILE",
             "user_id": user_id,
-            "role": "student",
+            "role": role,
             "listing": "account_profile",
             "listed_at": "2026-01-01T00:00:00+00:00",
         }
@@ -306,6 +306,7 @@ def _seed_old_answers(table: FakeTable) -> None:
 def test_the_backfill_reports_writes_and_then_finds_nothing(table, capsys):
     _profile(table, STUDENT)
     _profile(table, "nobody-answered")
+    _profile(table, "a-teacher", role="teacher")
     _seed_old_answers(table)
     # One answer after the release, with a later moment than any old one.
     _put(True, "c9", lesson_id="l1", unit_id="u1", created_at="2026-02-01T09:00:00+00:00")
