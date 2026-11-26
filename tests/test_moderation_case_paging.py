@@ -4,6 +4,10 @@ The list used to take only `limit`: the 51st case was never shown, and `count`
 was the length of the page. Here the queue is read through the route from a
 table whose scan pages are three rows long and mostly hold rows that are not
 cases, so most scan pages leave a filter nothing to keep.
+
+Each test runs twice (card 135): on the scan, as before the backfill has
+marked the list complete, and on GSI-Listing once it has, where the queue must
+read no scan at all.
 """
 
 from __future__ import annotations
@@ -15,17 +19,25 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
+from stoa.db import listing_index
 from stoa.db import table as db_table
+from stoa.db.repositories import moderation_repo
 from stoa.routers import admin
 
 SCAN_PAGE = 3
 
 
-@pytest.fixture
-def table(monkeypatch) -> FakeTable:
+@pytest.fixture(params=["scan", "index"])
+def table(request):
     built = FakeTable(page_item_cap=SCAN_PAGE)
     db_table.install(built)
-    return built
+    if request.param == "index":
+        built.seed(
+            {**listing_index.marker_key(moderation_repo.CASE_LISTING), "complete": True}
+        )
+    yield built
+    if request.param == "index":
+        assert built.calls["scan"] == 0, "the queue scanned the table"
 
 
 @pytest.fixture
@@ -56,7 +68,7 @@ def _seed_case(table: FakeTable, case_id: str, minute: int, **overrides) -> None
         "updated_at": created,
     }
     row.update(overrides)
-    table.seed(row)
+    table.seed({**row, **moderation_repo.listing_fields(row)})
     # A case's own history row sits beside it and is not a case.
     table.seed(
         {

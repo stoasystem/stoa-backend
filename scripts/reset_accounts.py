@@ -167,6 +167,8 @@ def write_identity(table, *, user_id: str, email: str, role: str, name: str) -> 
         "registration_role": role,
         "email_verification_status": "verified",
         "version": 1, "created_at": now, "updated_at": now,
+        # GSI-Listing keys, as account_deletion_repo.account_listing_fields writes them.
+        "listing": "account_profile", "listed_at": now,
         **(STUDENT_FIELDS if role == "student" else {}),
     })
     table.put_item(Item={

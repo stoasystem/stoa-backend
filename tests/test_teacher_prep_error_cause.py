@@ -103,3 +103,54 @@ def test_a_cause_inferred_from_a_typed_answer_reaches_the_prep(table: FakeTable)
         "count": 2,
         "recentMistakes": 3,
     }
+
+
+def _values(condition: Any) -> list[Any]:
+    if not hasattr(condition, "get_expression"):
+        return [condition]
+    return [v for value in condition.get_expression()["values"] for v in _values(value)]
+
+
+def _reads_answers(table: FakeTable) -> bool:
+    """Whether any query asked for the student's answer partition."""
+    return any(
+        f"ATTEMPTS#{STUDENT}" in _values(request.get("KeyConditionExpression"))
+        for operation, request in table.requests
+        if operation == "query"
+    )
+
+
+def test_the_poll_leaves_the_student_s_evidence_unread(
+    table: FakeTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`view=live` is what the open request polls with: status and messages, no evidence."""
+    _dispatch_to(table, TEACHER)
+    _attempt(table, 1, ADDS_DENOMINATORS)
+
+    full = _detail()
+    assert full["commonErrorCause"] is not None
+    assert _reads_answers(table)
+
+    table.requests.clear()
+    read = []
+    monkeypatch.setattr(
+        student_evidence,
+        "for_student",
+        lambda *args, **kwargs: read.append(args) or pytest.fail("the poll read evidence"),
+    )
+    response = _client(TEACHER).get(f"/teachers/me/help-requests/{REQUEST}", params={"view": "live"})
+    assert response.status_code == 200, response.text
+    live = response.json()
+
+    assert read == []
+    assert not _reads_answers(table)
+    assert live["commonErrorCause"] is None
+    assert live["aiHelpedStars"] == []
+    for key in ("requestId", "status", "messages", "notes", "askedStars", "weakTopics"):
+        assert live[key] == full[key]
+
+
+def test_an_unknown_view_is_refused(table: FakeTable) -> None:
+    _dispatch_to(table, TEACHER)
+    response = _client(TEACHER).get(f"/teachers/me/help-requests/{REQUEST}", params={"view": "x"})
+    assert response.status_code == 422

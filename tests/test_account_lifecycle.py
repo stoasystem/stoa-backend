@@ -15,7 +15,7 @@ import pytest
 from fakes.dynamodb import FakeTable
 
 from stoa.db import table as db_table
-from stoa.db.repositories import user_repo
+from stoa.db.repositories import account_deletion_repo, user_repo
 from stoa.rule_violation import RuleViolation
 from stoa.security.identity import AccountStatus
 from stoa.services import account_lifecycle, privileged_identity_service
@@ -51,6 +51,7 @@ def _seed(
     }
     if status is not None:
         row["account_status"] = str(status)
+    row.update(account_deletion_repo.account_listing_fields(row))
     table.seed(row)
     table.seed_active_account(user_id)
     return profile(table, user_id)
@@ -370,6 +371,98 @@ def test_另有active管理员时可以停用_提交里带着对它的条件(tab
         if "ConditionCheck" in operation
     ]
     assert {"PK": "USER#admin-1", "SK": "PROFILE"} in checks
+
+
+def _no_scan(table: FakeTable, monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(**_kwargs: Any) -> Any:
+        raise AssertionError("the administrator census scanned the table")
+
+    monkeypatch.setattr(table, "scan", refuse)
+
+
+def _seed_listed(table: FakeTable, row: dict[str, Any]) -> None:
+    table.seed({**row, **account_deletion_repo.account_listing_fields(row)})
+
+
+def test_管理员普查不扫表_只认别的active管理员资料行(
+    table: FakeTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Card 135: the census reads the account listing; only another active admin counts."""
+    table.page_item_cap = 1
+    _no_scan(table, monkeypatch)
+    _seed(table, "admin-1", AccountStatus.ACTIVE, role="admin")
+    _seed(table, "admin-2", AccountStatus.SUSPENDED, role="admin")
+    _seed(table, "admin-3", AccountStatus.ARCHIVED, role="admin")
+    _seed(table, "teacher-1", AccountStatus.ACTIVE, role="teacher")
+    _seed(table, "student-9", AccountStatus.ACTIVE)
+    # A deleted account's leftovers and a stray listed row that is not a profile.
+    _seed_listed(
+        table,
+        {
+            "PK": "USER#admin-4",
+            "SK": "PROFILE",
+            "user_id": "admin-4",
+            "entity_type": "user_profile_deletion_tombstone",
+            "status": "deleted",
+        },
+    )
+    _seed_listed(
+        table,
+        {
+            "PK": "USER#admin-5",
+            "SK": "PROFILE",
+            "user_id": "admin-5",
+            "role": "admin",
+            "account_status": "deleted",
+        },
+    )
+    _seed_listed(
+        table,
+        {
+            "PK": "USER#admin-6",
+            "SK": "DISPATCH_SEEN",
+            "user_id": "admin-6",
+            "role": "admin",
+            "account_status": "active",
+        },
+    )
+
+    assert user_repo.find_other_active_admin("admin-1") is None
+    assert table.calls["query"] > 1
+
+    _seed(table, "admin-7", AccountStatus.ACTIVE, role="admin")
+    assert user_repo.find_other_active_admin("admin-1") == "admin-7"
+    assert user_repo.find_other_active_admin("admin-7") == "admin-1"
+
+
+def test_只剩一个active管理员时_清单里有停用和墓碑也拒绝停用(
+    table: FakeTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _no_scan(table, monkeypatch)
+    _seed(table, "admin-1", AccountStatus.SUSPENDED, role="admin")
+    _seed(table, "teacher-1", AccountStatus.ACTIVE, role="teacher")
+    _seed_listed(
+        table,
+        {
+            "PK": "USER#admin-3",
+            "SK": "PROFILE",
+            "user_id": "admin-3",
+            "role": "admin",
+            "account_status": "deleted",
+        },
+    )
+    before = _seed(table, "admin-2", AccountStatus.ACTIVE, role="admin")
+
+    with pytest.raises(RuleViolation) as exc_info:
+        account_lifecycle.transition(
+            before,
+            AccountStatus.ACTIVE,
+            AccountStatus.SUSPENDED,
+            LifecycleActor(Trigger.ADMIN, user_id="teacher-1", role="admin"),
+        )
+
+    assert _refusal(exc_info) == AccountErrorCode.ACCOUNT_LAST_ACTIVE_ADMIN
+    assert profile(table, "admin-2")["account_status"] == "active"
 
 
 def test_两个管理员同时互相停用_必有一笔失败(

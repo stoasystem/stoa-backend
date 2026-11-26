@@ -53,6 +53,7 @@ PRACTICE_WRITER_REGISTRY = frozenset(
         "mark_lesson_completed",
         "put_attempt",
         "record_attempt",
+        "mark_attempt_rollups_complete",
         "usage_counter",
         "put_quiz_paper",
         "update_quiz_paper",
@@ -89,6 +90,9 @@ PRACTICE_PRIVATE_FIELDS = frozenset(
         "entitlement_snapshot",
         "parent_id",
         "actor_id",
+        "right_alone",
+        "right_asked",
+        "last_judged_at",
     }
 )
 PRACTICE_TOMBSTONE_ALLOWLIST = frozenset(
@@ -850,7 +854,36 @@ def put_attempt(
         item=item, owner_id=student_id, generation=generation
     )
     if _atomic_table(table):
-        db_table.fenced(student_id, operations, generation=generation, table=table)
+        # A judged answer moves its lesson's rollup in the same transaction: the
+        # star map reads the rollups instead of every answer (card 135).
+        rollup = (
+            None
+            if self_reported
+            else attempt_rollup_update(
+                student_id,
+                lesson_id=lesson_id,
+                unit_id=unit_id,
+                exercise_id=challenge_id,
+                correct=bool(correct),
+                asked_ai=asked_ai,
+                judged_at=str(item["created_at"]),
+                generation=generation,
+            )
+        )
+        if rollup is not None:
+            operations.append(rollup)
+        db_table.fenced(
+            student_id,
+            operations,
+            generation=generation,
+            rows=owner_registry.rows_after(rollup["Update"]["Key"], operations)
+            if rollup is not None
+            else (),
+            # Answers of one lesson meet on its rollup row; the transaction reads
+            # nothing first, so a cancelled one is sent again as it was.
+            resend_own_conflicts=rollup is not None,
+            table=table,
+        )
     else:
         _put_item(
             table,
@@ -884,6 +917,169 @@ def list_attempts(student_id: str, *, table: Any | None = None) -> list[dict]:
             Key("PK").eq(f"ATTEMPTS#{student_id}") & Key("SK").begins_with("ATTEMPT#")
         ),
         ConsistentRead=True,
+    )
+
+
+ATTEMPT_ROLLUP_ENTITY = "practice_attempt_rollup"
+ATTEMPT_ROLLUP_STATE_ENTITY = "practice_attempt_rollup_state"
+ATTEMPT_ROLLUP_PREFIX = "ROLLUP#"
+#: The marker row: every answer before it is in the rollups.
+ATTEMPT_ROLLUP_STATE_SK = "ROLLUP#!STATE"
+#: What the rollups hold; a marker of another version reads as absent.
+ATTEMPT_ROLLUP_VERSION = 1
+#: The fields the star map reads off an answer, when it has to read the answers.
+ATTEMPT_FACT_FIELDS = (
+    "PK",
+    "SK",
+    "attempt_id",
+    "challenge_id",
+    "exercise_id",
+    "correct",
+    "self_reported",
+    "asked_ai",
+    "lesson_id",
+    "unit_id",
+    "created_at",
+)
+
+
+def attempt_rollup_key(student_id: str, lesson_id: str, unit_id: str) -> dict[str, str]:
+    """One row per lesson and knowledge point in the student's answer partition.
+
+    The sort key never starts with `ATTEMPT#`, so the answer reads never see it.
+    """
+    return {
+        "PK": f"ATTEMPTS#{student_id}",
+        "SK": f"{ATTEMPT_ROLLUP_PREFIX}L#{lesson_id or '-'}#U#{unit_id or '-'}",
+    }
+
+
+def attempt_rollup_update(
+    student_id: str,
+    *,
+    lesson_id: str,
+    unit_id: str,
+    exercise_id: str,
+    correct: bool,
+    asked_ai: bool,
+    judged_at: str,
+    generation: int,
+) -> dict[str, Any]:
+    """The Update one judged answer makes to its rollup row.
+
+    `right_alone` holds the exercises answered right without asking AI first,
+    `right_asked` the ones answered right after asking; `last_judged_at` is
+    when the last judged answer was given.
+    """
+    values: dict[str, Any] = {
+        ":entity_type": ATTEMPT_ROLLUP_ENTITY,
+        ":student": student_id,
+        ":generation": generation,
+        ":lesson": lesson_id,
+        ":unit": unit_id,
+        ":at": judged_at,
+    }
+    if correct and exercise_id:
+        values[":exercise"] = {exercise_id}
+        expression = (
+            "SET entity_type = :entity_type, student_id = :student, user_id = :student, "
+            "owner_id = :student, account_fence_generation = :generation, "
+            "lesson_id = :lesson, unit_id = :unit, last_judged_at = :at "
+            "ADD right_asked :exercise"
+            if asked_ai
+            else "SET entity_type = :entity_type, student_id = :student, user_id = :student, "
+            "owner_id = :student, account_fence_generation = :generation, "
+            "lesson_id = :lesson, unit_id = :unit, last_judged_at = :at "
+            "ADD right_alone :exercise"
+        )
+    else:
+        expression = (
+            "SET entity_type = :entity_type, student_id = :student, user_id = :student, "
+            "owner_id = :student, account_fence_generation = :generation, "
+            "lesson_id = :lesson, unit_id = :unit, last_judged_at = :at"
+        )
+    return {
+        "Update": {
+            "Key": attempt_rollup_key(student_id, lesson_id, unit_id),
+            "UpdateExpression": expression,
+            "ConditionExpression": "attribute_not_exists(PK) OR owner_id = :student",
+            "ExpressionAttributeValues": values,
+        }
+    }
+
+
+def list_attempt_rollups(student_id: str, *, table: Any | None = None) -> list[dict]:
+    """The student's rollup rows and their marker, strongly consistent."""
+    table = table or db_table.table()
+    return _query_all_challenge_pages(
+        table,
+        KeyConditionExpression=(
+            Key("PK").eq(f"ATTEMPTS#{student_id}")
+            & Key("SK").begins_with(ATTEMPT_ROLLUP_PREFIX)
+        ),
+        ConsistentRead=True,
+    )
+
+
+def list_attempt_facts(student_id: str, *, table: Any | None = None) -> list[dict]:
+    """Every answer as `list_attempts` reads it, with only `ATTEMPT_FACT_FIELDS`.
+
+    The capacity is the same, the bytes carried back are not: the exercise
+    snapshot is most of each row.
+    """
+    table = table or db_table.table()
+    names = {f"#f{index}": name for index, name in enumerate(ATTEMPT_FACT_FIELDS)}
+    return _query_all_challenge_pages(
+        table,
+        KeyConditionExpression=(
+            Key("PK").eq(f"ATTEMPTS#{student_id}") & Key("SK").begins_with("ATTEMPT#")
+        ),
+        ProjectionExpression=", ".join(names),
+        ExpressionAttributeNames=names,
+        ConsistentRead=True,
+    )
+
+
+def mark_attempt_rollups_complete(
+    student_id: str, *, at: str | None = None, table: Any | None = None
+) -> None:
+    """Record that every answer of this student is in the rollups.
+
+    Written by the backfill once it has added every earlier answer, and by the
+    star map when the rollups it read agree with every answer it read. Until
+    it stands, the star map reads every answer.
+    """
+    target = table or db_table.table()
+    generation = _write_generation(student_id, None, target)
+    key = {"PK": f"ATTEMPTS#{student_id}", "SK": ATTEMPT_ROLLUP_STATE_SK}
+    operations = [
+        {
+            "Update": {
+                "Key": key,
+                "UpdateExpression": (
+                    "SET entity_type = :entity_type, student_id = :student, "
+                    "user_id = :student, owner_id = :student, "
+                    "account_fence_generation = :generation, "
+                    "rollup_version = :version, complete_at = :at"
+                ),
+                "ConditionExpression": "attribute_not_exists(PK) OR owner_id = :student",
+                "ExpressionAttributeValues": {
+                    ":entity_type": ATTEMPT_ROLLUP_STATE_ENTITY,
+                    ":student": student_id,
+                    ":generation": generation,
+                    ":version": ATTEMPT_ROLLUP_VERSION,
+                    ":at": at or datetime.now(timezone.utc).isoformat(),
+                },
+            }
+        }
+    ]
+    db_table.fenced(
+        student_id,
+        operations,
+        generation=generation,
+        rows=owner_registry.rows_after(key, operations),
+        resend_own_conflicts=True,
+        table=target,
     )
 
 

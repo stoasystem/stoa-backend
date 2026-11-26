@@ -17,7 +17,7 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from stoa.db.repositories import capability_repo
+from stoa.db.repositories import account_deletion_repo, capability_repo
 from stoa.services import account_provisioning_service
 from stoa.security.aws_operator_identity import (
     AwsOperatorIdentityError,
@@ -247,7 +247,7 @@ def ensure_dynamodb_profile_record(
     if dry_run:
         return ("would_create" if not existing else "would_update"), item
     if existing:
-        table.put_item(Item=item)
+        table.put_item(Item={**item, **account_deletion_repo.account_listing_fields(item)})
         return "updated", item
 
     # Opened the way every other account is opened. Hand-writing the row here

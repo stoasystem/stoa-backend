@@ -9,7 +9,7 @@ from itertools import islice
 import re
 from typing import Any, Protocol, runtime_checkable
 
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
@@ -163,10 +163,24 @@ def _profiles_by_email(email: str) -> list[UserItem]:
     return profiles
 
 
-# One census page is one scan call; the answer short-circuits on the first other
-# active administrator, so the usual table never reaches the second page.
+# One census page is one query of the account listing; the answer short-circuits
+# on the first other active administrator, so it rarely reaches a second page.
 ADMIN_CENSUS_PAGE_SIZE = 200
 ADMIN_CENSUS_MAX_PAGES = 25
+
+
+def listed_profiles_request(filter_expression: ConditionBase) -> dict[str, object]:
+    """A query of every listed profile the filter admits, for `db_table.pages`/`rows`.
+
+    Every profile carries the GSI-Listing keys (card 133), so this reads the
+    profiles of the whole table without a scan of it. Eventually consistent, as a
+    scan is. Pass `key=ACCOUNT_LIST_INDEX_KEY` alongside.
+    """
+    return {
+        "IndexName": ACCOUNT_LIST_INDEX,
+        "KeyConditionExpression": Key("listing").eq(account_deletion_repo.ACCOUNT_LISTING),
+        "FilterExpression": Attr("SK").eq("PROFILE") & filter_expression,
+    }
 
 
 def find_other_active_admin(user_id: str) -> str | None:
@@ -177,17 +191,22 @@ def find_other_active_admin(user_id: str) -> str | None:
     is not evidence that anyone else is active, so it answers None.
     """
     census = db_table.pages(
-        "scan",
-        FilterExpression="#entity = :profile AND #role = :role",
-        ExpressionAttributeNames={"#entity": "SK", "#role": "role"},
-        ExpressionAttributeValues={":profile": "PROFILE", ":role": "admin"},
+        "query",
+        key=ACCOUNT_LIST_INDEX_KEY,
         Limit=ADMIN_CENSUS_PAGE_SIZE,
+        **listed_profiles_request(Attr("role").eq("admin")),
     )
     try:
         for page in islice(census, ADMIN_CENSUS_MAX_PAGES):
             for row in _items(page.items):
                 other = str(row.get("user_id") or "")
-                if other and other != user_id and row.get("account_status") == "active":
+                if (
+                    other
+                    and other != user_id
+                    and row.get("SK") == "PROFILE"
+                    and row.get("role") == "admin"
+                    and row.get("account_status") == "active"
+                ):
                     return other
     except db_table.TableUnavailable as exc:
         raise ValueError("user repository dependency unavailable") from exc

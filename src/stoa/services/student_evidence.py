@@ -191,13 +191,22 @@ class Content:
 
 
 class Source(Protocol):
-    """The five student partitions the evidence is made of, each read whole."""
+    """The five student partitions the evidence is made of, each read whole.
+
+    And the lighter reads of two of them a page can ask for instead: the
+    answer rollups and the answers' facts (`ATTEMPTS#`), the cards' due times
+    (`REVIEW#`).
+    """
 
     def progress(self, student_id: str) -> list[dict[str, Any]]: ...
     def attempts(self, student_id: str) -> list[dict[str, Any]]: ...
     def activity(self, student_id: str) -> list[dict[str, Any]]: ...
     def star_quiz_outcomes(self, student_id: str) -> list[dict[str, Any]]: ...
     def review_cards(self, student_id: str) -> list[dict[str, Any]]: ...
+    def attempt_rollups(self, student_id: str) -> list[dict[str, Any]]: ...
+    def attempt_facts(self, student_id: str) -> list[dict[str, Any]]: ...
+    def review_due(self, student_id: str) -> list[dict[str, Any]]: ...
+    def mark_attempt_rollups_complete(self, student_id: str) -> None: ...
 
 
 class _Repositories:
@@ -221,6 +230,18 @@ class _Repositories:
 
     def review_cards(self, student_id: str) -> list[dict[str, Any]]:
         return curriculum_cache.with_table(review_repo.list_cards, student_id)
+
+    def attempt_rollups(self, student_id: str) -> list[dict[str, Any]]:
+        return curriculum_cache.with_table(practice_repo.list_attempt_rollups, student_id)
+
+    def attempt_facts(self, student_id: str) -> list[dict[str, Any]]:
+        return curriculum_cache.with_table(practice_repo.list_attempt_facts, student_id)
+
+    def review_due(self, student_id: str) -> list[dict[str, Any]]:
+        return curriculum_cache.with_table(review_repo.list_card_dues, student_id)
+
+    def mark_attempt_rollups_complete(self, student_id: str) -> None:
+        practice_repo.mark_attempt_rollups_complete(student_id)
 
 
 #: Every partition a `Source` reads.
@@ -330,6 +351,92 @@ def _judged(attempt: Mapping[str, Any]) -> bool:
 
 def _attempt_exercise(attempt: Mapping[str, Any]) -> str:
     return str(attempt.get("challenge_id") or attempt.get("exercise_id") or "")
+
+
+@dataclass(frozen=True, slots=True)
+class AttemptRollup:
+    """What one rollup row holds: a lesson's judged answers in one knowledge point (card 135)."""
+
+    right_alone: frozenset[str] = frozenset()
+    right_asked: frozenset[str] = frozenset()
+    last_judged_at: str = ""
+
+
+def _rollup_place(row: Mapping[str, Any]) -> tuple[str, str]:
+    return (str(row.get("lesson_id") or ""), str(row.get("unit_id") or ""))
+
+
+def expected_attempt_rollups(
+    attempts: Iterable[Mapping[str, Any]],
+) -> dict[tuple[str, str], AttemptRollup]:
+    """The rollups these answers make, by (lesson, knowledge point).
+
+    The rules of `answered_right`, `right_answers_by_unit` and
+    `last_activity_by_unit`: judged answers only, right ones by exercise,
+    split by whether AI was asked first.
+    """
+    alone: dict[tuple[str, str], set[str]] = {}
+    asked: dict[tuple[str, str], set[str]] = {}
+    latest: dict[tuple[str, str], str] = {}
+    for attempt in attempts:
+        if not _judged(attempt):
+            continue
+        place = _rollup_place(attempt)
+        alone.setdefault(place, set())
+        asked.setdefault(place, set())
+        moment = str(attempt.get("created_at") or "")
+        if moment > latest.get(place, ""):
+            latest[place] = moment
+        exercise = _attempt_exercise(attempt)
+        if attempt.get("correct") is True and exercise:
+            (asked if attempt.get("asked_ai") is True else alone)[place].add(exercise)
+    return {
+        place: AttemptRollup(
+            right_alone=frozenset(alone[place]),
+            right_asked=frozenset(asked[place]),
+            last_judged_at=latest.get(place, ""),
+        )
+        for place in alone
+    }
+
+
+def _strings(value: object) -> frozenset[str]:
+    if isinstance(value, (set, frozenset, list, tuple)):
+        return frozenset(str(item) for item in value if item)
+    return frozenset()
+
+
+def stored_attempt_rollups(
+    rows: Iterable[Mapping[str, Any]],
+) -> dict[tuple[str, str], AttemptRollup]:
+    """The rollup rows as read, by (lesson, knowledge point); the marker left out."""
+    return {
+        _rollup_place(row): AttemptRollup(
+            right_alone=_strings(row.get("right_alone")),
+            right_asked=_strings(row.get("right_asked")),
+            last_judged_at=str(row.get("last_judged_at") or ""),
+        )
+        for row in rows
+        if row.get("entity_type") == practice_repo.ATTEMPT_ROLLUP_ENTITY
+    }
+
+
+def attempt_rollups_complete(rows: Iterable[Mapping[str, Any]]) -> bool:
+    """Whether the rollups read carry the marker of this version: every answer is in them."""
+    return any(
+        row.get("SK") == practice_repo.ATTEMPT_ROLLUP_STATE_SK
+        and row.get("entity_type") == practice_repo.ATTEMPT_ROLLUP_STATE_ENTITY
+        and row.get("rollup_version") == practice_repo.ATTEMPT_ROLLUP_VERSION
+        for row in rows
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _RightAnswer:
+    exercise: str
+    unit_id: str
+    lesson_id: str
+    asked_ai: bool
 
 
 def _newest_first(attempt: Mapping[str, Any]) -> tuple[str, str]:
@@ -571,14 +678,85 @@ class StudentEvidence:
         """
         return self._once(
             "answered_right",
-            lambda: frozenset(
-                exercise
-                for attempt in self._rows("attempts")
-                if attempt.get("correct") is True
-                and _judged(attempt)
-                and (exercise := _attempt_exercise(attempt))
-            ),
+            lambda: frozenset(item.exercise for item in self._right_answers()),
         )
+
+    def _answers(self) -> tuple[str, list[dict[str, Any]]]:
+        """Where the answer facts come from: every answer, or their rollups (card 135).
+
+        The rollups when the page read them (`attempt_rollups` in `read_all`)
+        and the answers have not been read whole already. They are trusted only
+        under their marker, which the backfill writes once every earlier answer
+        is in them; without it every answer is read, as before.
+
+        This rests on the rollup write and this read going out in one deploy,
+        with the backfill run after it: an answer saved by code that does not
+        write rollups is never behind a marker. A marker this read writes itself
+        (`_complete_rollups`) can be written in the seconds a deploy still runs
+        the old code; the backfill run after the deploy adds what those missed.
+        """
+
+        def build() -> tuple[str, list[dict[str, Any]]]:
+            if "attempts" in self._partitions or "attempt_rollups" not in self._partitions:
+                return ("attempts", self._rows("attempts"))
+            rollups = self._rows("attempt_rollups")
+            if attempt_rollups_complete(rollups):
+                return ("rollups", rollups)
+            facts = self._rows("attempt_facts")
+            self._complete_rollups(rollups, facts)
+            return ("attempts", facts)
+
+        return self._once("answers", build)
+
+    def _complete_rollups(
+        self, rollups: Sequence[Mapping[str, Any]], facts: Sequence[Mapping[str, Any]]
+    ) -> None:
+        """Write the marker when the rollups read already say what every answer says.
+
+        A student who began after the backfill has no marker and would read
+        every answer forever. An answer saved between the two reads makes them
+        differ unless its rollup already held it, so agreeing rollups stay right
+        once the marker stands. Degrades to no marker.
+        """
+        if expected_attempt_rollups(facts) != stored_attempt_rollups(rollups):
+            return
+        try:
+            self.source.mark_attempt_rollups_complete(self.student_id)
+        except Exception:  # noqa: BLE001
+            logger.warning("Answer rollup marker could not be written", exc_info=True)
+
+    def _right_answers(self) -> tuple[_RightAnswer, ...]:
+        """Every judged right answer, one per exercise and place, from `_answers`."""
+
+        def build() -> tuple[_RightAnswer, ...]:
+            kind, rows = self._answers()
+            found: list[_RightAnswer] = []
+            if kind == "rollups":
+                for place, rollup in stored_attempt_rollups(rows).items():
+                    found.extend(
+                        _RightAnswer(exercise, place[1], place[0], False)
+                        for exercise in rollup.right_alone
+                    )
+                    found.extend(
+                        _RightAnswer(exercise, place[1], place[0], True)
+                        for exercise in rollup.right_asked
+                    )
+                return tuple(found)
+            for attempt in rows:
+                exercise = _attempt_exercise(attempt)
+                if attempt.get("correct") is not True or not _judged(attempt) or not exercise:
+                    continue
+                found.append(
+                    _RightAnswer(
+                        exercise,
+                        str(attempt.get("unit_id") or ""),
+                        str(attempt.get("lesson_id") or ""),
+                        attempt.get("asked_ai") is True,
+                    )
+                )
+            return tuple(found)
+
+        return self._once("right_answers", build)
 
     @property
     def right_answers_by_unit(self) -> dict[str, RightAnswers]:
@@ -593,17 +771,14 @@ class StudentEvidence:
         def build() -> dict[str, RightAnswers]:
             asked: dict[str, set[str]] = {}
             alone: dict[str, set[str]] = {}
-            for attempt in self._rows("attempts"):
-                exercise = _attempt_exercise(attempt)
-                if attempt.get("correct") is not True or not _judged(attempt) or not exercise:
-                    continue
-                unit_id = str(attempt.get("unit_id") or "") or self._once(
+            for answer in self._right_answers():
+                unit_id = answer.unit_id or self._once(
                     "unit_of_lesson", self.content.unit_of_lesson
-                ).get(str(attempt.get("lesson_id") or ""), "")
+                ).get(answer.lesson_id, "")
                 if not unit_id:
                     continue
-                kind = asked if attempt.get("asked_ai") is True else alone
-                kind.setdefault(unit_id, set()).add(exercise)
+                kind = asked if answer.asked_ai else alone
+                kind.setdefault(unit_id, set()).add(answer.exercise)
             return {
                 unit_id: RightAnswers(
                     independent=len(alone.get(unit_id, set())),
@@ -724,9 +899,14 @@ class StudentEvidence:
                 if unit_id and moment and str(moment) > latest.get(str(unit_id), ""):
                     latest[str(unit_id)] = str(moment)
 
-            for attempt in self._rows("attempts"):
-                if _judged(attempt):
-                    note(attempt.get("unit_id"), attempt.get("created_at"))
+            kind, rows = self._answers()
+            if kind == "rollups":
+                for (_lesson, unit_id), rollup in stored_attempt_rollups(rows).items():
+                    note(unit_id, rollup.last_judged_at)
+            else:
+                for attempt in rows:
+                    if _judged(attempt):
+                        note(attempt.get("unit_id"), attempt.get("created_at"))
             for item in self.completions:
                 note(item.unit_id, item.completed_at)
             return latest
@@ -849,13 +1029,13 @@ class StudentEvidence:
     def due_cards(self) -> tuple[dict[str, Any], ...]:
         """Every review card whose time has come, soonest first. Every page, no ceiling."""
 
-        def build() -> tuple[dict[str, Any], ...]:
-            moment = self.now.isoformat()
-            due = [card for card in self._rows("review_cards") if str(card.get("due_at", "")) <= moment]
-            due.sort(key=lambda card: str(card.get("due_at", "")))
-            return tuple(due)
+        return self._once("due_cards", lambda: self._due(self._rows("review_cards")))
 
-        return self._once("due_cards", build)
+    def _due(self, cards: Iterable[dict[str, Any]]) -> tuple[dict[str, Any], ...]:
+        moment = self.now.isoformat()
+        due = [card for card in cards if str(card.get("due_at", "")) <= moment]
+        due.sort(key=lambda card: str(card.get("due_at", "")))
+        return tuple(due)
 
     def card_unit(self, card: Mapping[str, Any]) -> str:
         """The one rule for where a card counts: the unit of its own lesson.
@@ -872,11 +1052,20 @@ class StudentEvidence:
 
     @property
     def review_due_by_unit(self) -> dict[str, int]:
-        """How many cards are due in each unit, by `card_unit`."""
+        """How many cards are due in each unit, by `card_unit`.
+
+        From the cards' due times alone (`review_due`) unless the cards were
+        read whole already.
+        """
 
         def build() -> dict[str, int]:
             counts: dict[str, int] = {}
-            for card in self.due_cards:
+            due = (
+                self.due_cards
+                if "review_cards" in self._partitions
+                else self._once("due_times", lambda: self._due(self._rows("review_due")))
+            )
+            for card in due:
                 unit_id = self.card_unit(card)
                 if unit_id:
                     counts[unit_id] = counts.get(unit_id, 0) + 1

@@ -191,17 +191,92 @@ def test_listings_ignore_the_legacy_shape(world):
     assert current_relationship.parents_of("student-1", table=world.table) == []
 
 
-def test_candidate_pairs_scan_every_page_for_active_parent_sides(world):
+def test_candidate_pairs_read_every_page_for_active_parent_sides(world):
     world.table.page_item_cap = 2
+    world.account("parent-3", "parent")
+    world.account("parent-4", "parent")
     world.link("parent-1", "student-1")
     world.link("parent-1", "student-2", status="pending")
     world.link("parent-2", "student-3")
+    world.link("parent-4", "student-2")
     _legacy_binding_only(world)
 
     pairs = current_relationship.candidate_pairs(table=world.table)
 
-    assert sorted(pairs) == [("parent-1", "student-1"), ("parent-2", "student-3")]
-    assert world.table.calls["scan"] > 1
+    assert sorted(pairs) == [
+        ("parent-1", "student-1"),
+        ("parent-2", "student-3"),
+        ("parent-4", "student-2"),
+    ]
+    # Card 135: the parents from the account listing, then their own rows.
+    assert world.table.calls["scan"] == 0
+    assert world.table.calls["query"] > 1
+
+
+def _scanned_candidates(world: LinkRows) -> set[tuple[str, str]]:
+    """What the whole-table scan `candidate_pairs` replaced found, row by row."""
+    return {
+        (row["parent_id"], row["student_id"])
+        for row in world.table.rows.values()
+        if row.get("entity_type") == parent_link_repo.ENTITY_TYPE
+        and row.get("status") == parent_link_repo.STATUS_ACTIVE
+        and str(row.get("SK") or "").startswith("CHILD#")
+        and isinstance(row.get("parent_id"), str)
+        and isinstance(row.get("student_id"), str)
+    }
+
+
+def test_candidate_pairs_keep_every_pair_the_scan_found_that_can_be_current(world):
+    """Card 135: the listing read gives the weekly job the same families.
+
+    Every pair the old scan found and the judge holds current is found, and
+    nothing is found that the scan did not: a pair missed is a parent's report
+    not sent, a pair added is a report sent to someone else's parent.
+    """
+    world.table.page_item_cap = 3
+    for index in range(5, 12):
+        world.account(f"parent-{index}", "parent")
+        world.account(f"student-{index}", "student")
+        world.link(f"parent-{index}", f"student-{index}")
+    world.link("parent-5", "student-6")
+    world.link("parent-1", "student-1")
+    world.link("parent-1", "student-2", status="rejected")
+    world.link("parent-2", "student-3", only_parent_side=True)
+    world.link("parent-2", "student-1", student_side_status="pending")
+    # A suspended parent and one whose account holds another role: found by the
+    # scan, never current.
+    world.account("parent-6", "parent", status="suspended")
+    world.account("parent-7", "teacher")
+    # A student-side row alone, as the scan never read it.
+    world.table.seed(
+        {
+            **parent_link_repo.student_side_key("student-8", "parent-9"),
+            "entity_type": parent_link_repo.ENTITY_TYPE,
+            "parent_id": "parent-9",
+            "student_id": "student-8",
+            "status": parent_link_repo.STATUS_ACTIVE,
+        }
+    )
+    _legacy_binding_only(world)
+
+    found = current_relationship.candidate_pairs(table=world.table)
+    scanned = _scanned_candidates(world)
+
+    assert len(found) == len(set(found))
+    assert set(found) <= scanned
+
+    def current(pairs):
+        return {
+            pair
+            for pair in pairs
+            if current_relationship.judge(*pair, table=world.table).is_current
+        }
+
+    assert current(found) == current(scanned)
+    assert len(current(found)) == 7
+    # The suspended parent is still a candidate, judged and refused by the job.
+    assert ("parent-6", "student-6") in found
+    assert world.table.calls["scan"] == 0
 
 
 # --- Many at once (card 133) ----------------------------------------------------

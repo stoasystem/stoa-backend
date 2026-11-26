@@ -287,6 +287,12 @@ def deleted_by_branch() -> dict[str, tuple[str, dict[str, Any]]]:
     add("practice_progress", _row(
         {"PK": review_repo.card_partition(ACCOUNT), "SK": "CARD#ch1"}, "review_card",
         student_id=ACCOUNT, user_id=ACCOUNT))
+    add("practice_progress", _row(
+        practice_repo.attempt_rollup_key(ACCOUNT, "l1", "u1"), "practice_attempt_rollup",
+        student_id=ACCOUNT, user_id=ACCOUNT, owner_id=ACCOUNT))
+    add("practice_progress", _row(
+        {"PK": f"ATTEMPTS#{ACCOUNT}", "SK": practice_repo.ATTEMPT_ROLLUP_STATE_SK},
+        "practice_attempt_rollup_state", student_id=ACCOUNT, user_id=ACCOUNT, owner_id=ACCOUNT))
     # adaptive_assignment / learning_memory / ai_teacher_draft / curriculum_signal
     add("adaptive_assignment", _row(
         {"PK": "ASSIGNMENT#a1", "SK": "META"}, "learning_assignment", student_id=ACCOUNT))

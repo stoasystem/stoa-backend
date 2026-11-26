@@ -499,6 +499,8 @@ SAMPLE_KEYS: Mapping[str, tuple[str, str]] = {
     "report_object_intent": ("USER#{a}", "REPORT_OBJECT#op#pdf"),
     "user_profile": ("USER#{a}", "PROFILE"),
     "practice_attempt": ("ATTEMPTS#{a}", "ATTEMPT#x"),
+    "practice_attempt_rollup": ("ATTEMPTS#{a}", "ROLLUP#L#l#U#u"),
+    "practice_attempt_rollup_state": ("ATTEMPTS#{a}", "ROLLUP#!STATE"),
     "usage_counter": ("USAGE#{a}", "QUESTION#2026-11-01"),
     "attachment_storage_usage": ("STORAGE#{a}", "USAGE"),
     "report_summary": ("REPORT#r", "SUMMARY"),

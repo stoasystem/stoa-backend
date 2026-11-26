@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal, NamedTuple, Protocol, runtime_checkable
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
@@ -670,8 +670,13 @@ async def get_help_request(
     request_id: str,
     authorized: AuthorizedResource = Depends(_help_request(AuthorizationAction.READ)),
     actor: Actor = Depends(get_actor),
+    view_mode: Literal["full", "live"] = Query(default="full", alias="view"),
 ):
-    """Get full detail of a specific help request including conversation messages."""
+    """Get full detail of a specific help request including conversation messages.
+
+    `view=live` is the poll: it leaves the student's evidence unread, so
+    `commonErrorCause` and `aiHelpedStars` come back empty.
+    """
     table = db_table.table()
 
     view = help_requests.teacher_view(authorized.value)
@@ -709,7 +714,10 @@ async def get_help_request(
     ]
     # One evidence for the prep's items, read lazily: each reads what it needs once.
     locale = locale_service.reader_locale(actor.user_id)
-    evidence = student_evidence.for_student(student_id, locale=locale)
+    evidence = (
+        student_evidence.for_student(student_id, locale=locale) if view_mode == "full" else None
+    )
+    content = evidence.content if evidence is not None else student_evidence.Content(locale=locale)
     asked_records = _asked_records(conv_id)
     asked = teacher_help_prep.questions(
         history, asked_at=_text(authorized.value.get("escalated_at")) or None
@@ -732,8 +740,8 @@ async def get_help_request(
         firstTeacherActionAt=view.first_teacher_action_at,
         sla=view.sla,
         weakTopics=_asked_topics(asked_records),
-        commonErrorCause=_common_error_cause(evidence, locale),
-        aiHelpedStars=_ai_helped_stars(evidence),
+        commonErrorCause=_common_error_cause(evidence, locale) if evidence is not None else None,
+        aiHelpedStars=_ai_helped_stars(evidence) if evidence is not None else [],
         firstQuestion=_prep_question(asked.first, attachment_summaries),
         lastQuestion=_prep_question(asked.last, attachment_summaries),
         uploads=[
@@ -741,7 +749,7 @@ async def get_help_request(
             for value in teacher_help_prep.uploads(history)
             if value in attachment_summaries
         ],
-        askedStars=_asked_stars(asked_records, evidence),
+        askedStars=_asked_stars(asked_records, content),
     )
 
 
@@ -793,7 +801,7 @@ def _prep_question(
 
 
 def _asked_stars(
-    records: list[dict[str, Any]], evidence: student_evidence.StudentEvidence
+    records: list[dict[str, Any]], content: student_evidence.Content
 ) -> list[TeacherAskedStar]:
     """The stars the conversation's Ask answers named, newest first (#517).
 
@@ -805,7 +813,7 @@ def _asked_stars(
     if not unit_ids:
         return []
     try:
-        titles = {str(unit.get("id") or ""): unit.get("title") for unit in evidence.content.units}
+        titles = {str(unit.get("id") or ""): unit.get("title") for unit in content.units}
     except Exception as exc:
         logger.warning(
             "help_request_asked_stars_unavailable error_class=%s", type(exc).__name__

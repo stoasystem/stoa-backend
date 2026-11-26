@@ -30,6 +30,7 @@ import pytest
 from stoa import aws
 from stoa import config
 from stoa.aws import Kind
+from stoa.db import listing_index
 from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.db.repositories import (
@@ -626,3 +627,28 @@ def test_a_case_written_despite_an_error_keeps_its_image(world, monkeypatch) -> 
     shown = world.admin.get(f"/admin/moderation/cases/{case['case_id']}/image")
     assert shown.status_code == 200, shown.text
     assert shown.content == data
+
+
+def test_a_case_is_listed_from_its_first_write_through_every_change(world) -> None:
+    """The queue and the retention read GSI-Listing, not the table (card 135)."""
+    world.table.seed(
+        {**listing_index.marker_key(moderation_repo.CASE_LISTING), "complete": True}
+    )
+    world.table.calls.clear()
+    _upload_id, case = _blocked(world)
+    key = (f"MODERATION#{case['case_id']}", "SUMMARY")
+    stored = world.table.rows[key]
+    assert (stored["listing"], stored["listed_at"]) == (
+        moderation_repo.CASE_LISTING,
+        stored["created_at"],
+    )
+
+    handled_at = _handle(world, case["case_id"])
+    summary = _retain(world, handled_at + timedelta(days=90))
+
+    assert summary.deleted == 1
+    [kept] = world.cases()
+    assert (kept["case_id"], kept["status"]) == (case["case_id"], "actioned")
+    assert world.table.rows[key]["listing"] == moderation_repo.CASE_LISTING
+    assert world.table.rows[key]["listed_at"] == stored["listed_at"]
+    assert world.table.calls["scan"] == 0
