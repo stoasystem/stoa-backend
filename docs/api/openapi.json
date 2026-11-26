@@ -37267,7 +37267,7 @@
     },
     "/teachers/me/help-requests/{request_id}": {
       "get": {
-        "description": "Get full detail of a specific help request including conversation messages.",
+        "description": "Get full detail of a specific help request including conversation messages.\n\n`view=live` is the poll: it leaves the student's evidence unread, so\n`commonErrorCause` and `aiHelpedStars` come back empty.",
         "operationId": "get_help_request_teachers_me_help_requests__request_id__get",
         "parameters": [
           {
@@ -37276,6 +37276,20 @@
             "required": true,
             "schema": {
               "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "default": "full",
+              "enum": [
+                "full",
+                "live"
+              ],
+              "title": "View",
               "type": "string"
             }
           }
