@@ -4,6 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
+from stoa.db import listing_index
 from stoa.db.repositories import report_repo
 from stoa.security.admin_authorization import (
     AdminTargetProvider,
@@ -208,13 +209,24 @@ async def list_recovery_jobs(
     actor: Actor = Depends(admin_operation),
 ):
     """List async report recovery jobs."""
-    last_key = _start_key(next_token, RECOVERY_JOBS_SCOPE)
-    result = report_repo.list_recovery_jobs(limit=limit, last_key=last_key)
+    indexed = report_repo.recovery_jobs_indexed()
+    scope = f"{RECOVERY_JOBS_SCOPE}:listing" if indexed else RECOVERY_JOBS_SCOPE
+    last_key = (
+        _start_key(
+            next_token,
+            scope,
+            key=listing_index.INDEX_KEY,
+            within=lambda key: key["listing"] == report_repo.RECOVERY_JOB_LISTING,
+        )
+        if indexed
+        else _start_key(next_token, scope)
+    )
+    result = report_repo.list_recovery_jobs(limit=limit, last_key=last_key, indexed=indexed)
     items = [_recovery_job_response(item) for item in _admin_items(result)]
     return RecoveryJobListResponse(
         items=items,
         count=len(items),
-        next_token=_next_token(RECOVERY_JOBS_SCOPE, result),
+        next_token=_next_token(scope, result),
     )
 
 

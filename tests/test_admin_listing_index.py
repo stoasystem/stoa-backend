@@ -26,7 +26,9 @@ from stoa.db import listing_index
 from stoa.db import table as db_table
 from stoa.db.repositories import (
     curriculum_ops_repo,
+    curriculum_analytics_repo,
     moderation_repo,
+    report_repo,
     question_repo,
     security_audit_repo,
     user_repo,
@@ -204,7 +206,7 @@ def test_the_lists_are_ones_the_table_carries() -> None:
     assert DEFAULT_INDEXES[question_repo.LISTING_INDEX] == schema
     assert DEFAULT_INDEXES[help_requests.LISTING_INDEX] == schema
     assert DEFAULT_INDEXES[curriculum_ops_repo.LISTING_INDEX] == schema
-    assert len(set(backfill.LISTINGS)) == 6
+    assert len(set(backfill.LISTINGS)) == 9
 
 
 # ── The curriculum worklist ──────────────────────────────────────────────────
@@ -488,3 +490,116 @@ def test_a_case_tombstoned_since_the_scan_is_not_listed(fake_table: FakeTable) -
 
     assert outcome == {"listed or gone meanwhile, skipped": 1}
     assert "listing" not in fake_table.rows[("MODERATION#mod-1", "SUMMARY")]
+
+
+# ── Card 135, second batch: reports, recovery jobs, curriculum metrics ──────
+
+
+def _reports_written_before(table: FakeTable) -> None:
+    table.seed(
+        {"PK": "REPORT#r-old", "SK": "SUMMARY", "status": "email_failed", "created_at": OLD},
+        {"PK": "REPORT#r-new", "SK": "SUMMARY", "status": "email_failed", "created_at": "2026-07-01T08:00:00Z"},
+        {"PK": "REPORT#r-gone", "SK": "SUMMARY", "privacy_deleted": True, "created_at": OLD},
+        {
+            "PK": "REPORT_RECOVERY_JOB#j-1",
+            "SK": "SUMMARY",
+            "entity_type": "REPORT_RECOVERY_JOB",
+            "created_at": OLD,
+        },
+        {"PK": "REPORT_RECOVERY_JOB#j-1", "SK": "TARGET#00000#t", "entity_type": "REPORT_RECOVERY_JOB_TARGET"},
+        {
+            "PK": "CURRICULUM_METRIC#lesson#l-1",
+            "SK": "VERSION#v1",
+            "entity_type": curriculum_analytics_repo.METRIC_ENTITY,
+            "content_type": "lesson",
+            "updated_at": OLD,
+        },
+    )
+
+
+def test_reports_jobs_and_metrics_keep_their_scan_until_marked_then_read_the_index(
+    fake_table: FakeTable, capsys
+) -> None:
+    _filler(fake_table)
+    _reports_written_before(fake_table)
+    assert not report_repo.reports_indexed()
+    assert len(curriculum_analytics_repo.list_metrics(limit=None)) == 1
+
+    assert backfill.run(fake_table, apply_writes=True, verify_index=False) == 0
+    assert "written: 4" in capsys.readouterr().out
+    assert _listed(fake_table, report_repo.REPORT_LISTING) == {
+        ("REPORT#r-old", "SUMMARY"),
+        ("REPORT#r-new", "SUMMARY"),
+    }
+    assert _listed(fake_table, report_repo.RECOVERY_JOB_LISTING) == {("REPORT_RECOVERY_JOB#j-1", "SUMMARY")}
+    assert backfill.run(fake_table, apply_writes=False, verify_index=True) == 0
+
+    fake_table.calls.clear()
+    page = report_repo.list_reports_for_admin(status="email_failed", limit=50)
+    assert [row["PK"] for row in page["Items"]] == ["REPORT#r-new", "REPORT#r-old"]
+    assert [row["PK"] for row in report_repo.list_recovery_jobs()["Items"]] == ["REPORT_RECOVERY_JOB#j-1"]
+    assert len(curriculum_analytics_repo.list_metrics(limit=None)) == 1
+    assert fake_table.calls["scan"] == 0
+
+
+def test_new_reports_jobs_and_metrics_are_written_into_their_lists(fake_table: FakeTable) -> None:
+    claim = {"report_id": "r-1", "student_id": "s-1", "created_at": OLD, "status": "generation_claimed"}
+    assert report_repo.try_claim_report_generation(claim)
+    report_repo.put_recovery_job({"job_id": "j-1", "created_at": OLD}, [])
+    curriculum_analytics_repo.increment_metric(
+        {
+            "public_id": "l-1",
+            "content_type": "lesson",
+            "signal_type": "hint",
+            "source_type": "student",
+            "created_at": OLD,
+        }
+    )
+
+    assert _listed(fake_table, report_repo.REPORT_LISTING) == {("REPORT#r-1", "SUMMARY")}
+    assert _listed(fake_table, report_repo.RECOVERY_JOB_LISTING) == {("REPORT_RECOVERY_JOB#j-1", "SUMMARY")}
+    assert _listed(fake_table, curriculum_analytics_repo.METRIC_LISTING) == {
+        ("CURRICULUM_METRIC#lesson#l-1", "VERSION#unknown")
+    }
+
+
+def test_a_students_signal_lists_the_metric_it_moves() -> None:
+    # Card 135 audit F1: the student path is the production one.
+    operations = curriculum_analytics_repo.build_curriculum_signal_transaction(
+        student_id="11111111-1111-4111-8111-111111111111",
+        generation=1,
+        item={
+            "signal_id": "sig-1",
+            "public_id": "l-1",
+            "content_type": "lesson",
+            "signal_type": "hint",
+            "source_type": "student",
+            "created_at": OLD,
+        },
+    )
+    [update] = [op["Update"] for op in operations if "Update" in op]
+    assert "#listing=:listing" in update["UpdateExpression"]
+    assert "#listed_at=:updated_at" in update["UpdateExpression"]
+    assert update["ExpressionAttributeValues"][":listing"] == curriculum_analytics_repo.METRIC_LISTING
+
+
+def test_recovery_targets_read_the_report_list_to_its_end(monkeypatch) -> None:
+    # Card 135 audit F2: the old page budget left targets past the 1000th report unseen.
+    from stoa.services import report_recovery_job_service as service
+
+    pages: list[int] = []
+
+    def list_reports_for_admin(**kwargs: Any) -> dict[str, Any]:
+        pages.append(1)
+        last = len(pages) >= 8
+        items = [{"report_id": "r-hit"}] if last else []
+        return {"Items": items} if last else {"Items": items, "LastEvaluatedKey": {"n": len(pages)}}
+
+    monkeypatch.setattr(service.report_repo, "reports_indexed", lambda table=None: True)
+    monkeypatch.setattr(service.report_repo, "list_reports_for_admin", list_reports_for_admin)
+    monkeypatch.setattr(service, "_target_preview", lambda report, job_type: dict(report))
+
+    targets, read = service._collect_targets(
+        job_type=service.RESEND_JOB_TYPE, filters={"status": "email_failed"}, max_targets=5
+    )
+    assert read == 8 and targets == [{"report_id": "r-hit"}]

@@ -286,6 +286,7 @@ def test_report_ops_list_returns_metadata_filters_and_next_token(monkeypatch):
             "student_id": "student-1",
             "limit": 10,
             "last_key": previous,
+            "indexed": False,
         }
     ]
     serialized = str(data)
@@ -357,6 +358,7 @@ def test_report_ops_list_round_trips_non_report_scan_key_next_token(monkeypatch)
             "student_id": None,
             "limit": 5,
             "last_key": None,
+            "indexed": False,
         }
     ]
 
@@ -991,8 +993,9 @@ def test_resend_recovery_job_preview_returns_metadata_only(monkeypatch):
         "week_start": "2026-06-01",
         "parent_id": None,
         "student_id": None,
-        "limit": 5,
+        "limit": 200,
         "last_key": None,
+        "indexed": False,
     }
     assert calls == [
         ("target_read", expected_read),
@@ -1120,8 +1123,9 @@ def test_generation_retry_recovery_job_preview_returns_metadata_only(monkeypatch
         "week_start": "2026-06-01",
         "parent_id": None,
         "student_id": None,
-        "limit": 5,
+        "limit": 200,
         "last_key": None,
+        "indexed": False,
     }
     assert calls == [expected_read, expected_read]
     _assert_no_private_artifact_markers(data)

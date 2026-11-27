@@ -18,6 +18,11 @@ step, the list's marker (`listing_index.marker_key`). Run it once the release
 that writes those keys is deployed everywhere, or a row an older release writes
 afterwards would be missing from a list its reader already trusts.
 
+Its second batch adds three more marked lists: the weekly report summaries and
+the report recovery jobs (`report_repo.listing_fields`), read by the admin
+report pages, the recovery job targets and the operator email counts; and the
+curriculum metrics (`curriculum_analytics_repo.METRIC_LISTING`).
+
     python scripts/backfill_listing_index_admin.py            # dry run: counts, writes nothing
     python scripts/backfill_listing_index_admin.py --apply    # writes the rows the dry run counted
     python scripts/backfill_listing_index_admin.py --verify   # reads the index back, writes nothing
@@ -55,9 +60,11 @@ from stoa.db import listing_index  # noqa: E402
 from stoa.db import table as db_table  # noqa: E402
 from stoa.db.repositories import (  # noqa: E402
     account_deletion_repo,
+    curriculum_analytics_repo,
     curriculum_ops_repo,
     moderation_repo,
     question_repo,
+    report_repo,
     security_audit_repo,
 )
 from stoa.models.question import QuestionStatus  # noqa: E402
@@ -72,11 +79,27 @@ LISTINGS = (
     curriculum_ops_repo.POINTER_LISTING,
     moderation_repo.CASE_LISTING,
     security_audit_repo.ALLOWED_LISTING,
+    report_repo.REPORT_LISTING,
+    report_repo.RECOVERY_JOB_LISTING,
+    curriculum_analytics_repo.METRIC_LISTING,
 )
 #: The lists whose readers keep their scan until this script's marker is there.
-MARKED = (moderation_repo.CASE_LISTING, security_audit_repo.ALLOWED_LISTING)
+MARKED = (
+    moderation_repo.CASE_LISTING,
+    security_audit_repo.ALLOWED_LISTING,
+    report_repo.REPORT_LISTING,
+    report_repo.RECOVERY_JOB_LISTING,
+    curriculum_analytics_repo.METRIC_LISTING,
+)
 #: What else a write requires of the row, by list.
+_NOT_TOMBSTONE = (
+    " AND (attribute_not_exists(#privacy_deleted) OR #privacy_deleted <> :deleted)",
+    {"#privacy_deleted": "privacy_deleted"},
+    {":deleted": True},
+)
 _STILL = {
+    report_repo.REPORT_LISTING: _NOT_TOMBSTONE,
+    report_repo.RECOVERY_JOB_LISTING: _NOT_TOMBSTONE,
     moderation_repo.CASE_LISTING: (
         " AND (attribute_not_exists(#privacy_deleted) OR #privacy_deleted <> :deleted)",
         {"#privacy_deleted": "privacy_deleted"},
@@ -100,7 +123,26 @@ def listing_fields(item: Mapping[str, Any]) -> dict[str, str]:
         return moderation_repo.listing_fields(item)
     if entity_type == "security_audit_event":
         return security_audit_repo.listing_fields(item)
+    if entity_type == curriculum_analytics_repo.METRIC_ENTITY:
+        updated_at = item.get("updated_at")
+        if not isinstance(updated_at, str) or not updated_at:
+            return {}
+        return {"listing": curriculum_analytics_repo.METRIC_LISTING, "listed_at": updated_at}
+    if report_repo.listing_fields(item):
+        return report_repo.listing_fields(item)
     return question_repo.listing_fields(item)
+
+
+def _untimed(item: Mapping[str, Any]) -> bool:
+    """A live report, recovery job or metric row its list would leave out for want of a time."""
+    if item.get("privacy_deleted") is True or account_deletion_repo.is_deletion_tombstone(item):
+        return False
+    pk = str(item.get("PK") or "")
+    if item.get("entity_type") == curriculum_analytics_repo.METRIC_ENTITY:
+        return not item.get("updated_at")
+    if item.get("SK") == "SUMMARY" and pk.startswith(("REPORT#", "REPORT_RECOVERY_JOB#")):
+        return not item.get("created_at")
+    return False
 
 
 def _row_key(item: Mapping[str, Any]) -> tuple[str, str]:
@@ -112,6 +154,8 @@ def count(items: Iterable[Mapping[str, Any]]) -> Counter[str]:
     counts: Counter[str] = Counter()
     for item in items:
         fields = listing_fields(item)
+        if not fields and _untimed(item):
+            counts["no timestamp, never listed"] += 1
         if not fields:
             # The old census counted every META row with a question status;
             # the index holds the questions only.
@@ -233,6 +277,7 @@ def run(
     counts = count(items)
     print(" | ".join(f"{name}: {counts[name]}" for name in (*LISTINGS, "in place", "to write")))
     print(f"not a question, no longer counted: {counts['not a question, no longer counted']}")
+    print(f"no timestamp, never listed: {counts['no timestamp, never listed']}")
     if verify_index:
         problems = verify(table, items)
         print(f"Index problems: {len(problems)}")

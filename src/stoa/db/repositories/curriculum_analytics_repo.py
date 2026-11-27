@@ -6,15 +6,16 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from boto3.dynamodb.conditions import Attr, ConditionBase
+from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 
-from stoa.db import data_catalog
+from stoa.db import data_catalog, listing_index
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
 
 SIGNAL_ENTITY = "curriculum_analytics_signal"
 METRIC_ENTITY = "curriculum_analytics_metric"
+METRIC_LISTING = "curriculum_metric"
 OWNER_MANIFEST_ENTITY = "curriculum_signal_owner_manifest"
 RECONCILIATION_ENTITY = "curriculum_signal_reconciliation"
 CURRICULUM_SIGNAL_WRITER_REGISTRY = frozenset(
@@ -188,7 +189,8 @@ def build_curriculum_signal_transaction(
                     "SET #entity_type=:entity_type, #public_id=:public_id, "
                     "#content_type=:content_type, #version_id=:version_id, "
                     "#subject_id=:subject_id, #topic_id=:topic_id, "
-                    "#updated_at=:updated_at ADD #total_count :one, "
+                    "#updated_at=:updated_at, #listing=:listing, #listed_at=:updated_at "
+                    "ADD #total_count :one, "
                     "#signal_count :one, #source_count :one"
                 ),
                 "ExpressionAttributeNames": {
@@ -199,6 +201,8 @@ def build_curriculum_signal_transaction(
                     "#subject_id": "subject_id",
                     "#topic_id": "topic_id",
                     "#updated_at": "updated_at",
+                    "#listing": "listing",
+                    "#listed_at": "listed_at",
                     "#total_count": "total_count",
                     "#signal_count": signal_field,
                     "#source_count": source_field,
@@ -211,6 +215,7 @@ def build_curriculum_signal_transaction(
                     ":subject_id": signal.get("subject_id") or "",
                     ":topic_id": signal.get("topic_id") or "",
                     ":updated_at": signal["created_at"],
+                    ":listing": METRIC_LISTING,
                     ":one": 1,
                 },
             }
@@ -267,6 +272,8 @@ def increment_metric(item: CurriculumSignalItem) -> None:
         "#subject_id": "subject_id",
         "#topic_id": "topic_id",
         "#updated_at": "updated_at",
+        "#listing": "listing",
+        "#listed_at": "listed_at",
         "#total_count": "total_count",
         "#signal_count": signal_field,
         "#source_count": source_field,
@@ -279,6 +286,7 @@ def increment_metric(item: CurriculumSignalItem) -> None:
         ":subject_id": item.get("subject_id") or "",
         ":topic_id": item.get("topic_id") or "",
         ":updated_at": item["created_at"],
+        ":listing": METRIC_LISTING,
         ":one": 1,
     }
     _update_item(
@@ -290,7 +298,8 @@ def increment_metric(item: CurriculumSignalItem) -> None:
         UpdateExpression=(
             "SET #entity_type = :entity_type, #public_id = :public_id, "
             "#content_type = :content_type, #version_id = :version_id, "
-            "#subject_id = :subject_id, #topic_id = :topic_id, #updated_at = :updated_at "
+            "#subject_id = :subject_id, #topic_id = :topic_id, #updated_at = :updated_at, "
+            "#listing = :listing, #listed_at = :updated_at "
             "ADD #total_count :one, #signal_count :one, #source_count :one"
         ),
         ExpressionAttributeNames=names,
@@ -313,6 +322,20 @@ def list_metrics(
         filter_expr = filter_expr & Attr("subject_id").eq(subject_id)
     if topic_id:
         filter_expr = filter_expr & Attr("topic_id").eq(topic_id)
+    if listing_index.backfilled(METRIC_LISTING, table=table):
+        # Newest first; the scan it replaced read the whole table (card 135).
+        return _items(
+            db_table.rows(
+                "query",
+                table=table,
+                want=limit or None,
+                key=listing_index.INDEX_KEY,
+                IndexName=listing_index.INDEX,
+                KeyConditionExpression=Key("listing").eq(METRIC_LISTING),
+                FilterExpression=filter_expr,
+                ScanIndexForward=False,
+            )
+        )
     return _scan_rows(table, want=limit or None, FilterExpression=filter_expr)
 
 
