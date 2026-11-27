@@ -39,13 +39,16 @@ from stoa.db.repositories.attachment_repo import (
 
 
 def _one_page(
-    read: Literal["query", "scan"],
+    read: Literal["query"],
     *,
     start: Mapping[str, object] | None = None,
     table: object | None,
     **request: object,
 ) -> db_table.Page:
-    """One page of a read, from `start`. An answer that is not a page is a dependency failure."""
+    """One page of a query, from `start`. An answer that is not a page is a dependency failure.
+
+    The upload store only queries: nothing here scans the table (#654).
+    """
     try:
         return next(db_table.pages(read, start=start or None, table=table, **request))
     except db_table.TableUnavailable:
@@ -567,51 +570,6 @@ def claim_upload_cleanup(
     )
 
 
-def scan_durable_upload_references(
-    upload_id: str,
-    immutable_object_key: str = "",
-    immutable_version_id: str = "",
-    *,
-    limit: int,
-    exclusive_start_key: dict[str, object] | None = None,
-    table: object | None = None,
-) -> tuple[bool, dict[str, object] | None]:
-    """Scan one bounded page for a durable attachment referencing upload bytes."""
-    scan: dict[str, object] = {
-        "Limit": limit,
-        "FilterExpression": (
-            "begins_with(PK,:attachment) AND SK=:meta AND "
-            "(source_upload_id=:upload_id OR "
-            "(immutable_object_key=:immutable_key AND immutable_version_id=:immutable_version))"
-        ),
-        "ExpressionAttributeValues": {
-            ":attachment": "ATTACHMENT#",
-            ":meta": "META",
-            ":upload_id": upload_id,
-            ":immutable_key": immutable_object_key,
-            ":immutable_version": immutable_version_id,
-        },
-    }
-    page = _one_page("scan", start=exclusive_start_key, table=table, **scan)
-    return bool(page.items), page.last_key
-
-
-def advance_upload_cleanup_reference_scan(
-    upload_id: str,
-    version: int,
-    cursor: dict[str, object],
-    *,
-    table: object | None = None,
-) -> bool:
-    return _cleanup_update(
-        upload_id,
-        version,
-        "SET cleanup_reference_cursor=:cursor, #version=:next",
-        {":cursor": cursor, ":next": version + 1},
-        table=table,
-    )
-
-
 def block_upload_cleanup(
     upload_id: str, version: int, *, now_epoch: int, table: object | None = None
 ) -> bool:
@@ -619,7 +577,7 @@ def block_upload_cleanup(
         upload_id,
         version,
         "SET #status=:blocked, #version=:next, expires_at=:retire "
-        "REMOVE cleanup_reference_cursor, " + ", ".join(CLEANUP_INDEX_FIELDS),
+        "REMOVE " + ", ".join(CLEANUP_INDEX_FIELDS),
         {
             ":blocked": "cleanup_blocked",
             ":next": version + 1,
@@ -655,7 +613,7 @@ def complete_upload_cleanup(
                     "multipart_upload_id", "immutable_object_key", "immutable_version_id",
                     "immutable_etag", "operation_kind", "operation_fence",
                     "operation_lease_expires_at", "operation_takeover_count",
-                    "cleanup_reference_cursor", "cleanup_multipart_aborted",
+                    "cleanup_multipart_aborted",
                     "cleanup_staging_deleted", "cleanup_immutable_deleted",
                     "cleanup_multipart_cursor", "cleanup_staging_cursor",
                     "cleanup_immutable_cursor", "cleanup_multipart_mutation_attempts",

@@ -106,10 +106,15 @@ def cleanup_upload_intent(
     s3: Any,
     settings: Settings,
     now: datetime,
-    reference_scan_limit: int,
     repository: Any = _store,
 ) -> str:
-    """Safely advance one terminal/expired upload toward idempotent deletion."""
+    """Safely advance one terminal/expired upload toward idempotent deletion.
+
+    Whether its bytes are still an attachment's is read from the upload alone
+    (`durable_attachment_id`, #654): an attachment is only ever made in the
+    transaction that spends its upload and writes that field, and the sweep
+    never takes a spent upload.
+    """
     status = str(candidate.get("status") or "")
     now_epoch = int(now.timestamp())
     if status not in {"invalid", "expired", "cleanup_pending"} and (
@@ -150,24 +155,6 @@ def cleanup_upload_intent(
             return "protected"
         immutable_key = str(current.get("immutable_object_key") or "")
         immutable_version = str(current.get("immutable_version_id") or "")
-        found, next_cursor = repository.scan_durable_upload_references(
-            str(current["upload_id"]),
-            immutable_key,
-            immutable_version,
-            limit=reference_scan_limit,
-            exclusive_start_key=current.get("cleanup_reference_cursor"),
-        )
-        if found:
-            repository.block_upload_cleanup(
-                str(current["upload_id"]), version, now_epoch=now_epoch
-            )
-            return "protected"
-        if next_cursor:
-            if repository.advance_upload_cleanup_reference_scan(
-                str(current["upload_id"]), version, next_cursor
-            ):
-                return "deferred"
-            return "skipped"
         staging_key = str(current.get("staging_object_key") or "")
         staging_version = str(current.get("staging_version_id") or "")
         multipart_id = str(current.get("multipart_upload_id") or "")

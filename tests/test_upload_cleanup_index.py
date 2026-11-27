@@ -420,7 +420,7 @@ _NEXT = {
     "validating": (6,),
     "promoting": (7,),
     "validated": (8, 10),
-    "cleanup_pending": (12, 13, 15),
+    "cleanup_pending": (12, 13, 14),
 }
 
 
@@ -434,7 +434,7 @@ def _walk_step(table: FakeTable, rng: random.Random, clock: list[int]) -> None:
         return
     version = int(row["version"])
     fence = str(row.get("operation_fence") or "fence-x")
-    step = rng.randrange(16)
+    step = rng.randrange(15)
     if rng.random() < 0.5:
         # Half the time the write the lifecycle makes next, or the walk rarely gets far.
         step = rng.choice(_NEXT.get(str(row["status"]), (step,)))
@@ -500,10 +500,6 @@ def _walk_step(table: FakeTable, rng: random.Random, clock: list[int]) -> None:
                 _store.mark_cleanup_parts_absent,
             ]
         )(upload_id, version)
-    elif step == 14:
-        _store.advance_upload_cleanup_reference_scan(
-            upload_id, version, {"PK": "ATTACHMENT#a", "SK": "META"}
-        )
     else:
         table.rows[(f"UPLOAD#{upload_id}", "META")].update(
             as_stored(

@@ -187,12 +187,6 @@ class StatefulCleanupRepository:
         value = self.uploads.get(upload_id)
         return dict(value) if value else None
 
-    def scan_durable_upload_references(self, *args, **kwargs):
-        return False, None
-
-    def advance_upload_cleanup_reference_scan(self, upload_id, version, cursor):
-        return self._advance(upload_id, version, cleanup_reference_cursor=cursor)
-
     def block_upload_cleanup(self, upload_id, version, *, now_epoch):
         return self._advance(upload_id, version, status="cleanup_blocked")
 
@@ -281,7 +275,6 @@ def _run_one(repository: StatefulCleanupRepository, provider: StatefulProvider) 
         s3=provider,
         settings=Settings(s3_images_bucket="private-bucket-canary"),
         now=NOW,
-        reference_scan_limit=10,
         repository=repository,
     )
 
@@ -408,7 +401,6 @@ def test_stale_cleanup_generation_makes_zero_provider_calls() -> None:
         s3=provider,
         settings=Settings(s3_images_bucket="private-bucket-canary"),
         now=NOW,
-        reference_scan_limit=10,
         repository=repository,
     )
 
