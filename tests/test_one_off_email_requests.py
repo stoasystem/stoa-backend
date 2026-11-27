@@ -13,6 +13,7 @@ and read its diff before committing it:
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 from pathlib import Path
@@ -21,9 +22,10 @@ import pytest
 
 from stoa import aws, config
 from stoa.aws import Kind
-from stoa.services import notify_service, password_change_code_service
+from stoa.services import one_off_email, password_change_code_service
 
 SNAPSHOT = Path(__file__).parent / "fixtures" / "one_off_email_requests_685.json"
+SERVICES = Path(__file__).resolve().parents[1] / "src" / "stoa" / "services"
 EXPIRES_AT = "2026-07-21T12:00:00+00:00"
 # Every language STOA speaks, none named, and one it does not speak.
 LOCALES = ("de", "fr", "it", "en", None, "xx")
@@ -45,7 +47,7 @@ def _send_code(locale):
 
 def _send_account_invitation(locale, role):
     # The console and the agent both mail an invitation through this (#384).
-    deliver = notify_service.account_invitation_delivery(locale)
+    deliver = one_off_email.account_invitation_delivery(locale)
     deliver(
         "invitee@example.test",
         activation_token="token/with+chars",
@@ -56,7 +58,7 @@ def _send_account_invitation(locale, role):
 
 
 def _send_teacher_invitation(locale):
-    notify_service.send_teacher_invitation_email(
+    one_off_email.send_teacher_invitation_email(
         "candidate@example.test",
         activation_token="token/with+chars",
         expires_at=EXPIRES_AT,
@@ -115,3 +117,34 @@ def test_the_snapshot_covers_every_case():
 @pytest.mark.parametrize("case", sorted(CASES))
 def test_ses_receives_the_same_request_as_before(case):
     assert _request(case) == _snapshot()[case]
+
+
+def _stoa_imports(module: str) -> set[str]:
+    tree = ast.parse((SERVICES / f"{module}.py").read_text(encoding="utf-8"))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("stoa"):
+            found |= {f"{node.module}.{alias.name}" for alias in node.names}
+        elif isinstance(node, ast.Import):
+            found |= {alias.name for alias in node.names if alias.name.startswith("stoa")}
+    return found
+
+
+def test_one_off_emails_reach_nothing_of_notifications():
+    """No preferences, no unsubscribe, no "only once": only the SES send and the layout."""
+    assert _stoa_imports("one_off_email") == {
+        "stoa.config",
+        "stoa.services.email_layout",
+        "stoa.services.locale_service",
+        "stoa.services.message_catalog",
+        "stoa.services.ses_email",
+    }
+
+
+def test_the_shared_ses_send_knows_nothing_of_either_side():
+    assert _stoa_imports("ses_email") == {
+        "stoa.aws",
+        "stoa.config",
+        "stoa.aws.Kind",
+        "stoa.services.email_layout",
+    }

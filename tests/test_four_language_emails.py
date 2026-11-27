@@ -13,7 +13,13 @@ import pytest
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.services import email_layout, locale_service, message_catalog, notify_service
+from stoa.services import (
+    email_layout,
+    locale_service,
+    message_catalog,
+    notify_service,
+    one_off_email,
+)
 from stoa.services.message_catalog import emails as email_catalog
 
 LOCALES = sorted(locale_service.SUPPORTED_LOCALES)
@@ -54,7 +60,7 @@ class _FakeSES:
 def test_the_teacher_activation_email_is_in_the_candidates_language(locale):
     ses = _FakeSES()
     aws.install({Kind.SES: ses})
-    notify_service.send_teacher_invitation_email(
+    one_off_email.send_teacher_invitation_email(
         "candidate@example.test",
         activation_token="token/with+chars",
         expires_at="2026-07-21T12:00:00+00:00",
@@ -84,7 +90,7 @@ def test_the_teacher_activation_email_is_in_the_candidates_language(locale):
 
 @pytest.mark.parametrize("locale", LOCALES)
 def test_a_nameless_candidate_is_greeted_without_a_name(locale):
-    email = notify_service.teacher_invitation_message(
+    email = one_off_email.teacher_invitation_message(
         activation_token="t", expires_at="2026-07-21", full_name="  ", locale=locale
     )
     assert escape(email_layout.greeting(None, locale)) in email.html
@@ -92,7 +98,7 @@ def test_a_nameless_candidate_is_greeted_without_a_name(locale):
 
 @pytest.mark.parametrize("locale", [None, "", "xx"])
 def test_a_candidate_without_a_usable_language_gets_the_default_one(locale):
-    email = notify_service.teacher_invitation_message(
+    email = one_off_email.teacher_invitation_message(
         activation_token="t", expires_at="2026-07-21", locale=locale
     )
     assert email.subject == message_catalog.text(
@@ -102,7 +108,7 @@ def test_a_candidate_without_a_usable_language_gets_the_default_one(locale):
 
 
 def test_a_name_cannot_inject_markup_into_the_activation_email():
-    email = notify_service.teacher_invitation_message(
+    email = one_off_email.teacher_invitation_message(
         activation_token="t", expires_at="2026-07-21", full_name="<b>x</b>", locale="fr"
     )
     assert "<b>" not in email.html

@@ -111,7 +111,7 @@ def _install_teacher_repositories(monkeypatch):
 
     delivered_invitations: list[dict] = []
     monkeypatch.setattr(
-        teacher_application_service.notify_service,
+        teacher_application_service.one_off_email,
         "send_teacher_invitation_email",
         send_invitation_email,
     )

@@ -19,6 +19,7 @@ from stoa.services import (
     message_catalog,
     notification_service,
     notify_service,
+    one_off_email,
     password_change_code_service,
     report_service,
 )
@@ -46,14 +47,14 @@ def _weekly_report(locale: str) -> str:
 
 def emails(locale: str) -> dict[str, tuple[str, str]]:
     """Name -> (subject, html) for every email, in one language."""
-    invitation = notify_service.account_invitation_message(
+    invitation = one_off_email.account_invitation_message(
         activation_token="preview-token",
         expires_at=EXPIRES,
         full_name="Anna Muster",
         locale=locale,
         role="parent",
     )
-    teacher = notify_service.teacher_invitation_message(
+    teacher = one_off_email.teacher_invitation_message(
         activation_token="preview-token", expires_at=EXPIRES, full_name="Marco Rossi", locale=locale
     )
     code = password_change_code_service.code_email("482913", locale=locale)

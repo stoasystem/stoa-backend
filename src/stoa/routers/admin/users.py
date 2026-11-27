@@ -31,7 +31,7 @@ from stoa.services import (
     account_listing,
     account_provisioning_service,
     current_relationship,
-    notify_service,
+    one_off_email,
     parent_link_service,
     public_identity_service,
 )
@@ -242,7 +242,7 @@ def _invitation_delivery(locale: str | None):
     Never in the administrator's own screen language: that is who sent the
     invitation, not who reads it. The operator calls (#384) mail the same way.
     """
-    return notify_service.account_invitation_delivery(locale)
+    return one_off_email.account_invitation_delivery(locale)
 
 
 def _record_account_admin_event(

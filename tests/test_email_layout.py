@@ -21,6 +21,7 @@ from stoa.services import (
     locale_service,
     message_catalog,
     notify_service,
+    one_off_email,
 )
 
 LOCALES = sorted(locale_service.SUPPORTED_LOCALES)
@@ -160,7 +161,7 @@ def test_a_one_off_email_goes_out_as_html_and_text_with_reply_to():
     ses = _RecordingSes()
     aws.install({Kind.SES: ses})
 
-    notify_service.send_account_invitation_email(
+    one_off_email.send_account_invitation_email(
         "a@stoa.test", activation_token="t", expires_at="2026-12-01T10:00:00+00:00", role="student"
     )
 
@@ -209,7 +210,7 @@ def test_the_logo_and_reply_to_come_from_settings():
     ses = _RecordingSes()
     aws.install({Kind.SES: ses})
 
-    notify_service.send_account_invitation_email("a@stoa.test", activation_token="t", expires_at="x")
+    one_off_email.send_account_invitation_email("a@stoa.test", activation_token="t", expires_at="x")
 
     [mail] = ses.sent
     assert 'src="https://cdn.example.test/logo.png"' in mail["Message"]["Body"]["Html"]["Data"]

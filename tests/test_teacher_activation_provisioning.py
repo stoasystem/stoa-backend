@@ -27,7 +27,7 @@ from stoa.db.repositories import (
 )
 from stoa.services import (
     account_provisioning_service,
-    notify_service,
+    one_off_email,
     teacher_application_service,
 )
 
@@ -125,7 +125,7 @@ def delivered(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
             }
         )
 
-    monkeypatch.setattr(notify_service, "send_teacher_invitation_email", send)
+    monkeypatch.setattr(one_off_email, "send_teacher_invitation_email", send)
     return sent
 
 
