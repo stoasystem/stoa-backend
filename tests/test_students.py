@@ -137,6 +137,8 @@ def test_summary_counts_questions_not_every_row_sharing_the_student_index(monkey
     body = response.json()
     assert body["total_questions"] == 1
     assert body["ai_resolved"] == 1
+    # The summary counts questions; weak topics live in the learning profile (#676).
+    assert set(body) == {"student_id", "total_questions", "ai_resolved", "teacher_resolved"}
 
 
 def test_learning_history_reports_questions_and_conversations_only(monkeypatch):

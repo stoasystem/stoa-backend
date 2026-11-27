@@ -225,8 +225,6 @@ def test_what_was_asked_about_is_among_the_student_s_weak_topics(
     # A star counts under its own unit, and so under the unit's subject, whatever
     # conversation it was asked in (#390); a free name keeps the conversation's.
     assert topics == {("physics", TITLES["kraefte"][locale]): 1, ("math", FREE[locale]): 1}
-    summary = _ok(_student().get(f"/students/{STUDENT}/summary"))
-    assert set(summary["weak_knowledge_points"]) == {TITLES["kraefte"][locale], FREE[locale]}
 
 
 def test_each_new_question_counts_and_a_follow_up_does_not(

@@ -338,7 +338,7 @@ async def get_curriculum_progress(
     subject_id: str | None = Query(default=None, alias="subjectId"),
     authorized_student: AuthorizedResource = Depends(_practice_progress),
 ):
-    """One student's progress: lessons finished, streak, mistakes by topic.
+    """One student's progress: lessons finished, streak, how many mistakes.
 
     `subjectId` narrows the lessons and the mistakes; the streak is the
     student's, whatever the subject.
@@ -361,10 +361,6 @@ async def get_curriculum_progress(
         "mistakeCount": len(mistakes),
         "studyStreak": evidence.study_streak,
         "practisedToday": evidence.practised_today,
-        "weakTopics": [
-            {"topicId": topic_id, "count": count}
-            for topic_id, count in evidence.mistakes_by_topic(subject_id).most_common(5)
-        ],
         "source": "practice_progress",
     }
 

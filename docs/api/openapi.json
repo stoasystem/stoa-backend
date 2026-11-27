@@ -14660,21 +14660,13 @@
           "total_questions": {
             "title": "Total Questions",
             "type": "integer"
-          },
-          "weak_knowledge_points": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Weak Knowledge Points",
-            "type": "array"
           }
         },
         "required": [
           "student_id",
           "total_questions",
           "ai_resolved",
-          "teacher_resolved",
-          "weak_knowledge_points"
+          "teacher_resolved"
         ],
         "title": "SummaryResponse",
         "type": "object"
@@ -33585,7 +33577,7 @@
     },
     "/practice/curriculum/progress": {
       "get": {
-        "description": "One student's progress: lessons finished, streak, mistakes by topic.\n\n`subjectId` narrows the lessons and the mistakes; the streak is the\nstudent's, whatever the subject.",
+        "description": "One student's progress: lessons finished, streak, how many mistakes.\n\n`subjectId` narrows the lessons and the mistakes; the streak is the\nstudent's, whatever the subject.",
         "operationId": "get_curriculum_progress_practice_curriculum_progress_get",
         "parameters": [
           {

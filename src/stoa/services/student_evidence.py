@@ -899,15 +899,6 @@ class StudentEvidence:
             if _within(item.get("created_at") or item.get("createdAt"), start, end)
         )
 
-    def mistakes_by_topic(self, subject_id: str | None = None) -> Counter[str]:
-        """Wrong answers per topic, of one subject or of all."""
-        return Counter(
-            str(item.get("topic_id"))
-            for item in self.mistakes
-            if item.get("topic_id")
-            and (not subject_id or curriculum_service.same_subject(item.get("subject_id", ""), subject_id))
-        )
-
     @property
     def last_activity_by_unit(self) -> dict[str, str]:
         """When the student last did something in each knowledge point (#164).

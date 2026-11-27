@@ -295,6 +295,8 @@ def test_curriculum_progress_uses_existing_practice_records(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["completedLessonIds"] == ["lesson-linear-1"]
-    assert response.json()["weakTopics"] == [{"topicId": "linear-equations", "count": 1}]
+    assert response.json()["mistakeCount"] == 1
+    # Weak topics are not part of progress; nobody read them (#676).
+    assert "weakTopics" not in response.json()
     assert forbidden.status_code == 404
     assert teacher.status_code == 200
