@@ -45,6 +45,7 @@ from stoa.services import (
     account_operations_service,
     allowance_service,
     billing_reconciliation_service,
+    curriculum_names,
     curriculum_service,
     current_relationship,
     learning_profile_service,
@@ -922,12 +923,12 @@ def _lesson_activity(lesson: student_evidence.Completion) -> ParentChildActivity
 
 
 def _mistake_activity(
-    item: Mapping[str, Any], names: learning_profile_service.TopicNames | None = None
+    item: Mapping[str, Any], names: curriculum_names.Names | None = None
 ) -> ParentChildActivity | None:
     created_at = _response_text(item.get("created_at") or item.get("createdAt"))
     if created_at is None or not _parse_iso_datetime(created_at):
         return None
-    names = names or learning_profile_service.TopicNames({}, locale_service.resolve_locale(None))
+    names = names or curriculum_names.for_reader(locale_service.resolve_locale(None))
     return ParentChildActivity(
         id=_response_text(item.get("lesson_id") or item.get("challenge_id"))
         or f"practice_mistake-{created_at}",
@@ -937,7 +938,9 @@ def _mistake_activity(
         ),
         # The knowledge point as the curriculum names it, never its stored id (#390).
         summary=names.name(
-            item.get("topic_id"), unit_id=item.get("unit_id"), lesson_id=item.get("lesson_id")
+            names.resolve(
+                item.get("topic_id"), unit_id=item.get("unit_id"), lesson_id=item.get("lesson_id")
+            )
         )
         or _response_text(item.get("topic_id") or item.get("subject_id"))
         or "",
@@ -1040,9 +1043,9 @@ def _practice_history_events(
     return activities
 
 
-def _topic_names(evidence: student_evidence.StudentEvidence) -> learning_profile_service.TopicNames:
+def _topic_names(evidence: student_evidence.StudentEvidence) -> curriculum_names.Names:
     """The curriculum's names for the child's knowledge points, in the reader's language."""
-    return learning_profile_service.TopicNames(evidence.content.catalog, evidence.content.locale)
+    return curriculum_names.for_reader(evidence.content.locale, catalog=evidence.content.catalog)
 
 
 def _conversation_history_events(child_id: str) -> list[ParentChildActivity]:
@@ -1523,7 +1526,7 @@ async def get_child_summary(
     names = _topic_names(evidence)
 
     def named(values: list[str]) -> list[str]:
-        return [names.name(value) or value for value in values]
+        return [names.name(names.resolve(value)) or value for value in values]
 
     weak_topics_counter: Counter[str] = Counter()
     for question in questions:
@@ -1537,7 +1540,9 @@ async def get_child_summary(
         topic = _response_text(mistake.get("topic_id"))
         if topic:
             topic_name = names.name(
-                topic, unit_id=mistake.get("unit_id"), lesson_id=mistake.get("lesson_id")
+                names.resolve(
+                    topic, unit_id=mistake.get("unit_id"), lesson_id=mistake.get("lesson_id")
+                )
             )
             weak_topics_counter[topic_name or topic] += 1
     if latest_report:

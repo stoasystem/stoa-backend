@@ -24,6 +24,7 @@ from stoa.db.repositories import practice_repo
 from stoa.services import (
     answer_judging,
     curriculum_migration_service,
+    curriculum_names,
     curriculum_ops_service,
     curriculum_translations,
     exercise_localization,
@@ -809,11 +810,11 @@ def test_a_published_exercise_reads_and_judges_in_the_students_language(
     assert not answer_judging.judge_challenge("Plus que 1", shown)
     physics = exercise_localization.localized(practice_repo.get_challenge("kb-p-h001-q1"), "it")
     assert answer_judging.judge_challenge("5 N", physics)
-    assert curriculum_translations.translated_title(
-        "brueche-brueche-addieren--sachaufgaben--1", "Sachaufgaben", "it"
+    assert curriculum_names.for_reader("it").name(
+        "brueche-brueche-addieren--sachaufgaben--1"
     ) == "Problemi"
-    assert curriculum_translations.translated_title(
-        "brueche-brueche-addieren", "Brüche addieren", "fr"
+    assert curriculum_names.for_reader("fr").name(
+        "brueche-brueche-addieren"
     ) == "Additionner des fractions"
 
 
