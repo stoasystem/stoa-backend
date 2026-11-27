@@ -144,11 +144,13 @@ def content(
     catalog: Mapping[str, Any] | None = None,
     exercises: Mapping[str, Sequence[Any]] | None = None,
     locale: str = "de",
+    named_rows: Sequence[Mapping[str, Any]] = (),
 ) -> student_evidence.Content:
     """The catalog and an index holding every one of its lessons.
 
     `exercises` names each lesson's exercises, as ids or as `{"id", "skills",
-    "knowledge_point"}`; a lesson it leaves out has none.
+    "knowledge_point"}`; a lesson it leaves out has none. `named_rows` are the
+    stored content rows whose names in every language spellings resolve by.
     """
     catalog = dict(catalog) if catalog is not None else empty_catalog()
     indexed: dict[str, list[dict[str, Any]]] = {
@@ -158,7 +160,9 @@ def content(
     }
     for lesson_id, items in (exercises or {}).items():
         indexed[lesson_id] = _entries(items)
-    return student_evidence.Content(locale=locale, catalog=catalog, indexed=indexed)
+    return student_evidence.Content(
+        locale=locale, catalog=catalog, indexed=indexed, named_rows=named_rows
+    )
 
 
 def _lesson_rows(catalog: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
@@ -188,6 +192,7 @@ def evidence(
     cards: Iterable[Mapping[str, Any]] = (),
     now: datetime | None = None,
     failing: Iterable[str] = (),
+    named_rows: Sequence[Mapping[str, Any]] = (),
 ) -> student_evidence.StudentEvidence:
     """One student's evidence from facts.
 
@@ -200,7 +205,7 @@ def evidence(
     `review_cards`).
     """
     moment = now or datetime(2026, 1, 5, 12, 0, tzinfo=UTC)
-    built = content(catalog=catalog, exercises=exercises, locale=locale)
+    built = content(catalog=catalog, exercises=exercises, locale=locale, named_rows=named_rows)
     lessons = _lesson_rows(built.catalog)
 
     progress_rows = [
