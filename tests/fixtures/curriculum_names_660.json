@@ -1715,7 +1715,7 @@
  },
  "learning_profile": {
   "de": {
-   "digest": "b68cfe809861f0bd98e091f4db47cf8fa1ad157e19e1facca7388ebd9147cba8",
+   "digest": "beb8c3eb089b5c1bdbc7e21d0ae6c3d4a5d36dff78d3dfbcc8efb5c7a5c98ba0",
    "names": [
     ".subjectActivity[0].label=Mathematics",
     ".subjectActivity[0].subject=math",
@@ -1733,9 +1733,9 @@
     ".weakTopics[0].subject=math",
     ".weakTopics[1].label=Brüche",
     ".weakTopics[1].subject=math",
-    ".weakTopics[2].label=Brüche verstehen und kürzen",
+    ".weakTopics[2].label=Freies Thema",
     ".weakTopics[2].subject=math",
-    ".weakTopics[3].label=Freies Thema",
+    ".weakTopics[3].label=Brüche verstehen und kürzen",
     ".weakTopics[3].subject=math",
     ".weakTopics[4].label=Verhältnisse und Proportionalität",
     ".weakTopics[4].subject=math",
@@ -1744,7 +1744,7 @@
    ]
   },
   "en": {
-   "digest": "6a72983b450335b8e27cfb4bf3a571e8c40609e97f8f9948bb412f6b950b1632",
+   "digest": "8e51b4e12902e83755f1e895a7b684ffa7fa9259f96f54a0e0b58512ac644f27",
    "names": [
     ".subjectActivity[0].label=Mathematics",
     ".subjectActivity[0].subject=math",
@@ -1764,16 +1764,16 @@
     ".weakTopics[1].subject=math",
     ".weakTopics[2].label=Freies Thema",
     ".weakTopics[2].subject=math",
-    ".weakTopics[3].label=Ratios and proportionality",
+    ".weakTopics[3].label=Understanding and reducing fractions",
     ".weakTopics[3].subject=math",
-    ".weakTopics[4].label=Understanding and reducing fractions",
+    ".weakTopics[4].label=Ratios and proportionality",
     ".weakTopics[4].subject=math",
     ".weakTopics[5].label=Energie",
     ".weakTopics[5].subject=physics"
    ]
   },
   "fr": {
-   "digest": "3b243af0e64e5793d2b52c5f4a7d8a9e3c2b2e4398cfb5d35605364e3d78e372",
+   "digest": "f891fef9e78a1bc9ed2a1176ef0fd9493c4a5fa08154292f03d753c41680e123",
    "names": [
     ".subjectActivity[0].label=Mathematics",
     ".subjectActivity[0].subject=math",
@@ -1791,9 +1791,9 @@
     ".weakTopics[0].subject=math",
     ".weakTopics[1].label=Fractions",
     ".weakTopics[1].subject=math",
-    ".weakTopics[2].label=Comprendre et simplifier les fractions",
+    ".weakTopics[2].label=Freies Thema",
     ".weakTopics[2].subject=math",
-    ".weakTopics[3].label=Freies Thema",
+    ".weakTopics[3].label=Comprendre et simplifier les fractions",
     ".weakTopics[3].subject=math",
     ".weakTopics[4].label=Proportions et proportionnalité",
     ".weakTopics[4].subject=math",
@@ -1802,7 +1802,7 @@
    ]
   },
   "it": {
-   "digest": "f78285e3bdbdae5a7f6633b9a504544b7486a3eb9187a5d031cd75172ec8b8ac",
+   "digest": "1aaa4bd7b2d6d507f6a08556defa3ed8b0f967848c4a7e022367b59ee7dd6acc",
    "names": [
     ".subjectActivity[0].label=Mathematics",
     ".subjectActivity[0].subject=math",
@@ -1820,9 +1820,9 @@
     ".weakTopics[0].subject=math",
     ".weakTopics[1].label=Frazioni",
     ".weakTopics[1].subject=math",
-    ".weakTopics[2].label=Capire e semplificare le frazioni",
+    ".weakTopics[2].label=Freies Thema",
     ".weakTopics[2].subject=math",
-    ".weakTopics[3].label=Freies Thema",
+    ".weakTopics[3].label=Capire e semplificare le frazioni",
     ".weakTopics[3].subject=math",
     ".weakTopics[4].label=Rapporti e proporzionalità",
     ".weakTopics[4].subject=math",
@@ -2133,7 +2133,7 @@
  },
  "parent_learning_profile": {
   "de": {
-   "digest": "b68cfe809861f0bd98e091f4db47cf8fa1ad157e19e1facca7388ebd9147cba8",
+   "digest": "beb8c3eb089b5c1bdbc7e21d0ae6c3d4a5d36dff78d3dfbcc8efb5c7a5c98ba0",
    "names": [
     ".subjectActivity[0].label=Mathematics",
     ".subjectActivity[0].subject=math",
@@ -2151,9 +2151,9 @@
     ".weakTopics[0].subject=math",
     ".weakTopics[1].label=Brüche",
     ".weakTopics[1].subject=math",
-    ".weakTopics[2].label=Brüche verstehen und kürzen",
+    ".weakTopics[2].label=Freies Thema",
     ".weakTopics[2].subject=math",
-    ".weakTopics[3].label=Freies Thema",
+    ".weakTopics[3].label=Brüche verstehen und kürzen",
     ".weakTopics[3].subject=math",
     ".weakTopics[4].label=Verhältnisse und Proportionalität",
     ".weakTopics[4].subject=math",
@@ -2162,7 +2162,7 @@
    ]
   },
   "en": {
-   "digest": "6a72983b450335b8e27cfb4bf3a571e8c40609e97f8f9948bb412f6b950b1632",
+   "digest": "8e51b4e12902e83755f1e895a7b684ffa7fa9259f96f54a0e0b58512ac644f27",
    "names": [
     ".subjectActivity[0].label=Mathematics",
     ".subjectActivity[0].subject=math",
@@ -2182,16 +2182,16 @@
     ".weakTopics[1].subject=math",
     ".weakTopics[2].label=Freies Thema",
     ".weakTopics[2].subject=math",
-    ".weakTopics[3].label=Ratios and proportionality",
+    ".weakTopics[3].label=Understanding and reducing fractions",
     ".weakTopics[3].subject=math",
-    ".weakTopics[4].label=Understanding and reducing fractions",
+    ".weakTopics[4].label=Ratios and proportionality",
     ".weakTopics[4].subject=math",
     ".weakTopics[5].label=Energie",
     ".weakTopics[5].subject=physics"
    ]
   },
   "fr": {
-   "digest": "3b243af0e64e5793d2b52c5f4a7d8a9e3c2b2e4398cfb5d35605364e3d78e372",
+   "digest": "f891fef9e78a1bc9ed2a1176ef0fd9493c4a5fa08154292f03d753c41680e123",
    "names": [
     ".subjectActivity[0].label=Mathematics",
     ".subjectActivity[0].subject=math",
@@ -2209,9 +2209,9 @@
     ".weakTopics[0].subject=math",
     ".weakTopics[1].label=Fractions",
     ".weakTopics[1].subject=math",
-    ".weakTopics[2].label=Comprendre et simplifier les fractions",
+    ".weakTopics[2].label=Freies Thema",
     ".weakTopics[2].subject=math",
-    ".weakTopics[3].label=Freies Thema",
+    ".weakTopics[3].label=Comprendre et simplifier les fractions",
     ".weakTopics[3].subject=math",
     ".weakTopics[4].label=Proportions et proportionnalité",
     ".weakTopics[4].subject=math",
@@ -2220,7 +2220,7 @@
    ]
   },
   "it": {
-   "digest": "f78285e3bdbdae5a7f6633b9a504544b7486a3eb9187a5d031cd75172ec8b8ac",
+   "digest": "1aaa4bd7b2d6d507f6a08556defa3ed8b0f967848c4a7e022367b59ee7dd6acc",
    "names": [
     ".subjectActivity[0].label=Mathematics",
     ".subjectActivity[0].subject=math",
@@ -2238,9 +2238,9 @@
     ".weakTopics[0].subject=math",
     ".weakTopics[1].label=Frazioni",
     ".weakTopics[1].subject=math",
-    ".weakTopics[2].label=Capire e semplificare le frazioni",
+    ".weakTopics[2].label=Freies Thema",
     ".weakTopics[2].subject=math",
-    ".weakTopics[3].label=Freies Thema",
+    ".weakTopics[3].label=Capire e semplificare le frazioni",
     ".weakTopics[3].subject=math",
     ".weakTopics[4].label=Rapporti e proporzionalità",
     ".weakTopics[4].subject=math",

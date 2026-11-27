@@ -5866,6 +5866,10 @@
             ],
             "title": "Latestevidenceat"
           },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          },
           "subject": {
             "title": "Subject",
             "type": "string"
@@ -5879,7 +5883,8 @@
           "subject",
           "topicId",
           "label",
-          "count"
+          "count",
+          "score"
         ],
         "title": "LearningWeakTopic",
         "type": "object"
@@ -6562,6 +6567,10 @@
             ],
             "title": "Latestevidenceat"
           },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          },
           "subject": {
             "title": "Subject",
             "type": "string"
@@ -6576,6 +6585,7 @@
           "topicId",
           "label",
           "count",
+          "score",
           "latestEvidenceAt"
         ],
         "title": "MemoryWeakTopic",

@@ -210,7 +210,7 @@ _MAX_MEMORY_TOPICS = 8
 
 # The hint label is added around the model output, so it has to be translated here
 # or the answer comes back with one German word in it.
-def _memory_context_for_student(student_id: str) -> str | None:
+def _memory_context_for_student(student_id: str, *, locale: str) -> str | None:
     """Summarise the student's weak topics for AI personalisation.
 
     Returns None when there is nothing to personalise on, or when the lookup
@@ -220,10 +220,11 @@ def _memory_context_for_student(student_id: str) -> str | None:
     memory summary also lists exercises for practice recommendations, which
     read the published curriculum once per weak topic and ran the question
     past Lambda's 29 seconds once the knowledge base was published (#496).
+    They are named in the student's language, `locale` (#673).
     """
     try:
         labels: list[str] = []
-        for topic in adaptive_learning_service.weak_topics(student_id):
+        for topic in adaptive_learning_service.weak_topics(student_id, locale=locale):
             if not isinstance(topic, Mapping):
                 continue
             label = str(topic.get("label") or topic.get("topicId") or "").strip()
@@ -586,12 +587,13 @@ def _resolve_generation_context(
     `answer_style` was added without a new schema version: it is optional, and
     every reader takes a missing or unknown one as `standard` (#314).
     """
+    locale = _student_locale(student_id)
     return {
         "schema_version": "generation-context.v1",
-        "locale": _student_locale(student_id),
+        "locale": locale,
         "subject": _answer_subject(subject),
         "grade": grade,
-        "memory_context": _memory_context_for_student(student_id),
+        "memory_context": _memory_context_for_student(student_id, locale=locale),
         "practice_context": practice_context,
         "answer_style": _student_answer_style(student_id),
     }

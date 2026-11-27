@@ -233,7 +233,10 @@ class LearningWeakTopic(BaseModel):
     subject: str
     topicId: str
     label: str
+    #: Mistakes that still count plus knowledge points named (#673).
     count: int
+    #: What the topics are ordered by: a mistake weighs 2, a knowledge point 1 (#673).
+    score: int
     latestEvidenceAt: str | None = None
     evidenceQuestionIds: list[str] = Field(default_factory=list)
 
@@ -1597,9 +1600,8 @@ async def get_child_learning_profile(
     return learning_profile_service.build_learning_profile(
         student_id=child_id,
         questions=questions,
-        mistakes=list(evidence.mistakes),
+        evidence=evidence,
         asked=asked_knowledge_repo.list_for_student(child_id),
-        catalog=evidence.content.catalog,
         locale=evidence.content.locale,
     )
 

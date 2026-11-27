@@ -19,9 +19,10 @@ from stoa.services.adaptive_learning_service import (
     automation_catalog_key,
 )
 from fakes import student_evidence as fake_evidence
-from test_adaptive_learning import (  # noqa: F401 - the autouse fixture
+from test_adaptive_learning import (  # noqa: F401 - the autouse fixtures
     _app,
     _canonical_student_profiles,
+    _evidence_read_on_the_same_day,
     _install_learning_sources,
     _install_memory_repo,
 )

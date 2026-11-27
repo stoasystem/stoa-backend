@@ -10,7 +10,9 @@ curriculum they draw is under 2,000 rows.
 The curriculum is still read whole where a route draws it whole - the bar is
 one read of each kind of row per request, not none. The responses are
 unchanged: they were recorded from origin/main `85d92d76` on the same fixture
-and are compared field for field.
+and are compared field for field. The two learning profiles' weak topics were
+recorded again when they began to come from `weak_topics` (#673): each carries
+its `score`, and topics of equal score come newest first.
 """
 
 from __future__ import annotations

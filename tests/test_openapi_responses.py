@@ -148,7 +148,7 @@ def _item_schema(schema: dict, body: dict, field: str) -> dict:
         ),
         # evidenceQuestionIds is declared but not required: a parent's view
         # leaves it out.
-        ("weakTopics", {"subject", "topicId", "label", "count", "latestEvidenceAt"}),
+        ("weakTopics", {"subject", "topicId", "label", "count", "score", "latestEvidenceAt"}),
         (
             "recommendations",
             {

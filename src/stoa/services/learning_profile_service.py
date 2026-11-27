@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import re
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime, timezone
 from collections.abc import Mapping
 from typing import Any
 
 from stoa.db.dynamodb import stored_int
 from stoa.services import (
-    curriculum_names,
     curriculum_service,
     locale_service,
     message_catalog,
+    student_evidence,
+    weak_topics,
 )
 
 
@@ -271,44 +272,23 @@ def build_learning_profile(
     *,
     student_id: str,
     questions: list[dict[str, Any]],
-    mistakes: list[dict[str, Any]] | None = None,
+    evidence: student_evidence.StudentEvidence,
     asked: list[dict[str, Any]] | None = None,
-    catalog: Mapping[str, Any] | None = None,
     locale: str = "de",
 ) -> dict[str, Any]:
-    """Build subject activity and weak-topic seed aggregates from existing records.
+    """The student's activity per subject and their weak topics.
 
-    `asked` are the records of what the student's Ask questions named
-    (`asked_knowledge_repo`, #143). They add to the weak topics as a question's
-    knowledge points do, and to nothing else: they are not questions.
-
-    `catalog` is the student catalog in `locale` (`curriculum_service.list_catalog`).
-    With it, every spelling of a knowledge point the curriculum knows - its unit
-    id, an old slug, its title in any language - is one weak topic, named as the
-    catalog names it (#390).
+    `questions` are the retired flow's question rows: they make the activity,
+    and count among the weak topics as Ask records do. `asked` are the records
+    of what the student's Ask questions named (`asked_knowledge_repo`, #143).
+    The weak topics are `weak_topics.for_student`'s first ten, named in
+    `locale`; nothing here counts them (#673).
     """
-    mistakes = mistakes or []
-    names = curriculum_names.for_reader(locale, catalog=catalog)
-    subjects = _subjects_of(catalog or {})
     activity: dict[str, dict[str, Any]] = {}
     feedback_totals: dict[str, list[int]] = defaultdict(list)
-    topic_counter: Counter[tuple[str, str, str]] = Counter()
-    topic_latest: dict[tuple[str, str, str], str] = {}
-    topic_evidence: dict[tuple[str, str, str], set[str]] = defaultdict(set)
 
     for subject_id in curriculum_service.SUPPORTED_SUBJECTS:
         activity[subject_id] = _empty_subject_activity(subject_id)
-
-    def count_topics(source: dict[str, Any], subject_id: str) -> None:
-        for seed in _question_topic_entries(source, subject_id):
-            key = _topic_key(names, subjects, seed["subject"], seed["topic_id"], seed["label"])
-            topic_counter[key] += 1
-            latest = seed.get("last_seen_at") or source.get("created_at") or ""
-            if latest and latest > topic_latest.get(key, ""):
-                topic_latest[key] = latest
-            for evidence_id in seed.get("evidence_question_ids") or [source.get("question_id")]:
-                if evidence_id:
-                    topic_evidence[key].add(str(evidence_id))
 
     for question in questions:
         subject_id = _safe_subject(question.get("subject"))
@@ -324,48 +304,12 @@ def build_learning_profile(
         if feedback is not None:
             feedback_totals[subject_id].append(feedback)
 
-        count_topics(question, subject_id)
-
-    for record in asked or []:
-        count_topics(record, _safe_subject(record.get("subject")))
-
-    for mistake in mistakes:
-        subject_id = _safe_subject(mistake.get("subject_id") or mistake.get("subject"))
-        raw_topic = mistake.get("topic_id")
-        if not raw_topic:
-            continue
-        label = str(raw_topic)
-        key = _topic_key(
-            names,
-            subjects,
-            subject_id,
-            normalize_topic_id(label),
-            label,
-            unit_id=mistake.get("unit_id"),
-            lesson_id=mistake.get("lesson_id"),
-        )
-        topic_counter[key] += 1
-        latest = mistake.get("created_at") or ""
-        if latest and latest > topic_latest.get(key, ""):
-            topic_latest[key] = latest
-
     for subject_id, values in feedback_totals.items():
         activity.setdefault(subject_id, _empty_subject_activity(subject_id))["feedbackAverage"] = round(
             sum(values) / len(values), 2
         )
 
-    weak_topics: list[dict[str, object]] = [
-        {
-            "subject": subject_id,
-            "topicId": topic_id,
-            "label": label,
-            "count": count,
-            "latestEvidenceAt": topic_latest.get((subject_id, topic_id, label)),
-            "evidenceQuestionIds": sorted(topic_evidence.get((subject_id, topic_id, label), set())),
-        }
-        for (subject_id, topic_id, label), count in topic_counter.items()
-    ]
-    weak_topics.sort(key=_weak_topic_sort_key)
+    weak = weak_topics.for_student(evidence, [*questions, *(asked or [])], locale=locale)
 
     return {
         "studentId": student_id,
@@ -378,59 +322,23 @@ def build_learning_profile(
             for subject_id, meta in curriculum_service.SUPPORTED_SUBJECTS.items()
         ],
         "subjectActivity": list(activity.values()),
-        "weakTopics": weak_topics[:10],
+        "weakTopics": [weak_topic_response(topic) for topic in weak[:10]],
         "strengthTopics": [],
         "updatedAt": datetime.now(timezone.utc).isoformat(),
     }
 
 
-def _subjects_of(catalog: Mapping[str, Any]) -> dict[str, object]:
-    """The subject each unit and topic of the catalog is filed under; a unit's first."""
-    subjects: dict[str, object] = {}
-    for key in ("units", "topics"):
-        of_kind = {
-            str(row["id"]): row.get("subjectId")
-            for row in catalog.get(key) or ()
-            if isinstance(row, Mapping) and row.get("id")
-        }
-        for content_id, subject in of_kind.items():
-            subjects.setdefault(content_id, subject)
-    return subjects
-
-
-def _topic_key(
-    names: curriculum_names.Names,
-    subjects: Mapping[str, object],
-    subject_id: str,
-    topic_id: str,
-    label: str,
-    *,
-    unit_id: object = None,
-    lesson_id: object = None,
-) -> tuple[str, str, str]:
-    """The weak topic a row counts under: (subject, id, label in the reader's language).
-
-    The knowledge point the curriculum knows by any of the row's spellings
-    (#390); a name it does not know at all - one an answer wrote freely - is
-    kept as written.
-    """
-    content_id = names.resolve(topic_id, label, unit_id=unit_id, lesson_id=lesson_id)
-    if content_id is None:
-        return (subject_id, topic_id, label)
-    return (
-        _safe_subject(subjects.get(content_id) or subject_id),
-        content_id,
-        names.name(content_id) or label,
-    )
-
-
-def _weak_topic_sort_key(item: dict[str, object]) -> tuple[int, str, str]:
-    count = item.get("count")
-    subject = item.get("subject")
-    label = item.get("label")
-    if not isinstance(count, int) or isinstance(count, bool) or not isinstance(subject, str) or not isinstance(label, str):
-        raise ValueError("Learning profile weak topic is incomplete")
-    return (-count, subject, label)
+def weak_topic_response(topic: weak_topics.WeakTopic) -> dict[str, object]:
+    """One weak topic as the learning profile and adaptive memory send it."""
+    return {
+        "subject": topic.subject,
+        "topicId": topic.topic_id,
+        "label": topic.name,
+        "count": topic.count,
+        "score": topic.score,
+        "latestEvidenceAt": topic.latest_evidence_at or None,
+        "evidenceQuestionIds": list(topic.evidence_question_ids),
+    }
 
 
 def _empty_subject_activity(subject_id: str) -> dict[str, Any]:
@@ -446,32 +354,12 @@ def _empty_subject_activity(subject_id: str) -> dict[str, Any]:
     }
 
 
-def _question_topic_entries(question: dict[str, Any], subject_id: str) -> list[dict[str, Any]]:
-    entries = question.get("topic_seeds")
-    if isinstance(entries, list) and entries:
-        return [entry for entry in entries if isinstance(entry, dict)]
-
-    timestamp = question.get("created_at") or datetime.now(timezone.utc).isoformat()
-    seeds = []
-    for label in question.get("knowledge_points", []) or []:
-        if not isinstance(label, str) or not label.strip():
-            continue
-        seeds.append(
-            {
-                "subject": subject_id,
-                "topic_id": normalize_topic_id(label),
-                "label": label,
-                "source": "ai_response",
-                "confidence": 0.5,
-                "evidence_question_ids": [question.get("question_id")],
-                "first_seen_at": timestamp,
-                "last_seen_at": timestamp,
-            }
-        )
-    return seeds
-
-
 def normalize_topic_id(label: str) -> str:
+    """A name made a slug, as the stored adaptive memory snapshots key their topics.
+
+    Weak topics no longer use it (#673): `weak_topics` keeps a name the
+    curriculum does not know as written. It goes with the stored snapshots (#675).
+    """
     value = re.sub(r"[^a-z0-9]+", "-", label.strip().lower())
     value = value.strip("-")
     return value or "general"

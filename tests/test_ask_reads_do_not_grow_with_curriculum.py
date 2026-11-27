@@ -14,6 +14,12 @@ These run the real routes against the shared table double holding the
 published curriculum at two sizes (`fakes.published_curriculum`), for a
 student with Ask history in two subjects, and compare the rows the table had
 to read. Only the model call and the entitlement read are replaced.
+
+Since #673 the weak topics are resolved against the catalog, which a container
+keeps (`curriculum_cache`): the table here carries the catalog stamp the seed
+writes in production, and each ask runs in a container that has not read the
+curriculum yet, so it loads the one stored copy (#669) rather than the
+partition.
 """
 
 from __future__ import annotations
@@ -21,6 +27,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+import time_machine
 
 from fakes.admission import seed_plan
 from fakes.ask_question import QUESTION, STUDENT, _client
@@ -30,7 +37,7 @@ from fakes.learning_session import seed_conversation
 from fakes.published_curriculum import ReadCountingTable, curriculum_rows
 from stoa.db import table as db_table
 from stoa.db.repositories import asked_knowledge_repo
-from stoa.services import adaptive_learning_service
+from stoa.services import adaptive_learning_service, curriculum_cache
 
 #: A twentieth of production, and five times that.
 SMALL, LARGE = 0.05, 0.25
@@ -75,8 +82,12 @@ def _table(monkeypatch: pytest.MonkeyPatch, scale: float) -> ReadCountingTable:
     )
     _asked_before(table)
     seed_conversation(table, conversation_id=CONV, student_id=STUDENT)
+    table.seed({**curriculum_cache.STAMP_KEY, "stamp": f"seed-{scale}"})
     db_table.install(table)
     seed_plan(monkeypatch)
+    # The first container to read the curriculum stores it; the ask runs in another.
+    curriculum_cache.current()
+    curriculum_cache.forget()
     table.reset_reads()
     return table
 
@@ -120,12 +131,14 @@ def test_the_answer_is_given_the_weak_topics_the_memory_summary_reports(
     _table(monkeypatch, SMALL)
     student = {"sub": STUDENT, "user_id": STUDENT, "role": "student"}
 
-    topics = adaptive_learning_service.weak_topics(STUDENT)
+    # A few days after the earlier answers: within the 90 days the weak topics count (#673).
+    with time_machine.travel("2026-11-18T12:00:00+00:00", tick=False):
+        topics = adaptive_learning_service.weak_topics(STUDENT, locale="de")
 
-    assert topics, "the earlier answers name weak topics"
-    assert all(topic.get("label") and topic.get("topicId") for topic in topics)
-    for subject in (None, "math", "physics"):
-        summary = adaptive_learning_service.get_memory_summary(
-            student_id=STUDENT, user=student, subject=subject
-        )
-        assert topics == summary["weakTopics"]
+        assert topics, "the earlier answers name weak topics"
+        assert all(topic.get("label") and topic.get("topicId") for topic in topics)
+        for subject in (None, "math", "physics"):
+            summary = adaptive_learning_service.get_memory_summary(
+                student_id=STUDENT, user=student, subject=subject
+            )
+            assert topics == summary["weakTopics"]

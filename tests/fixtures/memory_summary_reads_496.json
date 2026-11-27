@@ -1141,8 +1141,9 @@
    {
     "count": 2,
     "evidenceQuestionIds": [],
-    "label": "brueche",
+    "label": "Brüche",
     "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "score": 2,
     "subject": "math",
     "topicId": "brueche"
    },
@@ -1151,62 +1152,16 @@
     "evidenceQuestionIds": [],
     "label": "Kopfrechnen im Alltag",
     "latestEvidenceAt": "2026-11-15T10:00:00+00:00",
+    "score": 1,
     "subject": "math",
-    "topicId": "kopfrechnen-im-alltag"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "daten",
-    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "daten"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "geometrie",
-    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "geometrie"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "gleichungen",
-    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "gleichungen"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "groessen",
-    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "groessen"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "prozentrechnung",
-    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "prozentrechnung"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "zahlen",
-    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "zahlen"
+    "topicId": "kopfrechnen im alltag"
    },
    {
     "count": 1,
     "evidenceQuestionIds": [],
     "label": "Energie",
     "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "score": 1,
     "subject": "physics",
     "topicId": "energie"
    },
@@ -1215,8 +1170,63 @@
     "evidenceQuestionIds": [],
     "label": "Kräfte",
     "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "score": 1,
     "subject": "physics",
-    "topicId": "kr-fte"
+    "topicId": "kräfte"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Daten und Kombinatorik",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "daten"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Grössen und Masse",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "groessen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Prozent- und Verhältnisrechnung",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "prozentrechnung"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Zahlen und Rechnen",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "zahlen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Geometrie",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "geometrie"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Gleichungen",
+    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "gleichungen"
    }
   ]
  },
@@ -1698,8 +1708,9 @@
    {
     "count": 2,
     "evidenceQuestionIds": [],
-    "label": "brueche",
+    "label": "Brüche",
     "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "score": 2,
     "subject": "math",
     "topicId": "brueche"
    },
@@ -1708,62 +1719,16 @@
     "evidenceQuestionIds": [],
     "label": "Kopfrechnen im Alltag",
     "latestEvidenceAt": "2026-11-15T10:00:00+00:00",
+    "score": 1,
     "subject": "math",
-    "topicId": "kopfrechnen-im-alltag"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "daten",
-    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "daten"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "geometrie",
-    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "geometrie"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "gleichungen",
-    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "gleichungen"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "groessen",
-    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "groessen"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "prozentrechnung",
-    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "prozentrechnung"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "zahlen",
-    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "zahlen"
+    "topicId": "kopfrechnen im alltag"
    },
    {
     "count": 1,
     "evidenceQuestionIds": [],
     "label": "Energie",
     "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "score": 1,
     "subject": "physics",
     "topicId": "energie"
    },
@@ -1772,8 +1737,63 @@
     "evidenceQuestionIds": [],
     "label": "Kräfte",
     "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "score": 1,
     "subject": "physics",
-    "topicId": "kr-fte"
+    "topicId": "kräfte"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Daten und Kombinatorik",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "daten"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Grössen und Masse",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "groessen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Prozent- und Verhältnisrechnung",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "prozentrechnung"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Zahlen und Rechnen",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "zahlen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Geometrie",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "geometrie"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Gleichungen",
+    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "gleichungen"
    }
   ]
  },
@@ -1992,8 +2012,9 @@
    {
     "count": 2,
     "evidenceQuestionIds": [],
-    "label": "brueche",
+    "label": "Brüche",
     "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "score": 2,
     "subject": "math",
     "topicId": "brueche"
    },
@@ -2002,62 +2023,16 @@
     "evidenceQuestionIds": [],
     "label": "Kopfrechnen im Alltag",
     "latestEvidenceAt": "2026-11-15T10:00:00+00:00",
+    "score": 1,
     "subject": "math",
-    "topicId": "kopfrechnen-im-alltag"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "daten",
-    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "daten"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "geometrie",
-    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "geometrie"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "gleichungen",
-    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "gleichungen"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "groessen",
-    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "groessen"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "prozentrechnung",
-    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "prozentrechnung"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "zahlen",
-    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "zahlen"
+    "topicId": "kopfrechnen im alltag"
    },
    {
     "count": 1,
     "evidenceQuestionIds": [],
     "label": "Energie",
     "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "score": 1,
     "subject": "physics",
     "topicId": "energie"
    },
@@ -2066,8 +2041,63 @@
     "evidenceQuestionIds": [],
     "label": "Kräfte",
     "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "score": 1,
     "subject": "physics",
-    "topicId": "kr-fte"
+    "topicId": "kräfte"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Daten und Kombinatorik",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "daten"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Grössen und Masse",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "groessen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Prozent- und Verhältnisrechnung",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "prozentrechnung"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Zahlen und Rechnen",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "zahlen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Geometrie",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "geometrie"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Gleichungen",
+    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "gleichungen"
    }
   ]
  },
@@ -2549,8 +2579,9 @@
    {
     "count": 2,
     "evidenceQuestionIds": [],
-    "label": "brueche",
+    "label": "Brüche",
     "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "score": 2,
     "subject": "math",
     "topicId": "brueche"
    },
@@ -2559,62 +2590,16 @@
     "evidenceQuestionIds": [],
     "label": "Kopfrechnen im Alltag",
     "latestEvidenceAt": "2026-11-15T10:00:00+00:00",
+    "score": 1,
     "subject": "math",
-    "topicId": "kopfrechnen-im-alltag"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "daten",
-    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "daten"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "geometrie",
-    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "geometrie"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "gleichungen",
-    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "gleichungen"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "groessen",
-    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "groessen"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "prozentrechnung",
-    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "prozentrechnung"
-   },
-   {
-    "count": 1,
-    "evidenceQuestionIds": [],
-    "label": "zahlen",
-    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "zahlen"
+    "topicId": "kopfrechnen im alltag"
    },
    {
     "count": 1,
     "evidenceQuestionIds": [],
     "label": "Energie",
     "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "score": 1,
     "subject": "physics",
     "topicId": "energie"
    },
@@ -2623,8 +2608,63 @@
     "evidenceQuestionIds": [],
     "label": "Kräfte",
     "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "score": 1,
     "subject": "physics",
-    "topicId": "kr-fte"
+    "topicId": "kräfte"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Daten und Kombinatorik",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "daten"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Grössen und Masse",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "groessen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Prozent- und Verhältnisrechnung",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "prozentrechnung"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Zahlen und Rechnen",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "zahlen"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Geometrie",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "geometrie"
+   },
+   {
+    "count": 1,
+    "evidenceQuestionIds": [],
+    "label": "Gleichungen",
+    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "gleichungen"
    }
   ]
  },
@@ -2941,8 +2981,9 @@
   "weakAreas": [
    {
     "count": 2,
-    "label": "brueche",
+    "label": "Brüche",
     "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "score": 2,
     "subject": "math",
     "topicId": "brueche"
    },
@@ -2950,55 +2991,15 @@
     "count": 1,
     "label": "Kopfrechnen im Alltag",
     "latestEvidenceAt": "2026-11-15T10:00:00+00:00",
+    "score": 1,
     "subject": "math",
-    "topicId": "kopfrechnen-im-alltag"
-   },
-   {
-    "count": 1,
-    "label": "daten",
-    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "daten"
-   },
-   {
-    "count": 1,
-    "label": "geometrie",
-    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "geometrie"
-   },
-   {
-    "count": 1,
-    "label": "gleichungen",
-    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "gleichungen"
-   },
-   {
-    "count": 1,
-    "label": "groessen",
-    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "groessen"
-   },
-   {
-    "count": 1,
-    "label": "prozentrechnung",
-    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "prozentrechnung"
-   },
-   {
-    "count": 1,
-    "label": "zahlen",
-    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
-    "subject": "math",
-    "topicId": "zahlen"
+    "topicId": "kopfrechnen im alltag"
    },
    {
     "count": 1,
     "label": "Energie",
     "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "score": 1,
     "subject": "physics",
     "topicId": "energie"
    },
@@ -3006,8 +3007,57 @@
     "count": 1,
     "label": "Kräfte",
     "latestEvidenceAt": "2026-11-14T10:00:00+00:00",
+    "score": 1,
     "subject": "physics",
-    "topicId": "kr-fte"
+    "topicId": "kräfte"
+   },
+   {
+    "count": 1,
+    "label": "Daten und Kombinatorik",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "daten"
+   },
+   {
+    "count": 1,
+    "label": "Grössen und Masse",
+    "latestEvidenceAt": "2026-11-13T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "groessen"
+   },
+   {
+    "count": 1,
+    "label": "Prozent- und Verhältnisrechnung",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "prozentrechnung"
+   },
+   {
+    "count": 1,
+    "label": "Zahlen und Rechnen",
+    "latestEvidenceAt": "2026-11-12T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "zahlen"
+   },
+   {
+    "count": 1,
+    "label": "Geometrie",
+    "latestEvidenceAt": "2026-11-11T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "geometrie"
+   },
+   {
+    "count": 1,
+    "label": "Gleichungen",
+    "latestEvidenceAt": "2026-11-10T10:00:00+00:00",
+    "score": 1,
+    "subject": "math",
+    "topicId": "gleichungen"
    }
   ]
  }

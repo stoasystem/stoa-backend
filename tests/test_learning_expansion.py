@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+import time_machine
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -178,9 +179,11 @@ def test_parent_child_learning_profile_requires_owned_child(monkeypatch):
     )
     fake_evidence.install(monkeypatch)
 
-    response = _parents_client({"sub": "parent-claims", "role": "parent"}).get(
-        "/parents/me/children/child-1/learning-profile"
-    )
+    # Read two days after the question: weak topics count the last 90 days (#673).
+    with time_machine.travel("2026-06-10T08:00:00+00:00", tick=False):
+        response = _parents_client({"sub": "parent-claims", "role": "parent"}).get(
+            "/parents/me/children/child-1/learning-profile"
+        )
 
     assert response.status_code == 200
     body = response.json()

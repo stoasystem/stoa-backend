@@ -229,8 +229,8 @@ def _without_aside(title: str | None) -> str | None:
 def _slug(spelling: str) -> str:
     """A spelling as compared: lowercase, runs of anything else one hyphen.
 
-    The same as `learning_profile_service.normalize_topic_id`, which makes a
-    weak topic's id of a name the curriculum does not know.
+    The same as `learning_profile_service.normalize_topic_id`, so an old slug
+    a stored row carries resolves like the title it was made of.
     """
     value = re.sub(r"[^a-z0-9]+", "-", spelling.strip().lower()).strip("-")
     return value or "general"

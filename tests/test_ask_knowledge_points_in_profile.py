@@ -87,6 +87,17 @@ ASKED_AT = datetime(2026, 10, 27, 10, 0, tzinfo=UTC)
 ASKED = "Mein Geheimnis: wie kürze ich 6/8 ganz genau?"
 
 
+#: When everything is read: the day after the questions, so they are within
+#: the 90 days the weak topics count (#673) whenever the tests run.
+READ_AT = datetime(2026, 10, 28, 9, 0, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def _read_the_day_after():
+    with time_machine.travel(READ_AT, tick=False):
+        yield
+
+
 def _profile(user_id: str, role: str) -> dict[str, Any]:
     return {
         "PK": f"USER#{user_id}",

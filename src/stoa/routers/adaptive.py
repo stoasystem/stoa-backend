@@ -146,6 +146,8 @@ class MemoryWeakTopic(_MemoryItem):
     topic_id: str = Field(alias="topicId")
     label: str
     count: int
+    #: What the topics are ordered by: a mistake weighs 2, a knowledge point 1 (#673).
+    score: int
     latest_evidence_at: str | None = Field(alias="latestEvidenceAt")
     # Absent, not null, in a parent's view; the routes leave unset fields out.
     evidence_question_ids: list[str] | None = Field(default=None, alias="evidenceQuestionIds")

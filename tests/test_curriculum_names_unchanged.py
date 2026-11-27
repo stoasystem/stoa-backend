@@ -9,7 +9,9 @@ and the skill list were answered by origin/main `1e0d4d3b` for every language
 on the same fixture (`tests/test_curriculum_reads.py`, plus wrong answers and
 a finished lesson that carries its own title). The fixture keeps, per route and
 language, every name the response carries and a digest of the whole response;
-both must be what main gave.
+both must be what main gave. The two learning profiles were recorded again when
+their weak topics began to come from `weak_topics` (#673): the same names, in
+the new order, each topic with its `score`.
 
 To record it again (on main, before a change to names):
 `STOA_RECORD_CURRICULUM_NAMES=1 pytest tests/test_curriculum_names_unchanged.py`.
