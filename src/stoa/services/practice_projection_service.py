@@ -22,13 +22,13 @@ from stoa.models.practice import (
 )
 from stoa.db.repositories import practice_repo
 from stoa.services import (
+    curriculum_names,
     exercise_localization,
     grid_drawing,
     lesson_sections,
     locale_service,
     message_catalog,
 )
-from stoa.services.curriculum_translations import translated_title
 
 
 DIRECTIONAL_HINT_POLICY_VERSION = "practice-directional-hints-v1"
@@ -155,6 +155,11 @@ def _figure(raw: Mapping[str, Any], shown: Mapping[str, Any]) -> str | None:
     return figure if isinstance(figure, str) else None
 
 
+def _lesson_title(raw: Mapping[str, Any], locale: str) -> str:
+    """The lesson's title in `locale`, else its id."""
+    return curriculum_names.for_reader(locale, rows=[raw]).name(raw["lesson_id"]) or raw["lesson_id"]
+
+
 def build_lesson_preview(
     raw: Mapping[str, Any],
     challenges: list[Mapping[str, Any]],
@@ -169,7 +174,7 @@ def build_lesson_preview(
             subjectId=raw["subject_id"],
             gradeLevel=raw.get("grade_level", ""),
             topicId=raw["topic_id"],
-            title=translated_title(raw["lesson_id"], raw["title"], locale),
+            title=_lesson_title(raw, locale),
             topic=raw.get("topic_title", ""),
             difficulty=raw.get("difficulty", "practice"),
             status=status,
@@ -216,7 +221,7 @@ def build_curriculum_lesson_preview(
             gradeLevel=raw.get("grade_level", raw.get("grade_band", "")),
             unitId=raw.get("unit_id", ""),
             topicId=raw["topic_id"],
-            title=translated_title(raw["lesson_id"], raw.get("title", raw["lesson_id"]), locale),
+            title=_lesson_title(raw, locale),
             objective=raw.get("objective", raw.get("description", "")),
             difficulty=raw.get("difficulty", "practice"),
             estimatedMinutes=_as_int(raw.get("estimated_minutes", 10)),

@@ -4,7 +4,7 @@ from collections.abc import Iterable, Mapping
 from decimal import Decimal
 from datetime import datetime, timezone
 import logging
-from typing import Literal, NoReturn, Optional
+from typing import Any, Literal, NoReturn, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
@@ -32,6 +32,7 @@ from stoa.services.account_errors import AccountErrorCode, AccountViolation
 from stoa.services import (
     allowance_service,
     current_relationship,
+    curriculum_names,
     curriculum_service,
     entitlement_service,
     help_requests,
@@ -50,7 +51,6 @@ from stoa.routers.parents import (
     parent_link_request_conflict,
 )
 from stoa.security.identity import Actor
-from stoa.services.curriculum_translations import translated_title
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -367,20 +367,17 @@ def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
     return items
 
 
-def _lesson_titles(lesson_ids: Iterable[str]) -> dict[str, str]:
+def _lesson_rows(lesson_ids: Iterable[str]) -> list[Mapping[str, Any]]:
     """Progress rows record which lesson, not what it was called.
 
-    The titles of these lessons, each lesson read by its key: every lesson row
-    was read for them before, which grew with the published curriculum (#513)."""
+    These lessons' rows, to name them by, each lesson read by its key: every
+    lesson row was read for them before, which grew with the published
+    curriculum (#513)."""
     try:
         lessons = [practice_repo.get_lesson(lesson_id) for lesson_id in sorted(set(lesson_ids))]
     except Exception:
-        return {}
-    return {
-        _history_text(lesson.get("lesson_id")): _history_text(lesson.get("title"))
-        for lesson in lessons
-        if isinstance(lesson, Mapping)
-    }
+        return []
+    return [lesson for lesson in lessons if isinstance(lesson, Mapping)]
 
 
 def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
@@ -391,22 +388,27 @@ def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
         for lesson in student_evidence.for_student(student_id).completions
         if lesson.completed_at
     ]
-    titles = _lesson_titles(lesson.lesson_id for lesson in finished if not lesson.title)
     locale = locale_service.resolve_locale(None)
+    # An older progress row kept the lesson's title beside it, and that is the
+    # stored title it is named by; only the other lessons' rows are read.
+    kept = [{"lesson_id": lesson.lesson_id, "title": lesson.title} for lesson in finished if lesson.title]
+    read = _lesson_rows(lesson.lesson_id for lesson in finished if not lesson.title)
+    names = curriculum_names.for_reader(locale, rows=[*kept, *read])
     for lesson in finished:
-        stored_title = lesson.title or titles.get(lesson.lesson_id, "") or lesson.topic_id
         items.append(
             LearningHistoryItem(
                 id=lesson.lesson_id,
                 subject=(
-                    translated_title(lesson.subject_id, lesson.subject_id, locale)
+                    (names.name(lesson.subject_id) or lesson.subject_id)
                     if lesson.subject_id
                     else "Practice"
                 ),
                 title=message_catalog.text("activity.practice_path_lesson", locale),
                 # The lesson name is curriculum content, so it gets the same
                 # title translation the roadmap and the lesson header use.
-                summary=translated_title(lesson.lesson_id, stored_title, locale),
+                summary=_history_text(names.name(lesson.lesson_id))
+                or lesson.title
+                or lesson.topic_id,
                 createdAt=lesson.completed_at,
                 sourceLabel=message_catalog.text("activity.source.practice_path", locale),
                 kind="practice_lesson",

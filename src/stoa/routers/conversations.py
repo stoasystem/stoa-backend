@@ -61,7 +61,6 @@ from stoa.services import (
     classroom,
     curriculum_service,
     help_requests,
-    learning_profile_service,
     learning_session,
     locale_service,
     message_catalog,
@@ -404,14 +403,6 @@ async def list_conversations(
         for item in page.items
     ]
     return ConversationListResponse(items=summaries, truncated=page.truncated)
-
-
-def _subject_display_label(subject: object) -> str:
-    """The subject named the way students see it, not the id it is stored under."""
-    try:
-        return learning_profile_service.subject_metadata(str(subject))["label"]
-    except (ValueError, KeyError):
-        return str(subject)
 
 
 def _default_conversation_title(subject: object, grade: object) -> str:

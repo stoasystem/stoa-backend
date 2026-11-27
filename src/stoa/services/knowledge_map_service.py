@@ -32,8 +32,8 @@ from typing import Any
 
 from stoa.db.repositories import practice_repo
 from stoa.services import (
+    curriculum_names,
     curriculum_service,
-    curriculum_translations,
     knowledge_base_catalog,
     knowledge_mastery_service,
     learning_profile_service,
@@ -824,12 +824,13 @@ def _skills_of(
     practice needs knowledge not mastered yet names where that knowledge is
     (`missingPrerequisites`). Nothing is locked by it."""
     names = unit_names or {}
+    skill_names = curriculum_names.for_reader(locale)
     mine = [state for state in states.values() if state.unit_id == unit_id]
     out = []
     for state in sorted(mine, key=lambda state: state.skill_id):
         item: dict[str, Any] = {
             "skillId": state.skill_id,
-            "name": curriculum_translations.skill_title(state.skill_id, locale),
+            "name": skill_names.name(state.skill_id) or state.skill_id,
             "lit": state.lit,
         }
         if state.extension:

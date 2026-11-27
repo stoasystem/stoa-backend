@@ -10,9 +10,8 @@ from typing import Any
 
 from stoa.db.dynamodb import stored_int
 from stoa.services import (
+    curriculum_names,
     curriculum_service,
-    curriculum_translations,
-    knowledge_base_catalog,
     locale_service,
     message_catalog,
 )
@@ -289,7 +288,8 @@ def build_learning_profile(
     catalog names it (#390).
     """
     mistakes = mistakes or []
-    names = TopicNames(catalog or {}, locale)
+    names = curriculum_names.for_reader(locale, catalog=catalog)
+    subjects = _subjects_of(catalog or {})
     activity: dict[str, dict[str, Any]] = {}
     feedback_totals: dict[str, list[int]] = defaultdict(list)
     topic_counter: Counter[tuple[str, str, str]] = Counter()
@@ -301,7 +301,7 @@ def build_learning_profile(
 
     def count_topics(source: dict[str, Any], subject_id: str) -> None:
         for seed in _question_topic_entries(source, subject_id):
-            key = names.key(seed["subject"], seed["topic_id"], seed["label"])
+            key = _topic_key(names, subjects, seed["subject"], seed["topic_id"], seed["label"])
             topic_counter[key] += 1
             latest = seed.get("last_seen_at") or source.get("created_at") or ""
             if latest and latest > topic_latest.get(key, ""):
@@ -335,7 +335,9 @@ def build_learning_profile(
         if not raw_topic:
             continue
         label = str(raw_topic)
-        key = names.key(
+        key = _topic_key(
+            names,
+            subjects,
             subject_id,
             normalize_topic_id(label),
             label,
@@ -382,127 +384,44 @@ def build_learning_profile(
     }
 
 
-class TopicNames:
-    """What the curriculum calls each knowledge point a weak topic was counted under (#390).
+def _subjects_of(catalog: Mapping[str, Any]) -> dict[str, object]:
+    """The subject each unit and topic of the catalog is filed under; a unit's first."""
+    subjects: dict[str, object] = {}
+    for key in ("units", "topics"):
+        of_kind = {
+            str(row["id"]): row.get("subjectId")
+            for row in catalog.get(key) or ()
+            if isinstance(row, Mapping) and row.get("id")
+        }
+        for content_id, subject in of_kind.items():
+            subjects.setdefault(content_id, subject)
+    return subjects
 
-    A knowledge point reaches the weak topics spelled however its row was
-    written: the unit id a current attempt carries, the lesson an older one
-    names, the bare topic id every practice mistake stores, the title an
-    answer wrote in the language it was asked in, or the slug made of that
-    title. Each spelling the curriculum knows resolves to the current unit,
-    which is then named with the catalog's title in the reader's language.
 
-    A topic id resolves to its unit when the topic has only one; otherwise it
-    stays the topic, named by the topic's title. A name the curriculum does not
-    know at all - one an answer wrote freely - is kept as written.
+def _topic_key(
+    names: curriculum_names.Names,
+    subjects: Mapping[str, object],
+    subject_id: str,
+    topic_id: str,
+    label: str,
+    *,
+    unit_id: object = None,
+    lesson_id: object = None,
+) -> tuple[str, str, str]:
+    """The weak topic a row counts under: (subject, id, label in the reader's language).
+
+    The knowledge point the curriculum knows by any of the row's spellings
+    (#390); a name it does not know at all - one an answer wrote freely - is
+    kept as written.
     """
-
-    def __init__(self, catalog: Mapping[str, Any], locale: str) -> None:
-        self.locale = locale
-        self._units: dict[str, Mapping[str, Any]] = {
-            str(row["id"]): row for row in _rows(catalog, "units") if row.get("id")
-        }
-        self._topics: dict[str, Mapping[str, Any]] = {
-            str(row["id"]): row for row in _rows(catalog, "topics") if row.get("id")
-        }
-        self._lesson_units: dict[str, str] = {
-            str(row["id"]): str(row["unitId"])
-            for row in _rows(catalog, "lessons")
-            if row.get("id") and str(row.get("unitId") or "") in self._units
-        }
-        units_of_topic: dict[str, list[str]] = defaultdict(list)
-        for unit_id, row in self._units.items():
-            units_of_topic[str(row.get("topicId") or "")].append(unit_id)
-        self._aliases: dict[str, str] = {}
-        # The first claim on a spelling wins: a unit's own names before the
-        # names of what hangs under it, and those before a topic's.
-        for unit_id, row in self._units.items():
-            zap_title = knowledge_base_catalog.ZAP_UNITS.get(unit_id)
-            self._claim(unit_id, unit_id, row.get("title"), *_every_title(unit_id))
-            self._claim(unit_id, zap_title, _without_aside(zap_title))
-        for skill_id, unit_id in curriculum_service.skill_unit_ids().items():
-            if unit_id in self._units:
-                self._claim(
-                    unit_id,
-                    skill_id,
-                    curriculum_translations.SKILL_TITLES.get(skill_id),
-                    *_every_title(skill_id),
-                )
-        for row in _rows(catalog, "lessons"):
-            lesson_id = str(row.get("id") or "")
-            if lesson_id in self._lesson_units:
-                self._claim(
-                    self._lesson_units[lesson_id], lesson_id, row.get("title"), *_every_title(lesson_id)
-                )
-        for topic_id, row in self._topics.items():
-            units = units_of_topic.get(topic_id, [])
-            target = units[0] if len(units) == 1 else topic_id
-            self._claim(target, topic_id, row.get("title"), *_every_title(topic_id))
-
-    def _claim(self, target: str, *spellings: object) -> None:
-        for spelling in spellings:
-            if isinstance(spelling, str) and spelling.strip():
-                self._aliases.setdefault(normalize_topic_id(spelling), target)
-
-    def resolve(self, *spellings: object, unit_id: object = None, lesson_id: object = None) -> str | None:
-        """The unit (or, failing one, the topic) a row's spellings name, if the catalog knows it."""
-        if isinstance(unit_id, str) and unit_id in self._units:
-            return unit_id
-        if isinstance(lesson_id, str) and lesson_id in self._lesson_units:
-            return self._lesson_units[lesson_id]
-        for spelling in spellings:
-            if isinstance(spelling, str) and spelling.strip():
-                found = self._aliases.get(normalize_topic_id(spelling))
-                if found:
-                    return found
-        return None
-
-    def name(self, *spellings: object, unit_id: object = None, lesson_id: object = None) -> str | None:
-        """The catalog's name, in the reader's language, for what the spellings mean."""
-        content_id = self.resolve(*spellings, unit_id=unit_id, lesson_id=lesson_id)
-        if content_id is None:
-            return None
-        return _title(self._row(content_id))
-
-    def key(
-        self,
-        subject_id: str,
-        topic_id: str,
-        label: str,
-        *,
-        unit_id: object = None,
-        lesson_id: object = None,
-    ) -> tuple[str, str, str]:
-        """The weak topic a row counts under: (subject, id, label in the reader's language)."""
-        content_id = self.resolve(topic_id, label, unit_id=unit_id, lesson_id=lesson_id)
-        if content_id is None:
-            return (subject_id, topic_id, label)
-        row = self._row(content_id)
-        return (_safe_subject(row.get("subjectId") or subject_id), content_id, _title(row) or label)
-
-    def _row(self, content_id: str) -> Mapping[str, Any]:
-        return self._units.get(content_id) or self._topics[content_id]
-
-
-def _rows(catalog: Mapping[str, Any], key: str) -> list[Mapping[str, Any]]:
-    return [row for row in catalog.get(key) or () if isinstance(row, Mapping)]
-
-
-def _title(row: Mapping[str, Any]) -> str | None:
-    title = row.get("title")
-    return title if isinstance(title, str) and title.strip() else None
-
-
-def _every_title(content_id: str) -> tuple[str, ...]:
-    """A content id's translated titles: English, French and Italian."""
-    return tuple(curriculum_translations.TITLE_TRANSLATIONS.get(content_id, {}).values())
-
-
-def _without_aside(title: str | None) -> str | None:
-    """A ZAP unit's import title without its bracketed aside, as the catalog shows it."""
-    if not title:
-        return None
-    return re.sub(r"\s*\([^)]*\)\s*$", "", title)
+    content_id = names.resolve(topic_id, label, unit_id=unit_id, lesson_id=lesson_id)
+    if content_id is None:
+        return (subject_id, topic_id, label)
+    return (
+        _safe_subject(subjects.get(content_id) or subject_id),
+        content_id,
+        names.name(content_id) or label,
+    )
 
 
 def _weak_topic_sort_key(item: dict[str, object]) -> tuple[int, str, str]:

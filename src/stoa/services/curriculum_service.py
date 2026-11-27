@@ -8,9 +8,8 @@ from decimal import Decimal
 from typing import Any
 
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
-from stoa.services import curriculum_cache, practice_projection_service
+from stoa.services import curriculum_cache, curriculum_names, practice_projection_service
 from stoa.services import curriculum_translations
-from stoa.services.curriculum_translations import translated_title
 from stoa.services.practice_errors import PracticeErrorCode, PracticeViolation
 
 # ── Subject ids ───────────────────────────────────────────────────────────
@@ -21,7 +20,10 @@ from stoa.services.practice_errors import PracticeErrorCode, PracticeViolation
 # it, so stored values are normalised when read rather than migrated.
 
 # Every subject the platform teaches, with its rollout mark and how the answer
-# model is told to treat it.
+# model is told to treat it. The `label` is for the model's prompt
+# (`learning_profile_service.subject_prompt_context`); a reader is shown the
+# message catalog's `subject.<id>` (#637). The learning profile still hands it
+# out as a subject's `label` until #662.
 SUPPORTED_SUBJECTS: dict[str, dict[str, str]] = {
     "math": {
         "label": "Mathematics",
@@ -198,25 +200,27 @@ def _catalog(
     lesson_rows: Iterable[Mapping[str, Any]],
     challenges: Callable[[str], list[dict[str, Any]]],
 ) -> dict[str, Any]:
+    topic_rows, unit_rows, lesson_rows = list(topic_rows), list(unit_rows), list(lesson_rows)
+    names = curriculum_names.for_reader(locale, rows=[*topic_rows, *unit_rows, *lesson_rows])
     subjects = [
-        _build_subject(subject, locale)
+        _build_subject(subject, names)
         for subject in sorted(subject_rows, key=lambda item: _as_int(item.get("order", 0)))
         if _subject_matches(subject, subject_id, grade_level)
         and _matches_state(subject, rollout_state, include_preview)
         and subject_key(subject.get("subject_id", "")) in SUPPORTED_SUBJECTS
     ]
     topics = [
-        _build_topic(topic, locale)
+        _build_topic(topic, names)
         for topic in sorted(topic_rows, key=lambda item: _as_int(item.get("order", 0)))
         if _topic_matches(topic, subject_id, grade_level) and _matches_state(topic, rollout_state, include_preview)
     ]
     units = [
-        _build_unit(unit, locale)
+        _build_unit(unit, names)
         for unit in sorted(_all_units(topics, unit_rows), key=lambda item: (subject_key(item.get("subject_id", "")), item.get("topic_id", ""), _as_int(item.get("order", 0))))
         if _matches_state(unit, rollout_state, include_preview)
     ]
     lessons = [
-        _build_lesson(lesson, exercise_count=_exercise_count(lesson, include_preview, challenges), locale=locale)
+        _build_lesson(lesson, exercise_count=_exercise_count(lesson, include_preview, challenges), names=names)
         for lesson in sorted(lesson_rows, key=lambda item: (item.get("topic_id", ""), item.get("unit_id", ""), _as_int(item.get("order", 0))))
         if _lesson_matches(lesson, subject_id, grade_level) and _matches_state(lesson, rollout_state, include_preview)
     ]
@@ -360,12 +364,13 @@ def skill_unit_ids(*, subject_id: str | None = None) -> dict[str, str]:
 
 def list_skills(*, subject_id: str | None = None, locale: str = "de") -> dict[str, Any]:
     """The skill vocabulary, named in the requested locale."""
+    names = curriculum_names.for_reader(locale)
     items = [
         {
             "id": skill_id,
             "subjectId": subject_key(subject),
             "unitId": unit_id,
-            "name": curriculum_translations.skill_title(skill_id, locale),
+            "name": names.name(skill_id) or skill_id,
         }
         for subject, skills in curriculum_translations.SKILL_UNITS.items()
         if not subject_id or subject_key(subject) == subject_key(subject_id)
@@ -429,11 +434,10 @@ def _active_exercises_for_lesson(lesson_id: str, include_preview: bool) -> list[
     ]
 
 
-def _build_subject(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
-    name = raw.get("name", raw["subject_id"].title())
+def _build_subject(raw: dict[str, Any], names: curriculum_names.Names) -> dict[str, Any]:
     return {
         "id": subject_key(raw["subject_id"]),
-        "name": translated_title(raw["subject_id"], name, locale),
+        "name": names.name(raw["subject_id"]) or raw.get("name", raw["subject_id"].title()),
         "description": raw.get("description", ""),
         "gradeLevels": raw.get("grade_levels", []),
         "language": raw.get("language", _subject_language(raw["subject_id"])),
@@ -442,13 +446,12 @@ def _build_subject(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
     }
 
 
-def _build_topic(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
-    title = raw.get("title", raw["topic_id"])
+def _build_topic(raw: dict[str, Any], names: curriculum_names.Names) -> dict[str, Any]:
     return {
         "id": raw["topic_id"],
         "subjectId": subject_key(raw["subject_id"]),
         "gradeLevel": raw.get("grade_level", raw.get("grade_band", "")),
-        "title": translated_title(raw["topic_id"], title, locale),
+        "title": names.name(raw["topic_id"]) or raw["topic_id"],
         "description": raw.get("description", ""),
         "rolloutState": _content_state(raw),
         "order": _as_int(raw.get("order", 0)),
@@ -474,14 +477,13 @@ def _placement(raw: dict[str, Any], *extra: str) -> dict[str, Any]:
     return placed
 
 
-def _build_unit(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
-    title = raw.get("title", raw["unit_id"])
+def _build_unit(raw: dict[str, Any], names: curriculum_names.Names) -> dict[str, Any]:
     return {
         "id": raw["unit_id"],
         "subjectId": subject_key(raw["subject_id"]),
         "gradeLevel": raw.get("grade_level", raw.get("grade_band", "")),
         "topicId": raw["topic_id"],
-        "title": translated_title(raw["unit_id"], title, locale),
+        "title": names.name(raw["unit_id"]) or raw["unit_id"],
         "description": raw.get("description", ""),
         "rolloutState": _content_state(raw),
         "order": _as_int(raw.get("order", 0)),
@@ -508,15 +510,16 @@ def get_prerequisites(subject_id: str) -> dict[str, list[str]]:
     }
 
 
-def _build_lesson(raw: dict[str, Any], *, exercise_count: int, locale: str = "de") -> dict[str, Any]:
-    title = raw.get("title", raw["lesson_id"])
+def _build_lesson(
+    raw: dict[str, Any], *, exercise_count: int, names: curriculum_names.Names
+) -> dict[str, Any]:
     return {
         "id": raw["lesson_id"],
         "subjectId": subject_key(raw["subject_id"]),
         "gradeLevel": raw.get("grade_level", raw.get("grade_band", "")),
         "unitId": raw.get("unit_id", ""),
         "topicId": raw["topic_id"],
-        "title": translated_title(raw["lesson_id"], title, locale),
+        "title": names.name(raw["lesson_id"]) or raw["lesson_id"],
         "objective": raw.get("objective", raw.get("description", "")),
         "difficulty": raw.get("difficulty", "practice"),
         "estimatedMinutes": _as_int(raw.get("estimated_minutes", 10)),

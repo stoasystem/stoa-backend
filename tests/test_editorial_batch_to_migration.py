@@ -374,6 +374,14 @@ def test_a_converted_draft_goes_through_review_and_judges_its_listed_answers(
     assert not answer_judging.judge_challenge("24", challenge)
 
 
+def _named(lesson_id: str, locale: str) -> str | None:
+    """What a reader in `locale` calls a lesson stored with a German title."""
+    from stoa.services import curriculum_names
+
+    row = {"lesson_id": lesson_id, "title": "Deutscher Titel"}
+    return curriculum_names.for_reader(locale, rows=[row]).name(lesson_id)
+
+
 @pytest.mark.parametrize(
     "lesson_id",
     [
@@ -388,11 +396,8 @@ def test_a_converted_draft_goes_through_review_and_judges_its_listed_answers(
     ],
 )
 def test_the_fractions_batch_lessons_have_their_titles_in_every_locale(lesson_id: str) -> None:
-    from stoa.services import curriculum_translations
-
     titles = {
-        locale: curriculum_translations.translated_title(lesson_id, "Deutscher Titel", locale)
-        for locale in ("en", "fr", "it")
+        locale: _named(lesson_id, locale) for locale in ("en", "fr", "it")
     }
     assert "Deutscher Titel" not in titles.values()
     assert len(set(titles.values())) == 3
@@ -410,11 +415,10 @@ def test_the_zap1_adaptation_lessons_have_their_titles_in_every_locale() -> None
     assert len(lesson_ids) == 48
     for lesson_id in lesson_ids:
         titles = {
-            locale: curriculum_translations.translated_title(lesson_id, "Deutscher Titel", locale)
-            for locale in ("en", "fr", "it")
+            locale: _named(lesson_id, locale) for locale in ("en", "fr", "it")
         }
         assert "Deutscher Titel" not in titles.values(), lesson_id
-        assert all(title.strip() for title in titles.values()), lesson_id
+        assert all(title and title.strip() for title in titles.values()), lesson_id
 
 
 def test_a_translated_draft_publishes_and_judges_in_its_locale(table: FakeTable) -> None:

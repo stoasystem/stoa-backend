@@ -218,41 +218,38 @@ def test_a_point_with_nothing_before_it_names_nothing() -> None:
 def test_the_catalog_carries_a_unit_s_coordinates() -> None:
     from decimal import Decimal
 
-    from stoa.services import curriculum_service
+    from stoa.services import curriculum_names, curriculum_service
 
-    built = curriculum_service._build_unit(
-        {
-            "unit_id": "u1",
-            "subject_id": "math",
-            "topic_id": "brueche",
-            "title": "u1",
-            # The table hands numbers back as Decimal, which a float check
-            # written against `float` alone would drop on the floor.
-            "x": Decimal("0.25"),
-            "y": Decimal("0.75"),
-            "layout_version": "L3",
-        }
-    )
+    raw = {
+        "unit_id": "u1",
+        "subject_id": "math",
+        "topic_id": "brueche",
+        "title": "u1",
+        # The table hands numbers back as Decimal, which a float check
+        # written against `float` alone would drop on the floor.
+        "x": Decimal("0.25"),
+        "y": Decimal("0.75"),
+        "layout_version": "L3",
+    }
+    built = curriculum_service._build_unit(raw, curriculum_names.for_reader("de", rows=[raw]))
 
     assert (built["x"], built["y"]) == (0.25, 0.75)
     assert built["layoutVersion"] == "L3"
 
 
 def test_the_catalog_carries_a_nebula_s_centre_and_radius() -> None:
-    from stoa.services import curriculum_service
+    from stoa.services import curriculum_names, curriculum_service
 
-    built = curriculum_service._build_topic(
-        {"topic_id": "brueche", "subject_id": "math", "title": "Brüche", "x": 0.4, "y": 0.6, "radius": 0.12}
-    )
+    raw = {"topic_id": "brueche", "subject_id": "math", "title": "Brüche", "x": 0.4, "y": 0.6, "radius": 0.12}
+    built = curriculum_service._build_topic(raw, curriculum_names.for_reader("de", rows=[raw]))
 
     assert (built["x"], built["y"], built["radius"]) == (0.4, 0.6, 0.12)
 
 
 def test_a_row_that_has_not_been_laid_out_carries_no_coordinates() -> None:
-    from stoa.services import curriculum_service
+    from stoa.services import curriculum_names, curriculum_service
 
-    built = curriculum_service._build_unit(
-        {"unit_id": "u1", "subject_id": "math", "topic_id": "brueche", "title": "u1"}
-    )
+    raw = {"unit_id": "u1", "subject_id": "math", "topic_id": "brueche", "title": "u1"}
+    built = curriculum_service._build_unit(raw, curriculum_names.for_reader("de", rows=[raw]))
 
     assert "x" not in built and "y" not in built and "layoutVersion" not in built

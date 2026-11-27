@@ -108,6 +108,9 @@ _Avoid_：在模型调用之外拼请求体或读模型回包、在 Bedrock 适�
 **星图候选清单**：学生星图上画出的全部知识点（每颗星），覆盖所有学科，在学生提问时读一次，作为数据交给 AI；AI 回答里的知识点和想去的星只能从这份清单里挑，清单外的 id 一律不认。
 _Avoid_：把模型交回的 unit id 直接当成星图上的星。
 
+**内容名字**：主题、单元（星）、课、技能点给读者看的名字，以及把一个知识点的任意写法（单元、课、主题或技能点的 id，任一语言的标题，标题的 slug）认成哪颗星（或主题），只由 `curriculum_names` 一处给出（#660），每个请求按读者语言建一次：`name(id)` 不认识就是 `None`，由调用方决定显示什么。名字暂时还来自内容行存的德语 `title`、`TITLE_TRANSLATIONS`（英、法、意）和技能点的 `SKILL_TITLES`，只有这个模块读它们。科目名不归它：读者看到的科目名是 message catalog 的 `subject.<id>`，`SUPPORTED_SUBJECTS` 的 `label` 只给模型提示用（学习画像里还带着它，第 3 步 #662 去掉）。
+_Avoid_：在 `curriculum_names` 外读翻译表或内容行的 `title` 给读者起名字。
+
 **讲解卡**：课时在练习之前给学生读的讲解，存在课的 `sections` 里，按顺序排列（`lesson_sections`）。每张卡有 `id` 和德语的 `title`、`body`（`body` 可含 LaTeX），可带 `translations`（en、fr、it 等语言各自的 `title` 和 `body`）。学生的两个课时接口按学生语言给出 `[{id, title, body}]`，某种语言缺标题或正文就整张回落德语；原始 `translations` 不交出。课程运维写入时校验形状，坏卡在迁移 dry-run 里就报出来。草稿课不投影到练习分区，学生读不到。
 _Avoid_：把讲解卡和题目的 `explanation`（答题后才给的解析）混为一谈、在 `lesson_sections` 外自己挑译文、把 `translations` 原样发给客户端。
 

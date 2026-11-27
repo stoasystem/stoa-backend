@@ -61,6 +61,7 @@ from stoa.services import (
     knowledge_map_service,
     curriculum_analytics_service,
     learning_profile_service,
+    curriculum_names,
     curriculum_service,
     entitlement_service,
     locale_service,
@@ -69,7 +70,6 @@ from stoa.services import (
     usage_ledger_service,
 )
 from stoa.services import practice_projection_service, review_service
-from stoa.services.curriculum_translations import translated_title
 from stoa.services.practice_errors import PracticeErrorCode as _P, PracticeViolation
 
 router = APIRouter()
@@ -662,6 +662,7 @@ async def get_roadmap(
         all_lessons[-1]["lesson_id"] if all_lessons else None,
     )
     progress_pct = int(len(completed_ids) / len(all_lessons) * 100) if all_lessons else 0
+    names = curriculum_names.for_reader(locale, rows=[topic, *units_raw, *all_lessons])
 
     roadmap_units = []
     for unit_raw in units_raw:
@@ -671,7 +672,7 @@ async def get_roadmap(
             st = _lesson_status(lesson["lesson_id"], completed_ids, current_lesson_id)
             roadmap_lessons.append({
                 "id": lesson["lesson_id"],
-                "title": translated_title(lesson["lesson_id"], lesson["title"], locale),
+                "title": names.name(lesson["lesson_id"]) or lesson["lesson_id"],
                 "description": lesson.get("description", ""),
                 "order": lesson.get("order", 1),
                 "status": st,
@@ -684,7 +685,7 @@ async def get_roadmap(
             })
         roadmap_units.append({
             "id": unit_raw["unit_id"],
-            "title": translated_title(unit_raw["unit_id"], unit_raw["title"], locale),
+            "title": names.name(unit_raw["unit_id"]) or unit_raw["unit_id"],
             "description": unit_raw.get("description", ""),
             "order": unit_raw.get("order", 1),
             "lessons": roadmap_lessons,
@@ -698,7 +699,7 @@ async def get_roadmap(
             "id": topic["topic_id"],
             "subjectId": subject,
             "gradeLevel": topic.get("grade_level", ""),
-            "title": translated_title(topic["topic_id"], topic["title"], locale),
+            "title": names.name(topic["topic_id"]) or topic["topic_id"],
             "description": topic.get("description", ""),
             "progress": progress_pct,
             "currentLessonId": current_lesson_id,

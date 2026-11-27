@@ -10,6 +10,8 @@ Keyed by the content id from stoa.db.repositories.practice_repo (subject_id,
 topic_id, unit_id, lesson_id). A missing id or locale falls back to the
 stored German title, so newly seeded content is never hidden while its
 translation is pending.
+
+Only `curriculum_names` reads these tables to name content (#660).
 """
 from __future__ import annotations
 
@@ -487,13 +489,6 @@ TITLE_TRANSLATIONS: dict[str, dict[str, str]] = {
 }
 
 
-def translated_title(content_id: str, title: str, locale: str) -> str:
-    """Return the display title in the requested locale, falling back to German."""
-    if locale == "de":
-        return title
-    return TITLE_TRANSLATIONS.get(content_id, {}).get(locale, title)
-
-
 # ── Skill points (stoa-backend#58) ────────────────────────────────────────
 #
 # A skill point is an exercise's skill, and stoa-frontend#9 point 12 gives it
@@ -503,7 +498,7 @@ def translated_title(content_id: str, title: str, locale: str) -> str:
 # read it rather than keep a copy.
 #
 # Names follow the same mechanism as the titles above: German is the stored
-# language and `translated_title` serves the other three.
+# language and `curriculum_names` serves the other three.
 
 SKILL_UNITS: dict[str, dict[str, str]] = {
     "mathematics": {
@@ -926,8 +921,3 @@ def skill_unit_id(skill_id: str) -> str | None:
         if owner:
             return owner
     return None
-
-
-def skill_title(skill_id: str, locale: str) -> str:
-    """The skill's display name, falling back to German and then to its id."""
-    return translated_title(skill_id, SKILL_TITLES.get(skill_id, skill_id), locale)
