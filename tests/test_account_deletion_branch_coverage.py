@@ -102,6 +102,9 @@ NO_LONGER_WRITTEN: dict[str, str] = {
     # #675 retired `POST /adaptive/students/{id}/memory/refresh`, the only writer.
     # The rows it stored are cleaned out once, but the deletion still reaches any.
     "learning_memory_snapshot": "#675",
+    # #684 removed the payment expiry reminder's writers, which nothing called. The
+    # read moved to `billing_fact_repo`; the notification sweep still takes any row.
+    "payment_expiry_reminder": "#684",
 }
 
 
@@ -128,6 +131,7 @@ def deleted_by_branch() -> dict[str, tuple[str, dict[str, Any]]]:
         allowance_repo,
         asked_knowledge_repo,
         attachment_repo,
+        billing_fact_repo,
         capability_repo,
         identity_repo,
         notification_repo,
@@ -327,8 +331,9 @@ def deleted_by_branch() -> dict[str, tuple[str, dict[str, Any]]]:
         {"PK": "ASSISTANCE_SUMMARY#s1", "SK": "META"},
         "teacher_assistance_summary_seed", **owner))
     add("notification_device_realtime", _row(
-        {"PK": notification_repo.payment_expiry_reminder_pk(ACCOUNT),
-         "SK": notification_repo.payment_expiry_reminder_sk("a" * 64)},
+        {"PK": billing_fact_repo.payment_expiry_reminder_pk(ACCOUNT),
+         "SK": billing_fact_repo.payment_expiry_reminder_sk("a" * 64)},
+        # Keyed as `put_payment_expiry_reminder` keyed it before #684.
         "payment_expiry_reminder", owner_id=ACCOUNT, parent_id=ACCOUNT))
     add("notification_device_realtime", _row(
         {"PK": websocket_repo.connection_pk("ws-1"), "SK": "META"}, "websocket_connection",

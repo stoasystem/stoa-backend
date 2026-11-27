@@ -1,9 +1,8 @@
 """Unsubscribe links and headers for notification emails (#363).
 
-Three kinds of email recur or notify, and each can be stopped from the email
-itself: the parent's weekly report, the teacher's dispatch reminder and the
-notification digest. One-off emails (account and teacher activation, password
-code) carry nothing from here.
+Two kinds of email recur or notify, and each can be stopped from the email
+itself: the parent's weekly report and the teacher's dispatch reminder. One-off
+emails (account and teacher activation, password code) carry nothing from here.
 
 A link holds a token naming one recipient and one kind of email, signed with
 HMAC-SHA256. It reveals the account id, never the address. It does not expire:
@@ -47,7 +46,6 @@ PAGE_PATH = "/unsubscribe"
 class EmailKind(StrEnum):
     WEEKLY_REPORT = "weekly_report"
     DISPATCH_REMINDER = "dispatch_reminder"
-    NOTIFICATION_DIGEST = "notification_digest"
 
 
 @dataclass(frozen=True, slots=True)

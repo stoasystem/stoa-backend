@@ -564,3 +564,37 @@ def test_fact_rows_round_trip_through_closed_billing_fact_model_without_sensitiv
     }
     canaries = ("payload", "signature", "card", "cvc", "secret", "checkout_url")
     assert not any(canary in repr(row).lower() for canary in canaries)
+
+
+def test_payment_expiry_reminders_are_read_from_the_parents_own_partition() -> None:
+    # Moved here from the notification repository with #684; read only.
+    from fakes.dynamodb import FakeTable
+
+    parent = "parent-684"
+    identity = "a" * 64
+    table = FakeTable()
+    own = {
+        "PK": billing_fact_repo.payment_expiry_reminder_pk(parent),
+        "SK": billing_fact_repo.payment_expiry_reminder_sk(identity),
+        "entity_type": billing_fact_repo.PAYMENT_EXPIRY_REMINDER_ENTITY,
+        "parent_id": parent,
+        "owner_id": parent,
+        "status": "pending",
+    }
+    table.seed(
+        own,
+        # Another kind of row, and one naming another owner, in the same partition.
+        {**own, "SK": "OTHER", "entity_type": "something_else"},
+        {**own, "SK": billing_fact_repo.payment_expiry_reminder_sk("b" * 64), "owner_id": "x"},
+    )
+
+    assert billing_fact_repo.list_payment_expiry_reminders(parent, table=table) == [own]
+    assert billing_fact_repo.get_payment_expiry_reminder(parent, identity, table=table) == own
+    assert billing_fact_repo.list_payment_expiry_reminders("nobody", table=table) == []
+    with pytest.raises(ValueError):
+        billing_fact_repo.payment_expiry_reminder_pk(" ")
+    with pytest.raises(ValueError):
+        billing_fact_repo.payment_expiry_reminder_sk("short")
+    assert all(
+        request.get("ConsistentRead") is True for operation, request in table.requests
+    )

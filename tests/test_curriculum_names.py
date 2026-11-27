@@ -214,7 +214,6 @@ TITLE_READS: dict[tuple[str, str], str] = {
     ("services/knowledge_map_service.py", "build_map"): _CATALOG,
     ("services/knowledge_mastery_service.py", "judge_unit"): _CATALOG,
     ("services/lesson_sections.py", "localized"): _NOT_CONTENT,
-    ("services/notification_service.py", "_digest_email_html"): _NOT_CONTENT,
     ("services/notification_service.py", "_event_text"): _NOT_CONTENT,
     ("services/notification_service.py", "attempt_push_delivery"): _NOT_CONTENT,
     ("services/practice_context_service.py", "resolve"): _CATALOG,

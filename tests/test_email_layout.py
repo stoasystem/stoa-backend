@@ -34,11 +34,11 @@ def _preview_module():
     return module
 
 
-NOTIFICATION_EMAILS = {"dispatch_reminder", "notification_digest", "weekly_report"}
+NOTIFICATION_EMAILS = {"dispatch_reminder", "weekly_report"}
 
 
 @pytest.mark.parametrize("locale", LOCALES)
-def test_all_six_emails_wear_the_frame_in_every_language(locale):
+def test_all_five_emails_wear_the_frame_in_every_language(locale):
     rendered = _preview_module().emails(locale)
 
     assert set(rendered) == {
@@ -46,7 +46,6 @@ def test_all_six_emails_wear_the_frame_in_every_language(locale):
         "teacher_activation",
         "password_code",
         "dispatch_reminder",
-        "notification_digest",
         "weekly_report",
     }
     logo = escape(config.settings().email_logo_url, quote=True)

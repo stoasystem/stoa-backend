@@ -1,5 +1,4 @@
 import re
-from html import escape
 from decimal import Decimal
 
 import pytest
@@ -153,9 +152,6 @@ def _install_push_token_repo(monkeypatch):
 
 def _notification_provider_settings(**overrides):
     defaults = {
-        "notification_email_provider": "ses",
-        "notification_email_provider_approved": True,
-        "notification_email_send_enabled": True,
         "notification_push_provider": "native-relay",
         "notification_push_provider_approved": True,
         "notification_push_provider_endpoint_url": "https://push.example.test/send",
@@ -256,21 +252,55 @@ def test_notification_preferences_default_and_update(monkeypatch):
     default_response = client.get("/notifications/preferences")
     assert default_response.status_code == 200
     default_body = default_response.json()
-    assert default_body["preferences"]["teacher_responses"]["in_app"] is True
-    assert default_body["preferences"]["teacher_responses"]["realtime"] is True
-    assert default_body["preferences"]["teacher_responses"]["email_digest"] is False
+    # Only the categories an event falls into, and the channels still sent (#684).
+    assert default_body["preferences"] == {
+        "admin_operations": {"in_app": True, "realtime": True, "push": False},
+        "teacher_responses": {"in_app": True, "realtime": True, "push": False},
+    }
+    assert default_body["supportedCategories"] == ["admin_operations", "teacher_responses"]
+    assert default_body["supportedChannels"] == ["in_app", "push", "realtime"]
 
     update_response = client.patch(
         "/notifications/preferences",
-        json={"preferences": {"teacher_responses": {"realtime": False, "email_digest": True}}},
+        json={"preferences": {"teacher_responses": {"realtime": False, "push": True}}},
     )
 
     assert update_response.status_code == 200
     body = update_response.json()
     assert body["preferences"]["teacher_responses"]["realtime"] is False
-    assert body["preferences"]["teacher_responses"]["email_digest"] is True
+    assert body["preferences"]["teacher_responses"]["push"] is True
     assert body["preferences"]["teacher_responses"]["in_app"] is True
     assert preferences["student-1"]["preferences"]["teacher_responses"]["realtime"] is False
+
+
+def test_an_old_settings_page_sending_the_retired_cells_saves_as_without_them(monkeypatch):
+    """An older page sends the whole matrix back, digest column and empty categories
+    included (#684): taken, ignored, and stored exactly as the same matrix without them.
+    """
+    _, preferences = _install_notification_repo(monkeypatch)
+    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+    current = {
+        "admin_operations": {"in_app": True, "realtime": False, "push": False},
+        "teacher_responses": {"in_app": False, "realtime": True, "push": True},
+    }
+    old_page = {
+        category: {**channels, "email_digest": True} for category, channels in current.items()
+    }
+    for retired in ("learning_updates", "assignments", "weekly_reports"):
+        old_page[retired] = {"in_app": False, "realtime": False, "email_digest": True, "push": True}
+
+    without = client.patch(
+        "/notifications/preferences", json={"preferences": current, "dispatchEmail": False}
+    )
+    stored_without = preferences["student-1"]["preferences"]
+    with_retired = client.patch(
+        "/notifications/preferences", json={"preferences": old_page, "dispatchEmail": False}
+    )
+
+    assert without.status_code == with_retired.status_code == 200
+    assert preferences["student-1"]["preferences"] == stored_without == current
+    for field in ("preferences", "dispatchEmail", "weeklyReportEmail"):
+        assert with_retired.json()[field] == without.json()[field]
 
 
 def test_notification_preferences_reject_invalid_channel(monkeypatch):
@@ -298,7 +328,6 @@ def test_delivery_decision_honors_realtime_preference(monkeypatch):
         "preferences": notification_service.default_preferences(),
     }
     preferences["student-1"]["preferences"]["teacher_responses"]["realtime"] = False
-    preferences["student-1"]["preferences"]["teacher_responses"]["email_digest"] = True
 
     event = notification_service.create_event(
         recipient_id="student-1",
@@ -316,7 +345,7 @@ def test_delivery_decision_honors_realtime_preference(monkeypatch):
     assert decision["category"] == "teacher_responses"
     assert decision["channels"]["in_app"]["decision"] == "stored"
     assert decision["channels"]["realtime"]["decision"] == "skipped_preference"
-    assert decision["channels"]["email_digest"]["decision"] == "deferred_digest"
+    assert set(decision["channels"]) == {"in_app", "realtime", "push"}
     assert event["deliveryChannels"]["realtime"]["decision"] == "skipped_preference"
 
 
@@ -463,205 +492,6 @@ def test_admin_delivery_status_reports_live_ready_websocket_without_secrets(monk
     assert "stale-conn" not in serialized
 
 
-def test_digest_preview_selects_digest_enabled_unread_notifications(monkeypatch):
-    events, preferences = _install_notification_repo(monkeypatch)
-    prefs = notification_service.default_preferences()
-    prefs["teacher_responses"]["email_digest"] = True
-    prefs["teacher_responses"]["push"] = True
-    preferences["student-1"] = {
-        "user_id": "student-1",
-        "preferences": prefs,
-    }
-    created = notification_service.create_event(
-        recipient_id="student-1",
-        recipient_role="student",
-        event_type="teacher_reply",
-        target_type="question",
-        target_id="question-1",
-        title="Teacher replied",
-        summary="Your teacher added a reply.",
-        metadata={
-            "subject": "math",
-            "html_s3_key": "weekly-reports/private/report.html",
-            "safe_count": 1,
-        },
-        created_at="2026-06-11T10:00:00+00:00",
-    )
-    notification_service.create_event(
-        recipient_id="student-1",
-        recipient_role="student",
-        event_type="learning_profile_update",
-        target_type="learning_profile",
-        target_id="student-1",
-        title="Profile updated",
-        summary="Learning profile changed.",
-        created_at="2026-06-11T11:00:00+00:00",
-    )
-    events[created["eventId"]]["status"] = "created"
-
-    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
-    response = client.get("/notifications/digest-preview?category=teacher_responses")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["deliveryMode"] == "preview_only"
-    assert body["emailProviderConfigured"] is False
-    assert body["pushProviderConfigured"] is False
-    assert body["pushPreferencesSupported"] is True
-    assert body["count"] == 1
-    assert body["items"][0]["eventId"] == created["eventId"]
-    assert body["items"][0]["metadata"] == {"subject": "math", "safe_count": 1}
-
-
-def test_digest_preview_requires_digest_preference(monkeypatch):
-    _install_notification_repo(monkeypatch)
-    notification_service.create_event(
-        recipient_id="student-1",
-        recipient_role="student",
-        event_type="teacher_reply",
-        target_type="question",
-        target_id="question-1",
-        title="Teacher replied",
-        summary="Your teacher added a reply.",
-    )
-    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
-
-    response = client.get("/notifications/digest-preview")
-
-    assert response.status_code == 200
-    assert response.json()["count"] == 0
-
-
-def test_digest_send_refuses_unconfigured_provider_and_records_evidence(monkeypatch):
-    events, preferences = _install_notification_repo(monkeypatch)
-    prefs = notification_service.default_preferences()
-    prefs["teacher_responses"]["email_digest"] = True
-    preferences["student-1"] = {"user_id": "student-1", "preferences": prefs}
-    created = notification_service.create_event(
-        recipient_id="student-1",
-        recipient_role="student",
-        event_type="teacher_reply",
-        target_type="question",
-        target_id="question-1",
-        title="Teacher replied",
-        summary="Your teacher added a reply.",
-    )
-
-    result = notification_service.send_digest(
-        {"sub": "student-1", "role": "student", "email": "student@example.com"},
-        category="teacher_responses",
-    )
-
-    assert result["status"] == "refused_provider_not_ready"
-    attempts = events[created["eventId"]]["metadata"]["email_digest_delivery_attempts"]
-    assert attempts[0]["status"] == "refused_provider_not_ready"
-    assert attempts[0]["recipient_email_hash"]
-    assert "student@example.com" not in str(result)
-
-
-def test_digest_send_selects_enabled_items_and_redacts_provider_result(monkeypatch):
-    events, preferences = _install_notification_repo(monkeypatch)
-    config.install(_notification_provider_settings())
-    prefs = notification_service.default_preferences()
-    prefs["teacher_responses"]["email_digest"] = True
-    preferences["student-1"] = {"user_id": "student-1", "preferences": prefs}
-    created = notification_service.create_event(
-        recipient_id="student-1",
-        recipient_role="student",
-        event_type="teacher_reply",
-        target_type="question",
-        target_id="question-1",
-        title="Teacher replied",
-        summary="Your teacher added a reply.",
-    )
-    sent = []
-
-    def send_func(payload):
-        sent.append(payload)
-        return {"messageId": "msg-1", "apiKey": "provider-secret"}
-
-    result = notification_service.send_digest(
-        {"sub": "student-1", "role": "student", "email": "student@example.com"},
-        category="teacher_responses",
-        send_func=send_func,
-    )
-
-    assert result["status"] == "sent"
-    assert result["eventIds"] == [created["eventId"]]
-    assert sent[0]["recipientEmail"] == "student@example.com"
-    assert events[created["eventId"]]["metadata"]["email_digest_delivery_attempts"][0]["status"] == "sent"
-    assert "provider-secret" not in str(result)
-    assert result["providerResult"] == {}
-
-
-@pytest.mark.parametrize("locale", sorted(locale_service.SUPPORTED_LOCALES))
-def test_the_digest_email_is_in_the_recipients_language(monkeypatch, locale):
-    # Sent from whoever's request, read by the recipient: their stored
-    # language, and role messages rendered in it as the inbox does (#278).
-    events, preferences = _install_notification_repo(monkeypatch)
-    config.install(_notification_provider_settings())
-    monkeypatch.setattr(
-        user_repo,
-        "get_user",
-        lambda user_id, **_k: {"user_id": user_id, "preferred_locale": locale},
-    )
-    locale_service.set_request_locale("en" if locale != "en" else "de")
-    prefs = notification_service.default_preferences()
-    for category in prefs:
-        prefs[category]["email_digest"] = True
-    preferences["teacher-1"] = {"user_id": "teacher-1", "preferences": prefs}
-    created = notification_service.create_event(
-        recipient_id="teacher-1",
-        recipient_role="teacher",
-        event_type="teacher_requested",
-        target_type="question",
-        target_id="question-1",
-        **notification_service._role_message_text("teacher_requested", {"subject": "math"}),
-    )
-    events[created["eventId"]]["recipient_id"] = "teacher-1"
-    sent = []
-
-    try:
-        result = notification_service.send_digest(
-            {"sub": "teacher-1", "role": "teacher", "email": "teacher@example.com"},
-            send_func=lambda payload: sent.append(payload) or {"messageId": "msg-1"},
-        )
-    finally:
-        locale_service.set_request_locale(None)
-
-    assert result["status"] == "sent"
-    heading = message_catalog.text("email.notification_digest.title", locale)
-    assert sent[0]["subject"] == message_catalog.text("email.notification_digest.subject", locale)
-    assert f">{escape(heading)}</h1>" in sent[0]["html"]
-    assert f'<html lang="{locale}">' in sent[0]["html"]
-    title, summary = notification_service._teacher_requested_message({"subject": "math"}, locale)
-    assert sent[0]["items"][0]["title"] == title
-    assert sent[0]["items"][0]["summary"] == summary
-
-
-def test_digest_send_honors_email_digest_opt_out(monkeypatch):
-    _install_notification_repo(monkeypatch)
-    config.install(_notification_provider_settings())
-    notification_service.create_event(
-        recipient_id="student-1",
-        recipient_role="student",
-        event_type="teacher_reply",
-        target_type="question",
-        target_id="question-1",
-        title="Teacher replied",
-        summary="Your teacher added a reply.",
-    )
-
-    result = notification_service.send_digest(
-        {"sub": "student-1", "role": "student", "email": "student@example.com"},
-        category="teacher_responses",
-        send_func=lambda payload: (_ for _ in ()).throw(AssertionError("send should not run")),
-    )
-
-    assert result["status"] == "refused_no_digest_items"
-    assert result["itemCount"] == 0
-
-
 def test_push_token_registration_and_revocation_redacts_raw_token(monkeypatch):
     _install_push_token_repo(monkeypatch)
     client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
@@ -801,49 +631,6 @@ def test_push_delivery_records_success_and_provider_failure_redacted(monkeypatch
     assert failure_attempt["status"] == "provider_acceptance_unknown"
     assert failure_attempt["provider_result"] == {}
     assert "provider-token-secret" not in str(failure_attempt)
-
-
-def test_digest_preview_filters_by_time_window(monkeypatch):
-    _events, preferences = _install_notification_repo(monkeypatch)
-    prefs = notification_service.default_preferences()
-    prefs["teacher_responses"]["email_digest"] = True
-    preferences["student-1"] = {
-        "user_id": "student-1",
-        "preferences": prefs,
-    }
-    older = notification_service.create_event(
-        recipient_id="student-1",
-        recipient_role="student",
-        event_type="teacher_reply",
-        target_type="question",
-        target_id="question-1",
-        title="Older reply",
-        summary="This reply is before the digest window.",
-        created_at="2026-06-10T10:00:00+00:00",
-    )
-    selected = notification_service.create_event(
-        recipient_id="student-1",
-        recipient_role="student",
-        event_type="teacher_reply",
-        target_type="question",
-        target_id="question-2",
-        title="Selected reply",
-        summary="This reply is inside the digest window.",
-        created_at="2026-06-11T10:00:00+00:00",
-    )
-
-    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
-    response = client.get(
-        "/notifications/digest-preview"
-        "?since=2026-06-11T00:00:00+00:00"
-        "&until=2026-06-11T23:59:59+00:00"
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["count"] == 1
-    assert body["items"][0]["eventId"] == selected["eventId"]
-    assert body["items"][0]["eventId"] != older["eventId"]
 
 
 # ── notification copy follows the reader's language (#124) ────────────────

@@ -947,12 +947,6 @@ _ENTRIES: tuple[DataType, ...] = (
     ),
     DataType("notification_delivery_intent", _repo("notification_repo"), _owner("owner_id")),
     DataType(
-        "payment_expiry_reminder",
-        _repo("notification_repo"),
-        _owner("owner_id"),
-        _not("the same account as `owner_id`, which is declared", "parent_id"),
-    ),
-    DataType(
         "websocket_connection", "stoa.services.websocket_service", _owner("owner_id", "user_id")
     ),
     # -- no longer written: stored rows may remain, and the deletion still reaches them -
@@ -966,6 +960,15 @@ _ENTRIES: tuple[DataType, ...] = (
         "ai_teacher_draft",
         _repo("ai_teacher_tools_repo"),
         _owner("student_id", "owner_id"),
+        lifecycle="no_longer_written",
+    ),
+    # A parent's card expiry reminder: billing reads it; its writers had no caller and
+    # left with #684.
+    DataType(
+        "payment_expiry_reminder",
+        _repo("billing_fact_repo"),
+        _owner("owner_id"),
+        _not("the same account as `owner_id`, which is declared", "parent_id"),
         lifecycle="no_longer_written",
     ),
     # The adaptive memory snapshot: `/memory/refresh` wrote it until #675, which

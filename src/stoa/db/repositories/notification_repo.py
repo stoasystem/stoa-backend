@@ -13,10 +13,10 @@ from uuid import uuid4
 
 from boto3.dynamodb.conditions import Attr, Key
 
-from stoa.db import data_catalog, owner_registry
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
-from stoa.db.repositories import account_deletion_repo
+from stoa.db.repositories import account_deletion_repo, billing_fact_repo
 
 
 NOTIFICATION_ENTITY = "notification_event"
@@ -27,7 +27,6 @@ SUMMARY_SEED_ENTITY = "teacher_assistance_summary_seed"
 PREFERENCE_ENTITY = "notification_preference"
 PUSH_TOKEN_ENTITY = "notification_push_token"
 DELIVERY_INTENT_ENTITY = "notification_delivery_intent"
-PAYMENT_EXPIRY_REMINDER_ENTITY = "payment_expiry_reminder"
 GLOBAL_NONPRIVATE_CONTRACT_ID = "stoa-global-nonprivate.v1"
 GLOBAL_NONPRIVATE_DELIVERY_CONTRACTS = {
     GLOBAL_NONPRIVATE_CONTRACT_ID: {
@@ -46,7 +45,9 @@ NOTIFICATION_PRIVATE_ROW_REGISTRY = frozenset(
         PREFERENCE_ENTITY,
         PUSH_TOKEN_ENTITY,
         DELIVERY_INTENT_ENTITY,
-        PAYMENT_EXPIRY_REMINDER_ENTITY,
+        # A billing row (#684), still taken out with the account by this sweep
+        # as before; nothing writes one any more.
+        billing_fact_repo.PAYMENT_EXPIRY_REMINDER_ENTITY,
     }
 )
 NOTIFICATION_WRITER_REGISTRY = frozenset(
@@ -62,9 +63,6 @@ NOTIFICATION_WRITER_REGISTRY = frozenset(
         "recover_delivery_intent",
         "cancel_delivery_intent",
         "complete_delivery_intent",
-        "put_payment_expiry_reminder",
-        "resolve_payment_expiry_reminder",
-        "mark_payment_expiry_reminder_notified",
     }
 )
 NOTIFICATION_PRIVATE_FIELDS = frozenset(
@@ -552,24 +550,6 @@ def delivery_intent_pk(owner_id: str) -> str:
 
 def delivery_intent_sk(operation_id: str) -> str:
     return f"INTENT#{operation_id}"
-
-
-def payment_expiry_reminder_pk(parent_id: str) -> str:
-    parent = str(parent_id).strip()
-    if not parent:
-        raise account_deletion_repo.AccountDeletionConflict(
-            "payment reminder owner is invalid"
-        )
-    return f"PAYMENT_EXPIRY_REMINDER#{parent}"
-
-
-def payment_expiry_reminder_sk(reminder_identity: str) -> str:
-    identity = str(reminder_identity).strip()
-    if len(identity) != 64:
-        raise account_deletion_repo.AccountDeletionConflict(
-            "payment reminder identity is invalid"
-        )
-    return f"REMINDER#{identity}"
 
 
 # -- Where a notification is found by who it is for (#613) ---------------------------
@@ -1307,174 +1287,6 @@ def reindex_push_token(item: Mapping[str, object], *, table: object | None = Non
     return True
 
 
-def get_payment_expiry_reminder(
-    parent_id: str,
-    reminder_identity: str,
-    *,
-    table: object | None = None,
-) -> NotificationItem | None:
-    target = table or db_table.table()
-    response = _get_item(
-        target,
-        Key={
-            "PK": payment_expiry_reminder_pk(parent_id),
-            "SK": payment_expiry_reminder_sk(reminder_identity),
-        },
-        ConsistentRead=True,
-    )
-    return _optional_item(response.get("Item"))
-
-
-def list_payment_expiry_reminders(
-    parent_id: str, *, table: object | None = None
-) -> list[NotificationItem]:
-    target = table or db_table.table()
-    response = _query(
-        target,
-        KeyConditionExpression="PK = :pk",
-        ExpressionAttributeValues={":pk": payment_expiry_reminder_pk(parent_id)},
-        ConsistentRead=True,
-    )
-    return [
-        item
-        for item in _response_items(response)
-        if item.get("entity_type") == PAYMENT_EXPIRY_REMINDER_ENTITY
-        and item.get("parent_id") == parent_id
-        and item.get("owner_id") == parent_id
-    ]
-
-
-def put_payment_expiry_reminder(
-    item: Mapping[str, object], *, table: object | None = None
-) -> NotificationItem:
-    target = table or db_table.table()
-    parent_id = _required_text(
-        item, "parent_id", "payment reminder owner is invalid"
-    )
-    identity = _required_text(
-        item, "reminder_identity", "payment reminder identity is invalid"
-    )
-    key = {
-        "PK": payment_expiry_reminder_pk(parent_id),
-        "SK": payment_expiry_reminder_sk(identity),
-    }
-    existing = _optional_item(
-        _get_item(target, Key=key, ConsistentRead=True).get("Item")
-    )
-    if existing is not None:
-        if (
-            existing.get("entity_type") != PAYMENT_EXPIRY_REMINDER_ENTITY
-            or existing.get("schema_version") != "payment_expiry_reminder.v1"
-            or existing.get("parent_id") != parent_id
-            or existing.get("reminder_identity") != identity
-            or existing.get("payment_method_digest")
-            != item.get("payment_method_digest")
-            or existing.get("exp_month") != item.get("exp_month")
-            or existing.get("exp_year") != item.get("exp_year")
-        ):
-            raise account_deletion_repo.AccountDeletionConflict(
-                "payment reminder identity changed"
-            )
-        return existing
-    generation = _generation(
-        parent_id, item.get("account_fence_generation"), target
-    )
-    stored: NotificationItem = {
-        **dict(item),
-        **key,
-        "entity_type": PAYMENT_EXPIRY_REMINDER_ENTITY,
-        "schema_version": "payment_expiry_reminder.v1",
-        "owner_id": parent_id,
-        "account_fence_generation": generation,
-    }
-    try:
-        db_table.fenced(
-            parent_id,
-            build_notification_write_transaction(
-                item=stored,
-                owner_id=parent_id,
-                generation=generation,
-            ),
-            generation=generation,
-            table=target,
-        )
-    except Exception as exc:
-        if not _delivery_conditional_loss(exc):
-            raise
-        replay = get_payment_expiry_reminder(
-            parent_id, identity, table=target
-        )
-        if replay is None:
-            raise
-        return replay
-    return stored
-
-
-def _update_payment_expiry_reminder(
-    parent_id: str,
-    reminder_identity: str,
-    updates: Mapping[str, object],
-    *,
-    table: object | None = None,
-) -> NotificationItem | None:
-    target = table or db_table.table()
-    current = get_payment_expiry_reminder(
-        parent_id, reminder_identity, table=target
-    )
-    if current is None:
-        return None
-    generation = _generation(
-        parent_id, current.get("account_fence_generation"), target
-    )
-    operations = build_notification_write_transaction(
-        item=current,
-        owner_id=parent_id,
-        generation=generation,
-        mode="update",
-        updates=updates,
-    )
-    db_table.fenced(
-        parent_id,
-        operations,
-        generation=generation,
-        rows=owner_registry.rows_after(current, operations),
-        table=target,
-    )
-    return {**current, **dict(updates)}
-
-
-def resolve_payment_expiry_reminder(
-    parent_id: str,
-    reminder_identity: str,
-    *,
-    resolved_at: str,
-    table: object | None = None,
-) -> NotificationItem | None:
-    target = table or db_table.table()
-    return _update_payment_expiry_reminder(
-        parent_id,
-        reminder_identity,
-        {"status": "resolved", "resolved_at": resolved_at, "updated_at": resolved_at},
-        table=target,
-    )
-
-
-def mark_payment_expiry_reminder_notified(
-    parent_id: str,
-    reminder_identity: str,
-    *,
-    notified_at: str,
-    table: object | None = None,
-) -> NotificationItem | None:
-    target = table or db_table.table()
-    return _update_payment_expiry_reminder(
-        parent_id,
-        reminder_identity,
-        {"status": "notified", "notified_at": notified_at, "updated_at": notified_at},
-        table=target,
-    )
-
-
 def register_delivery_intent(
     *,
     scope: DeliveryIntentScope | None = None,
@@ -2076,10 +1888,6 @@ def _replace_notification_owner_tombstone(
         if item.get(field) is not None:
             tombstone[field] = item[field]
     tombstone = {key: value for key, value in tombstone.items() if key in NOTIFICATION_TOMBSTONE_ALLOWLIST}
-    hook = getattr(target, "replace_notification_tombstone", None)
-    if callable(hook):
-        hook(dict(item), tombstone, owner_id, generation)
-        return
     db_table.transact(
         [
             account_deletion_repo.deletion_fence_condition(owner_id, generation),

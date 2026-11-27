@@ -333,18 +333,6 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "Un cas de modération a été signalé.",
         "it": "È stato segnalato un caso di moderazione.",
     },
-    "teacher_requested.title": {
-        "de": "Hilfe angefragt",
-        "en": "Teacher help requested",
-        "fr": "Aide demandée",
-        "it": "Aiuto richiesto",
-    },
-    "teacher_requested.summary": {
-        "de": "Eine Schülerin oder ein Schüler bittet um Hilfe bei einer Frage in {subject}.",
-        "en": "A student requested help with a {subject} question.",
-        "fr": "Un·e élève demande de l’aide pour une question en {subject}.",
-        "it": "Un/a allievo/a chiede aiuto per una domanda di {subject}.",
-    },
     "subscription.update.title": {
         "de": "Abo-Anfrage aktualisiert",
         "en": "Subscription request updated",

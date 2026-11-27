@@ -1025,3 +1025,66 @@ __all__ = [
     "record_provider_fact",
     "register_provider_event",
 ]
+
+
+# -- payment method expiry reminders (#684) ---------------------------------------------
+#
+# One parent's reminder that a saved card runs out, under the parent's partition. The
+# admin and parent billing views read the current one. Nothing writes them any more:
+# the writers had no caller and were removed with #684, and production held no rows.
+# Rows a later writer stores are taken out with the account by the notification sweep
+# (`notification_repo.NOTIFICATION_PRIVATE_ROW_REGISTRY`), as before.
+
+PAYMENT_EXPIRY_REMINDER_ENTITY = "payment_expiry_reminder"
+
+
+def payment_expiry_reminder_pk(parent_id: str) -> str:
+    parent = str(parent_id).strip()
+    if not parent:
+        raise ValueError("payment reminder owner is invalid")
+    return f"PAYMENT_EXPIRY_REMINDER#{parent}"
+
+
+def payment_expiry_reminder_sk(reminder_identity: str) -> str:
+    identity = str(reminder_identity).strip()
+    if len(identity) != 64:
+        raise ValueError("payment reminder identity is invalid")
+    return f"REMINDER#{identity}"
+
+
+def get_payment_expiry_reminder(
+    parent_id: str,
+    reminder_identity: str,
+    *,
+    table: object | None = None,
+) -> BillingItem | None:
+    return _strong_get(
+        table or db_table.table(),
+        {
+            "PK": payment_expiry_reminder_pk(parent_id),
+            "SK": payment_expiry_reminder_sk(reminder_identity),
+        },
+    )
+
+
+def list_payment_expiry_reminders(
+    parent_id: str, *, table: object | None = None
+) -> list[BillingItem]:
+    """Every reminder stored for this parent, read strongly."""
+    try:
+        items = db_table.rows(
+            "query",
+            table=table or db_table.table(),
+            KeyConditionExpression="PK = :pk",
+            ExpressionAttributeValues={":pk": payment_expiry_reminder_pk(parent_id)},
+            ConsistentRead=True,
+        )
+    except db_table.TableUnavailable as exc:
+        raise ValueError("payment reminder query is unavailable") from exc
+    return [
+        item
+        for item in items
+        if item.get("entity_type") == PAYMENT_EXPIRY_REMINDER_ENTITY
+        and item.get("parent_id") == parent_id
+        and item.get("owner_id") == parent_id
+    ]

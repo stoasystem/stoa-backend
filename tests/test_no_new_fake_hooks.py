@@ -7,10 +7,9 @@ method silently skips the step: `release_resource_attachments` ran without its
 retention fence for any repository without `activate_retention_fence`.
 
 #629 removed the fifteen hooks no fake used any more. The ones listed below are
-still in use; candidate I (#634) removes the account-deletion ones and candidate C
-(#638) the notification one. The attachment service's went with its three leave
-actions (#653). A hook not listed may not appear, and a listed hook that is gone
-must be taken off.
+still in use; candidate I (#634) removes the account-deletion ones. The attachment
+service's went with its three leave actions (#653), the notification one with #684.
+A hook not listed may not appear, and a listed hook that is gone must be taken off.
 """
 
 from __future__ import annotations
@@ -27,7 +26,6 @@ SEAMS = {"table", "target", "repository"}
 Hook = tuple[str, str, str]  # (file, enclosing function, attribute asked for)
 
 ACCOUNT_DELETION = "src/stoa/db/repositories/account_deletion_repo.py"
-NOTIFICATION = "src/stoa/db/repositories/notification_repo.py"
 
 ALLOWED: Counter[Hook] = Counter(
     {
@@ -46,12 +44,6 @@ ALLOWED: Counter[Hook] = Counter(
         (ACCOUNT_DELETION, "persist_branch_result", "'persist_branch_result'"): 1,
         (ACCOUNT_DELETION, "finalize_account_deletion", "'get_deletion_command'"): 1,
         (ACCOUNT_DELETION, "finalize_account_deletion", "'finalize_account_deletion'"): 2,
-        # Candidate C (#638).
-        (
-            NOTIFICATION,
-            "_replace_notification_owner_tombstone",
-            "'replace_notification_tombstone'",
-        ): 1,
         # Other repositories, as found when the gate was added.
         (
             "src/stoa/db/repositories/adaptive_learning_repo.py",

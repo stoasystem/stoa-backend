@@ -1,9 +1,8 @@
 """Notification emails carry an unsubscribe link and RFC 8058 headers (#363).
 
-Three kinds of email recur or notify and can be stopped from the email itself:
-the parent's weekly report, the teacher's dispatch reminder and the notification
-digest. Each carries a link in the reader's language and the `List-Unsubscribe`
-headers. The link holds a signed token bound to one recipient and one kind of
+Two kinds of email recur or notify and can be stopped from the email itself:
+the parent's weekly report and the teacher's dispatch reminder. Each carries a
+link in the reader's language and the `List-Unsubscribe` headers. The link holds a signed token bound to one recipient and one kind of
 email; following it switches off the existing preference for that kind, without
 signing in. A tampered token, one for another kind, or one signed with a key we
 do not hold are all refused with the same answer. The three one-off emails
@@ -25,7 +24,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa import aws, config
+from stoa import aws
 from stoa.aws import Kind
 from stoa.routers import notifications
 from stoa.services import email_unsubscribe, notification_service, notify_service
@@ -169,28 +168,24 @@ def test_the_one_click_post_of_rfc_8058_unsubscribes(preferences) -> None:
     assert notification_service.dispatch_email_enabled(TEACHER) is False
 
 
-def test_unsubscribing_from_the_digest_turns_the_email_digest_channel_off(preferences) -> None:
-    prefs = notification_service.default_preferences()
-    prefs["teacher_responses"]["email_digest"] = True
-    prefs["assignments"]["email_digest"] = True
-    preferences[STUDENT] = {"user_id": STUDENT, "preferences": prefs}
-    token = email_unsubscribe.issue_token(STUDENT, EmailKind.NOTIFICATION_DIGEST)
+def test_a_signed_link_for_the_retired_digest_is_refused_like_any_other(preferences) -> None:
+    # The digest email was never sent and left with #684; a link for it, even one
+    # we signed, is a kind we no longer know.
+    key_id, secret = email_unsubscribe._keyring()[0]
+    body = email_unsubscribe._b64(
+        json.dumps(
+            {"c": "notification_digest", "k": key_id, "u": STUDENT},
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    )
+    token = f"{body}.{email_unsubscribe._b64(email_unsubscribe._signature(secret, body))}"
 
-    client = _public_client()
-    assert client.post("/notifications/email-unsubscribe", params={"token": token}).status_code == 200
+    status, answer = _refused(token)
 
-    stored = notification_service.get_preferences_for_user(STUDENT)
-    assert not any(channels["email_digest"] for channels in stored.values())
-    assert stored["teacher_responses"]["in_app"] is True
-
-    # Undo puts back exactly the categories that were on, and no others.
-    undone = client.post("/notifications/email-resubscribe", params={"token": token})
-    assert undone.json() == {"kind": "notification_digest", "subscribed": True}
-    restored = notification_service.get_preferences_for_user(STUDENT)
-    assert {c for c, channels in restored.items() if channels["email_digest"]} == {
-        "teacher_responses",
-        "assignments",
-    }
+    assert status == 400
+    assert answer["detail"]["code"] == "email_unsubscribe_link_invalid"
+    assert preferences == {}
 
 
 def test_the_weekly_report_switch_is_on_by_default_and_the_link_turns_it_off(preferences) -> None:
@@ -264,64 +259,6 @@ def test_the_dispatch_reminder_carries_the_link_and_headers_in_the_teachers_lang
     assert _headers(mail)["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
     assert email_unsubscribe.read_token(_header_token(mail)).kind is EmailKind.DISPATCH_REMINDER
     assert "teacher@stoa.test" not in _headers(mail)["List-Unsubscribe"]
-
-
-def test_the_digest_carries_the_link_and_headers(preferences, monkeypatch) -> None:
-    config.install(test_notifications._notification_provider_settings())
-    prefs = notification_service.default_preferences()
-    prefs["teacher_responses"]["email_digest"] = True
-    preferences[STUDENT] = {"user_id": STUDENT, "preferences": prefs}
-    notification_service.create_event(
-        recipient_id=STUDENT,
-        recipient_role="student",
-        event_type="teacher_reply",
-        target_type="question",
-        target_id="question-1",
-        title="Teacher replied",
-        summary="Your teacher added a reply.",
-    )
-    ses = RecordingSes()
-    aws.install({Kind.SES_NOTIFICATION: ses})
-
-    result = notification_service.send_digest(
-        {"sub": STUDENT, "role": "student", "email": "student@example.com"},
-        category="teacher_responses",
-    )
-
-    assert result["status"] == "sent"
-    [mail] = ses.sent
-    target = email_unsubscribe.read_token(_footer_token(_html(mail)))
-    assert (target.user_id, target.kind) == (STUDENT, EmailKind.NOTIFICATION_DIGEST)
-    assert _headers(mail)["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
-    assert email_unsubscribe.read_token(_header_token(mail)) == target
-
-
-def test_after_unsubscribing_the_next_digest_is_not_sent(preferences, monkeypatch) -> None:
-    config.install(test_notifications._notification_provider_settings())
-    prefs = notification_service.default_preferences()
-    prefs["teacher_responses"]["email_digest"] = True
-    preferences[STUDENT] = {"user_id": STUDENT, "preferences": prefs}
-    notification_service.create_event(
-        recipient_id=STUDENT,
-        recipient_role="student",
-        event_type="teacher_reply",
-        target_type="question",
-        target_id="question-1",
-        title="Teacher replied",
-        summary="Your teacher added a reply.",
-    )
-    token = email_unsubscribe.issue_token(STUDENT, EmailKind.NOTIFICATION_DIGEST)
-    assert _public_client().post("/notifications/email-unsubscribe", params={"token": token}).status_code == 200
-    ses = RecordingSes()
-    aws.install({Kind.SES_NOTIFICATION: ses})
-
-    result = notification_service.send_digest(
-        {"sub": STUDENT, "role": "student", "email": "student@example.com"},
-        category="teacher_responses",
-    )
-
-    assert result["status"] == "refused_no_digest_items"
-    assert ses.sent == []
 
 
 def test_the_weekly_report_carries_the_link_and_headers_in_the_parents_language(monkeypatch) -> None:

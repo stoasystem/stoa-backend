@@ -11,15 +11,12 @@ from typing import Any, Callable, Mapping
 from urllib import request
 from uuid import uuid4
 
-from stoa import aws
-from stoa.aws import Kind
 from stoa import config
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
 from stoa.services import (
     curriculum_service,
-    email_layout,
     email_unsubscribe,
     learning_profile_service,
     locale_service,
@@ -34,28 +31,27 @@ from stoa.services.notification_errors import NotificationErrorCode as _N, Notif
 logger = logging.getLogger(__name__)
 
 
-EVENT_TYPES = {
-    "teacher_requested",
-    "teacher_takeover",
-    "teacher_reply",
-    "teacher_help_expired",
-    "teacher_help_dispatched",
-    "teacher_dispatch_paused",
-    "moderation_case_update",
-    "subscription_request_update",
-    "learning_profile_update",
-    "assignment_update",
-    "weekly_report_update",
+EVENT_CATEGORY_BY_TYPE = {
+    "teacher_takeover": "teacher_responses",
+    "teacher_reply": "teacher_responses",
+    "teacher_help_expired": "teacher_responses",
+    "teacher_help_dispatched": "teacher_responses",
+    "teacher_dispatch_paused": "teacher_responses",
+    "moderation_case_update": "admin_operations",
+    "subscription_request_update": "admin_operations",
 }
+EVENT_TYPES = set(EVENT_CATEGORY_BY_TYPE)
 STATUSES = {"created", "read", "archived", "failed"}
-PREFERENCE_CATEGORIES = {
-    "learning_updates",
-    "teacher_responses",
-    "assignments",
-    "weekly_reports",
-    "admin_operations",
-}
-PREFERENCE_CHANNELS = {"in_app", "realtime", "email_digest", "push"}
+# The categories an event falls into. The weekly report email has its own switch
+# (`weekly_report_email`), not a category.
+PREFERENCE_CATEGORIES = set(EVENT_CATEGORY_BY_TYPE.values())
+PREFERENCE_CHANNELS = {"in_app", "realtime", "push"}
+# What an older settings page still sends back with the whole matrix (#684): the
+# digest email channel, never sent and retired, and the three categories no event
+# ever fell into. Taken and ignored, so such a page saves without an error; stored
+# rows keep them, and `_merged_preferences` drops them on reading.
+RETIRED_PREFERENCE_CATEGORIES = frozenset({"learning_updates", "assignments", "weekly_reports"})
+RETIRED_PREFERENCE_CHANNELS = frozenset({"email_digest"})
 PUSH_TOKEN_STATUSES = {"active", "revoked"}
 PUSH_TOKEN_PLATFORMS = {"ios", "android", "web"}
 # Stored in the bell whatever the reader's in-app preference says. An offer
@@ -68,23 +64,10 @@ PUSH_TOKEN_PLATFORMS = {"ios", "android", "web"}
 ALWAYS_IN_APP_EVENT_TYPES = frozenset({"teacher_help_dispatched", "teacher_dispatch_paused"})
 # The switch for the dispatch reminder email (#141), on until the teacher turns
 # it off. It is not a category x channel cell: the bell for the same offer
-# cannot be turned off, and the email is sent at once, not in a digest.
+# cannot be turned off.
 DISPATCH_EMAIL_DEFAULT = True
 # The parent's weekly report email (#363); on until they switch it off.
 WEEKLY_REPORT_EMAIL_DEFAULT = True
-EVENT_CATEGORY_BY_TYPE = {
-    "teacher_requested": "teacher_responses",
-    "teacher_takeover": "teacher_responses",
-    "teacher_reply": "teacher_responses",
-    "teacher_help_expired": "teacher_responses",
-    "teacher_help_dispatched": "teacher_responses",
-    "teacher_dispatch_paused": "teacher_responses",
-    "moderation_case_update": "admin_operations",
-    "subscription_request_update": "admin_operations",
-    "learning_profile_update": "learning_updates",
-    "assignment_update": "assignments",
-    "weekly_report_update": "weekly_reports",
-}
 
 
 def _recipient_locale(recipient_id: str | None) -> str:
@@ -107,17 +90,6 @@ def _moderation_created_message(params: Mapping[str, Any], locale: str) -> tuple
     )
 
 
-def _teacher_requested_message(params: Mapping[str, Any], locale: str) -> tuple[str, str]:
-    return (
-        message_catalog.text("teacher_requested.title", locale),
-        message_catalog.text(
-            "teacher_requested.summary",
-            locale,
-            subject=learning_profile_service.subject_name(params.get("subject"), locale),
-        ),
-    )
-
-
 # Events written once for a whole role (`recipient_id=None`) have no reader
 # whose language is known when they are written. The row keeps one of these
 # keys and its raw parameters, and each reader is shown the title and summary
@@ -125,7 +97,6 @@ def _teacher_requested_message(params: Mapping[str, Any], locale: str) -> tuple[
 # are the English, for whatever shows a row without a reader to render it for.
 ROLE_MESSAGES = {
     "moderation.created": _moderation_created_message,
-    "teacher_requested": _teacher_requested_message,
 }
 ROLE_MESSAGE_STORED_LOCALE = "en"
 
@@ -777,7 +748,7 @@ def create_event(
     else:
         raise NotificationViolation(_N.NOTIFICATION_OWNER_REQUIRED)
 
-    category = category_for_event(event_type=event_type, target_type=target_type)
+    category = EVENT_CATEGORY_BY_TYPE[event_type]
     preferences = get_preferences_for_user(recipient_id) if recipient_id else default_preferences()
     delivery = delivery_decision(
         category=category,
@@ -1316,7 +1287,6 @@ def default_preferences() -> dict[str, Any]:
         category: {
             "in_app": True,
             "realtime": True,
-            "email_digest": False,
             "push": False,
         }
         for category in sorted(PREFERENCE_CATEGORIES)
@@ -1390,16 +1360,17 @@ def update_preferences(
     if weekly_report_email is None:
         weekly_report_email = _stored_weekly_report_email(stored)
     for category, channel_updates in preferences.items():
-        if category not in PREFERENCE_CATEGORIES:
+        if category not in PREFERENCE_CATEGORIES | RETIRED_PREFERENCE_CATEGORIES:
             raise NotificationViolation(_N.NOTIFICATION_PREFERENCE_CATEGORY_UNSUPPORTED)
         if not isinstance(channel_updates, dict):
             raise NotificationViolation(_N.NOTIFICATION_PREFERENCE_CHANNELS_INVALID)
         for channel, enabled in channel_updates.items():
-            if channel not in PREFERENCE_CHANNELS:
+            if channel not in PREFERENCE_CHANNELS | RETIRED_PREFERENCE_CHANNELS:
                 raise NotificationViolation(_N.NOTIFICATION_PREFERENCE_CHANNEL_UNSUPPORTED)
             if not isinstance(enabled, bool):
                 raise NotificationViolation(_N.NOTIFICATION_PREFERENCE_VALUE_INVALID)
-            merged[category][channel] = enabled
+            if category in PREFERENCE_CATEGORIES and channel in PREFERENCE_CHANNELS:
+                merged[category][channel] = enabled
 
     updated_at = now_iso()
     notification_repo.put_preferences(
@@ -1432,13 +1403,10 @@ def set_email_subscription(token: str, *, subscribed: bool) -> dict[str, Any]:
     writes the preference the settings page already shows:
 
     - dispatch reminder: `dispatch_email`;
-    - weekly report: `weekly_report_email`;
-    - digest: the `email_digest` channel of every category. The categories it
-      turns off are remembered, so undoing turns back on those and no others.
+    - weekly report: `weekly_report_email`.
     """
     target = email_unsubscribe.read_token(token)
     user_id = target.user_id
-    stored = notification_repo.get_preferences(user_id) or {}
     # The repository merges these fields onto the stored row.
     item: dict[str, Any] = {
         "entity_type": notification_repo.PREFERENCE_ENTITY,
@@ -1448,23 +1416,8 @@ def set_email_subscription(token: str, *, subscribed: bool) -> dict[str, Any]:
     }
     if target.kind is email_unsubscribe.EmailKind.DISPATCH_REMINDER:
         item["dispatch_email"] = subscribed
-    elif target.kind is email_unsubscribe.EmailKind.WEEKLY_REPORT:
-        item["weekly_report_email"] = subscribed
     else:
-        merged = _merged_preferences(stored.get("preferences"))
-        raw = stored.get("email_digest_unsubscribed")
-        remembered = {str(c) for c in raw} if isinstance(raw, list) else set()
-        if subscribed:
-            for category in remembered & PREFERENCE_CATEGORIES:
-                merged[category]["email_digest"] = True
-            remembered = set()
-        else:
-            for category, channels in merged.items():
-                if channels["email_digest"]:
-                    remembered.add(category)
-                    channels["email_digest"] = False
-        item["preferences"] = merged
-        item["email_digest_unsubscribed"] = sorted(remembered)
+        item["weekly_report_email"] = subscribed
     try:
         notification_repo.put_preferences(item)
     except account_deletion_repo.AccountDeletionConflict as exc:
@@ -1472,16 +1425,6 @@ def set_email_subscription(token: str, *, subscribed: bool) -> dict[str, Any]:
         # the link answers as any other that no longer works.
         raise email_unsubscribe.invalid_link() from exc
     return {"kind": target.kind.value, "subscribed": subscribed}
-
-
-def category_for_event(*, event_type: str, target_type: str) -> str:
-    if event_type in EVENT_CATEGORY_BY_TYPE:
-        return EVENT_CATEGORY_BY_TYPE[event_type]
-    if target_type in {"assignment", "recommendation"}:
-        return "assignments"
-    if target_type in {"weekly_report", "report"}:
-        return "weekly_reports"
-    return "learning_updates"
 
 
 def delivery_decision(
@@ -1506,10 +1449,6 @@ def delivery_decision(
                     else "skipped_preference"
                 ),
                 "configured": realtime_configured,
-            },
-            "email_digest": {
-                "enabled": bool(category_prefs["email_digest"]),
-                "decision": "deferred_digest" if category_prefs["email_digest"] else "skipped_preference",
             },
             "push": {
                 "enabled": bool(category_prefs["push"]),
@@ -1550,7 +1489,6 @@ def delivery_status(*, limit: int = 100) -> dict[str, Any]:
         "websocketConfigured": bool(config.settings().websocket_api_endpoint),
         "websocketMode": websocket_readiness["mode"],
         "websocketReadiness": websocket_readiness,
-        "emailProvider": email_provider_readiness(),
         "pushProvider": push_provider_readiness(),
         "preferenceCategories": sorted(PREFERENCE_CATEGORIES),
         "preferenceChannels": sorted(PREFERENCE_CHANNELS),
@@ -1559,169 +1497,6 @@ def delivery_status(*, limit: int = 100) -> dict[str, Any]:
         "realtimeDecisionCounts": realtime_counts,
         "deliveryAttemptCounts": delivery_attempt_counts,
         "recentDeliveryAttempts": recent_delivery_attempts[-10:],
-    }
-
-
-def digest_preview(
-    user: dict[str, Any] | Actor,
-    *,
-    category: str | None = None,
-    since: str | None = None,
-    until: str | None = None,
-    limit: int = 25,
-) -> dict[str, Any]:
-    if category is not None and category not in PREFERENCE_CATEGORIES:
-        raise NotificationViolation(_N.NOTIFICATION_PREFERENCE_CATEGORY_UNSUPPORTED)
-    user_id = _user_id(user)
-    role = _user_role(user)
-    preferences = get_preferences_for_user(user_id)
-    items = []
-    for item in _sort_events(notification_repo.list_inbox(user_id=user_id, role=role)):
-        if not _visible_to_user(item, user_id=user_id, role=role):
-            continue
-        if item.get("status") != "created":
-            continue
-        item_category = item.get("category") or category_for_event(
-            event_type=str(item.get("event_type") or ""),
-            target_type=str(item.get("target_type") or ""),
-        )
-        if category and item_category != category:
-            continue
-        created_at = str(item.get("created_at") or "")
-        if since and created_at < since:
-            continue
-        if until and created_at > until:
-            continue
-        category_prefs = _merged_preferences(preferences)[item_category]
-        if not category_prefs["email_digest"]:
-            continue
-        items.append(digest_item(item, category=item_category))
-        if len(items) >= limit:
-            break
-    return {
-        "userId": user_id,
-        "category": category,
-        "window": {"since": since, "until": until},
-        "count": len(items),
-        "items": items,
-        "deliveryMode": "preview_only",
-        "emailProviderConfigured": email_provider_readiness()["configured"],
-        "pushProviderConfigured": push_provider_readiness()["configured"],
-        "pushPreferencesSupported": True,
-    }
-
-
-def send_digest(
-    user: dict[str, Any] | Actor,
-    *,
-    category: str | None = None,
-    since: str | None = None,
-    until: str | None = None,
-    limit: int = 25,
-    send_func: Any | None = None,
-) -> dict[str, Any]:
-    preview = digest_preview(user, category=category, since=since, until=until, limit=limit)
-    readiness = email_provider_readiness()
-    delivery_id = f"email-{uuid4().hex}"
-    event_ids = [str(item["eventId"]) for item in preview["items"]]
-    recipient_email = _safe_text(_user_value(user, "email"))
-    attempt = {
-        "delivery_id": delivery_id,
-        "attempted_at": now_iso(),
-        "channel": "email_digest",
-        "provider": readiness["provider"],
-        "provider_mode": readiness["mode"],
-        "template": config.settings().notification_email_digest_template,
-        "event_ids": event_ids,
-        "item_count": len(event_ids),
-        "recipient_email_hash": _hash_value(recipient_email) if recipient_email else None,
-        "status": "pending",
-        "provider_result": {},
-    }
-
-    if not event_ids:
-        attempt["status"] = "refused_no_digest_items"
-    elif not recipient_email:
-        attempt["status"] = "refused_missing_recipient_email"
-    elif readiness["mode"] == "disabled" or readiness["blockers"]:
-        attempt["status"] = "refused_provider_not_ready"
-    elif not config.settings().notification_email_send_enabled and send_func is None:
-        attempt["status"] = "refused_provider_send_disabled"
-    else:
-        try:
-            batch = load_authoritative_delivery_events(event_ids)
-            if (
-                batch.ownership.kind == "private_owner"
-                and batch.ownership.owner_id != _user_id(user)
-            ):
-                raise DeliveryOwnershipError("delivery_scope_mismatch")
-        except DeliveryOwnershipError as exc:
-            attempt["status"] = exc.status
-        else:
-            # The digest is read by its recipient, not by whoever's request sent it.
-            locale = _recipient_locale(_user_id(user))
-            canonical_items = [
-                digest_item(
-                    event,
-                    category=str(
-                        event.get("category")
-                        or category_for_event(
-                            event_type=str(event.get("event_type") or ""),
-                            target_type=str(event.get("target_type") or ""),
-                        )
-                    ),
-                    locale=locale,
-                )
-                for event in batch.events
-            ]
-            discriminator = _canonical_payload_digest(
-                {
-                    "recipient_email_hash": attempt["recipient_email_hash"],
-                    "template": config.settings().notification_email_digest_template,
-                }
-            )
-            delivery_id = authoritative_delivery_operation_id(
-                channel="email_digest",
-                batch=batch,
-                discriminator=discriminator,
-            )
-            attempt["delivery_id"] = delivery_id
-            payload = {
-                "deliveryId": delivery_id,
-                "recipientEmail": recipient_email,
-                "subject": message_catalog.text("email.notification_digest.subject", locale),
-                "html": _digest_email_html(canonical_items, locale, _user_id(user)),
-                "recipientUserId": _user_id(user),
-                "items": canonical_items,
-                "template": config.settings().notification_email_digest_template,
-            }
-            result = run_authoritative_delivery(
-                channel="email_digest",
-                batch=batch,
-                payload=payload,
-                discriminator=discriminator,
-                provider_call=lambda: (
-                    send_func(payload)
-                    if send_func is not None
-                    else _send_email_digest_provider(payload)
-                ),
-            )
-            attempt["status"] = {
-                "accepted": "sent",
-                "provider_acceptance_unknown": "provider_acceptance_unknown",
-                "canceled_account_deletion": "canceled_account_deletion",
-            }.get(str(result.get("status") or ""), "retryable")
-
-    _record_event_attempts(event_ids, "email_digest_delivery_attempts", attempt)
-    return {
-        "deliveryId": delivery_id,
-        "status": attempt["status"],
-        "providerMode": readiness["mode"],
-        "template": attempt["template"],
-        "itemCount": len(event_ids),
-        "eventIds": event_ids,
-        "recipient": {"emailHash": attempt["recipient_email_hash"]},
-        "providerResult": attempt["provider_result"],
     }
 
 
@@ -1920,34 +1695,6 @@ def attempt_push_delivery(
     }
 
 
-def email_provider_readiness() -> dict[str, Any]:
-    provider = _safe_text(config.settings().notification_email_provider)
-    sender = _safe_text(config.settings().notification_email_sender)
-    template = _safe_text(config.settings().notification_email_digest_template)
-    blockers = []
-    if not provider:
-        blockers.append("missing_notification_email_provider")
-    if provider and not config.settings().notification_email_provider_approved:
-        blockers.append("notification_email_provider_not_approved")
-    if provider and not sender:
-        blockers.append("missing_notification_email_sender")
-    if provider and not template:
-        blockers.append("missing_notification_email_digest_template")
-    mode = "disabled"
-    if provider:
-        mode = "provider_ready" if not blockers and config.settings().notification_email_send_enabled else "configured"
-    return {
-        "provider": provider or "disabled",
-        "mode": mode,
-        "configured": bool(provider and not blockers),
-        "approved": bool(config.settings().notification_email_provider_approved),
-        "sendEnabled": bool(config.settings().notification_email_send_enabled),
-        "senderConfigured": bool(sender),
-        "template": template,
-        "blockers": blockers,
-    }
-
-
 def push_provider_readiness() -> dict[str, Any]:
     provider = _safe_text(config.settings().notification_push_provider)
     template = _safe_text(config.settings().notification_push_template)
@@ -2009,24 +1756,6 @@ def _event_text(item: dict[str, Any], locale: str | None) -> tuple[Any, Any]:
     return item.get("title"), item.get("summary")
 
 
-def digest_item(
-    item: dict[str, Any], *, category: str, locale: str | None = None
-) -> dict[str, Any]:
-    """One event as a digest lists it; a role message in `locale` when given."""
-    title, summary = _event_text(item, locale)
-    return {
-        "eventId": item.get("event_id"),
-        "eventType": item.get("event_type"),
-        "category": category,
-        "targetType": item.get("target_type"),
-        "targetId": item.get("target_id"),
-        "title": title,
-        "summary": summary,
-        "createdAt": item.get("created_at"),
-        "metadata": _digest_safe_metadata(item.get("metadata") or {}),
-    }
-
-
 def mark_event(event_id: str, user: dict[str, Any], next_status: str) -> dict[str, Any]:
     if next_status not in {"read", "archived"}:
         raise NotificationViolation(_N.NOTIFICATION_TRANSITION_UNSUPPORTED)
@@ -2064,16 +1793,6 @@ def mark_authorized_event(item: Mapping[str, object], next_status: str) -> dict[
     if not updated:
         raise NotificationViolation(_N.NOTIFICATION_NOT_FOUND)
     return event_response(updated)
-
-
-def _user_value(user: dict[str, Any] | Actor, key: str) -> Any:
-    if isinstance(user, Actor):
-        if key == "sub":
-            return user.user_id
-        if key == "role":
-            return user.role.value
-        return dict(user.auth_context).get(key)
-    return user.get(key)
 
 
 def _user_id(user: dict[str, Any] | Actor) -> str:
@@ -2140,19 +1859,6 @@ def _record_event_attempts(event_ids: list[str], metadata_key: str, attempt: dic
         notification_repo.update_event(event_id, {"metadata": metadata})
 
 
-def _send_email_digest_provider(payload: dict[str, Any]) -> dict[str, Any]:
-    response = notify_service.send_notification_email(
-        aws.client(Kind.SES_NOTIFICATION),
-        sender=config.settings().notification_email_sender,
-        recipient=payload["recipientEmail"],
-        recipient_user_id=payload["recipientUserId"],
-        kind=email_unsubscribe.EmailKind.NOTIFICATION_DIGEST,
-        subject=payload["subject"],
-        html=payload["html"],
-    )
-    return {"messageId": response.get("MessageId")}
-
-
 def _send_push_provider(payload: dict[str, Any]) -> dict[str, Any]:
     endpoint = _safe_text(config.settings().notification_push_provider_endpoint_url)
     if not endpoint:
@@ -2166,40 +1872,6 @@ def _send_push_provider(payload: dict[str, Any]) -> dict[str, Any]:
     with request.urlopen(req, timeout=5) as response:
         raw = response.read().decode("utf-8")
     return {"statusCode": response.status, "bodyHash": _hash_value(raw) if raw else None}
-
-
-def _digest_email_html(items: list[dict[str, Any]], locale: str, user_id: str) -> str:
-    """The digest in the STOA frame (#374), its unsubscribe line in the footer (#363).
-
-    It goes to students too, so it greets nobody by name.
-    """
-    email = email_layout.render(
-        subject=message_catalog.text("email.notification_digest.subject", locale),
-        title=message_catalog.text("email.notification_digest.title", locale),
-        greeting=email_layout.greeting(None, locale),
-        blocks=[
-            email_layout.Paragraph(message_catalog.text("email.notification_digest.intro", locale)),
-            email_layout.Items(
-                tuple(
-                    (str(item.get("title") or ""), str(item.get("summary") or ""))
-                    for item in items
-                )
-            ),
-            email_layout.Action(
-                message_catalog.text("email.notification_digest.action", locale),
-                config.settings().app_base_url.rstrip("/") + "/",
-            ),
-        ],
-        locale=locale,
-        footer_reason=None,
-        questions=False,
-    )
-    return email_unsubscribe.with_footer(
-        email.html,
-        email_unsubscribe.footer_html(
-            user_id, email_unsubscribe.EmailKind.NOTIFICATION_DIGEST, locale
-        ),
-    )
 
 
 def _redacted_provider_result(value: Any) -> dict[str, Any]:
@@ -2272,20 +1944,6 @@ def _clean_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         str(key): value for key, value in metadata.items()
         if value is not None and "s3_key" not in str(key).lower()
     }
-
-
-def _digest_safe_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
-    private_markers = ("s3", "artifact", "presigned", "weekly-reports/", "html", "raw")
-    safe: dict[str, Any] = {}
-    for key, value in metadata.items():
-        key_text = str(key)
-        value_text = str(value)
-        combined = f"{key_text} {value_text}".lower()
-        if any(marker in combined for marker in private_markers):
-            continue
-        if isinstance(value, (str, int, float, bool)) or value is None:
-            safe[key_text] = value
-    return safe
 
 
 def _merged_preferences(raw: Any) -> dict[str, dict[str, bool]]:

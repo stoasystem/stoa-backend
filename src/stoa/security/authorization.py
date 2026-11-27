@@ -43,7 +43,6 @@ class ResourceType(StrEnum):
     NOTIFICATION_COLLECTION = "notification_collection"
     NOTIFICATION_EVENT = "notification_event"
     NOTIFICATION_PREFERENCE = "notification_preference"
-    NOTIFICATION_DIGEST = "notification_digest"
     NOTIFICATION_PUSH_TOKEN = "notification_push_token"
     OPERATOR_RESOURCE = "operator_resource"
     UPLOAD = "upload"
@@ -639,7 +638,6 @@ class AuthorizationPolicy:
                     ResourceType.NOTIFICATION_COLLECTION,
                     ResourceType.NOTIFICATION_EVENT,
                     ResourceType.NOTIFICATION_PREFERENCE,
-                    ResourceType.NOTIFICATION_DIGEST,
                     ResourceType.NOTIFICATION_PUSH_TOKEN,
                 }
                 and resource.owner_id == actor.user_id

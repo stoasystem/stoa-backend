@@ -512,8 +512,6 @@ class Settings(BaseSettings):
     account_deletion_registry_path: bool = False
 
     # Provider-backed notifications (v4.9)
-    notification_email_provider: str = ""
-    notification_email_provider_approved: bool = False
     notification_email_sender: str = "noreply@stoaedu.ch"
     # Every email names this address as Reply-To, so "just reply" reaches a
     # mailbox somebody reads (#374).
@@ -521,8 +519,6 @@ class Settings(BaseSettings):
     # The logo at the top of every email (#374). Mail clients fetch it themselves,
     # so it must be a stable public HTTPS address.
     email_logo_url: str = "https://app.stoaedu.ch/email/stoa-logo.png"
-    notification_email_digest_template: str = "notification_digest_v1"
-    notification_email_send_enabled: bool = False
     notification_push_provider: str = ""
     notification_push_provider_approved: bool = False
     notification_push_provider_api_key: str = ""
