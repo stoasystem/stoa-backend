@@ -99,6 +99,9 @@ NO_LONGER_WRITTEN: dict[str, str] = {
     # already stored can still be set as an assignment (`sourceType: ai_draft`),
     # which only updates them (`ai_teacher_tools_service.mark_delivered`).
     "ai_teacher_draft": "#518",
+    # #675 retired `POST /adaptive/students/{id}/memory/refresh`, the only writer.
+    # The rows it stored are cleaned out once, but the deletion still reaches any.
+    "learning_memory_snapshot": "#675",
 }
 
 

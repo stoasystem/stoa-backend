@@ -82,7 +82,6 @@ def test_source_registry_closes_learning_writers_and_private_fields() -> None:
         "put_assignment",
         "put_assignment_if_absent",
         "update_assignment",
-        "put_memory_snapshot",
         "put_draft",
         "update_draft",
         "record_curriculum_signal",

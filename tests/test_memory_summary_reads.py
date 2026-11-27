@@ -15,7 +15,11 @@ return is unchanged: the responses below were recorded from origin/main
 `c1cc6edb` on the same fixture and are compared field for field. The weak
 topics (`weakTopics`, the parent's `weakAreas`) were recorded again when they
 began to come from `weak_topics` (#673): named as the catalog names them, each
-with its `score`; the recommendations stayed as main gave them.
+with its `score`; the recommendations stayed as main gave them. The
+`memorySnapshots` were recorded again when they began to be worked out from
+the same weak topics on each read (#675): one per weak topic, in its order,
+keyed as it is (a free name no longer made a slug); the recommendations,
+again, stayed as they were.
 
 Since #673 the weak topics are resolved against the catalog, which a container
 keeps (`curriculum_cache`): the table here carries the catalog stamp the seed

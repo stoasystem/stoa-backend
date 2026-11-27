@@ -61,6 +61,8 @@ class WeakTopic:
     latest_evidence_at: str
     #: The retired flow's questions behind it, if any.
     evidence_question_ids: tuple[str, ...] = ()
+    #: The wrong answers behind it that still count, as stored, in `evidence.mistakes` order.
+    mistakes: tuple[Mapping[str, Any], ...] = ()
 
 
 def for_student(
@@ -102,6 +104,7 @@ def for_student(
             points=MISTAKE_POINTS,
             at=str(mistake.get("created_at") or ""),
             moment=moment,
+            mistake=mistake,
         )
 
     for record in asked:
@@ -132,6 +135,7 @@ class _Topic:
     latest: datetime | None = None
     latest_at: str = ""
     question_ids: set[str] = field(default_factory=set)
+    mistakes: list[Mapping[str, Any]] = field(default_factory=list)
 
 
 class _Tally:
@@ -152,6 +156,7 @@ class _Tally:
         unit_id: object = None,
         lesson_id: object = None,
         question_ids: Iterable[str] = (),
+        mistake: Mapping[str, Any] | None = None,
     ) -> None:
         written = _written(label) or _written(spelling)
         content_id = self._names.resolve(spelling, label, unit_id=unit_id, lesson_id=lesson_id)
@@ -169,6 +174,8 @@ class _Tally:
         topic.score += points
         topic.count += 1
         topic.question_ids.update(question_ids)
+        if mistake is not None:
+            topic.mistakes.append(mistake)
         if moment is not None and (topic.latest is None or moment > topic.latest):
             topic.latest, topic.latest_at = moment, at
             if content_id is None:
@@ -196,6 +203,7 @@ class _Tally:
                 count=topic.count,
                 latest_evidence_at=topic.latest_at,
                 evidence_question_ids=tuple(sorted(topic.question_ids)),
+                mistakes=tuple(topic.mistakes),
             )
             for topic in ordered
         ]

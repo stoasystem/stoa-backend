@@ -913,11 +913,6 @@ _ENTRIES: tuple[DataType, ...] = (
             "created_by",
         ),
     ),
-    DataType(
-        "learning_memory_snapshot",
-        _repo("adaptive_learning_repo"),
-        (*_owner("student_id", "owner_id"), _owned_by_partition("LEARNING_MEMORY#")),
-    ),
     DataType("ai_teacher_draft_deletion_tombstone", _repo("ai_teacher_tools_repo"), ()),
     DataType("teacher_session_deletion_tombstone", _repo("account_deletion_repo"), ()),
     # -- notifications and realtime -----------------------------------------------------
@@ -971,6 +966,14 @@ _ENTRIES: tuple[DataType, ...] = (
         "ai_teacher_draft",
         _repo("ai_teacher_tools_repo"),
         _owner("student_id", "owner_id"),
+        lifecycle="no_longer_written",
+    ),
+    # The adaptive memory snapshot: `/memory/refresh` wrote it until #675, which
+    # computes the snapshots on each read and cleans the stored rows out.
+    DataType(
+        "learning_memory_snapshot",
+        _repo("adaptive_learning_repo"),
+        (*_owner("student_id", "owner_id"), _owned_by_partition("LEARNING_MEMORY#")),
         lifecycle="no_longer_written",
     ),
     # -- legacy: no writer in this codebase; the deletion still reads them --------------

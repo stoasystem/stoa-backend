@@ -13,6 +13,8 @@ from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
+# Nothing writes or reads these any more (#675); the account deletion still
+# reaches rows stored before.
 MEMORY_ENTITY = "learning_memory_snapshot"
 ASSIGNMENT_ENTITY = "learning_assignment"
 ADAPTIVE_WRITER_REGISTRY = frozenset(
@@ -20,7 +22,6 @@ ADAPTIVE_WRITER_REGISTRY = frozenset(
         "put_assignment",
         "put_assignment_if_absent",
         "update_assignment",
-        "put_memory_snapshot",
     }
 )
 ADAPTIVE_PRIVATE_FIELDS = frozenset(
@@ -226,57 +227,6 @@ def build_adaptive_write_transaction(
         }
     )
     return operations
-
-
-def put_memory_snapshot(item: dict[str, Any]) -> None:
-    table = db_table.table()
-    stored = {
-            "PK": f"LEARNING_MEMORY#{item['student_id']}",
-            "SK": f"SUBJECT#{item['subject']}#TOPIC#{item['topic_id']}",
-            "entity_type": MEMORY_ENTITY,
-            **item,
-        }
-    owner, generation = _generation(stored, table)
-    existing = None
-    if _atomic_table(table):
-        existing = _get_item(
-            table,
-            Key={"PK": stored["PK"], "SK": stored["SK"]}, ConsistentRead=True
-        ).get("Item")
-    operations = build_adaptive_write_transaction(
-        item=stored,
-        owner_id=owner,
-        generation=generation,
-        mode="update" if existing else "put",
-        updates={key: value for key, value in stored.items() if key not in {"PK", "SK"}}
-        if existing
-        else None,
-    )
-    if _atomic_table(table):
-        db_table.fenced(
-            owner,
-            operations,
-            generation=generation,
-            rows=owner_registry.rows_after(existing or stored, operations),
-            table=table,
-        )
-    else:
-        _put_item(table, Item=operations[-1]["Put"]["Item"])
-    item.update(owner_id=owner, account_fence_generation=generation)
-
-
-def list_memory_snapshots(student_id: str, subject: str | None = None) -> list[dict[str, Any]]:
-    table = db_table.table()
-    resp = _query(
-        table,
-        KeyConditionExpression=(
-            Key("PK").eq(f"LEARNING_MEMORY#{student_id}") & Key("SK").begins_with("SUBJECT#")
-        )
-    )
-    items = resp.get("Items", [])
-    if subject:
-        items = [item for item in items if item.get("subject") == subject]
-    return items
 
 
 def put_assignment(item: dict[str, Any]) -> None:

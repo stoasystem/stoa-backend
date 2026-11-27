@@ -232,10 +232,6 @@ _ADAPTIVE_READ = {
     CanonicalRole.TEACHER: AuthorizationPurpose.LEARNING_ASSIGNMENT,
     CanonicalRole.ADMIN: AuthorizationPurpose.LEARNING_ASSIGNMENT,
 }
-_ADAPTIVE_REFRESH = {
-    CanonicalRole.TEACHER: AuthorizationPurpose.LEARNING_ASSIGNMENT,
-    CanonicalRole.ADMIN: AuthorizationPurpose.LEARNING_ASSIGNMENT,
-}
 _AUTOMATION_PREVIEW = {
     CanonicalRole.TEACHER: AuthorizationPurpose.ASSIGNMENT_AUTOMATION_PREVIEW,
     CanonicalRole.ADMIN: AuthorizationPurpose.ASSIGNMENT_AUTOMATION_PREVIEW,
@@ -262,9 +258,6 @@ _my_adaptive_read = authorized(
     {CanonicalRole.STUDENT: AuthorizationPurpose.SELF_SERVICE},
 )
 _adaptive_read = authorized(_PROFILE, AuthorizationAction.READ, _STUDENT_ID, _ADAPTIVE_READ)
-_adaptive_refresh = authorized(
-    _PROFILE, AuthorizationAction.UPDATE, _STUDENT_ID, _ADAPTIVE_REFRESH
-)
 _automation_preview = authorized(
     _PROFILE, AuthorizationAction.READ, _STUDENT_ID, _AUTOMATION_PREVIEW
 )
@@ -361,26 +354,6 @@ async def get_student_memory(
         student_id=authorized_student.ref.student_id,
         user=actor_projection(actor),
         subject=subject,
-    )
-
-
-@router.post(
-    "/students/{student_id}/memory/refresh",
-    response_model=MemorySummaryResponse,
-    response_model_exclude_unset=True,
-)
-async def refresh_student_memory(
-    student_id: str,
-    subject: str | None = Query(default=None),
-    actor: Actor = Depends(get_actor),
-    authorized_student: AuthorizedResource = Depends(_adaptive_refresh),
-):
-    """Persist a durable memory snapshot from current learning evidence."""
-    return adaptive_learning_service.get_memory_summary(
-        student_id=authorized_student.ref.student_id,
-        user=actor_projection(actor),
-        subject=subject,
-        persist=True,
     )
 
 

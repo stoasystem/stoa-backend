@@ -131,8 +131,7 @@ def test_memory_response_keeps_camel_case_keys(key):
         student_id="student-1",
         user={"role": "student", "user_id": "student-1"},
         profile={"weakTopics": [{"subject": "math", "topicId": "fractions", "label": "Fractions", "count": 3}]},
-        generated_snapshots=[],
-        stored_snapshots=[],
+        snapshots=[],
         recommendations=[],
         assignments=[],
     )

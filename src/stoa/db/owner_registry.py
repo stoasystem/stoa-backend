@@ -65,7 +65,7 @@ DERIVED_PREFIXES: tuple[str, ...] = (
     "STORAGE#",  # attachment_repo storage usage
     "OWNER#",  # attachment_repo owner index rows
     "ALLOWANCE#",  # allowance_repo, keyed by beneficiary
-    "LEARNING_MEMORY#",  # adaptive_learning_repo
+    "LEARNING_MEMORY#",  # retired memory snapshots (#675); old rows are still deleted
     "CURRICULUM_SIGNAL_OWNER#",  # curriculum_analytics_repo owner manifest
     "STUDENT#",  # parent_link_repo (student side of a link)
     "PARENT#",  # parent_link_repo (parent side of a link)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from collections.abc import Mapping
@@ -275,6 +274,7 @@ def build_learning_profile(
     evidence: student_evidence.StudentEvidence,
     asked: list[dict[str, Any]] | None = None,
     locale: str = "de",
+    weak: list[weak_topics.WeakTopic] | None = None,
 ) -> dict[str, Any]:
     """The student's activity per subject and their weak topics.
 
@@ -282,7 +282,8 @@ def build_learning_profile(
     and count among the weak topics as Ask records do. `asked` are the records
     of what the student's Ask questions named (`asked_knowledge_repo`, #143).
     The weak topics are `weak_topics.for_student`'s first ten, named in
-    `locale`; nothing here counts them (#673).
+    `locale`; nothing here counts them (#673). A caller that already has them
+    from the same evidence passes them as `weak`.
     """
     activity: dict[str, dict[str, Any]] = {}
     feedback_totals: dict[str, list[int]] = defaultdict(list)
@@ -309,7 +310,8 @@ def build_learning_profile(
             sum(values) / len(values), 2
         )
 
-    weak = weak_topics.for_student(evidence, [*questions, *(asked or [])], locale=locale)
+    if weak is None:
+        weak = weak_topics.for_student(evidence, [*questions, *(asked or [])], locale=locale)
 
     return {
         "studentId": student_id,
@@ -352,17 +354,6 @@ def _empty_subject_activity(subject_id: str) -> dict[str, Any]:
         "teacherEscalationCount": 0,
         "feedbackAverage": None,
     }
-
-
-def normalize_topic_id(label: str) -> str:
-    """A name made a slug, as the stored adaptive memory snapshots key their topics.
-
-    Weak topics no longer use it (#673): `weak_topics` keeps a name the
-    curriculum does not know as written. It goes with the stored snapshots (#675).
-    """
-    value = re.sub(r"[^a-z0-9]+", "-", label.strip().lower())
-    value = value.strip("-")
-    return value or "general"
 
 
 def _safe_subject(subject: Any) -> str:
