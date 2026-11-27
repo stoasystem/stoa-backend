@@ -1,7 +1,6 @@
 """Parent routes - child list and weekly learning reports."""
 import logging
 import re
-from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
@@ -46,7 +45,6 @@ from stoa.services import (
     allowance_service,
     billing_reconciliation_service,
     curriculum_names,
-    curriculum_service,
     current_relationship,
     learning_profile_service,
     learning_session,
@@ -59,6 +57,7 @@ from stoa.services import (
     teacher_support_allowance_service,
     usage_period,
     voice_questions,
+    weak_topics,
 )
 from stoa.services.billing_errors import BillingErrorCode
 
@@ -1524,37 +1523,14 @@ async def get_child_summary(
         and _is_current_week(item.get("escalated_at") or item.get("updated_at"))
     )
 
-    # Every name a knowledge point was written under counts as the one the
-    # curriculum gives it, in the reader's language (#390).
-    names = _topic_names(evidence)
-
-    def named(values: list[str]) -> list[str]:
-        return [names.name(names.resolve(value)) or value for value in values]
-
-    weak_topics_counter: Counter[str] = Counter()
-    for question in questions:
-        weak_topics_counter.update(named(_response_string_list(question.get("knowledge_points", []))))
-    # What Ask questions named, by name only (#143).
-    for record in asked_knowledge_repo.list_for_student(child_id):
-        weak_topics_counter.update(named(_response_string_list(record.get("knowledge_points", []))))
-    # A mistake counts under its topic; one without a topic is not counted,
-    # and its subject is never a weak topic (#631).
-    for mistake in evidence.mistakes:
-        topic = _response_text(mistake.get("topic_id"))
-        if topic:
-            topic_name = names.name(
-                names.resolve(
-                    topic, unit_id=mistake.get("unit_id"), lesson_id=mistake.get("lesson_id")
-                )
-            )
-            weak_topics_counter[topic_name or topic] += 1
-    if latest_report:
-        # Reports written before #631 stored the subject (`mathematics`) among
-        # their weak points; it is left out here rather than backfilled.
-        stored = _response_string_list(latest_report.get("weak_knowledge_points", []))
-        weak_topics_counter.update(
-            named([point for point in stored if curriculum_service.subject_id(point) is None])
-        )
+    # The weak topics are the learning profile's first ten, from the same
+    # projection in the reader's language (#674). A stored report's weak points
+    # are what was sent that week; they are not counted again here.
+    weak = weak_topics.for_student(
+        evidence,
+        [*questions, *asked_knowledge_repo.list_for_student(child_id)],
+        locale=evidence.content.locale,
+    )
 
     activities = []
     activities.extend(_question_history_events(child_id, limit=20))
@@ -1574,10 +1550,7 @@ async def get_child_summary(
         aiResolvedThisWeek=ai_resolved,
         teacherHelpRequestsThisWeek=teacher_help,
         practiceLessonsCompletedThisWeek=len(current_week_lessons),
-        weakTopics=[
-            topic
-            for topic, _ in sorted(weak_topics_counter.items(), key=lambda item: (-item[1], item[0]))
-        ][:10],
+        weakTopics=[topic.name for topic in weak[:10]],
         recentActivity=_sort_activities(activities, limit=5),
         starAnswers=_star_answers(evidence),
     )
