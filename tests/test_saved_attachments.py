@@ -16,7 +16,8 @@ from stoa import aws
 from stoa.aws import Kind
 from stoa.config import Settings
 from stoa import config
-from stoa.db.repositories import attachment_repo
+from stoa.db import table as db_table
+from stoa.db.repositories import account_deletion_repo, attachment_repo
 from stoa.deps import get_actor
 from stoa.models import attachment as attachment_models
 from stoa.routers import files
@@ -128,82 +129,35 @@ def test_filename_projection_uses_safe_cross_platform_basename(
     assert "\\" not in header and "/" not in header
 
 
-class _OwnerRepository:
-    def __init__(self, items: list[dict[str, Any]]) -> None:
-        self.items = {item["attachment_id"]: dict(item) for item in items}
-        self.list_calls: list[dict[str, Any]] = []
-        self.get_calls: list[str] = []
-
-    def get_attachment(self, attachment_id: str) -> dict[str, Any] | None:
-        self.get_calls.append(attachment_id)
-        item = self.items.get(attachment_id)
-        return dict(item) if item else None
-
-    def list_saved_attachments(
-        self,
-        owner_id: str,
-        *,
-        limit: int,
-        exclusive_start_key: dict[str, str] | None = None,
-    ) -> tuple[list[dict[str, Any]], dict[str, str] | None]:
-        self.list_calls.append(
-            {
-                "owner_id": owner_id,
-                "limit": limit,
-                "exclusive_start_key": exclusive_start_key,
-            }
-        )
-        ordered = [
-            dict(item)
-            for item in self.items.values()
-            if item["owner_id"] == owner_id and item["status"] == "active"
-        ]
-        if exclusive_start_key:
-            ordered = [
-                item
-                for item in ordered
-                if item["attachment_id"] > exclusive_start_key["attachment_id"]
-            ]
-        page = ordered[:limit]
-        cursor = (
-            {"attachment_id": page[-1]["attachment_id"]}
-            if len(ordered) > limit
-            else None
-        )
-        return page, cursor
-
-    def mark_saved_attachment_deletion_pending(self, item: dict[str, Any]) -> bool:
-        current = self.items.get(item["attachment_id"])
-        if not current or current["status"] != "active" or current.get("ref_count", 0):
-            return False
-        current["status"] = "deletion_pending"
-        return True
+def _seed(*items: dict[str, Any]) -> Any:
+    """Plant attachment rows in the table every test starts with, and hand it back."""
+    table = db_table.table()
+    table.seed(*items)
+    return table
 
 
 def test_list_and_detail_are_owner_scoped_paginated_and_have_no_quota_gate() -> None:
-    repository = _OwnerRepository(
-        [
-            _saved_attachment(attachment_id="attachment-1"),
-            _saved_attachment(attachment_id="attachment-2"),
-            _saved_attachment(attachment_id="attachment-foreign", owner_id="student-2"),
-        ]
+    table = _seed(
+        _saved_attachment(attachment_id="attachment-1"),
+        _saved_attachment(attachment_id="attachment-2"),
+        _saved_attachment(attachment_id="attachment-foreign", owner_id="student-2"),
     )
-    page = attachment_service.list_owned_attachments(
-        _actor(), limit=1, continuation=None, repository=repository
-    )
+    page = attachment_service.list_owned_attachments(_actor(), limit=1, continuation=None)
     assert [item.attachment_id for item in page.items] == ["attachment-1"]
     assert page.continuation
     second = attachment_service.list_owned_attachments(
-        _actor(), limit=10, continuation=page.continuation, repository=repository
+        _actor(), limit=10, continuation=page.continuation
     )
     assert [item.attachment_id for item in second.items] == ["attachment-2"]
     detail = attachment_service.saved_attachment_detail(
-        attachment_service.readable_attachment(
-            _actor(), "attachment-2", repository=repository
-        )
+        attachment_service.readable_attachment(_actor(), "attachment-2")
     )
     assert detail.attachment_id == "attachment-2"
-    assert not hasattr(repository, "get_storage_usage")
+    # No quota gate: the owner's storage row is never read.
+    assert not any(
+        str(request.get("Key", {}).get("PK", "")).startswith("STORAGE#")
+        for _operation, request in table.requests
+    )
 
 
 def _without(field: str) -> dict[str, Any]:
@@ -228,9 +182,11 @@ def test_readable_attachment_refuses_missing_inactive_incomplete_and_revoked(
     item: dict[str, Any] | None, actor: Actor
 ) -> None:
     """One judgement for every reader (#253): a refusal looks like a missing attachment."""
-    repository = _OwnerRepository([item] if item else [])
+    if item:
+        # An owner-less row stays out of the owner index, as the table would keep it.
+        _seed({key: value for key, value in item.items() if value != "" or key != "student_id"})
     with pytest.raises(attachment_errors.AttachmentDecisionError) as captured:
-        attachment_service.readable_attachment(actor, "attachment-1", repository=repository)
+        attachment_service.readable_attachment(actor, "attachment-1")
     assert captured.value.code is attachment_errors.AttachmentErrorCode.UPLOAD_NOT_FOUND
     assert set(captured.value.public_body()) == {"code", "message", "correlationId"}
 
@@ -338,13 +294,12 @@ def test_delete_referenced_attachment_uses_stable_actionable_in_use_contract() -
     assert contract.http_status == 409
     message = render_message(code, "en").lower()
     assert "conversation" in message or "question" in message
-    repository = _OwnerRepository([_saved_attachment(ref_count=1)])
+    _seed(_saved_attachment(ref_count=1))
     with pytest.raises(attachment_errors.AttachmentDecisionError) as captured:
         attachment_service.delete_saved_attachment(
-            repository.items["attachment-1"],
+            _saved_attachment(ref_count=1),
             s3=_DownloadS3({}),
             settings=Settings(s3_images_bucket=PRIVATE_CANARIES[0]),
-            repository=repository,
         )
     assert captured.value.code is code
 
@@ -352,49 +307,42 @@ def test_delete_referenced_attachment_uses_stable_actionable_in_use_contract() -
 def test_delete_unreferenced_projects_retryable_until_exact_absence() -> None:
     delete = getattr(attachment_service, "delete_saved_attachment", None)
     assert callable(delete)
+    _seed(_saved_attachment(ref_count=0))
     assert "complete" not in delete(
         _saved_attachment(ref_count=0),
         s3=_DownloadS3(RuntimeError("provider-private-canary")),
         settings=Settings(s3_images_bucket=PRIVATE_CANARIES[0]),
-        repository=_OwnerRepository([_saved_attachment(ref_count=0)]),
     ).status
-
-
-class _PurgeRepository:
-    def __init__(self) -> None:
-        self.finalize_calls = 0
-
-    def complete_retention_fence(self, *_args: Any, **_kwargs: Any) -> bool:
-        self.finalize_calls += 1
-        raise AssertionError("attachment branch must not finalize the account fence")
-
-    def list_owner_attachment_items(
-        self, _owner_id: str, *, fence: dict[str, Any] | None = None
-    ) -> list[dict[str, Any]]:
-        return []
-
-    def delete_empty_storage_usage(
-        self, _owner_id: str, *, account_fence_generation: int
-    ) -> bool:
-        return True
 
 
 def test_purge_hook_returns_typed_independent_progress_without_aggregate_authority(
     monkeypatch,
 ) -> None:
-    # The account's upload rows are the upload package's: none, on the empty table
-    # every test starts with.
+    # The account has no attachment rows: none, on the empty table every test
+    # starts with.
     result_type = getattr(attachment_service, "AttachmentPurgeBranchResult", None)
     assert result_type is not None
     assert not hasattr(result_type, "finalize_account")
-    repository = _PurgeRepository()
+    table = _seed()
+    table.seed(
+        {
+            **account_deletion_repo.account_fence_key("student-1"),
+            "status": "deletion_pending",
+            "generation": 7,
+        }
+    )
+    finalized = []
+    monkeypatch.setattr(
+        attachment_repo,
+        "complete_retention_fence",
+        lambda *args, **kwargs: finalized.append(args),
+    )
     result = attachment_service.purge_student_attachments(
         "student-1",
         account_fence_generation=7,
         cursors={},
         s3=object(),
         settings=Settings(s3_images_bucket=PRIVATE_CANARIES[0]),
-        repository=repository,
     )
     assert isinstance(result, result_type)
     assert result.status.value in {"complete", "retryable", "conflict"}
@@ -410,7 +358,7 @@ def test_purge_hook_returns_typed_independent_progress_without_aggregate_authori
     }
     assert result.quiescent is True
     assert sum(result.debt_counts.values()) == 0
-    assert repository.finalize_calls == 0
+    assert finalized == []
 
 
 def _client(
@@ -540,22 +488,21 @@ def test_download_body_helper_accepts_file_like_stream_contract() -> None:
 
 def test_readable_attachment_reads_a_live_one_whoever_the_policy_let_in() -> None:
     """Whose it is is the route's policy; the resolver judges only the attachment."""
-    repository = _OwnerRepository([_saved_attachment()])
+    _seed(_saved_attachment())
     teacher = Actor(
         "teacher-1", "issuer", "subject", CanonicalRole.TEACHER, AccountStatus.ACTIVE, "teacher"
     )
-    assert attachment_service.readable_attachment(
-        teacher, "attachment-1", repository=repository
-    )["attachment_id"] == "attachment-1"
+    assert attachment_service.readable_attachment(teacher, "attachment-1")[
+        "attachment_id"
+    ] == "attachment-1"
 
 
 def test_a_message_reuses_only_the_students_own_saved_attachment() -> None:
-    repository = _OwnerRepository([_saved_attachment(owner_id="student-2")])
+    _seed(_saved_attachment(owner_id="student-2"))
     with pytest.raises(attachment_errors.AttachmentDecisionError) as captured:
         attachment_service.prepare_message_attachments(
             [attachment_models.AttachmentReference(attachmentId="attachment-1")],
             _actor(),
-            repository=repository,
         )
     assert captured.value.code is attachment_errors.AttachmentErrorCode.UPLOAD_NOT_FOUND
 

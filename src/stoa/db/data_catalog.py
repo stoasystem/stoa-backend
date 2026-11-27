@@ -242,10 +242,14 @@ type Effect = Literal[
   the profile tombstone's own transaction;
 - `revoke_provider_identity`: the sign-in provider's user is signed out and
   deleted, under a revoke debt row that records it was done;
-- `release_attachments`: the attachments the row holds lose that reference, and
-  an attachment no longer referenced is deleted;
+- `release_attachments`: the attachment the row references loses that reference,
+  and is deleted with its last one. Only an `attachment_association` row has it:
+  it is the attachment module's "let go of one reference"
+  (`attachment_service.release_reference`);
 - `delete_stored_object`: the S3 object the row stands for is deleted and proven
-  absent (an attachment, an upload, a moderated image, a report file);
+  absent (an attachment, an upload, a moderated image, a report file). On an
+  `attachment` row it is "delete one file" (`attachment_service.delete_attachment`),
+  on an `upload_intent` row "clean one upload" (`uploads.cleanup`);
 - `reconcile_curriculum_signal`: the curriculum signal the row registers is
   deleted and its counts taken back off the metric;
 - `cancel_inflight_question`: an Ask question still being answered is stopped;
@@ -1205,8 +1209,9 @@ DELETIONS: Final[Mapping[str, Deletion]] = {
     "report_summary": _tombstone(_KEEPS_REPORT),
     "report_object_intent": _tombstone(_KEEPS_REPORT, "delete_stored_object"),
     # -- conversations -------------------------------------------------------------------------
-    "conversation": _tombstone(_KEEPS_CONVERSATION, "release_attachments"),
-    "conversation_message": _tombstone(_KEEPS_CONVERSATION, "release_attachments"),
+    # Their attachments are let go of by their own reference rows (#636).
+    "conversation": _tombstone(_KEEPS_CONVERSATION),
+    "conversation_message": _tombstone(_KEEPS_CONVERSATION),
     "conversation_teacher_note": _tombstone(_KEEPS_CONVERSATION),
     "message_command": _tombstone(_KEEPS_CONVERSATION, "cancel_inflight_question"),
     "chat_quota_operation": _tombstone(_KEEPS_CONVERSATION),

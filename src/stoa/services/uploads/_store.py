@@ -664,6 +664,8 @@ def complete_upload_cleanup(
                     "cleanup_staging_reconciliation_pages",
                     "cleanup_immutable_reconciliation_pages", "cleanup_part_cursor",
                     "cleanup_parts_absent",
+                    # The staging copy it owed went with the rest (#653).
+                    "staging_cleanup_status",
                 ),
             ),
             table=table,

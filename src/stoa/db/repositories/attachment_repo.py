@@ -1399,6 +1399,45 @@ def build_release_reference_transaction(
     ]
 
 
+def _association_row_key(association: Mapping[str, object]) -> dict[str, str]:
+    pk = _required_text(association.get("PK"))
+    sk = _required_text(association.get("SK"))
+    if not pk.startswith("ATTACHMENT#") or not sk.startswith("REF#"):
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    return {"PK": pk, "SK": sk}
+
+
+def get_association(
+    association: Mapping[str, object], *, table: object | None = None
+) -> dict[str, object] | None:
+    """The reference row `association` names, read strongly; `None` once it is gone."""
+    response = _get_item(table, Key=_association_row_key(association), ConsistentRead=True)
+    return _optional_mapping(response.get("Item"))
+
+
+def delete_association(
+    association: Mapping[str, object], *, table: object | None = None
+) -> None:
+    """Delete a reference row its attachment no longer counts (gone, or being deleted).
+
+    Deleting one that is already gone is no error, so this is safe to repeat.
+    """
+    transact(
+        [
+            {
+                "Delete": {
+                    "Key": _association_row_key(association),
+                    "ConditionExpression": (
+                        "attribute_not_exists(PK) OR entity_type=:association"
+                    ),
+                    "ExpressionAttributeValues": {":association": "attachment_association"},
+                }
+            }
+        ],
+        table=table,
+    )
+
+
 def mark_deletion_absence_proven(
     attachment: dict[str, object], *, table: object | None = None
 ) -> bool:

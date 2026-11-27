@@ -5,6 +5,12 @@ it (`uploads.consume_operation` rides in that write). This module owns the
 attachment rows and their references, downloads, quota and deletion, and the
 strict parsers every S3 answer is read through, which `uploads` uses too.
 The upload itself, from issuance to cleanup, is the `uploads` package's.
+
+An attachment leaves by one of two actions, each on one row and safe to run
+again (#636): `delete_attachment` deletes one file, `release_reference` lets go
+of one reference and deletes the file with its last one. Neither checks a
+fence; the conditional writes on the rows keep them safe. Cleaning one upload
+is `uploads.cleanup`'s.
 """
 
 from __future__ import annotations
@@ -99,6 +105,18 @@ class RetentionResult(dict[str, int]):
         self.stage = stage
 
 
+class LeaveOutcome(StrEnum):
+    """Where one of the leave actions left its row."""
+
+    # The row is gone: the file deleted, or the reference let go of (and, with
+    # the last one, the file deleted too).
+    DONE = "done"
+    # The file is still referenced; nothing was changed.
+    IN_USE = "in_use"
+    # A step did not finish; running the action again carries on from there.
+    RETRYABLE = "retryable"
+
+
 class AttachmentPurgeBranchStatus(StrEnum):
     COMPLETE = "complete"
     RETRYABLE = "retryable"
@@ -181,28 +199,13 @@ class PreparedSavedAttachmentDownload:
         }
 
 
-def _list_owner_retention_items(
-    repository: Any, owner_id: str, fence: dict[str, Any] | None
-) -> list[dict[str, Any]]:
-    if fence is None:
-        return repository.list_owner_attachment_items(owner_id)
-    try:
-        return repository.list_owner_attachment_items(owner_id, fence=fence)
-    except TypeError:
-        # Narrow compatibility for in-memory repositories used by inherited tests.
-        return repository.list_owner_attachment_items(owner_id)
-
-
 def _list_owner_account_attachment_items(
-    repository: Any, owner_id: str, fence: dict[str, Any] | None
+    owner_id: str, fence: dict[str, Any] | None
 ) -> list[dict[str, Any]]:
     """Read every attachment-owned account row, including non-GSI upload debt."""
-    try:
-        return repository.list_owner_attachment_items(
-            owner_id, entity_types=None, fence=fence
-        )
-    except TypeError:
-        return _list_owner_retention_items(repository, owner_id, fence)
+    return attachment_repo.list_owner_attachment_items(
+        owner_id, entity_types=None, fence=fence
+    )
 
 
 def _gateway_call(
@@ -425,9 +428,7 @@ def is_live_attachment(item: object, *, for_reading: bool = True) -> bool:
     return True
 
 
-def readable_attachment(
-    actor: Actor, attachment_id: str, *, repository: Any = attachment_repo
-) -> dict[str, Any]:
+def readable_attachment(actor: Actor, attachment_id: str) -> dict[str, Any]:
     """The live attachment an authorized actor asked for, or `UPLOAD_NOT_FOUND`.
 
     Who may read whose attachment (its owner, a parent or teacher the policy
@@ -438,7 +439,7 @@ def readable_attachment(
     """
     if actor.account_status is not AccountStatus.ACTIVE:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
-    item = _gateway_call(lambda: repository.get_attachment(attachment_id))
+    item = _gateway_call(lambda: attachment_repo.get_attachment(attachment_id))
     if item is not None and not isinstance(item, dict):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     if not is_live_attachment(item):
@@ -507,14 +508,13 @@ def list_owned_attachments(
     *,
     limit: int = 50,
     continuation: str | None = None,
-    repository: Any = attachment_repo,
 ) -> SavedAttachmentPage:
     """List durable owner files without consulting storage quota."""
     if actor.account_status.value != "active":
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     cursor = _decode_attachment_continuation(continuation)
     try:
-        items, next_cursor = repository.list_saved_attachments(
+        items, next_cursor = attachment_repo.list_saved_attachments(
             actor.user_id,
             limit=limit,
             exclusive_start_key=cursor,
@@ -647,65 +647,158 @@ def delete_saved_attachment(
     s3: Any,
     settings: Settings,
     now: datetime | None = None,
-    repository: Any = attachment_repo,
 ) -> SavedAttachmentDeleteResult:
-    """Enter the exact Plan 22 deletion lifecycle for one unreferenced file."""
+    """The owner deletes one of their saved files: `delete_attachment`, as the route answers it.
+
+    A file a message still holds is `ATTACHMENT_IN_USE` (409); a delete that did
+    not finish is `retryable`, and asking again carries it on.
+    """
     _require_immutable_record(item)
-    if int(item.get("ref_count", 0)) > 0:
+    outcome = delete_attachment(item, s3=s3, settings=settings, now=now)
+    if outcome is LeaveOutcome.IN_USE:
         raise AttachmentDecisionError(AttachmentErrorCode.ATTACHMENT_IN_USE)
-    mark_pending = getattr(repository, "mark_saved_attachment_deletion_pending", None)
-    if not callable(mark_pending):
-        return SavedAttachmentDeleteResult(
-            attachmentId=item["attachment_id"],
-            status=SavedAttachmentDeleteStatus.RETRYABLE,
-        )
-    try:
-        marked = mark_pending(item)
-    except Exception:
-        marked = False
-    if not marked:
-        try:
-            current = repository.get_attachment(item["attachment_id"])
-        except Exception:
-            current = item
-        if current is None:
-            return SavedAttachmentDeleteResult(
-                attachmentId=item["attachment_id"],
-                status=SavedAttachmentDeleteStatus.DELETED,
-            )
-        if current.get("owner_id") != item.get("owner_id"):
-            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
-        if current.get("status") != "deletion_pending":
-            if int(current.get("ref_count", 0)) > 0:
-                raise AttachmentDecisionError(AttachmentErrorCode.ATTACHMENT_IN_USE)
-            return SavedAttachmentDeleteResult(
-                attachmentId=item["attachment_id"],
-                status=SavedAttachmentDeleteStatus.RETRYABLE,
-            )
-        pending = current
-    else:
-        pending = {
-            **item,
-            "status": "deletion_pending",
-            "deletion_stage": RetentionStage.OBJECT_DELETION_PENDING.value,
-            "deletion_resource_type": "saved_attachment",
-            "deletion_resource_id": item["attachment_id"],
-        }
-    complete = _finish_pending_deletion(
-        pending,
-        s3=s3,
-        settings=settings,
-        now=(now or datetime.now(UTC)).astimezone(UTC),
-        repository=repository,
-    )
     return SavedAttachmentDeleteResult(
         attachmentId=item["attachment_id"],
         status=(
             SavedAttachmentDeleteStatus.DELETED
-            if complete
+            if outcome is LeaveOutcome.DONE
             else SavedAttachmentDeleteStatus.RETRYABLE
         ),
     )
+
+
+_DELETION_PENDING = "deletion_pending"
+
+
+def delete_attachment(
+    attachment: Mapping[str, Any],
+    *,
+    s3: Any,
+    settings: Settings,
+    now: datetime | None = None,
+) -> LeaveOutcome:
+    """Delete one file: its exact S3 version, its row and its bytes off the quota.
+
+    `attachment` is its row as last read. An active one is marked
+    `deletion_pending` only while nothing references it (`active` and
+    `ref_count=0`, one conditional write); reusing it in a message needs it
+    `active`, so of a delete and a reuse that race, one is refused. Then the
+    exact version is deleted and listed absent, and the row deleted with the
+    quota row lowered in one transaction.
+
+    A file still referenced is `IN_USE`, with nothing changed. A row already
+    `deletion_pending` (a step that did not finish, or the last reference let
+    go) carries on from where it stopped; a row already gone is `DONE`.
+    """
+    now = (now or datetime.now(UTC)).astimezone(UTC)
+    attachment_id = attachment.get("attachment_id")
+    if not isinstance(attachment_id, str) or not attachment_id:
+        return LeaveOutcome.RETRYABLE
+    current: Mapping[str, Any] | None = attachment
+    if attachment.get("status") == AttachmentStatus.ACTIVE:
+        if int(attachment.get("ref_count", 0)) > 0:
+            return LeaveOutcome.IN_USE
+        try:
+            marked = attachment_repo.mark_saved_attachment_deletion_pending(dict(attachment))
+        except Exception:
+            marked = False
+        if marked:
+            current = {
+                **attachment,
+                "status": _DELETION_PENDING,
+                "deletion_stage": RetentionStage.OBJECT_DELETION_PENDING.value,
+                "deletion_resource_type": "saved_attachment",
+                "deletion_resource_id": attachment_id,
+            }
+        else:
+            # Refused: referenced since it was read, gone, or already being deleted.
+            try:
+                current = attachment_repo.get_attachment(attachment_id)
+            except Exception:
+                return LeaveOutcome.RETRYABLE
+            if current is None:
+                return LeaveOutcome.DONE
+            if current.get("status") == AttachmentStatus.ACTIVE:
+                if int(current.get("ref_count", 0)) > 0:
+                    return LeaveOutcome.IN_USE
+                return LeaveOutcome.RETRYABLE
+    if current.get("status") != _DELETION_PENDING:
+        return LeaveOutcome.RETRYABLE
+    if _finish_pending_deletion(dict(current), s3=s3, settings=settings, now=now):
+        return LeaveOutcome.DONE
+    return LeaveOutcome.RETRYABLE
+
+
+def release_reference(
+    association: Mapping[str, Any],
+    *,
+    s3: Any,
+    settings: Settings,
+    now: datetime | None = None,
+) -> LeaveOutcome:
+    """Let go of one reference (an `attachment_association` row); with the last, delete the file.
+
+    The reference row is deleted and the file's `ref_count` lowered in one
+    transaction, conditional on the row still being there and the count being
+    what was read, so running it twice never lowers the count twice. The last
+    reference marks the file `deletion_pending` in that same transaction and
+    `delete_attachment` deletes it. A reference whose file is gone or already
+    being deleted holds nothing and is simply deleted.
+    """
+    return _release_reference(
+        association, s3=s3, settings=settings, now=(now or datetime.now(UTC)).astimezone(UTC)
+    )[0]
+
+
+def _release_reference(
+    association: Mapping[str, Any], *, s3: Any, settings: Settings, now: datetime
+) -> tuple[LeaveOutcome, bool]:
+    """`release_reference`, and whether the file was deleted with it."""
+    attachment_id = association.get("attachment_id")
+    if not isinstance(attachment_id, str) or not attachment_id:
+        return LeaveOutcome.RETRYABLE, False
+    try:
+        attachment = attachment_repo.get_attachment(attachment_id)
+    except Exception:
+        return LeaveOutcome.RETRYABLE, False
+    if attachment is not None and attachment.get("status") == AttachmentStatus.ACTIVE:
+        last = int(attachment.get("ref_count", 1)) <= 1
+        try:
+            attachment_repo.transact(
+                attachment_repo.build_release_reference_transaction(
+                    attachment=attachment,
+                    association=dict(association),
+                    last_reference=last,
+                )
+            )
+        except Exception:
+            # Refused: the reference already let go of, or the count moved since
+            # it was read. Only the first leaves nothing to do here.
+            try:
+                if attachment_repo.get_association(association) is not None:
+                    return LeaveOutcome.RETRYABLE, False
+                attachment = attachment_repo.get_attachment(attachment_id)
+            except Exception:
+                return LeaveOutcome.RETRYABLE, False
+        else:
+            if not last:
+                return LeaveOutcome.DONE, False
+            attachment = {
+                **attachment,
+                "status": _DELETION_PENDING,
+                "deletion_stage": RetentionStage.OBJECT_DELETION_PENDING.value,
+                "deletion_resource_type": association.get("resource_type"),
+                "deletion_resource_id": association.get("resource_id"),
+            }
+    else:
+        try:
+            attachment_repo.delete_association(association)
+        except Exception:
+            return LeaveOutcome.RETRYABLE, False
+    if attachment is not None and attachment.get("status") == _DELETION_PENDING:
+        outcome = delete_attachment(attachment, s3=s3, settings=settings, now=now)
+        return outcome, outcome is LeaveOutcome.DONE
+    return LeaveOutcome.DONE, False
 
 
 def _require_immutable_record(item: Mapping[str, Any]) -> None:
@@ -749,7 +842,6 @@ def prepare_message_attachments(
     actor: Actor,
     *,
     now: datetime | None = None,
-    repository: Any = attachment_repo,
     conversation_id: str | None = None,
 ) -> list[tuple[str, dict[str, Any]]]:
     """Resolve the complete owner list before any message, quota, or AI effect.
@@ -771,9 +863,7 @@ def prepare_message_attachments(
             _require_immutable_record(item)
             prepared.append(("upload", item))
         else:
-            item = readable_attachment(
-                actor, str(reference.attachment_id), repository=repository
-            )
+            item = readable_attachment(actor, str(reference.attachment_id))
             # A message carries only the student's own saved attachments.
             if item.get("owner_id") != actor.user_id:
                 raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
@@ -811,7 +901,6 @@ def prepare_reply_images(
     actor: Actor,
     *,
     now: datetime | None = None,
-    repository: Any = attachment_repo,
 ) -> list[dict[str, Any]]:
     """The replying teacher's own reply images, resolved before the reply exists (#145).
 
@@ -901,11 +990,9 @@ def ensure_message_attachment_capacity(
     prepared: list[tuple[str, dict[str, Any]]],
     owner_id: str,
     effective_plan: str,
-    *,
-    repository: Any = attachment_repo,
 ) -> None:
     fresh_bytes = sum(int(item["content_length"]) for kind, item in prepared if kind == "upload")
-    used_bytes = _gateway_call(lambda: repository.get_storage_usage(owner_id))
+    used_bytes = _gateway_call(lambda: attachment_repo.get_storage_usage(owner_id))
     if used_bytes + fresh_bytes > storage_limit_for_entitlement(
         effective_plan
     ):
@@ -921,7 +1008,6 @@ def bind_message_attachments(
     prepared: list[tuple[str, dict[str, Any]]],
     effective_plan: str,
     now: datetime | None = None,
-    repository: Any = attachment_repo,
     command_operations: Callable[..., Sequence[attachment_repo.TransactionOperation]]
     | None = None,
     deterministic_attachment_ids: Sequence[object] | None = None,
@@ -985,7 +1071,7 @@ def bind_message_attachments(
         bound_attachment_ids.append(attachment_id)
         associations.append(
             {
-                **repository.association_key(
+                **attachment_repo.association_key(
                     attachment_id, "conversation", conversation_id, message_id
                 ),
                 "attachment_id": attachment_id,
@@ -1000,14 +1086,12 @@ def bind_message_attachments(
         )
         summaries.append(_attachment_summary(attachment))
     limit = storage_limit_for_entitlement(effective_plan)
-    ensure_message_attachment_capacity(
-        prepared, actor.user_id, effective_plan, repository=repository
-    )
+    ensure_message_attachment_capacity(prepared, actor.user_id, effective_plan)
     try:
         account_fence = account_deletion_repo.require_active_account_fence(actor.user_id)
         generation = int(account_fence["generation"])
-        repository.transact(
-            repository.build_message_attachment_transaction(
+        attachment_repo.transact(
+            attachment_repo.build_message_attachment_transaction(
                 message_put=message_put(bound_attachment_ids, generation),
                 fresh=fresh,
                 reused=reused,
@@ -1214,12 +1298,15 @@ def release_resource_attachments(
     s3: Any,
     settings: Settings,
     now: datetime | None = None,
-    repository: Any = attachment_repo,
 ) -> RetentionResult:
-    """Release references and retain a retryable tombstone for last-byte deletion."""
+    """Let go of every reference one resource holds, by `release_reference` on each.
+
+    Account deletion's, under the resource's retention fence until #655 removes
+    both: the new deletion flow calls `release_reference` row by row.
+    """
     now = (now or datetime.now(UTC)).astimezone(UTC)
     try:
-        fence: dict[str, Any] = repository.activate_retention_fence(
+        fence: dict[str, Any] = attachment_repo.activate_retention_fence(
             owner_id,
             resource_type=resource_type,
             resource_id=resource_id,
@@ -1232,8 +1319,23 @@ def release_resource_attachments(
             else RetentionDisposition.CONFLICT
         )
         return RetentionResult(disposition, RetentionStage.FENCED)
+
+    def holds(item: Mapping[str, Any]) -> bool:
+        """One of this resource's references, or a file its last one left being deleted."""
+        if item.get("entity_type") == "attachment_association":
+            return (
+                item.get("resource_type") == resource_type
+                and item.get("resource_id") == resource_id
+            )
+        return (
+            item.get("entity_type") == "attachment"
+            and item.get("status") == _DELETION_PENDING
+            and item.get("deletion_resource_type") == resource_type
+            and item.get("deletion_resource_id") == resource_id
+        )
+
     try:
-        items = _list_owner_retention_items(repository, owner_id, fence)
+        items = attachment_repo.list_owner_attachment_items(owner_id, fence=fence)
     except attachment_repo.AttachmentRepositoryConflict as exc:
         disposition = (
             RetentionDisposition.INCOMPLETE_RETRYABLE
@@ -1241,62 +1343,41 @@ def release_resource_attachments(
             else RetentionDisposition.CONFLICT
         )
         return RetentionResult(disposition, RetentionStage.RETRYABLE)
-    attachments = {
-        item["attachment_id"]: item for item in items if item.get("entity_type") == "attachment"
-    }
-    associations = [
-        item
-        for item in items
-        if item.get("entity_type") == "attachment_association"
-        and item.get("resource_type") == resource_type
-        and item.get("resource_id") == resource_id
-    ]
     released = deleted = 0
-    disposition = RetentionDisposition.COMPLETE
-    for association in associations:
-        attachment = attachments.get(association.get("attachment_id"))
-        if not attachment or attachment.get("status") != "active":
-            disposition = RetentionDisposition.CONCEALED_MISSING
+    for item in items:
+        if not holds(item):
             continue
-        last = int(attachment.get("ref_count", 1)) == 1
-        try:
-            repository.transact(
-                repository.build_release_reference_transaction(
-                    attachment=attachment,
-                    association=association,
-                    last_reference=last,
-                )
+        if item.get("entity_type") == "attachment_association":
+            outcome, file_deleted = _release_reference(
+                item, s3=s3, settings=settings, now=now
             )
-        except attachment_repo.AttachmentRepositoryConflict:
-            disposition = RetentionDisposition.CONFLICT
-            continue
-        released += 1
-        if last:
-            pending = {
-                **attachment,
-                "status": "deletion_pending",
-                "deletion_stage": RetentionStage.OBJECT_DELETION_PENDING.value,
-                "deletion_resource_type": resource_type,
-                "deletion_resource_id": resource_id,
-            }
-            if _finish_pending_deletion(
-                pending, s3=s3, settings=settings, now=now, repository=repository
-            ):
-                deleted += 1
-        else:
-            attachment["ref_count"] = int(attachment.get("ref_count", 1)) - 1
-    for attachment in attachments.values():
-        if (
-            attachment.get("status") == "deletion_pending"
-            and attachment.get("deletion_resource_type") == resource_type
-            and attachment.get("deletion_resource_id") == resource_id
-            and _finish_pending_deletion(
-                attachment, s3=s3, settings=settings, now=now, repository=repository
-            )
-        ):
+            released += outcome is LeaveOutcome.DONE
+            deleted += file_deleted
+        elif delete_attachment(item, s3=s3, settings=settings, now=now) is LeaveOutcome.DONE:
             deleted += 1
     try:
-        quiescent_items = _list_owner_retention_items(repository, owner_id, fence)
+        remaining = [
+            item
+            for item in attachment_repo.list_owner_attachment_items(owner_id, fence=fence)
+            if holds(item)
+        ]
+    except attachment_repo.AttachmentRepositoryConflict:
+        remaining = None
+    if remaining is None or remaining:
+        return RetentionResult(
+            RetentionDisposition.INCOMPLETE_RETRYABLE,
+            RetentionStage.RETRYABLE,
+            released=released,
+            deleted=deleted,
+        )
+    try:
+        if not attachment_repo.complete_retention_fence(fence, now_iso=now.isoformat()):
+            return RetentionResult(
+                RetentionDisposition.CONFLICT,
+                RetentionStage.CONFLICT,
+                released=released,
+                deleted=deleted,
+            )
     except attachment_repo.AttachmentRepositoryConflict:
         return RetentionResult(
             RetentionDisposition.INCOMPLETE_RETRYABLE,
@@ -1304,54 +1385,6 @@ def release_resource_attachments(
             released=released,
             deleted=deleted,
         )
-    remaining = [
-        item
-        for item in quiescent_items
-        if (
-            item.get("entity_type") == "attachment_association"
-            and item.get("resource_type") == resource_type
-            and item.get("resource_id") == resource_id
-        )
-        or (
-            item.get("entity_type") == "attachment"
-            and item.get("status") == "deletion_pending"
-            and item.get("deletion_resource_type") == resource_type
-            and item.get("deletion_resource_id") == resource_id
-        )
-    ]
-    if remaining:
-        if disposition is RetentionDisposition.COMPLETE:
-            disposition = RetentionDisposition.INCOMPLETE_RETRYABLE
-        return RetentionResult(
-            disposition,
-            RetentionStage.RETRYABLE,
-            released=released,
-            deleted=deleted,
-        )
-    if disposition is not RetentionDisposition.COMPLETE:
-        return RetentionResult(
-            disposition,
-            RetentionStage.CONFLICT,
-            released=released,
-            deleted=deleted,
-        )
-    complete_fence = getattr(repository, "complete_retention_fence", None)
-    if fence is not None and callable(complete_fence):
-        try:
-            if not complete_fence(fence, now_iso=now.isoformat()):
-                return RetentionResult(
-                    RetentionDisposition.CONFLICT,
-                    RetentionStage.CONFLICT,
-                    released=released,
-                    deleted=deleted,
-                )
-        except attachment_repo.AttachmentRepositoryConflict:
-            return RetentionResult(
-                RetentionDisposition.INCOMPLETE_RETRYABLE,
-                RetentionStage.RETRYABLE,
-                released=released,
-                deleted=deleted,
-            )
     return RetentionResult(
         RetentionDisposition.COMPLETE,
         RetentionStage.COMPLETE,
@@ -1367,9 +1400,13 @@ def purge_student_attachments(
     cursors: dict[str, Any] | None = None,
     s3: Any,
     settings: Settings,
-    repository: Any = attachment_repo,
 ) -> AttachmentPurgeBranchResult:
-    """Advance only attachment/provider debt under an existing account fence."""
+    """Advance only attachment/provider debt under an existing account fence.
+
+    Each row goes by its own action: a reference by `release_reference` (through
+    `release_resource_attachments`, a resource at a time, until #655), a file by
+    `delete_attachment`, an upload by `uploads.cleanup`.
+    """
     now = datetime.now(UTC)
     fence: dict[str, Any] | None = None
     progress = {name: (cursors or {}).get(name) for name in PURGE_CURSOR_CATEGORIES}
@@ -1389,7 +1426,7 @@ def purge_student_attachments(
             "generation": account_fence_generation,
         }
     try:
-        items = _list_owner_account_attachment_items(repository, student_id, fence)
+        items = _list_owner_account_attachment_items(student_id, fence)
     except attachment_repo.AttachmentRepositoryConflict:
         return AttachmentPurgeBranchResult(
             AttachmentPurgeBranchStatus.RETRYABLE, cursors=progress
@@ -1418,7 +1455,6 @@ def purge_student_attachments(
             resource_id,
             s3=s3,
             settings=settings,
-            repository=repository,
         )
         released += result["released"]
         deleted += result["deleted"]
@@ -1430,9 +1466,7 @@ def purge_student_attachments(
                 deleted=deleted,
             )
     try:
-        pending_items = _list_owner_account_attachment_items(
-            repository, student_id, fence
-        )
+        pending_items = _list_owner_account_attachment_items(student_id, fence)
     except attachment_repo.AttachmentRepositoryConflict:
         return AttachmentPurgeBranchResult(
             AttachmentPurgeBranchStatus.RETRYABLE,
@@ -1441,34 +1475,16 @@ def purge_student_attachments(
             deleted=deleted,
         )
     for attachment in pending_items:
-        if attachment.get("entity_type") != "attachment":
-            continue
-        if attachment.get("status") == "active" and int(
-            attachment.get("ref_count", 0)
-        ) == 0:
-            outcome = delete_saved_attachment(
-                attachment,
-                s3=s3,
-                settings=settings,
-                now=now,
-                repository=repository,
-            )
-            if outcome.status is SavedAttachmentDeleteStatus.DELETED:
-                deleted += 1
-        elif attachment.get("status") == "deletion_pending" and _finish_pending_deletion(
-            attachment,
-            s3=s3,
-            settings=settings,
-            now=now,
-            repository=repository,
+        if (
+            attachment.get("entity_type") == "attachment"
+            and delete_attachment(attachment, s3=s3, settings=settings, now=now)
+            is LeaveOutcome.DONE
         ):
             deleted += 1
 
     if account_fence_generation is not None:
         try:
-            after_attachments = _list_owner_account_attachment_items(
-                repository, student_id, fence
-            )
+            after_attachments = _list_owner_account_attachment_items(student_id, fence)
         except attachment_repo.AttachmentRepositoryConflict:
             return AttachmentPurgeBranchResult(
                 AttachmentPurgeBranchStatus.RETRYABLE,
@@ -1492,9 +1508,7 @@ def purge_student_attachments(
             now=now,
         )
     try:
-        pending_items = _list_owner_account_attachment_items(
-            repository, student_id, fence
-        )
+        pending_items = _list_owner_account_attachment_items(student_id, fence)
     except attachment_repo.AttachmentRepositoryConflict:
         return AttachmentPurgeBranchResult(
             AttachmentPurgeBranchStatus.RETRYABLE,
@@ -1505,14 +1519,9 @@ def purge_student_attachments(
     for attachment in pending_items:
         if (
             attachment.get("entity_type") == "attachment"
-            and attachment.get("status") == "deletion_pending"
-            and _finish_pending_deletion(
-                attachment,
-                s3=s3,
-                settings=settings,
-                now=now,
-                repository=repository,
-            )
+            and attachment.get("status") == _DELETION_PENDING
+            and delete_attachment(attachment, s3=s3, settings=settings, now=now)
+            is LeaveOutcome.DONE
         ):
             deleted += 1
     try:
@@ -1527,9 +1536,7 @@ def purge_student_attachments(
             deleted=deleted,
         )
     try:
-        quiescent_items = _list_owner_account_attachment_items(
-            repository, student_id, fence
-        )
+        quiescent_items = _list_owner_account_attachment_items(student_id, fence)
     except attachment_repo.AttachmentRepositoryConflict:
         return AttachmentPurgeBranchResult(
             AttachmentPurgeBranchStatus.RETRYABLE,
@@ -1575,7 +1582,7 @@ def purge_student_attachments(
         )
     if account_fence_generation is not None:
         try:
-            if not repository.delete_empty_storage_usage(
+            if not attachment_repo.delete_empty_storage_usage(
                 student_id,
                 account_fence_generation=account_fence_generation,
             ):
@@ -1609,7 +1616,6 @@ def release_conversation_attachments(
     *,
     s3: Any,
     settings: Settings,
-    repository: Any = attachment_repo,
 ) -> RetentionResult:
     """Conversation-deletion integration hook."""
     return release_resource_attachments(
@@ -1618,7 +1624,6 @@ def release_conversation_attachments(
         conversation_id,
         s3=s3,
         settings=settings,
-        repository=repository,
     )
 
 
@@ -1628,12 +1633,18 @@ def _finish_pending_deletion(
     s3: Any,
     settings: Settings,
     now: datetime,
-    repository: Any,
 ) -> bool:
+    """Delete a `deletion_pending` file's exact version, then its row; whether it is gone.
+
+    Each step is conditional on the one before, so a run that stopped part way
+    resumes: the version is listed absent before the row records it, and the row
+    goes, with its bytes off the quota, only once it has.
+    """
     try:
         _require_immutable_record(attachment)
     except Exception:
         return False
+    attachment_id = str(attachment["attachment_id"])
     try:
         s3.delete_object(
             Bucket=settings.s3_images_bucket,
@@ -1652,41 +1663,29 @@ def _finish_pending_deletion(
         )
         if not absent or cursor is not None:
             return False
-        mark_absent = getattr(repository, "mark_deletion_absence_proven", None)
-        if callable(mark_absent) and not mark_absent(attachment):
-            current = repository.get_attachment(attachment["attachment_id"])
-            if not current or current.get("deletion_stage") != RetentionStage.OBJECT_ABSENCE_PROVEN:
+        if not attachment_repo.mark_deletion_absence_proven(attachment):
+            current = attachment_repo.get_attachment(attachment_id)
+            if current is None:
+                return True
+            if current.get("deletion_stage") != RetentionStage.OBJECT_ABSENCE_PROVEN:
                 return False
-        attachment = {
-            **attachment,
-            "deletion_stage": RetentionStage.OBJECT_ABSENCE_PROVEN.value,
-        }
-        repository.transact(
-            repository.build_finalize_deletion_transaction(attachment, now.isoformat())
+        attachment_repo.transact(
+            attachment_repo.build_finalize_deletion_transaction(
+                {**attachment, "deletion_stage": RetentionStage.OBJECT_ABSENCE_PROVEN.value},
+                now.isoformat(),
+            )
         )
-    except attachment_repo.AttachmentRepositoryConflict:
-        get_attachment = getattr(repository, "get_attachment", None)
-        if callable(get_attachment):
-            try:
-                return get_attachment(attachment["attachment_id"]) is None
-            except Exception:
-                return False
-        return False
     except Exception:
-        get_attachment = getattr(repository, "get_attachment", None)
-        if callable(get_attachment):
-            try:
-                return get_attachment(attachment["attachment_id"]) is None
-            except Exception:
-                return False
-        return False
+        # The finalize may have committed before its response was lost.
+        try:
+            return attachment_repo.get_attachment(attachment_id) is None
+        except Exception:
+            return False
     return True
 
 
-def list_attachment_summaries(
-    attachment_ids: list[str], *, repository: Any = attachment_repo
-) -> dict[str, AttachmentSummary]:
-    records = repository.get_attachments(list(dict.fromkeys(attachment_ids)))
+def list_attachment_summaries(attachment_ids: list[str]) -> dict[str, AttachmentSummary]:
+    records = attachment_repo.get_attachments(list(dict.fromkeys(attachment_ids)))
     return {
         attachment_id: _attachment_summary(item)
         for attachment_id, item in records.items()

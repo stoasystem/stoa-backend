@@ -143,7 +143,7 @@ def cleanup_upload_intent(
         ):
             return "skipped"
         version = int(current["version"])
-        if current.get("durable_attachment_id"):
+        if _attachment_still_holds(current):
             repository.block_upload_cleanup(
                 str(current["upload_id"]), version, now_epoch=now_epoch
             )
@@ -351,6 +351,19 @@ def cleanup_upload_intent(
     ):
         return "retryable"
     return "deleted"
+
+
+def _attachment_still_holds(upload: dict[str, Any]) -> bool:
+    """Whether the attachment this upload became is still there to delete its bytes.
+
+    A spent upload names its attachment (`durable_attachment_id`, written in the
+    same transaction that made it). While that attachment is there, its bytes
+    are its own to delete; once it is gone, nothing of the upload is held.
+    """
+    attachment_id = upload.get("durable_attachment_id")
+    if not isinstance(attachment_id, str) or not attachment_id:
+        return False
+    return attachment_repo.get_attachment(attachment_id) is not None
 
 
 def _provider_target_absent(exc: Exception) -> bool:
