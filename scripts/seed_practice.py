@@ -38,7 +38,6 @@ from stoa.security.aws_operator_identity import require_sso_operator_session
 from stoa.services import (
     curriculum_cache,
     curriculum_names,
-    curriculum_translations,
     knowledge_base_catalog,
     practice_projection_service,
 )
@@ -1255,13 +1254,233 @@ def row_kind(row: dict) -> str:
     return kind
 
 
+#: The English, French and Italian names of the content the seed writes; German
+#: is each row's `title`. They go onto the rows with it (`titles`, #661).
+TRANSLATED_TITLES: dict[str, dict[str, str]] = {
+    "zahlen": {"en": "Numbers and arithmetic", "fr": "Nombres et calcul", "it": "Numeri e calcolo"},
+    "zahlen-u1": {
+        "en": "Calculating with whole numbers and decimals",
+        "fr": "Calculer avec des nombres entiers et décimaux",
+        "it": "Calcolare con numeri interi e decimali",
+    },
+    "zahlen-u2": {
+        "en": "Place value and the number line",
+        "fr": "Valeur de position et droite numérique",
+        "it": "Valore posizionale e retta numerica",
+    },
+    "zahlen-u3": {
+        "en": "Divisors and multiples",
+        "fr": "Diviseurs et multiples",
+        "it": "Divisori e multipli",
+    },
+    "zahlen-u4": {
+        "en": "Patterns and sequences",
+        "fr": "Motifs et suites",
+        "it": "Schemi e successioni",
+    },
+    "brueche": {"en": "Fractions", "fr": "Fractions", "it": "Frazioni"},
+    "brueche-u1": {
+        "en": "Understanding and reducing fractions",
+        "fr": "Comprendre et simplifier les fractions",
+        "it": "Capire e semplificare le frazioni",
+    },
+    "brueche-u2": {
+        "en": "Calculating with fractions",
+        "fr": "Calculer avec des fractions",
+        "it": "Calcolare con le frazioni",
+    },
+    "brueche-l1": {
+        "en": "Reading and reducing fractions",
+        "fr": "Lire et simplifier les fractions",
+        "it": "Leggere e semplificare le frazioni",
+    },
+    "brueche-l2": {
+        "en": "Equivalent fractions",
+        "fr": "Fractions équivalentes",
+        "it": "Frazioni equivalenti",
+    },
+    "brueche-l3": {
+        "en": "Adding and subtracting fractions",
+        "fr": "Additionner et soustraire des fractions",
+        "it": "Addizionare e sottrarre frazioni",
+    },
+    "brueche-l4": {
+        "en": "Multiplying fractions",
+        "fr": "Multiplier des fractions",
+        "it": "Moltiplicare le frazioni",
+    },
+    "gleichungen": {"en": "Equations", "fr": "Équations", "it": "Equazioni"},
+    "gleichungen-u1": {
+        "en": "Solving simple equations",
+        "fr": "Résoudre des équations simples",
+        "it": "Risolvere equazioni semplici",
+    },
+    "gleichungen-u2": {
+        "en": "Equations from word problems",
+        "fr": "Équations issues de problèmes concrets",
+        "it": "Equazioni da problemi con testo",
+    },
+    "gleichungen-l1": {
+        "en": "One-step equations",
+        "fr": "Équations à une étape",
+        "it": "Equazioni a un passaggio",
+    },
+    "gleichungen-l2": {
+        "en": "Two-step equations",
+        "fr": "Équations à deux étapes",
+        "it": "Equazioni a due passaggi",
+    },
+    "gleichungen-l3": {
+        "en": "Setting up an equation",
+        "fr": "Mettre un problème en équation",
+        "it": "Impostare un'equazione",
+    },
+    "gleichungen-l4": {
+        "en": "ZAP tasks: equations",
+        "fr": "Exercices ZAP : équations",
+        "it": "Esercizi ZAP: equazioni",
+    },
+    "geometrie": {"en": "Geometry", "fr": "Géométrie", "it": "Geometria"},
+    "geometrie-u1": {
+        "en": "Area and perimeter",
+        "fr": "Aire et périmètre",
+        "it": "Area e perimetro",
+    },
+    "geometrie-u2": {
+        "en": "Volume and surface area",
+        "fr": "Volume et surface",
+        "it": "Volume e superficie",
+    },
+    "geometrie-u3": {
+        "en": "Coordinates and transformations",
+        "fr": "Coordonnées et transformations",
+        "it": "Coordinate e trasformazioni",
+    },
+    "geometrie-u4": {
+        "en": "Spatial reasoning",
+        "fr": "Représentation spatiale",
+        "it": "Visione spaziale",
+    },
+    "geometrie-l1": {
+        "en": "Rectangle and triangle",
+        "fr": "Rectangle et triangle",
+        "it": "Rettangolo e triangolo",
+    },
+    "geometrie-l2": {
+        "en": "Circle area and circumference",
+        "fr": "Aire et circonférence du cercle",
+        "it": "Area e circonferenza del cerchio",
+    },
+    "geometrie-l3": {
+        "en": "Volume of cuboid and cube",
+        "fr": "Volume du pavé et du cube",
+        "it": "Volume di parallelepipedo e cubo",
+    },
+    "geometrie-l4": {
+        "en": "Pythagorean theorem",
+        "fr": "Théorème de Pythagore",
+        "it": "Teorema di Pitagora",
+    },
+    "geometrie-l5": {
+        "en": "Areas and circles in everyday life",
+        "fr": "Aires et cercles au quotidien",
+        "it": "Aree e cerchi nella vita quotidiana",
+    },
+    "prozentrechnung": {
+        "en": "Percentages and ratios",
+        "fr": "Pourcentages et proportions",
+        "it": "Percentuali e proporzioni",
+    },
+    "prozentrechnung-u1": {
+        "en": "Calculating percentages",
+        "fr": "Calculer des pourcentages",
+        "it": "Calcolare le percentuali",
+    },
+    "prozentrechnung-u2": {
+        "en": "Ratios and proportionality",
+        "fr": "Proportions et proportionnalité",
+        "it": "Rapporti e proporzionalità",
+    },
+    "prozentrechnung-l1": {
+        "en": "Basic percentage problems",
+        "fr": "Exercices de base sur les pourcentages",
+        "it": "Esercizi di base sulle percentuali",
+    },
+    "prozentrechnung-l2": {
+        "en": "Discount, price increase, VAT",
+        "fr": "Remise, hausse de prix, TVA",
+        "it": "Sconto, aumento di prezzo, IVA",
+    },
+    "prozentrechnung-l3": {"en": "Ratios", "fr": "Proportions", "it": "Rapporti"},
+    "prozentrechnung-l4": {
+        "en": "ZAP tasks: percentages & ratios",
+        "fr": "Exercices ZAP : pourcentages et proportions",
+        "it": "Esercizi ZAP: percentuali e rapporti",
+    },
+    "groessen": {
+        "en": "Quantities and measures",
+        "fr": "Grandeurs et mesures",
+        "it": "Grandezze e misure",
+    },
+    "groessen-u1": {
+        "en": "Converting units",
+        "fr": "Convertir des unités",
+        "it": "Convertire unità di misura",
+    },
+    "groessen-u2": {"en": "Money and prices", "fr": "Argent et prix", "it": "Denaro e prezzi"},
+    "groessen-u3": {
+        "en": "Time, speed and distance",
+        "fr": "Temps, vitesse et distance",
+        "it": "Tempo, velocità e distanza",
+    },
+    "textaufgaben-l1": {
+        "en": "Money and shopping",
+        "fr": "Argent et achats",
+        "it": "Denaro e acquisti",
+    },
+    "textaufgaben-l2": {
+        "en": "Time, speed, distance",
+        "fr": "Temps, vitesse, distance",
+        "it": "Tempo, velocità, distanza",
+    },
+    "daten": {"en": "Data and counting", "fr": "Données et dénombrement", "it": "Dati e conteggio"},
+    "daten-u1": {
+        "en": "Averages and charts",
+        "fr": "Moyennes et diagrammes",
+        "it": "Medie e diagrammi",
+    },
+    "daten-u2": {"en": "Combinatorics", "fr": "Combinatoire", "it": "Combinatoria"},
+    "textaufgaben": {"en": "Word problems", "fr": "Problèmes concrets", "it": "Problemi con testo"},
+    "textaufgaben-u1": {
+        "en": "Combined word problems",
+        "fr": "Problèmes combinés",
+        "it": "Problemi combinati",
+    },
+    "textaufgaben-u2": {
+        "en": "ZAP exam-style tasks",
+        "fr": "Exercices type examen ZAP",
+        "it": "Esercizi in stile esame ZAP",
+    },
+    "textaufgaben-l3": {
+        "en": "ZAP 2023-2025: task type A",
+        "fr": "ZAP 2023-2025 : type d'exercice A",
+        "it": "ZAP 2023-2025: tipo di esercizio A",
+    },
+    "textaufgaben-l4": {
+        "en": "ZAP 2023-2025: task type B",
+        "fr": "ZAP 2023-2025 : type d'exercice B",
+        "it": "ZAP 2023-2025: tipo di esercizio B",
+    },
+}
+
+
 def _named(row: dict, content_id: str) -> dict:
     """`row` with its names in the four languages (#661): its German `title` and
-    the English, French and Italian names the readers show for it. A row that
-    brings its own (the knowledge base's) keeps them."""
+    its `TRANSLATED_TITLES`. A row that brings its own (the knowledge base's)
+    keeps them."""
     if "titles" in row:
         return row
-    translated = curriculum_translations.TITLE_TRANSLATIONS.get(content_id)
+    translated = TRANSLATED_TITLES.get(content_id)
     return {**row, "titles": curriculum_names.normalized_titles(translated, german=row["title"])}
 
 

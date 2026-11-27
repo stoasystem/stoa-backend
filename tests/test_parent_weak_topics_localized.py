@@ -63,6 +63,21 @@ def _catalog(locale: str) -> dict[str, Any]:
     }
 
 
+def _named_rows() -> list[dict[str, Any]]:
+    """The stored topic and unit rows, each named in every language (#661): what
+    an answer's spelling in another language is recognised by."""
+    return [
+        *(
+            {"topic_id": topic_id, "title": titles["de"], "titles": titles}
+            for topic_id, titles in TOPIC_TITLES.items()
+        ),
+        *(
+            {"unit_id": unit_id, "title": titles["de"], "titles": titles}
+            for unit_id, titles in UNIT_TITLES.items()
+        ),
+    ]
+
+
 # What production held for one child, each row as stored.
 QUESTIONS = [
     {
@@ -117,6 +132,7 @@ def _profile(locale: str, **overrides: Any) -> dict[str, Any]:
     evidence = fake_evidence.evidence(
         CHILD,
         catalog=_catalog(locale),
+        named_rows=_named_rows(),
         locale=locale,
         attempts=overrides.get("mistakes", MISTAKES),
         now=READ_AT,
@@ -212,7 +228,11 @@ def parent_client(monkeypatch: pytest.MonkeyPatch):
         fake_evidence.install(
             monkeypatch,
             fake_evidence.evidence(
-                CHILD, catalog=_catalog(locale), locale=locale, attempts=MISTAKES
+                CHILD,
+                catalog=_catalog(locale),
+                named_rows=_named_rows(),
+                locale=locale,
+                attempts=MISTAKES,
             ),
         )
         installed = student_evidence.for_student

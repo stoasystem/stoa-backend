@@ -20,7 +20,7 @@ import pytest
 from scripts import knowledge_base_import as kb
 from scripts import seed_practice
 from stoa.db import table as db_table
-from stoa.db.repositories import practice_repo
+from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.services import (
     answer_judging,
     curriculum_migration_service,
@@ -741,15 +741,14 @@ def _register(
     monkeypatch.setattr(knowledge_base_catalog, "_skills_data", lambda: vocabulary)
     units = copy.deepcopy(curriculum_translations.SKILL_UNITS)
     titles = dict(curriculum_translations.SKILL_TITLES)
-    translations = dict(curriculum_translations.TITLE_TRANSLATIONS)
-    translations.update(knowledge_base_catalog.title_translations())
+    translations = dict(curriculum_translations.SKILL_TRANSLATIONS)
     for skill_id, skill in vocabulary["skills"].items():
         units.setdefault(skill["subject"], {})[skill_id] = skill["unit"]
         titles[skill_id] = skill["titles"]["de"]
         translations[skill_id] = {locale: skill["titles"][locale] for locale in ("en", "fr", "it")}
     monkeypatch.setattr(curriculum_translations, "SKILL_UNITS", units)
     monkeypatch.setattr(curriculum_translations, "SKILL_TITLES", titles)
-    monkeypatch.setattr(curriculum_translations, "TITLE_TRANSLATIONS", translations)
+    monkeypatch.setattr(curriculum_translations, "SKILL_TRANSLATIONS", translations)
 
 
 @pytest.fixture
@@ -816,10 +815,13 @@ def test_a_published_exercise_reads_and_judges_in_the_students_language(
     assert not answer_judging.judge_challenge("Plus que 1", shown)
     physics = exercise_localization.localized(practice_repo.get_challenge("kb-p-h001-q1"), "it")
     assert answer_judging.judge_challenge("5 N", physics)
-    assert curriculum_names.for_reader("it").name(
+    # Named by the names the published set's row and its star's row carry (#661).
+    practice_set = practice_repo.get_lesson("brueche-brueche-addieren--sachaufgaben--1")
+    star = curriculum_ops_repo.get_practice_unit("brueche-brueche-addieren")
+    assert curriculum_names.for_reader("it", rows=[practice_set]).name(
         "brueche-brueche-addieren--sachaufgaben--1"
     ) == "Problemi"
-    assert curriculum_names.for_reader("fr").name(
+    assert curriculum_names.for_reader("fr", rows=[star]).name(
         "brueche-brueche-addieren"
     ) == "Additionner des fractions"
 
@@ -1143,7 +1145,7 @@ def test_the_coarse_stars_lie_in_an_existing_or_new_nebula() -> None:
         assert unit["topic_id"] in topics | zap_topics
         assert set(unit["titles"]) == set(knowledge_base_catalog.LOCALES)
     assert knowledge_base_catalog.topic_of_group("brueche-u2") == "brueche"
-    assert knowledge_base_catalog.title_translations()["physics"]["fr"] == "Physique"
+    assert curriculum_translations.SUBJECT_TRANSLATIONS["physics"]["fr"] == "Physique"
 
 
 def test_every_subject_has_question_types_in_four_languages() -> None:

@@ -774,18 +774,6 @@ def unit_choices(subject_id: str) -> dict[str, str]:
     return {}
 
 
-def title_translations() -> dict[str, dict[str, str]]:
-    """en/fr/it titles of every subject, nebula, star and practice set this module adds."""
-    rows = [*SUBJECTS, *topics(), *units()]
-    out: dict[str, dict[str, str]] = {}
-    for row in rows:
-        content_id = row.get("unit_id") or row.get("topic_id") or row["subject_id"]
-        out[content_id] = {locale: row["titles"][locale] for locale in LOCALES if locale != "de"}
-    for lesson_id, titles in practice_sets().items():
-        out[lesson_id] = {locale: titles[locale] for locale in LOCALES if locale != "de"}
-    return out
-
-
 @cache
 def _skills_data() -> dict[str, Any]:
     if not SKILLS_FILE.exists():
