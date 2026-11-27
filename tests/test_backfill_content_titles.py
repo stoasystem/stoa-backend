@@ -95,6 +95,9 @@ def test_a_dry_run_counts_and_writes_nothing(
     assert f"TOPIC: rows {topics} | named already 0 | to write {topics} | of them German only 0" in out
     # Every row but the authored one, which names itself in what the table would give.
     assert f"Rows to write: {len(rows) - 1}" in out
+    # A lesson the table has no translation for is listed: it reads German anyway.
+    assert "German only (shown in German in every language, before and after):" in out
+    assert "  LESSON#kb-mathematics-l0 active: " in out
     assert "[DRY RUN]" in out
 
 

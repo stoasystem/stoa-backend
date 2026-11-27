@@ -103,6 +103,9 @@ class Plan:
 
     writes: list[tuple[dict[str, Any], dict[str, str]]] = field(default_factory=list)
     counts: Counter[tuple[str, str]] = field(default_factory=Counter)
+    #: The rows the table has no translation for: named in German in every
+    #: language today, and after the backfill.
+    german_only: list[str] = field(default_factory=list)
 
     def report(self) -> str:
         lines = []
@@ -113,6 +116,9 @@ class Plan:
             ]
             lines.append(f"{kind}: " + " | ".join(parts))
         lines.append(f"Rows to write: {len(self.writes)}")
+        if self.german_only:
+            lines.append("German only (shown in German in every language, before and after):")
+            lines.extend(f"  {line}" for line in self.german_only[:50])
         return "\n".join(lines)
 
 
@@ -131,6 +137,8 @@ def plan(rows: Iterable[Mapping[str, Any]]) -> Plan:
         result.counts[(kind, "to write")] += 1
         if set(names) <= {"de"}:
             result.counts[(kind, "of them German only")] += 1
+            state = row.get("rollout_state") or "-"
+            result.german_only.append(f"{row['SK']} {state}: {row.get('title')}")
         result.writes.append((dict(row), names))
     return result
 
