@@ -1,6 +1,5 @@
 """Weekly report aggregation and generation helpers."""
 
-from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
 import hashlib
 import json
@@ -36,6 +35,7 @@ from stoa.services import (
     notify_service,
     report_artifact_service,
     student_evidence,
+    weak_topics,
 )
 
 logger = logging.getLogger(__name__)
@@ -193,12 +193,9 @@ def build_weekly_learning_payload(
     questions = _list_all_questions(student_id)
     evidence = student_evidence.for_student(student_id, locale=locale)
     conversations = _list_conversations_for_student(student_id)
-    # What Ask questions named that week (#143), read from its first day on.
-    weekly_asked = [
-        item
-        for item in asked_knowledge_repo.list_for_student(student_id, since=start.isoformat())
-        if _is_in_window(item.get("created_at"), start, end)
-    ]
+    # What Ask questions named (#143), read from the week's first day on; the
+    # weak topics keep only that week's.
+    asked = asked_knowledge_repo.list_for_student(student_id, since=start.isoformat())
 
     weekly_questions = [
         item for item in questions if _is_in_window(item.get("created_at") or item.get("createdAt"), start, end)
@@ -224,7 +221,10 @@ def build_weekly_learning_payload(
         if item.get("escalated") and _is_in_window(item.get("escalated_at") or item.get("updated_at"), start, end)
     )
 
-    weak_topics = _rank_weak_topics(weekly_questions, weekly_mistakes, weekly_asked)
+    # The week's weak topics, by the one rule every reader uses (#674).
+    weak = weak_topics.for_student(
+        evidence, [*questions, *asked], locale=locale, since=window[0], until=window[1]
+    )
     activities = _sort_activities(
         [
             *[_question_activity(item) for item in weekly_questions],
@@ -265,7 +265,7 @@ def build_weekly_learning_payload(
             "afterAskingAi": answered_right.asked_ai,
         },
         "starsLit": _stars_lit(evidence, *window),
-        "weakTopics": weak_topics,
+        "weakTopics": [{"topic": topic.name, "count": topic.count} for topic in weak],
         "activities": activities,
         "sourceCounts": {
             "questions": len(weekly_questions),
@@ -1223,31 +1223,6 @@ def _question_requested_teacher_help(question: dict[str, Any]) -> bool:
         "teacher_requested",
         "teacher_help",
     }
-
-
-def _rank_weak_topics(
-    questions: list[dict[str, Any]],
-    mistakes: list[dict[str, Any]],
-    asked: list[dict[str, Any]] | None = None,
-) -> list[dict[str, Any]]:
-    """The week's weak topics, most often met first.
-
-    Only knowledge points and topics count. A question's subject and a
-    mistake's subject are not topics (#631): practice rows store `mathematics`,
-    which then headed the list. A mistake without a topic is not counted.
-    """
-    counter: Counter[str] = Counter()
-    for record in asked or []:
-        counter.update(topic for topic in record.get("knowledge_points", []) if topic)
-    for question in questions:
-        counter.update(topic for topic in question.get("knowledge_points", []) if topic)
-    for mistake in mistakes:
-        if mistake.get("topic_id"):
-            counter[mistake["topic_id"]] += 1
-    return [
-        {"topic": topic, "count": count}
-        for topic, count in sorted(counter.items(), key=lambda item: (-item[1], item[0]))
-    ]
 
 
 def _display_name(profile: dict[str, Any]) -> str:

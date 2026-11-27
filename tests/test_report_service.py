@@ -323,40 +323,136 @@ def test_mixed_weekly_activity_aggregates_metrics_and_topics(monkeypatch):
     assert [activity["id"] for activity in payload["activities"]][:2] == ["conv-1", "challenge-1"]
 
 
-def test_weak_topics_count_knowledge_points_and_mistake_topics_only():
-    # Practice rows store the lesson's subject as `mathematics`; a question
-    # carries `math`. Neither is a topic, and a mistake with no topic is not
-    # counted at all (#631).
-    ranked = report_service._rank_weak_topics(
+def _week_evidence(monkeypatch, *, questions, mistakes, asked):
+    patch_sources(
+        monkeypatch,
+        children=[
+            {
+                "user_id": "student-1",
+                "parent_id": "parent-1",
+                "role": "student",
+                "email": "student@example.com",
+                "name": "Student",
+            }
+        ],
+        questions=questions,
+        mistakes=mistakes,
+    )
+    # The repository is asked from the week's first day on; the projection
+    # keeps the week alone, so these records are handed over unfiltered.
+    monkeypatch.setattr(
+        report_service.asked_knowledge_repo, "list_for_student", lambda student_id, **_kwargs: asked
+    )
+
+
+def _wrong(challenge, topic, created_at, **fields):
+    return {
+        "challenge_id": challenge,
+        "subject_id": "mathematics",
+        "topic_id": topic,
+        "correct": False,
+        "created_at": created_at,
+        **fields,
+    }
+
+
+def test_the_week_s_weak_topics_are_the_projection_over_that_week_only(monkeypatch):
+    """Only the report's own week counts (#674): its first moment in, the next
+    week's first moment out. A mistake put right later, even after the week,
+    no longer counts; a mistake weighs two, a named point one."""
+    _week_evidence(
+        monkeypatch,
         questions=[
-            {"subject": "math", "knowledge_points": ["fractions", "ratios"]},
-            {"subject": "math", "knowledge_points": ["fractions", ""]},
-            {"subject": "physics"},
+            {
+                "PK": "QUESTION#q1",
+                "SK": "META",
+                "question_id": "q1",
+                "status": "ai_answered",
+                "subject": "math",
+                "knowledge_points": ["algebra"],
+                "created_at": "2026-06-03T10:00:00Z",
+            },
+            {
+                "PK": "QUESTION#q0",
+                "SK": "META",
+                "question_id": "q0",
+                "status": "ai_answered",
+                "subject": "math",
+                "knowledge_points": ["ratios"],
+                "created_at": "2026-05-25T10:00:00Z",
+            },
         ],
         mistakes=[
-            {"subject_id": "mathematics", "topic_id": "geometry"},
-            {"subject_id": "mathematics", "topic_id": "fractions"},
-            {"subject_id": "mathematics"},
-            {"subject_id": "mathematics", "topic_id": ""},
+            _wrong("c-geo", "geometry", "2026-06-02T08:00:00Z"),
+            _wrong("c-frac", "fractions", "2026-06-02T09:00:00Z"),
+            {**_wrong("c-frac", "fractions", "2026-06-10T09:00:00Z"), "correct": True},
+            _wrong("c-pct", "percentages", "2026-05-31T23:59:59Z"),
+            _wrong("c-ratio", "ratios", "2026-06-08T00:00:00Z"),
+            # A subject is not a topic (#631).
+            {**_wrong("c-subject", None, "2026-06-04T08:00:00Z"), "topic_id": ""},
         ],
-        asked=[{"knowledge_points": ["geometry", "percentages"]}],
+        asked=[
+            {"subject": "math", "knowledge_points": ["geometry", "algebra"], "created_at": "2026-06-01T00:00:00Z"},
+            {"subject": "math", "knowledge_points": ["percentages"], "created_at": "2026-06-08T00:00:00Z"},
+        ],
     )
 
-    assert ranked == [
-        {"topic": "fractions", "count": 3},
+    payload = report_service.build_weekly_learning_payload("parent-1", "student-1", "2026-06-01")
+
+    assert payload["weakTopics"] == [
         {"topic": "geometry", "count": 2},
-        {"topic": "percentages", "count": 1},
-        {"topic": "ratios", "count": 1},
+        {"topic": "algebra", "count": 2},
     ]
+    # The model is given them, and so is the report written without it, which
+    # is what the report row stores.
+    assert report_service.build_bedrock_report_input(payload)["weakTopics"] == payload["weakTopics"]
+    fallback = report_service.build_deterministic_report_fallback(payload)
+    assert [topic["topic"] for topic in fallback["weakTopics"]] == ["geometry", "algebra"]
+    record = report_service.build_weekly_report_record(payload, fallback)
+    assert record["weak_knowledge_points"] == ["geometry", "algebra"]
 
 
-def test_weak_topics_of_a_week_with_only_subjects_are_empty():
-    ranked = report_service._rank_weak_topics(
-        questions=[{"subject": "math", "knowledge_points": []}],
-        mistakes=[{"subject_id": "mathematics"}],
+def test_the_week_s_weak_topics_are_named_in_the_parent_s_language(monkeypatch):
+    """The parent's stored language names them, as it does the report (#637)."""
+    _week_evidence(monkeypatch, questions=[], mistakes=[], asked=[])
+    monkeypatch.setattr(report_service.locale_service, "stored_locale", lambda _user_id: "fr")
+    seen = {}
+
+    def for_student(evidence, asked, *, locale, since=None, until=None):
+        seen.update(locale=locale, since=since, until=until)
+        return []
+
+    monkeypatch.setattr(report_service.weak_topics, "for_student", for_student)
+
+    report_service.build_weekly_learning_payload("parent-1", "student-1", "2026-06-01")
+
+    assert seen == {
+        "locale": "fr",
+        "since": datetime(2026, 6, 1, tzinfo=timezone.utc),
+        "until": datetime(2026, 6, 8, tzinfo=timezone.utc),
+    }
+
+
+def test_weak_topics_of_a_week_with_only_subjects_are_empty(monkeypatch):
+    _week_evidence(
+        monkeypatch,
+        questions=[
+            {
+                "PK": "QUESTION#q1",
+                "SK": "META",
+                "question_id": "q1",
+                "subject": "math",
+                "knowledge_points": [],
+                "created_at": "2026-06-03T10:00:00Z",
+            }
+        ],
+        mistakes=[{"challenge_id": "c-1", "subject_id": "mathematics", "created_at": "2026-06-03T10:00:00Z"}],
+        asked=[],
     )
 
-    assert ranked == []
+    payload = report_service.build_weekly_learning_payload("parent-1", "student-1", "2026-06-01")
+
+    assert payload["weakTopics"] == []
 
 
 def test_unlinked_student_raises(monkeypatch):
