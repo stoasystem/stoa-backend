@@ -284,28 +284,24 @@ def test_unresolved_grace_falls_to_free_once_and_preserves_history_and_storage(
 
 
 def test_over_free_limit_blocks_only_new_bytes_and_never_deletes() -> None:
-    class Repository:
-        def __init__(self) -> None:
-            self.calls: list[tuple[str, str]] = []
+    from stoa.db import table as db_table
+    from stoa.db.repositories import attachment_repo
 
-        def get_storage_usage(self, owner_id: str) -> int:
-            self.calls.append(("get_storage_usage", owner_id))
-            return FREE_STORAGE_BYTES + 1
-
-        def delete_object(self, *_args: object, **_kwargs: object) -> None:
-            pytest.fail("storage downgrade admission must never delete")
-
-    repository = Repository()
+    table = db_table.table()
+    table.seed(
+        {**attachment_repo.storage_key("student-1"), "used_bytes": FREE_STORAGE_BYTES + 1}
+    )
     prepared = [("upload", {"content_length": 1})]
     with pytest.raises(AttachmentDecisionError) as error:
         attachment_service.ensure_message_attachment_capacity(
             prepared,
             "student-1",
             BillingPlanId.FREE_TRIAL.value,
-            repository=repository,
         )
     assert error.value.code is AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED
-    assert repository.calls == [("get_storage_usage", "student-1")]
+    # Only the storage row was read; nothing was written or deleted.
+    assert [operation for operation, _request in table.requests] == ["get_item"]
+    assert table.rows[("STORAGE#student-1", "USAGE")]["used_bytes"] == FREE_STORAGE_BYTES + 1
     assert (
         attachment_service.attachment_storage_limit(BillingPlanId.FREE_TRIAL.value)
         == FREE_STORAGE_BYTES

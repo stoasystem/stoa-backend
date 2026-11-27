@@ -5,8 +5,9 @@ from typing import Any
 
 import pytest
 
-from fakes.dynamodb import from_wire
+from fakes.dynamodb import FakeTable, from_wire
 from stoa.config import Settings
+from stoa.db import table as db_table
 from stoa.db.repositories import attachment_repo
 from stoa.services import attachment_service, learning_session
 from stoa.services.uploads import _store as upload_store
@@ -196,63 +197,73 @@ class _VersionListingS3:
         return {"Versions": versions, "DeleteMarkers": [], "IsTruncated": False}
 
 
-class _FinalizeRepository:
-    build_finalize_deletion_transaction = staticmethod(
-        attachment_repo.build_finalize_deletion_transaction
-    )
+class _FinalizeTable(FakeTable):
+    """The shared table, whose finalize transaction fails or commits and loses its answer."""
 
     def __init__(self, *, commit_then_raise: bool = False, fail: bool = False) -> None:
-        self.row: dict[str, Any] | None = _attachment(status="deletion_pending")
+        super().__init__()
         self.commit_then_raise = commit_then_raise
         self.fail = fail
         self.finalize_calls = 0
+        self.seed(
+            {**_attachment(status="deletion_pending"), "deletion_stage": "object_deletion_pending"},
+            {**attachment_repo.storage_key(OWNER), "used_bytes": 9},
+        )
 
-    def mark_deletion_absence_proven(self, *_args: Any, **_kwargs: Any) -> bool:
-        assert self.row is not None
-        self.row["deletion_stage"] = "object_absence_proven"
-        return True
-
-    def transact(self, _operations: list[dict[str, Any]]) -> None:
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
         self.finalize_calls += 1
         if self.fail:
-            raise attachment_repo.AttachmentRepositoryConflict("dependency_failure")
-        self.row = None
+            raise RuntimeError("provider-private-finalize-failure")
+        super().transact_write_items(TransactItems=TransactItems)
         if self.commit_then_raise:
-            raise attachment_repo.AttachmentRepositoryConflict("dependency_failure")
+            raise RuntimeError("provider-private-commit-then-raise")
 
-    def get_attachment(self, _attachment_id: str) -> dict[str, Any] | None:
-        return self.row
+    def row(self) -> dict[str, Any] | None:
+        return self.rows.get(("ATTACHMENT#attachment-retention", "META"))
 
 
 def test_delete_commit_then_raise_reconciles_exact_absence_and_finalize_once() -> None:
     s3 = _VersionListingS3(retained=True, raise_after_delete=True)
-    repository = _FinalizeRepository(commit_then_raise=True)
+    table = _FinalizeTable(commit_then_raise=True)
+    db_table.install(table)
 
     assert attachment_service._finish_pending_deletion(
         _attachment(status="deletion_pending"),
         s3=s3,
         settings=Settings(s3_images_bucket="private-bucket"),
         now=datetime(2026, 7, 17, tzinfo=UTC),
-        repository=repository,
     )
-    assert repository.finalize_calls == 1
+    assert table.finalize_calls == 1
     assert s3.delete_calls == 1
+    assert table.row() is None
+    assert table.rows[("STORAGE#" + OWNER, "USAGE")]["used_bytes"] == 0
 
 
 def test_quota_finalize_failure_retains_resumable_tombstone() -> None:
     s3 = _VersionListingS3(retained=False)
-    repository = _FinalizeRepository(fail=True)
+    table = _FinalizeTable(fail=True)
+    db_table.install(table)
 
     assert not attachment_service._finish_pending_deletion(
         _attachment(status="deletion_pending"),
         s3=s3,
         settings=Settings(s3_images_bucket="private-bucket"),
         now=datetime(2026, 7, 17, tzinfo=UTC),
-        repository=repository,
     )
-    assert repository.row is not None
-    assert repository.row["status"] == "deletion_pending"
-    assert repository.row["deletion_stage"] == "object_absence_proven"
+    row = table.row()
+    assert row is not None
+    assert row["status"] == "deletion_pending"
+    assert row["deletion_stage"] == "object_absence_proven"
+
+    # The next run carries on from the recorded proof and finishes.
+    table.fail = False
+    assert attachment_service._finish_pending_deletion(
+        row,
+        s3=s3,
+        settings=Settings(s3_images_bucket="private-bucket"),
+        now=datetime(2026, 7, 17, tzinfo=UTC),
+    )
+    assert table.row() is None
 
 
 class _CaptureUpdateTable:

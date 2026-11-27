@@ -18,8 +18,10 @@ ready, failed or expired. The entry points:
 - `usable` is a ready upload of the caller's for one purpose, the record a
   message or a reply makes its attachment from; `consume_operation` is the
   update that spends it, for the caller's own transaction.
-- `cleanup_candidates` and `cleanup` are the sweep's (`jobs.upload_cleanup`);
-  `purge_for_account` and `settle_staging_debts` are account deletion's.
+- `cleanup` cleans one upload: the sweep's (`jobs.upload_cleanup`), on what
+  `cleanup_candidates` finds, and account deletion's, on each of the account's
+  upload rows. `purge_for_account` and `settle_staging_debts` are the old
+  account purge's, until #655.
 
 The durable attachment an upload becomes is `attachment_service`'s.
 """
@@ -174,16 +176,62 @@ def cleanup_candidates(
 
 
 def cleanup(
-    candidate: dict[str, Any],
+    candidate: Mapping[str, Any],
     *,
     s3: Any,
     settings: Settings,
     now: datetime,
-    reference_scan_limit: int,
+    reference_scan_limit: int = 100,
+    account_fence_generation: int | None = None,
 ) -> str:
-    """Clean one candidate a step further: `deleted`, `deferred`, `protected`, `retryable` or `skipped`."""
+    """Clean one upload a step further: `deleted`, `deferred`, `protected`, `retryable` or `skipped`.
+
+    Cleaning takes its parts, its staging and immutable copies, its PART rows and
+    any staging copy it still owed; the row is left `cleanup_complete` until its
+    TTL. Safe to run again: each step is recorded on the row before the next.
+
+    An upload whose attachment is still there is `protected` and left alone:
+    those bytes are the attachment's, which deletes them when it goes, and the
+    next pass finds the upload free. Once the attachment is gone, it is cleaned.
+
+    The sweep passes an upload it found due. Account deletion passes each of
+    the closing account's upload rows with its fence generation, which takes an
+    upload in any state (`_store.claim_account_upload_cleanup`) instead of only
+    one past its usable window.
+    """
+    if account_fence_generation is None:
+        return _lifecycle.cleanup_upload_intent(
+            dict(candidate),
+            s3=s3,
+            settings=settings,
+            now=now,
+            reference_scan_limit=reference_scan_limit,
+        )
+    owner_id = candidate.get("owner_id")
+    if not isinstance(owner_id, str) or not owner_id:
+        return "skipped"
+    try:
+        if _lifecycle._attachment_still_holds(dict(candidate)):
+            return "protected"
+    except Exception:
+        return "retryable"
+    current: dict[str, Any] = dict(candidate)
+    if current.get("status") == UploadStatus.CLEANUP_COMPLETE:
+        return "deleted"
+    if current.get("status") != UploadStatus.CLEANUP_PENDING:
+        try:
+            claimed = _store.claim_account_upload_cleanup(
+                current,
+                owner_id=owner_id,
+                account_fence_generation=account_fence_generation,
+            )
+        except Exception:
+            return "retryable"
+        if not isinstance(claimed, dict):
+            return "retryable"
+        current = claimed
     return _lifecycle.cleanup_upload_intent(
-        candidate,
+        current,
         s3=s3,
         settings=settings,
         now=now,
@@ -201,12 +249,11 @@ def purge_for_account(
     settings: Settings,
     now: datetime,
 ) -> None:
-    """Clean every upload among the deleted account's rows that no live attachment holds.
+    """Clean every upload among the deleted account's rows, by `cleanup` on each.
 
-    Each is claimed under the account's deletion fence, cleaned, and its
-    tombstone deleted once nothing of it is left. An upload whose attachment
-    is still live goes with that attachment instead. A step that fails leaves
-    the upload for the purge's next pass.
+    An upload whose attachment is still live goes with that attachment instead.
+    Each cleaned upload's tombstone is deleted under the account's deletion
+    fence. A step that fails leaves the upload for the purge's next pass.
     """
     for upload in owner_items:
         if upload.get("entity_type") != "upload_intent":
@@ -214,26 +261,19 @@ def purge_for_account(
         durable_attachment_id = upload.get("durable_attachment_id")
         if isinstance(durable_attachment_id, str) and durable_attachment_id in live_attachment_ids:
             continue
-        current: dict[str, Any] = dict(upload)
-        if current.get("status") != UploadStatus.CLEANUP_PENDING:
-            try:
-                claimed = _store.claim_account_upload_cleanup(
-                    current,
-                    owner_id=student_id,
-                    account_fence_generation=account_fence_generation,
-                )
-            except Exception:
-                continue
-            if not isinstance(claimed, dict):
-                continue
-            current = claimed
-        outcome = _lifecycle.cleanup_upload_intent(
-            current, s3=s3, settings=settings, now=now, reference_scan_limit=100
+        if upload.get("owner_id") != student_id:
+            continue
+        outcome = cleanup(
+            upload,
+            s3=s3,
+            settings=settings,
+            now=now,
+            account_fence_generation=account_fence_generation,
         )
         if outcome == "deleted":
             try:
                 _store.delete_account_upload_tombstone(
-                    current["upload_id"],
+                    str(upload["upload_id"]),
                     owner_id=student_id,
                     account_fence_generation=account_fence_generation,
                 )
@@ -245,7 +285,9 @@ def settle_staging_debts(student_id: str, *, s3: Any, settings: Settings) -> boo
     """Delete every staging copy the owner's promoted uploads still owe; whether all went."""
     debts = _store.list_owner_staging_cleanup_debts(student_id)
     return all(
-        _lifecycle._reconcile_staging_cleanup_debt(debt, s3=s3, settings=settings)
+        _lifecycle._reconcile_staging_cleanup_debt(
+            debt, s3=s3, settings=settings, repository=_store
+        )
         for debt in debts
     )
 
