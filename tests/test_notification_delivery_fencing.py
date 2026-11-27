@@ -61,9 +61,6 @@ class _StrongTable:
 
 def _ready_settings() -> Settings:
     return Settings(
-        notification_email_provider="ses",
-        notification_email_provider_approved=True,
-        notification_email_send_enabled=True,
         notification_push_provider="native-relay",
         notification_push_provider_approved=True,
         notification_push_provider_endpoint_url="https://push.example.test/send",
@@ -276,51 +273,6 @@ def test_global_nonprivate_requires_exact_persisted_contract_digest() -> None:
         with pytest.raises(notification_service.DeliveryOwnershipError) as caught:
             notification_service.resolve_delivery_ownership(forged)
         assert caught.value.status == "delivery_classification_invalid"
-
-
-def test_mixed_owner_digest_is_refused_before_email_provider(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    first = _private_event()
-    second = _private_event(
-        event_id="event-private-delivery-2",
-        PK="NOTIFICATION#event-private-delivery-2",
-        owner_id="student-foreign",
-    )
-    events = {first["event_id"]: first, second["event_id"]: second}
-    calls: list[dict[str, Any]] = []
-    preferences = notification_service.default_preferences()
-    preferences["teacher_responses"]["email_digest"] = True
-    config.install(_ready_settings())
-    # The double hands back every event, another person's among them: what the
-    # digest keeps of an inbox is still decided by `_visible_to_user` (#613).
-    monkeypatch.setattr(notification_repo, "list_inbox", lambda **_kwargs: list(events.values()))
-    monkeypatch.setattr(notification_repo, "get_preferences", lambda _user_id: {"preferences": preferences})
-    monkeypatch.setattr(notification_repo, "get_event", lambda event_id: deepcopy(events[event_id]))
-    monkeypatch.setattr(notification_repo, "update_event", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        notification_repo,
-        "load_delivery_event_strong",
-        lambda event_id: deepcopy(events[event_id]),
-        raising=False,
-    )
-    monkeypatch.setattr(
-        account_deletion_repo,
-        "require_active_account_fence",
-        lambda owner_id, *_args, **_kwargs: {
-            "status": "active",
-            "generation": GENERATION,
-            "owner": owner_id,
-        },
-    )
-
-    result = notification_service.send_digest(
-        {"sub": OWNER, "role": "student", "email": "student@example.test"},
-        send_func=lambda payload: calls.append(payload),
-    )
-
-    assert result["status"] == "delivery_scope_mismatch"
-    assert calls == []
 
 
 def test_websocket_invalid_persisted_scope_lists_no_connections_and_posts_nothing(

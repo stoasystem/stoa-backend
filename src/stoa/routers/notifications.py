@@ -25,7 +25,7 @@ _OWN_NOTIFICATIONS = {
 
 
 def _own(resource_type: ResourceType, action: AuthorizationAction):
-    """The Actor's own notification collection, preferences, digest or new token."""
+    """The Actor's own notification collection, preferences or new token."""
     return authorized(resource_type, action, SELF, _OWN_NOTIFICATIONS)
 
 
@@ -79,24 +79,6 @@ class NotificationPreferenceUpdate(BaseModel):
     weeklyReportEmail: bool | None = None
 
 
-class NotificationDigestSendRequest(BaseModel):
-    category: str | None = None
-    since: str | None = None
-    until: str | None = None
-    limit: int = Field(default=25, ge=1, le=100)
-
-
-class NotificationDigestSendResponse(BaseModel):
-    deliveryId: str
-    status: str
-    providerMode: str
-    template: str
-    itemCount: int
-    eventIds: list[str]
-    recipient: dict[str, Any]
-    providerResult: dict[str, Any] = Field(default_factory=dict)
-
-
 class NotificationPushTokenRegisterRequest(BaseModel):
     platform: str
     token: str | None = None
@@ -133,7 +115,6 @@ class NotificationDeliveryStatusResponse(BaseModel):
     websocketConfigured: bool
     websocketMode: str
     websocketReadiness: dict[str, Any] = Field(default_factory=dict)
-    emailProvider: dict[str, Any] = Field(default_factory=dict)
     pushProvider: dict[str, Any] = Field(default_factory=dict)
     preferenceCategories: list[str]
     preferenceChannels: list[str]
@@ -142,30 +123,6 @@ class NotificationDeliveryStatusResponse(BaseModel):
     realtimeDecisionCounts: dict[str, int]
     deliveryAttemptCounts: dict[str, int] = Field(default_factory=dict)
     recentDeliveryAttempts: list[dict[str, Any]] = Field(default_factory=list)
-
-
-class NotificationDigestItem(BaseModel):
-    eventId: str
-    eventType: str
-    category: str
-    targetType: str
-    targetId: str
-    title: str
-    summary: str
-    createdAt: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class NotificationDigestPreviewResponse(BaseModel):
-    userId: str
-    category: str | None = None
-    window: dict[str, str | None]
-    count: int
-    items: list[NotificationDigestItem]
-    deliveryMode: str
-    emailProviderConfigured: bool
-    pushProviderConfigured: bool
-    pushPreferencesSupported: bool
 
 
 @router.get("", response_model=NotificationListResponse)
@@ -205,8 +162,8 @@ async def update_notification_preferences(
 
 
 class EmailSubscriptionResponse(BaseModel):
-    # Which kind of email the link was for: weekly_report, dispatch_reminder or
-    # notification_digest. Nothing names the person or their address.
+    # Which kind of email the link was for: weekly_report or dispatch_reminder.
+    # Nothing names the person or their address.
     kind: str
     subscribed: bool
 
@@ -231,37 +188,6 @@ async def unsubscribe_from_email(token: str = Query(..., max_length=2048)):
 async def resubscribe_to_email(token: str = Query(..., max_length=2048)):
     """Undo an unsubscribe from the same link (#363)."""
     return notification_service.set_email_subscription(token, subscribed=True)
-
-
-@router.get("/digest-preview", response_model=NotificationDigestPreviewResponse)
-async def preview_notification_digest(
-    category: str | None = Query(default=None),
-    since: str | None = Query(default=None),
-    until: str | None = Query(default=None),
-    limit: int = Query(default=25, ge=1, le=100),
-    actor: Actor = Depends(_own(ResourceType.NOTIFICATION_DIGEST, AuthorizationAction.READ)),
-):
-    return notification_service.digest_preview(
-        actor,
-        category=category,
-        since=since,
-        until=until,
-        limit=limit,
-    )
-
-
-@router.post("/digest-send", response_model=NotificationDigestSendResponse)
-async def send_notification_digest(
-    body: NotificationDigestSendRequest,
-    actor: Actor = Depends(_own(ResourceType.NOTIFICATION_DIGEST, AuthorizationAction.CREATE)),
-):
-    return notification_service.send_digest(
-        actor,
-        category=body.category,
-        since=body.since,
-        until=body.until,
-        limit=body.limit,
-    )
 
 
 @router.post("/push-tokens", response_model=NotificationPushTokenResponse)

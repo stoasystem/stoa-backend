@@ -395,7 +395,7 @@ def test_an_inbox_is_read_by_queries_of_the_index_and_never_a_scan(table) -> Non
 
 
 def test_the_bell_shows_a_persons_own_among_more_than_a_hundred_and_scans_nothing() -> None:
-    """The bell itself (#613, step 2): `list_user_events` and the digest read the inbox.
+    """The bell itself (#613, step 2): `list_user_events` reads the inbox.
 
     With the scan, a site holding more than a hundred notifications showed each
     person only those of theirs that fell among the first hundred it met.
@@ -432,7 +432,6 @@ def test_the_bell_shows_a_persons_own_among_more_than_a_hundred_and_scans_nothin
         unread = notification_service.list_user_events(teacher, status="created", limit=100)
         archived = notification_service.list_user_events(teacher, status="archived")
         student = notification_service.list_user_events({"sub": STUDENT, "role": "student"}, limit=100)
-        preview = notification_service.digest_preview(teacher)
 
         assert [item["eventId"] for item in shown] == ["mine-new"]
         assert [item["eventId"] for item in unread] == ["mine-new"]
@@ -440,7 +439,6 @@ def test_the_bell_shows_a_persons_own_among_more_than_a_hundred_and_scans_nothin
         # The newest hundred of the student's own hundred and fifty, newest first.
         assert len(student) == 100
         assert student[0]["eventId"] == "other-149"
-        assert preview["userId"] == TEACHER
         assert double.calls["scan"] == scans
     finally:
         db_table.install(None)

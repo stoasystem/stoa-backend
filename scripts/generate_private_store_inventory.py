@@ -231,7 +231,6 @@ SEMANTIC_REQUIREMENTS: dict[str, dict[str, tuple[str | tuple[str, ...], ...]]] =
             "provider_call()",
         ),
         "attempt_push_delivery": ("load_authoritative_delivery_events", "run_authoritative_delivery"),
-        "send_digest": ("load_authoritative_delivery_events", "run_authoritative_delivery"),
     },
     "src/stoa/services/websocket_service.py": {
         "fanout_notification_event": (

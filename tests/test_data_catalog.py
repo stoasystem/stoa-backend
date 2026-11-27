@@ -265,7 +265,6 @@ FIELDS_READ_BY_HAND: Mapping[str, str] = {
     "curriculum_version": "curriculum_ops_service: authored-content version",
     "learning_assignment": "adaptive_learning_service: student_id, created_by; repo adds owner_id",
     "moderation_event": "moderation_service._event: actor_id, student_id",
-    "payment_expiry_reminder": "notification_service: parent_id; repo stamps owner_id",
     "practice_quiz_paper": "practice_repo: the quiz scope's lesson/unit ids",
     "privileged_identity_command": "privileged_identity_service: target_id (a digest), approved_by",
     "provider_usage_evidence": "allowance_repo: cache token counts",

@@ -10,8 +10,8 @@ under `email.common`. The tone is warm and plain: say why the email came, what
 to do next, and what to do when a link or code has run out.
 
 Teachers and parents are addressed formally, like every other message this
-backend writes to them, and so is an invited account of any role. A digest
-goes to students too, so its own lines name nobody. Swiss German writes "ss".
+backend writes to them, and so is an invited account of any role. Swiss German
+writes "ss".
 """
 
 from __future__ import annotations
@@ -222,44 +222,11 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Vous recevez cet e-mail parce que STOA vous attribue des demandes d'aide.",
         "it": "Riceve questa e-mail perché STOA Le assegna richieste di aiuto.",
     },
-    "email.unsubscribe.reason.notification_digest": {
-        "de": "Sie erhalten diese E-Mail, weil Sie Zusammenfassungen Ihrer Mitteilungen per E-Mail eingeschaltet haben.",
-        "en": "You are receiving this email because you turned on notification digests by email.",
-        "fr": "Vous recevez cet e-mail parce que vous avez activé les résumés de notifications par e-mail.",
-        "it": "Riceve questa e-mail perché ha attivato i riepiloghi delle notifiche via e-mail.",
-    },
     "email.unsubscribe.action": {
         "de": "Diese E-Mails abbestellen",
         "en": "Unsubscribe from these emails",
         "fr": "Se désabonner de ces e-mails",
         "it": "Non ricevere più queste e-mail",
-    },
-    # ── the notification digest email ────────────────────────────────────
-    #
-    # Each item below the intro is the notification's own title and summary.
-    "email.notification_digest.subject": {
-        "de": "STOA – Ihre neuen Mitteilungen",
-        "en": "STOA – Your new notifications",
-        "fr": "STOA – Vos nouvelles notifications",
-        "it": "STOA – Le Sue nuove notifiche",
-    },
-    "email.notification_digest.title": {
-        "de": "Das ist neu bei STOA",
-        "en": "Here is what's new on STOA",
-        "fr": "Voici les nouveautés sur STOA",
-        "it": "Ecco le novità su STOA",
-    },
-    "email.notification_digest.intro": {
-        "de": "Seit Ihrer letzten Zusammenfassung ist Folgendes passiert:",
-        "en": "Here is what has happened since your last digest:",
-        "fr": "Voici ce qui s'est passé depuis votre dernier résumé :",
-        "it": "Ecco cosa è successo dal Suo ultimo riepilogo:",
-    },
-    "email.notification_digest.action": {
-        "de": "STOA öffnen",
-        "en": "Open STOA",
-        "fr": "Ouvrir STOA",
-        "it": "Apri STOA",
     },
     # ── the weekly report email to a parent ──────────────────────────────
     #

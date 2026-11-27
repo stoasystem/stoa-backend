@@ -27,7 +27,6 @@ from stoa.db.repositories import (
     account_deletion_repo,
     billing_fact_repo,
     checkout_command_repo,
-    notification_repo,
     user_repo,
 )
 from stoa.models.billing import (
@@ -1015,7 +1014,7 @@ def get_current_payment_reminder(
     parent = _billing_required_text(parent_id, "parent_id")
     target = table or get_table()
     try:
-        rows = notification_repo.list_payment_expiry_reminders(parent, table=target)
+        rows = billing_fact_repo.list_payment_expiry_reminders(parent, table=target)
     except Exception:
         raise ValueError("billing projection is temporarily unavailable") from None
     unresolved: list[tuple[int, dict[str, object]]] = []

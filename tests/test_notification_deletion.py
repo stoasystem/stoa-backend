@@ -264,7 +264,7 @@ def test_commit_then_raise_is_unknown_and_same_operation_is_not_blindly_retried(
         owner_id=STUDENT_ID,
         generation=GENERATION,
         operation_id="delivery-ambiguous",
-        channel="email_digest",
+        channel="push",
         event_ids=["event-private"],
         payload={"summary": "private summary canary"},
         provider_call=ambiguous,
@@ -276,24 +276,27 @@ def test_commit_then_raise_is_unknown_and_same_operation_is_not_blindly_retried(
 
 
 def test_strong_paginated_scans_and_scrubs_leave_only_strict_tombstones() -> None:
-    notification_pages: list[dict[str, Any]] = [
+    # The real write path (#684): the table's own transaction under the deletion
+    # fence, one row to a page so the sweep has to follow its cursor.
+    notifications = FakeTable(page_item_cap=1)
+    notifications.seed(
         {
-            "Items": [_event()],
-            "LastEvaluatedKey": {"PK": "NOTIFICATION#event-private", "SK": "META"},
+            "PK": f"USER#{STUDENT_ID}",
+            "SK": "ACCOUNT_FENCE",
+            "status": "deletion_pending",
+            "generation": GENERATION,
         },
+        _event(),
         {
-            "Items": [
-                {
-                    "PK": "ASSISTANCE_SUMMARY#late",
-                    "SK": "META",
-                    "entity_type": "teacher_assistance_summary_seed",
-                    "summary_id": "late",
-                    "student_id": STUDENT_ID,
-                    "question_summary": "late private canary",
-                }
-            ]
+            "PK": "ASSISTANCE_SUMMARY#late",
+            "SK": "META",
+            "entity_type": "teacher_assistance_summary_seed",
+            "summary_id": "late",
+            "student_id": STUDENT_ID,
+            "owner_id": STUDENT_ID,
+            "question_summary": "late private canary",
         },
-    ]
+    )
     connection_pages = [
         {
             "Items": [
@@ -311,7 +314,7 @@ def test_strong_paginated_scans_and_scrubs_leave_only_strict_tombstones() -> Non
         }
     ]
     calls: list[dict[str, Any]] = []
-    tombstones: list[dict[str, Any]] = []
+    deleted_connections: list[dict[str, Any]] = []
 
     class _Table:
         def __init__(self, pages: list[dict[str, Any]]) -> None:
@@ -321,17 +324,23 @@ def test_strong_paginated_scans_and_scrubs_leave_only_strict_tombstones() -> Non
             calls.append(kwargs)
             return self.pages.pop(0)
 
-        def replace_notification_tombstone(self, _old: Any, new: Any, *_args: Any) -> None:
-            tombstones.append(new)
-
         def delete_connection_for_account(self, *_args: Any, **_kwargs: Any) -> None:
-            tombstones.append({"deleted_connection": True})
+            deleted_connections.append({"deleted_connection": True})
 
-    notifications = _Table(notification_pages)
     scan = _contract(notification_repo, "scan_notification_private_rows")
-    first = scan(STUDENT_ID, table=notifications, maximum_pages=1)
-    second = scan(STUDENT_ID, table=notifications, cursor=first.cursor, maximum_pages=1)
-    for item in (*first.items, *second.items):
+    found: list[dict[str, Any]] = []
+    cursor = None
+    for _ in range(10):
+        page = scan(STUDENT_ID, table=notifications, cursor=cursor, maximum_pages=1)
+        found.extend(page.items)
+        cursor = page.cursor
+        if cursor is None:
+            break
+    assert {item["PK"] for item in found} == {
+        "NOTIFICATION#event-private",
+        "ASSISTANCE_SUMMARY#late",
+    }
+    for item in found:
         _contract(notification_repo, "scrub_notification_private_row")(
             item,
             owner_id=STUDENT_ID,
@@ -341,10 +350,10 @@ def test_strong_paginated_scans_and_scrubs_leave_only_strict_tombstones() -> Non
         )
 
     connections = _Table(connection_pages)
-    page = _contract(websocket_repo, "scan_account_connections")(
+    connection_page = _contract(websocket_repo, "scan_account_connections")(
         STUDENT_ID, table=connections, maximum_pages=1
     )
-    for item in page.items:
+    for item in connection_page.items:
         _contract(websocket_repo, "revoke_account_connection")(
             item,
             owner_id=STUDENT_ID,
@@ -352,14 +361,21 @@ def test_strong_paginated_scans_and_scrubs_leave_only_strict_tombstones() -> Non
             table=connections,
         )
 
-    assert all(call.get("ConsistentRead") is True and "IndexName" not in call for call in calls)
-    allowlist = _contract(notification_repo, "NOTIFICATION_TOMBSTONE_ALLOWLIST")
-    assert all(
-        set(item) <= allowlist
-        for item in tombstones
-        if "deleted_connection" not in item
+    scans = [request for operation, request in notifications.requests if operation == "scan"]
+    assert scans and all(
+        call.get("ConsistentRead") is True and "IndexName" not in call
+        for call in (*scans, *calls)
     )
-    assert "private canary" not in repr(tombstones)
+    tombstones = [
+        row
+        for row in notifications.rows.values()
+        if str(row.get("entity_type")).endswith("_deletion_tombstone")
+    ]
+    assert len(tombstones) == 2
+    allowlist = _contract(notification_repo, "NOTIFICATION_TOMBSTONE_ALLOWLIST")
+    assert all(set(item) <= allowlist for item in tombstones)
+    assert deleted_connections == [{"deleted_connection": True}]
+    assert "private canary" not in repr(notifications.rows)
     assert "private-endpoint" not in repr(tombstones)
 
 

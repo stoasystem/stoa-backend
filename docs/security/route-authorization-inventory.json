@@ -1205,22 +1205,6 @@
         "action": "read",
         "capability": null,
         "purpose": "notification_self_service",
-        "resource_type": "notification_digest"
-      }
-    ],
-    "classification": "authorized",
-    "family": "notifications",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/notifications/digest-preview",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": null,
-        "purpose": "notification_self_service",
         "resource_type": "notification_preference"
       }
     ],
@@ -3695,22 +3679,6 @@
     "method": "POST",
     "path": "/monitoring/frontend-errors",
     "sensitive": false
-  },
-  {
-    "authorization": [
-      {
-        "action": "create",
-        "capability": null,
-        "purpose": "notification_self_service",
-        "resource_type": "notification_digest"
-      }
-    ],
-    "classification": "authorized",
-    "family": "notifications",
-    "identifiers": [],
-    "method": "POST",
-    "path": "/notifications/digest-send",
-    "sensitive": true
   },
   {
     "authorization": [],

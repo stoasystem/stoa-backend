@@ -16,8 +16,6 @@ from pathlib import Path
 from stoa.services import (
     email_unsubscribe,
     locale_service,
-    message_catalog,
-    notification_service,
     notify_service,
     password_change_code_service,
     report_service,
@@ -64,14 +62,6 @@ def emails(locale: str) -> dict[str, tuple[str, str]]:
         minutes=10,
         locale=locale,
     )
-    digest_html = notification_service._digest_email_html(
-        [
-            {"title": "Neue Antwort einer Lehrperson", "summary": "Ihre Frage zu Brüchen wurde beantwortet."},
-            {"title": "Wochenbericht bereit", "summary": "Der Bericht für Lea ist da."},
-        ],
-        locale,
-        SAMPLE_USER,
-    )
     # The unsubscribe line is added at send time, as `send_fenced_weekly_report_email` does.
     weekly_html = email_unsubscribe.with_footer(
         _weekly_report(locale),
@@ -82,10 +72,6 @@ def emails(locale: str) -> dict[str, tuple[str, str]]:
         "teacher_activation": (teacher.subject, teacher.html),
         "password_code": (code.subject, code.html),
         "dispatch_reminder": dispatch,
-        "notification_digest": (
-            message_catalog.text("email.notification_digest.subject", locale),
-            digest_html,
-        ),
         "weekly_report": (notify_service.weekly_report_subject("Lea", locale), weekly_html),
     }
 
