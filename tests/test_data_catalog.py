@@ -140,6 +140,37 @@ def test_untyped_kinds_are_recognized_by_key_and_never_shadow_a_type():
     assert data_catalog.data_type_of({**tagged, "SK": "OTHER"}) is None
 
 
+def test_rows_that_belong_to_no_account_are_known_and_name_nobody():
+    """Shared rows with no `entity_type` are listed, so only a new kind is unknown (#397)."""
+    shared = {
+        "curriculum_content": [
+            {"PK": "PRACTICE", "SK": "CHALLENGE#l1#c1", "lesson_id": "l1"},
+            {"PK": "PRACTICE", "SK": "LESSON#l1"},
+            {"PK": "PRACTICE", "SK": "CURRICULUM_SEED"},
+        ],
+        "listing_backfill_marker": [{"PK": "LISTING_BACKFILL", "SK": "LISTING#teachers"}],
+        "upload_part": [{"PK": "UPLOAD#u1", "SK": "PART#000001", "upload_id": "u1"}],
+    }
+    for name, rows in shared.items():
+        for row in rows:
+            entry = data_catalog.data_type_of(row)
+            assert entry is not None and entry.name == name, row
+            assert entry.accounts == () and entry.deletion is None
+            assert data_catalog.mentions({**row, "student_id": PROBE, "owner_id": PROBE}) == {}
+
+
+def test_the_shared_curriculum_partition_is_matched_whole():
+    """`PRACTICE` is one partition; a student's `PRACTICE#...` rows are still theirs."""
+    theirs = {"PK": f"PRACTICE#{PROBE}", "SK": "LESSON#l1", "student_id": PROBE}
+    assert data_catalog.data_type_of(theirs).name == "legacy_untyped_practice"
+    assert data_catalog.mentions(theirs) == {PROBE: OWNER}
+    attempt = {"PK": "PRACTICE_ATTEMPT#a1", "SK": "META", "student_id": PROBE}
+    assert data_catalog.mentions(attempt) == {PROBE: OWNER}
+    # Neither is the other two shared kinds' business.
+    assert data_catalog.data_type_of({"PK": "LISTING_BACKFILL#x", "SK": "LISTING#t"}) is None
+    assert data_catalog.data_type_of({"PK": "UPLOAD#u1", "SK": "META"}) is None
+
+
 def test_every_type_that_points_to_an_account_says_what_its_deletion_does():
     """One action for each role a type's pointers declare, none for the others (#639).
 

@@ -213,10 +213,16 @@ class KeyShape:
     pk_prefix: str
     sk: str | None = None  # the whole SK, when one value identifies the kind
     sk_prefix: str | None = None
+    whole_pk: bool = False
+    """`pk_prefix` is the whole PK: one shared partition (`PRACTICE`), which a
+    prefix would confuse with every partition whose name starts the same way
+    (`PRACTICE#{id}`, `PRACTICE_ATTEMPT#...`)."""
 
     def matches(self, row: Mapping[str, object]) -> bool:
         pk, sk = row.get("PK"), row.get("SK")
         if not isinstance(pk, str) or not pk.startswith(self.pk_prefix):
+            return False
+        if self.whole_pk and pk != self.pk_prefix:
             return False
         if not isinstance(sk, str):
             return False
@@ -1080,6 +1086,38 @@ UNTYPED: tuple[DataType, ...] = (
             "parent_id",
         ),
         untyped_key=KeyShape("REPORT#", sk="SUMMARY"),
+    ),
+    # Rows with no `entity_type` that belong to no account (#397). They are
+    # listed so that the registry sweep's count of rows unknown to the catalog
+    # is zero on an ordinary day and a kind nobody has declared stands out;
+    # unlisted, the curriculum alone put some eleven thousand rows in it.
+    #
+    # The curriculum every student reads, in the one shared partition
+    # `PRACTICE`: subjects, units, topics, lessons, challenges and the seed
+    # marker. Content only - no row there holds an account.
+    DataType(
+        "curriculum_content",
+        _repo("curriculum_ops_repo"),
+        (),
+        untyped_key=KeyShape("PRACTICE", whole_pk=True),
+    ),
+    # `LISTING_BACKFILL/LISTING#{listing}`: that a listing index has been
+    # filled, and when.
+    DataType(
+        "listing_backfill_marker",
+        "stoa.db.listing_index",
+        (),
+        untyped_key=KeyShape("LISTING_BACKFILL", sk_prefix="LISTING#", whole_pk=True),
+    ),
+    # `UPLOAD#{id}/PART#{n}`: one part of a multipart upload - a number, a
+    # checksum, a length. The account is on the upload's own row
+    # (`upload_intent`), and cleaning that upload deletes its parts
+    # (`uploads._store`), which is how an account's deletion reaches them.
+    DataType(
+        "upload_part",
+        "stoa.services.uploads._store",
+        (),
+        untyped_key=KeyShape("UPLOAD#", sk_prefix="PART#"),
     ),
 )
 
