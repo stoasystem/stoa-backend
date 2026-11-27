@@ -606,6 +606,7 @@ def test_report_repo_list_reports_for_admin_uses_bounded_scan_without_parent(mon
         student_id="child-1",
         limit=11,
         last_key={"PK": "REPORT#0", "SK": "SUMMARY"},
+        indexed=False,
     )
 
     assert result["Items"][0]["student_id"] == "child-1"
@@ -616,6 +617,40 @@ def test_report_repo_list_reports_for_admin_uses_bounded_scan_without_parent(mon
             "ExclusiveStartKey": {"PK": "REPORT#0", "SK": "SUMMARY"},
         }
     ]
+
+
+def test_report_repo_list_reports_for_admin_reads_the_listing_once_backfilled():
+    class FakeQueryTable:
+        def __init__(self):
+            self.calls = []
+
+        def query(self, **kwargs):
+            self.calls.append(kwargs)
+            return {"Items": [_report()]}
+
+    table = FakeQueryTable()
+    db_table.install(table)
+
+    result = report_repo.list_reports_for_admin(status="email_failed", limit=200, indexed=True)
+
+    assert result["Items"][0]["student_id"] == "child-1"
+    [call] = table.calls
+    assert call["IndexName"] == "GSI-Listing"
+    assert call["ScanIndexForward"] is False
+    assert call["Limit"] == 200
+    assert "FilterExpression" in call
+
+
+def test_report_summary_rows_carry_their_listing_keys():
+    row = {"PK": "REPORT#r1", "SK": "SUMMARY", "created_at": "2026-11-20T08:00:00Z"}
+    assert report_repo.listing_fields(row) == {
+        "listing": report_repo.REPORT_LISTING,
+        "listed_at": "2026-11-20T08:00:00Z",
+    }
+    assert report_repo.listing_fields({**row, "privacy_deleted": True}) == {}
+    job = {"PK": "REPORT_RECOVERY_JOB#j1", "SK": "SUMMARY", "created_at": "2026-11-20T08:00:00Z"}
+    assert report_repo.listing_fields(job)["listing"] == report_repo.RECOVERY_JOB_LISTING
+    assert report_repo.listing_fields({**row, "SK": "TARGET#00000#x"}) == {}
 
 
 def test_report_repo_update_report_status_updates_summary_item(monkeypatch):

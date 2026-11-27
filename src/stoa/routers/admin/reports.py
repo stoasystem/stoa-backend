@@ -4,6 +4,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, Query, Request
 
+from stoa.db import listing_index
 from stoa.db.repositories import report_repo
 from stoa.security.admin_authorization import (
     AdminTargetProvider,
@@ -64,17 +65,24 @@ async def list_report_operations(
     actor: Actor = Depends(admin_operation),
 ):
     """List report operation metadata for admin triage."""
-    scope = _admin_reports_scope(parent_id)
-    last_key = (
-        _start_key(
+    indexed = False if parent_id else report_repo.reports_indexed()
+    scope = report_repo.ADMIN_REPORTS_INDEX_SCOPE if indexed else _admin_reports_scope(parent_id)
+    if parent_id:
+        last_key = _start_key(
             next_token,
             scope,
             key=ADMIN_REPORTS_PARENT_KEY,
             within=lambda key: key["parent_id"] == parent_id,
         )
-        if parent_id
-        else _start_key(next_token, scope)
-    )
+    elif indexed:
+        last_key = _start_key(
+            next_token,
+            scope,
+            key=listing_index.INDEX_KEY,
+            within=lambda key: key["listing"] == report_repo.REPORT_LISTING,
+        )
+    else:
+        last_key = _start_key(next_token, scope)
 
     result = report_repo.list_reports_for_admin(
         status=status,
@@ -83,13 +91,14 @@ async def list_report_operations(
         student_id=student_id,
         limit=limit,
         last_key=last_key,
+        indexed=indexed,
     )
     items = [_report_operation_response(report) for report in _admin_items(result)]
     return ReportOperationListResponse(
         items=items,
         count=len(items),
         next_token=_next_token(scope, result),
-        access_pattern="parent_gsi" if parent_id else "bounded_scan",
+        access_pattern="parent_gsi" if parent_id else ("listing_index" if indexed else "bounded_scan"),
     )
 
 

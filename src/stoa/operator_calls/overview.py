@@ -110,9 +110,13 @@ def report_email_stats(arguments: ReportEmailStatsArguments) -> Outcome:
     reports = 0
     last_key: dict[str, Any] | None = None
     complete = False
+    indexed = report_repo.reports_indexed()
     for _page in range(REPORT_PAGE_BUDGET):
         page = report_repo.list_reports_for_admin(
-            week_start=arguments.weekStart, limit=REPORT_PAGE_SIZE, last_key=last_key
+            week_start=arguments.weekStart,
+            limit=REPORT_PAGE_SIZE,
+            last_key=last_key,
+            indexed=indexed,
         )
         for report in page.get("Items") or []:
             reports += 1

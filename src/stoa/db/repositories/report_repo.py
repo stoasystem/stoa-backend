@@ -8,7 +8,7 @@ from hashlib import sha256
 from typing import Literal, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
-from stoa.db import data_catalog
+from stoa.db import data_catalog, listing_index
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -350,6 +350,40 @@ class ReportPrivatePage:
     unresolved: int = 0
 
 
+REPORT_LISTING = "weekly_report"
+RECOVERY_JOB_LISTING = "report_recovery_job"
+ADMIN_REPORTS_INDEX_SCOPE = "admin_reports_listing"
+
+
+def listing_fields(item: Mapping[str, object]) -> dict[str, str]:
+    """The GSI-Listing keys of a report summary or a recovery job summary (card 135)."""
+    pk = item.get("PK")
+    created_at = item.get("created_at")
+    if item.get("SK") != "SUMMARY" or not isinstance(pk, str) or item.get("privacy_deleted") is True:
+        return {}
+    if not isinstance(created_at, str) or not created_at:
+        return {}
+    if pk.startswith("REPORT#"):
+        return {"listing": REPORT_LISTING, "listed_at": created_at}
+    if pk.startswith("REPORT_RECOVERY_JOB#"):
+        return {"listing": RECOVERY_JOB_LISTING, "listed_at": created_at}
+    return {}
+
+
+def _summary_row(item: ReportItem) -> ReportItem:
+    row: ReportItem = {"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item}
+    return {**row, **listing_fields(row)}
+
+
+def reports_indexed(table: object | None = None) -> bool:
+    """Whether the admin report reads use GSI-Listing; until the backfill, the scan."""
+    return listing_index.backfilled(REPORT_LISTING, table=table)
+
+
+def recovery_jobs_indexed(table: object | None = None) -> bool:
+    return listing_index.backfilled(RECOVERY_JOB_LISTING, table=table)
+
+
 def put_report(item: ReportItem) -> None:
     table = db_table.table()
     owner_id = item.get("student_id")
@@ -360,7 +394,7 @@ def put_report(item: ReportItem) -> None:
             [
                 {
                     "Put": {
-                        "Item": {"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item},
+                        "Item": _summary_row(item),
                         # This completes the row try_claim_report_generation wrote,
                         # so the row already exists. Demanding its absence would
                         # reject every generation the claim just authorized. What
@@ -381,7 +415,7 @@ def put_report(item: ReportItem) -> None:
             table=table,
         )
         return
-    _put_item(table, Item={"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item})
+    _put_item(table, Item=_summary_row(item))
 
 
 def try_claim_report_generation(item: ReportItem) -> bool:
@@ -395,7 +429,7 @@ def try_claim_report_generation(item: ReportItem) -> bool:
                 [
                     {
                         "Put": {
-                            "Item": {"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item},
+                            "Item": _summary_row(item),
                             "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
                         }
                     },
@@ -413,7 +447,7 @@ def try_claim_report_generation(item: ReportItem) -> bool:
     try:
         db_table.put(
             table=table,
-            Item={"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item},
+            Item=_summary_row(item),
             ConditionExpression="attribute_not_exists(PK)",
         )
     except db_table.WriteRefused:
@@ -1194,6 +1228,7 @@ def put_recovery_job(job: ReportItem, targets: list[ReportItem]) -> None:
         "entity_type": "REPORT_RECOVERY_JOB",
         **job,
     }
+    summary.update(listing_fields(summary))
     rows = [
         {
             "PK": f"REPORT_RECOVERY_JOB#{job['job_id']}",
@@ -1227,8 +1262,20 @@ def get_recovery_job(job_id: str) -> ReportItem | None:
 
 
 def list_recovery_jobs(
-    *, limit: int = 50, last_key: ReportItem | None = None
+    *, limit: int = 50, last_key: ReportItem | None = None, indexed: bool | None = None
 ) -> ReportItem:
+    if indexed is None:
+        indexed = recovery_jobs_indexed()
+    if indexed:
+        return _page(
+            "query",
+            last_key,
+            key=listing_index.INDEX_KEY,
+            IndexName=listing_index.INDEX,
+            KeyConditionExpression=Key("listing").eq(RECOVERY_JOB_LISTING),
+            Limit=limit,
+            ScanIndexForward=False,
+        )
     kwargs = {
         "FilterExpression": Attr("PK").begins_with("REPORT_RECOVERY_JOB#") & Attr("SK").eq("SUMMARY"),
         "Limit": limit,
@@ -1501,12 +1548,14 @@ def list_reports_for_admin(
     student_id: str | None = None,
     limit: int = 50,
     last_key: ReportItem | None = None,
+    indexed: bool | None = None,
 ) -> ReportItem:
     """List report summary rows for admin operations.
 
     Parent-filtered access uses the existing parent/week GSI where possible.
-    Cross-parent admin access uses a bounded scan for pilot volume; callers must
-    pass a strict limit and preserve LastEvaluatedKey pagination.
+    Cross-parent access reads GSI-Listing, newest first, once the backfill has
+    marked it complete (`indexed`); until then a bounded scan. A caller that
+    pages keeps the `indexed` it started with, since the two cursors differ.
     """
     if parent_id:
         return _list_reports_for_admin_parent_query(
@@ -1517,6 +1566,21 @@ def list_reports_for_admin(
             limit=limit,
             last_key=last_key,
         )
+    if indexed is None:
+        indexed = reports_indexed()
+    if indexed:
+        kwargs: dict[str, object] = {
+            "IndexName": listing_index.INDEX,
+            "KeyConditionExpression": Key("listing").eq(REPORT_LISTING),
+            "Limit": limit,
+            "ScanIndexForward": False,
+        }
+        filter_expr = _admin_report_filter_expression(
+            status=status, week_start=week_start, student_id=student_id
+        )
+        if filter_expr is not None:
+            kwargs["FilterExpression"] = filter_expr
+        return _page("query", last_key, key=listing_index.INDEX_KEY, **kwargs)
     return _list_reports_for_admin_scan(
         status=status,
         week_start=week_start,

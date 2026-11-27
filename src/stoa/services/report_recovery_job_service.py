@@ -31,6 +31,8 @@ from stoa.services.report_recovery_errors import (
 
 MAX_TARGETS = 25
 MAX_SCAN_PAGES = 5
+# Rows evaluated per page; the status filter drops most of them (card 135).
+TARGET_PAGE_SIZE = 200
 FAILURE_THRESHOLD = 5
 TIME_REMAINING_FLOOR_MS = 30_000
 RESEND_JOB_TYPE = "resend_email"
@@ -759,14 +761,16 @@ def _collect_targets(*, job_type: str, filters: dict[str, Any], max_targets: int
     targets: list[dict[str, Any]] = []
     last_key = None
     pages = 0
+    indexed = report_repo.reports_indexed()
     while pages < MAX_SCAN_PAGES and len(targets) < max_targets:
         result = report_repo.list_reports_for_admin(
             status=filters.get("status"),
             week_start=filters.get("week_start"),
             parent_id=filters.get("parent_id"),
             student_id=filters.get("student_id"),
-            limit=max_targets,
+            limit=TARGET_PAGE_SIZE,
             last_key=last_key,
+            indexed=indexed,
         )
         pages += 1
         for report in _required_record_list(result.get("Items"), "Recovery report page is incomplete"):
