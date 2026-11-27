@@ -374,53 +374,6 @@ def test_a_converted_draft_goes_through_review_and_judges_its_listed_answers(
     assert not answer_judging.judge_challenge("24", challenge)
 
 
-def _named(lesson_id: str, locale: str) -> str | None:
-    """What a reader in `locale` calls a lesson stored with a German title."""
-    from stoa.services import curriculum_names
-
-    row = {"lesson_id": lesson_id, "title": "Deutscher Titel"}
-    return curriculum_names.for_reader(locale, rows=[row]).name(lesson_id)
-
-
-@pytest.mark.parametrize(
-    "lesson_id",
-    [
-        # The lessons batch 1 of the fractions bank (#360) creates under brueche-u2: one per
-        # knowledge card, the ten-exercise card in two parts.
-        f"{converter.lesson_id_for('KP-BRU-ANTEILWERT')}-1",
-        f"{converter.lesson_id_for('KP-BRU-ANTEILWERT')}-2",
-        converter.lesson_id_for("KP-BRU-GANZES"),
-        converter.lesson_id_for("KP-BRU-ANTEILSBRUCH"),
-        converter.lesson_id_for("KP-BRU-ADDITION"),
-        converter.lesson_id_for("KP-BRU-RECHENREIHENFOLGE"),
-    ],
-)
-def test_the_fractions_batch_lessons_have_their_titles_in_every_locale(lesson_id: str) -> None:
-    titles = {
-        locale: _named(lesson_id, locale) for locale in ("en", "fr", "it")
-    }
-    assert "Deutscher Titel" not in titles.values()
-    assert len(set(titles.values())) == 3
-
-
-def test_the_zap1_adaptation_lessons_have_their_titles_in_every_locale() -> None:
-    """The 48 lessons the ZAP1 adaptations (#423) create under the ZAP stars."""
-    from stoa.services import curriculum_translations
-
-    lesson_ids = [
-        lesson_id
-        for lesson_id in curriculum_translations.TITLE_TRANSLATIONS
-        if lesson_id.startswith("zap1-")
-    ]
-    assert len(lesson_ids) == 48
-    for lesson_id in lesson_ids:
-        titles = {
-            locale: _named(lesson_id, locale) for locale in ("en", "fr", "it")
-        }
-        assert "Deutscher Titel" not in titles.values(), lesson_id
-        assert all(title and title.strip() for title in titles.values()), lesson_id
-
-
 def test_a_translated_draft_publishes_and_judges_in_its_locale(table: FakeTable) -> None:
     question = _question(
         "EX-D0001-1A", correct_feedback="Richtig!", translations={"fr": _french()}

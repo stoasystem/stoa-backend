@@ -4,9 +4,9 @@ A topic, unit or lesson row holds `titles` - German, English, French, Italian -
 with the German one also its `title`. The writers give it: the seed, the
 knowledge-base import (`test_knowledge_base_import.py`), and the curriculum
 authoring and migrations, whose publish puts a lesson's names on its row.
-`curriculum_names` names content by them before the translation table, which
-holds the names of the rows written before them until the backfill
-(`test_backfill_content_titles.py`).
+`curriculum_names` names content by them alone: the rows written before them
+were given theirs by a backfill, and the translation table's content entries
+are gone.
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ from stoa.services import (
     curriculum_names,
     curriculum_ops_service,
     curriculum_service,
-    curriculum_translations,
     knowledge_base_catalog,
 )
 
@@ -48,7 +47,7 @@ def test_normalized_titles_keeps_each_languages_name_and_german_is_the_title() -
     assert curriculum_names.missing_locales({"de": "Brüche", "it": "Frazioni"}) == ["en", "fr"]
 
 
-def test_a_rows_own_name_comes_before_the_translation_table() -> None:
+def test_a_row_is_named_by_its_own_names_and_in_german_where_it_has_none() -> None:
     row = {
         "unit_id": "brueche-u1",
         "topic_id": "brueche",
@@ -60,12 +59,8 @@ def test_a_rows_own_name_comes_before_the_translation_table() -> None:
         return curriculum_names.for_reader(locale, rows=[row]).name("brueche-u1")
 
     assert name("en") == "Fractions, understood"
-    # A language the row does not name: the table, until the backfill names it.
-    assert name("fr") == curriculum_translations.TITLE_TRANSLATIONS["brueche-u1"]["fr"]
+    assert name("fr") == "Brüche verstehen"
     assert name("de") == "Brüche verstehen"
-    # Without the table, the row's German name.
-    unknown = {**row, "unit_id": "new-unit", "titles": {"de": "Neu", "en": "New"}}
-    assert curriculum_names.for_reader("it", rows=[unknown]).name("new-unit") == "Neu"
 
 
 def test_two_rows_of_one_lesson_each_give_the_languages_the_other_lacks() -> None:
@@ -104,7 +99,7 @@ def test_every_seeded_content_row_carries_the_names_readers_are_shown() -> None:
         content_id = row.get("lesson_id") or row.get("unit_id") or row["topic_id"]
         expected = knowledge_base.get(content_id) or {
             "de": row["title"],
-            **curriculum_translations.TITLE_TRANSLATIONS[content_id],
+            **seed_practice.TRANSLATED_TITLES[content_id],
         }
         assert row["titles"] == expected, content_id
         assert row["titles"]["de"] == row["title"], content_id

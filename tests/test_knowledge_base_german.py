@@ -245,7 +245,10 @@ def test_the_committed_german_stars_are_the_written_ones() -> None:
         assert set(unit["prerequisites"]) <= set(by_id)
     assert knowledge_base_catalog.subject_of_topic("deutsch-literatur") == "german"
     assert "deutsch-saetze-komma" in knowledge_base_catalog.unit_choices("german")
-    assert knowledge_base_catalog.title_translations()["deutsch-rechtschreibung"]["it"] == "Ortografia"
+    named = {row.get("unit_id") or row["topic_id"]: row["titles"] for row in [
+        *knowledge_base_catalog.topics(), *knowledge_base_catalog.units()
+    ]}
+    assert named["deutsch-rechtschreibung"]["it"] == "Ortografia"
 
 
 def test_the_bare_live_flag_writes_german_live_with_its_subject_row() -> None:

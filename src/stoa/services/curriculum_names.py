@@ -14,13 +14,11 @@ asks it two things:
 
 Where the names come from: a content row carries its own, `titles` - German,
 English, French and Italian, the shape `normalized_titles` gives (#661) - with
-the German one also in its `title` for the readers that read only that. Until
-the rows written before #661 have theirs (`scripts/backfill_content_titles.py`),
-a language a row does not name is still looked up in
-`curriculum_translations.TITLE_TRANSLATIONS`, and German falls back to the
-stored `title`. A skill point has no row: `SKILL_TITLES` and its translations
-name it. Only this module reads them to name content;
-`tests/test_curriculum_names.py` keeps it that way.
+the German one also in its `title` for the readers that read only that. A
+language a row does not name is shown in German. A skill point has no row:
+`curriculum_translations.SKILL_TITLES` and `SKILL_TRANSLATIONS` name it, and
+`SUBJECT_TRANSLATIONS` a subject until #662. Only this module reads them to
+name content; `tests/test_curriculum_names.py` keeps it that way.
 """
 
 from __future__ import annotations
@@ -118,8 +116,8 @@ class Names:
 
         The catalog's title where the catalog has it, as it is already in the
         reader's language; else the name its row carries in that language;
-        else the translation into that language; else the row's German name,
-        then a skill point's own name.
+        else a skill point's or a subject's translation into that language;
+        else the row's German name, then a skill point's own name.
         """
         if not isinstance(content_id, str) or not content_id:
             return None
@@ -131,9 +129,7 @@ class Names:
         if own is not None:
             return own
         if self._locale != "de":
-            translated = curriculum_translations.TITLE_TRANSLATIONS.get(content_id, {}).get(
-                self._locale
-            )
+            translated = _translations(content_id).get(self._locale)
             if translated is not None:
                 return translated
         return stored.get("de") or curriculum_translations.SKILL_TITLES.get(content_id)
@@ -192,7 +188,7 @@ class _Spellings:
         units, topics = _by_id(catalog, "units"), _by_id(catalog, "topics")
 
         def every_name(content_id: str) -> tuple[str, ...]:
-            """What a content row calls itself in any language, and its translations."""
+            """What a content row calls itself in any language."""
             return (*stored.get(content_id, {}).values(), *_every_translation(content_id))
 
         known = cls(
@@ -271,9 +267,19 @@ def _is_name(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def _translations(content_id: str) -> Mapping[str, str]:
+    """A skill point's or a subject's English, French and Italian names; a
+    topic, unit or lesson has its own on its row."""
+    return (
+        curriculum_translations.SKILL_TRANSLATIONS.get(content_id)
+        or curriculum_translations.SUBJECT_TRANSLATIONS.get(content_id)
+        or {}
+    )
+
+
 def _every_translation(content_id: str) -> tuple[str, ...]:
-    """A content id's translated titles: English, French and Italian."""
-    return tuple(curriculum_translations.TITLE_TRANSLATIONS.get(content_id, {}).values())
+    """A skill point's or a subject's translated names: English, French and Italian."""
+    return tuple(_translations(content_id).values())
 
 
 def _without_aside(title: str | None) -> str | None:

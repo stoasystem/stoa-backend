@@ -40,13 +40,18 @@ CATALOG = {
 # ── name ────────────────────────────────────────────────────────────────────
 
 
-def test_a_stored_row_is_named_by_its_title_in_german_and_by_its_translation_elsewhere() -> None:
-    row = {"lesson_id": "brueche-l1", "unit_id": "brueche-u1", "topic_id": "brueche", "title": "Brüche lesen"}
-    translated = curriculum_translations.TITLE_TRANSLATIONS["brueche-l1"]
+def test_a_stored_row_is_named_by_the_names_it_carries() -> None:
+    titles = {"de": "Brüche lesen", "en": "Reading fractions", "fr": "Lire", "it": "Leggere"}
+    row = {
+        "lesson_id": "brueche-l1",
+        "unit_id": "brueche-u1",
+        "topic_id": "brueche",
+        "title": "Brüche lesen",
+        "titles": titles,
+    }
 
-    assert curriculum_names.for_reader("de", rows=[row]).name("brueche-l1") == "Brüche lesen"
-    for locale in ("en", "fr", "it"):
-        assert curriculum_names.for_reader(locale, rows=[row]).name("brueche-l1") == translated[locale]
+    for locale, name in titles.items():
+        assert curriculum_names.for_reader(locale, rows=[row]).name("brueche-l1") == name
     # A lesson row is named under its own id, not the unit or topic it carries.
     assert curriculum_names.for_reader("de", rows=[row]).name("brueche-u1") is None
 
@@ -69,7 +74,7 @@ def test_the_catalog_title_is_the_name_it_shows() -> None:
 def test_a_skill_point_is_named_by_its_own_name_and_its_translation() -> None:
     assert curriculum_names.for_reader("de").name("brueche-kuerzen") == "Brüche kürzen"
     assert curriculum_names.for_reader("en").name("brueche-kuerzen") == (
-        curriculum_translations.TITLE_TRANSLATIONS["brueche-kuerzen"]["en"]
+        curriculum_translations.SKILL_TRANSLATIONS["brueche-kuerzen"]["en"]
     )
 
 
@@ -113,9 +118,16 @@ def test_every_spelling_of_a_knowledge_point_resolves_to_its_unit(spelling: str)
 
 
 def test_a_translated_title_resolves_whatever_the_reader_reads() -> None:
-    english = curriculum_translations.TITLE_TRANSLATIONS["brueche-u1"]["en"]
+    row = {
+        "unit_id": "brueche-u1",
+        "title": "Brüche verstehen",
+        "titles": {"de": "Brüche verstehen", "en": "Understanding fractions"},
+    }
 
-    assert curriculum_names.for_reader("fr", catalog=CATALOG).resolve(english) == "brueche-u1"
+    names = curriculum_names.for_reader("fr", catalog=CATALOG, rows=[row])
+    assert names.resolve("Understanding fractions") == "brueche-u1"
+    # The catalog alone shows one language; the rows tell the others.
+    assert curriculum_names.for_reader("fr", catalog=CATALOG).resolve("Understanding fractions") is None
 
 
 def test_a_topic_with_several_units_stays_the_topic() -> None:
@@ -148,8 +160,18 @@ def test_the_ids_a_row_recorded_count_before_its_spellings_when_the_catalog_has_
 #: The modules that define the name tables; they hold them, they do not read
 #: them to name anything.
 _TABLE_OWNERS = {"services/curriculum_translations.py", "services/knowledge_base_catalog.py"}
-_TABLES = {"TITLE_TRANSLATIONS", "SKILL_TRANSLATIONS", "SKILL_TITLES", "title_translations"}
-_RETIRED = {"translated_title", "skill_title", "TopicNames", "_every_title", "_subject_display_label"}
+_TABLES = {"SUBJECT_TRANSLATIONS", "SKILL_TRANSLATIONS", "SKILL_TITLES"}
+#: Gone: the old ways of naming content (#660), and the table that named topics,
+#: units and lessons before their rows did (#661).
+_RETIRED = {
+    "translated_title",
+    "skill_title",
+    "TopicNames",
+    "_every_title",
+    "_subject_display_label",
+    "TITLE_TRANSLATIONS",
+    "title_translations",
+}
 
 #: Every read of a `title` or `titles` in src/stoa outside curriculum_names, by
 #: module and function, and why it does not name a topic, unit, lesson or skill
@@ -187,7 +209,6 @@ TITLE_READS: dict[tuple[str, str], str] = {
     ("services/curriculum_ops_service.py", "lesson_missing_locales"): _WRITER,
     ("services/curriculum_ops_service.py", "named_lesson"): _WRITER,
     ("services/curriculum_translations.py", "<module>"): _SOURCE,
-    ("services/knowledge_base_catalog.py", "title_translations"): _SOURCE,
     ("services/knowledge_base_catalog.py", "unit_choices"): _SOURCE,
     ("services/knowledge_map_service.py", "_practice_sets"): _CATALOG,
     ("services/knowledge_map_service.py", "build_map"): _CATALOG,
