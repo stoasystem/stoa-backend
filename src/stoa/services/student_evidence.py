@@ -833,6 +833,29 @@ class StudentEvidence:
         )
 
     @property
+    def last_answered_right(self) -> Mapping[str, datetime]:
+        """When each exercise was last answered right, by any answer (#673).
+
+        Self-reported answers count here: this says whether a student went back
+        to an exercise they got wrong and got it right, not whether a star is
+        earned. From every answer, as `mistakes`; one whose moment cannot be
+        read is left out.
+        """
+
+        def build() -> Mapping[str, datetime]:
+            latest: dict[str, datetime] = {}
+            for attempt in self._rows("attempts"):
+                exercise = _attempt_exercise(attempt)
+                moment = _moment(attempt.get("created_at") or attempt.get("createdAt"))
+                if attempt.get("correct") is not True or not exercise or moment is None:
+                    continue
+                if exercise not in latest or moment > latest[exercise]:
+                    latest[exercise] = moment
+            return MappingProxyType(latest)
+
+        return self._once("last_answered_right", build)
+
+    @property
     def recent_error_causes(self) -> tuple[ErrorCauseCount, ...]:
         """Why the recent wrong answers were wrong, most common first (#452).
 

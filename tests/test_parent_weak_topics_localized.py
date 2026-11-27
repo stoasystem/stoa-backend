@@ -12,6 +12,7 @@ catalog's title in the language the request asked for.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -108,15 +109,29 @@ MISTAKES = [
 ]
 
 
+#: When the profile is read: every row above is within its 90 days (#673).
+READ_AT = datetime(2026, 11, 10, 9, 0, tzinfo=UTC)
+
+
 def _profile(locale: str, **overrides: Any) -> dict[str, Any]:
+    evidence = fake_evidence.evidence(
+        CHILD,
+        catalog=_catalog(locale),
+        locale=locale,
+        attempts=overrides.get("mistakes", MISTAKES),
+        now=READ_AT,
+    )
     return learning_profile_service.build_learning_profile(
         student_id=CHILD,
         questions=overrides.get("questions", QUESTIONS),
-        mistakes=overrides.get("mistakes", MISTAKES),
+        evidence=evidence,
         asked=overrides.get("asked", []),
-        catalog=_catalog(locale),
         locale=locale,
     )
+
+
+def _mistake(topic_id: str) -> dict[str, Any]:
+    return {"subject_id": "mathematics", "topic_id": topic_id, "created_at": "2026-11-06T09:00:00+00:00"}
 
 
 def _topics(profile: dict[str, Any]) -> dict[tuple[str, str], int]:
@@ -148,25 +163,30 @@ def test_a_merged_topic_keeps_every_piece_of_its_evidence() -> None:
 
 
 def test_a_bare_topic_id_is_named_by_its_topic_never_shown_as_the_id() -> None:
-    profile = _profile("de", questions=[], mistakes=[{"subject_id": "mathematics", "topic_id": "brueche"}])
+    profile = _profile("de", questions=[], mistakes=[_mistake("brueche")])
 
     assert _topics(profile) == {("brueche", "Brüche"): 1}
 
 
 def test_a_topic_with_one_unit_folds_into_that_unit() -> None:
-    profile = _profile(
-        "de", questions=[], mistakes=[{"subject_id": "mathematics", "topic_id": "gleichungen"}]
-    )
+    profile = _profile("de", questions=[], mistakes=[_mistake("gleichungen")])
 
     assert _topics(profile) == {("gleichungen-u1", "Einfache Gleichungen lösen"): 1}
 
 
 def test_a_name_the_curriculum_does_not_know_is_kept_as_written() -> None:
-    asked = [{"subject": "math", "knowledge_points": ["Kopfrechnen mit Zehnerpotenzen"], "created_at": "x"}]
+    asked = [
+        {
+            "subject": "math",
+            "knowledge_points": ["Kopfrechnen mit Zehnerpotenzen"],
+            "created_at": "2026-11-06T09:00:00+00:00",
+        }
+    ]
 
     profile = _profile("de", questions=[], mistakes=[], asked=asked)
 
-    assert _topics(profile) == {("kopfrechnen-mit-zehnerpotenzen", "Kopfrechnen mit Zehnerpotenzen"): 1}
+    # Compared without case, shown as written (#673).
+    assert _topics(profile) == {("kopfrechnen mit zehnerpotenzen", "Kopfrechnen mit Zehnerpotenzen"): 1}
 
 
 # ── Through the parent's route ──────────────────────────────────────────────

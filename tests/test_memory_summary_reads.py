@@ -12,7 +12,16 @@ The exercises are now read once per summary and grouped by subject and topic
 in memory; the assignments are read from `GSI-StudentId`, which holds every
 assignment row (each carries `student_id` and `created_at`). What the reads
 return is unchanged: the responses below were recorded from origin/main
-`c1cc6edb` on the same fixture and are compared field for field.
+`c1cc6edb` on the same fixture and are compared field for field. The weak
+topics (`weakTopics`, the parent's `weakAreas`) were recorded again when they
+began to come from `weak_topics` (#673): named as the catalog names them, each
+with its `score`; the recommendations stayed as main gave them.
+
+Since #673 the weak topics are resolved against the catalog, which a container
+keeps (`curriculum_cache`): the table here carries the catalog stamp the seed
+writes in production, and each summary is read in a container that has not
+read the curriculum yet, so it loads the one stored copy (#669) rather than
+the partition.
 """
 
 from __future__ import annotations
@@ -36,7 +45,7 @@ from stoa.db.repositories import asked_knowledge_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import adaptive
 from stoa.services import adaptive_learning_service as service
-from stoa.services import curriculum_service
+from stoa.services import curriculum_cache, curriculum_service
 
 STUDENT = "student-1"
 GOLDEN = Path(__file__).parent / "fixtures" / "memory_summary_reads_496.json"
@@ -105,6 +114,10 @@ def _table(monkeypatch: pytest.MonkeyPatch, scale: float, asked=ASKED) -> ReadCo
             user=TEACHER_USER,
             status="recommended",
         )
+    table.seed({**curriculum_cache.STAMP_KEY, "stamp": f"seed-{scale}"})
+    # The first container to read the curriculum stores it; the summary is read in another.
+    curriculum_cache.current()
+    curriculum_cache.forget()
     table.reset_reads()
     return table
 

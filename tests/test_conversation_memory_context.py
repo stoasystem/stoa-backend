@@ -35,8 +35,9 @@ def _run_message_command(model, monkeypatch, *, weak_topics: Any) -> dict[str, A
     an Exception instance to make the lookup raise.
     """
 
-    def fake_weak_topics(student_id: str):
+    def fake_weak_topics(student_id: str, *, locale: str):
         assert student_id == "student-1"
+        assert locale == "de"
         if isinstance(weak_topics, Exception):
             raise weak_topics
         return weak_topics

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from pydantic import ValidationError
 import pytest
+import time_machine
 
 from rule_violation_helpers import assert_violation
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -116,6 +117,14 @@ def _app(user: dict) -> TestClient:
     app.dependency_overrides[get_authorization_fact_repository] = _Facts
     app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _evidence_read_on_the_same_day():
+    """The weak topics count the 90 days before the evidence's own now (#673):
+    the same day the service is told it is."""
+    with time_machine.travel(datetime(2026, 6, 11, 12, 0, tzinfo=timezone.utc), tick=False):
+        yield
 
 
 @pytest.fixture(autouse=True)

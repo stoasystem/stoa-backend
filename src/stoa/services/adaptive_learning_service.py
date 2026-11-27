@@ -22,6 +22,7 @@ from stoa.db.repositories import (
 from stoa.services import (
     ai_teacher_tools_service,
     curriculum_analytics_service,
+    curriculum_names,
     curriculum_service,
     learning_profile_service,
     locale_service,
@@ -30,6 +31,8 @@ from stoa.services import (
     student_evidence,
     usage_ledger_service,
 )
+# This module's own `weak_topics` is the Ask hint's reader of it.
+from stoa.services import weak_topics as weak_topics_projection
 from stoa.services.adaptive_learning_errors import (
     AdaptiveLearningErrorCode as _L,
     AdaptiveLearningViolation,
@@ -161,24 +164,24 @@ def _question_rows(student_id: str) -> list[dict[str, Any]]:
     return [dict(item) for item in raw_items]
 
 
-def weak_topics(student_id: str) -> list[dict[str, Any]]:
-    """The student's weak topics, as `get_memory_summary` reports them to the student.
+def weak_topics(student_id: str, *, locale: str) -> list[dict[str, Any]]:
+    """The student's weak topics, as `get_memory_summary` reports them, named in `locale`.
 
     They come from the student's own evidence alone - their questions, their
-    mistakes and what their Ask answers named - so this reads only the
-    student's partitions. `get_memory_summary` also builds practice
-    recommendations, which list the subject's exercises once per weak topic and
-    scan the table for the student's assignments; a question's answer, which
-    needs only these, must not wait for that (#496).
+    mistakes and what their Ask answers named - through `weak_topics` (#673),
+    so this reads only the student's partitions and the catalog.
+    `get_memory_summary` also builds practice recommendations, which list the
+    subject's exercises once per weak topic and scan the table for the
+    student's assignments; a question's answer, which needs only these, must
+    not wait for that (#496).
     """
-    evidence = student_evidence.for_student(student_id)
-    profile = learning_profile_service.build_learning_profile(
-        student_id=student_id,
-        questions=_question_rows(student_id),
-        mistakes=list(evidence.mistakes),
-        asked=asked_knowledge_repo.list_for_student(student_id),
+    evidence = student_evidence.for_student(student_id, locale=locale)
+    found = weak_topics_projection.for_student(
+        evidence,
+        [*_question_rows(student_id), *asked_knowledge_repo.list_for_student(student_id)],
+        locale=locale,
     )
-    return list(profile.get("weakTopics", []))
+    return [learning_profile_service.weak_topic_response(topic) for topic in found[:10]]
 
 
 def get_memory_summary(
@@ -192,14 +195,17 @@ def get_memory_summary(
     questions = _question_rows(student_id)
     # One evidence value for the whole summary: every snapshot's lessons come
     # out of one read of the student's progress, not one read per snapshot.
-    evidence = student_evidence.for_student(student_id)
+    # Its catalog is in the reader's language, which names the weak topics.
+    locale = locale_service.resolve_locale(user)
+    evidence = student_evidence.for_student(student_id, locale=locale)
     mistakes = list(evidence.mistakes)
     asked = asked_knowledge_repo.list_for_student(student_id)
     profile = learning_profile_service.build_learning_profile(
         student_id=student_id,
         questions=questions,
-        mistakes=mistakes,
+        evidence=evidence,
         asked=asked,
+        locale=locale,
     )
     snapshots = _build_memory_snapshots(
         student=evidence,
@@ -213,7 +219,14 @@ def get_memory_summary(
         for snapshot in snapshots:
             adaptive_learning_repo.put_memory_snapshot(snapshot)
         stored = snapshots
-    recommendations = _next_practice_recommendations(student_id, profile, snapshots, normalized_subject, user)
+    recommendations = _next_practice_recommendations(
+        student_id,
+        profile,
+        snapshots,
+        normalized_subject,
+        user,
+        topic_of=_curriculum_topic_of(evidence.content.catalog, locale),
+    )
     assignments = adaptive_learning_repo.list_assignments(
         student_id=student_id,
         include_archived=_can_manage_assignments(user),
@@ -1663,10 +1676,12 @@ def _next_practice_recommendations(
     snapshots: list[dict[str, Any]],
     subject: str | None,
     user: dict[str, Any],
+    *,
+    topic_of: Callable[[str], str],
 ) -> list[dict[str, Any]]:
     assignments = adaptive_learning_repo.list_assignments(student_id=student_id, include_archived=True, limit=None)
     assignment_state = _assignment_signal_state(assignments)
-    signal_index = _sequencing_signal_index(profile, snapshots, subject)
+    signal_index = _sequencing_signal_index(profile, snapshots, subject, topic_of=topic_of)
     drafts = _safe_reviewed_ai_drafts(student_id, user) if _can_manage_assignments(user) else []
     candidates: list[dict[str, Any]] = []
     # Each weak topic reads its first exercises through its shelf, not every exercise (#496, #513).
@@ -1689,10 +1704,37 @@ def _next_practice_recommendations(
     return [_recommendation_response(candidate) for candidate in ranked[:5]]
 
 
+def _curriculum_topic_of(catalog: Mapping[str, Any], locale: str) -> Callable[[str], str]:
+    """The curriculum topic a weak topic or a memory snapshot is recommended under.
+
+    Exercises are shelved, reviewed drafts and assignments filed, under a
+    curriculum topic. A weak topic is a unit, a topic or a free name (#673); a
+    stored snapshot keys its topic by a slug of whatever its row said (#675
+    retires them). Each is taken to the topic the curriculum files it under:
+    a unit's topic, the topic itself, and otherwise the slug, as before.
+    """
+    names = curriculum_names.for_reader(locale, catalog=catalog)
+    unit_topics = {
+        str(row["id"]): str(row.get("topicId") or row["id"])
+        for row in catalog.get("units") or ()
+        if isinstance(row, Mapping) and row.get("id")
+    }
+
+    def topic_of(topic_id: str) -> str:
+        content_id = names.resolve(topic_id)
+        if content_id is None:
+            return learning_profile_service.normalize_topic_id(topic_id)
+        return unit_topics.get(content_id, content_id)
+
+    return topic_of
+
+
 def _sequencing_signal_index(
     profile: dict[str, Any],
     snapshots: list[dict[str, Any]],
     subject: str | None,
+    *,
+    topic_of: Callable[[str], str],
 ) -> dict[tuple[str, str], dict[str, Any]]:
     signals: dict[tuple[str, str], dict[str, Any]] = {}
     for position, topic in enumerate(profile.get("weakTopics", [])[:10]):
@@ -1702,6 +1744,7 @@ def _sequencing_signal_index(
         topic_id = str(topic.get("topicId") or topic.get("topic_id") or "")
         if not topic_id:
             continue
+        topic_id = topic_of(topic_id)
         signal = signals.setdefault(
             (topic_subject, topic_id),
             _empty_signal(topic_subject, topic_id, topic.get("label") or topic_id),
@@ -1717,6 +1760,7 @@ def _sequencing_signal_index(
         topic_id = str(snapshot.get("topic_id") or "")
         if not topic_id:
             continue
+        topic_id = topic_of(topic_id)
         signal = signals.setdefault((topic_subject, topic_id), _empty_signal(topic_subject, topic_id, topic_id))
         signal["snapshotWeak"] = bool(snapshot.get("weak_topics") or snapshot.get("struggling_concepts"))
         signal["mistakeAttempts"] = max(signal["mistakeAttempts"], len(snapshot.get("recent_exercise_attempts") or []))
@@ -2096,6 +2140,7 @@ def _parent_weak_topic(topic: dict[str, Any]) -> dict[str, Any]:
         "topicId": topic.get("topicId"),
         "label": topic.get("label"),
         "count": topic.get("count", 0),
+        "score": topic.get("score", 0),
         "latestEvidenceAt": topic.get("latestEvidenceAt"),
     }
 
