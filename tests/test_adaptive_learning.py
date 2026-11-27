@@ -159,7 +159,6 @@ ASSIGNMENT_GENERATION = 3
 
 
 def _install_memory_repo(monkeypatch):
-    snapshots: list[dict] = []
     assignments: dict[str, dict] = {}
 
     def _stored_assignment(item):
@@ -169,15 +168,6 @@ def _install_memory_repo(monkeypatch):
         stored["account_fence_generation"] = Decimal(ASSIGNMENT_GENERATION)
         item["account_fence_generation"] = stored["account_fence_generation"]
         return stored
-
-    def put_memory_snapshot(item):
-        snapshots.append(_as_stored(dict(item)))
-
-    def list_memory_snapshots(student_id, subject=None):
-        items = [item for item in snapshots if item["student_id"] == student_id]
-        if subject:
-            items = [item for item in items if item["subject"] == subject]
-        return [dict(item) for item in items]
 
     def put_assignment(item):
         assignments[item["assignment_id"]] = _stored_assignment(item)
@@ -231,14 +221,12 @@ def _install_memory_repo(monkeypatch):
     monkeypatch.setattr(adaptive_learning_service.ai_teacher_tools_repo, "update_draft", update_draft)
 
     repo = adaptive_learning_service.adaptive_learning_repo
-    monkeypatch.setattr(repo, "put_memory_snapshot", put_memory_snapshot)
-    monkeypatch.setattr(repo, "list_memory_snapshots", list_memory_snapshots)
     monkeypatch.setattr(repo, "put_assignment", put_assignment)
     monkeypatch.setattr(repo, "put_assignment_if_absent", put_assignment_if_absent)
     monkeypatch.setattr(repo, "get_assignment", get_assignment)
     monkeypatch.setattr(repo, "update_assignment", update_assignment)
     monkeypatch.setattr(repo, "list_assignments", list_assignments)
-    return snapshots, assignments
+    return assignments
 
 
 def _install_learning_sources(monkeypatch):
@@ -264,7 +252,7 @@ def _install_learning_sources(monkeypatch):
 
 
 def test_assignment_generation_and_transition_record_usage_ledger(monkeypatch):
-    _snapshots, assignments = _install_memory_repo(monkeypatch)
+    assignments = _install_memory_repo(monkeypatch)
     ledger_calls = []
     monkeypatch.setattr(
         adaptive_learning_service,
@@ -345,8 +333,8 @@ def test_assignment_generation_and_transition_record_usage_ledger(monkeypatch):
     )
 
 
-def test_teacher_refreshes_memory_and_parent_gets_safe_progress(monkeypatch):
-    snapshots, assignments = _install_memory_repo(monkeypatch)
+def test_teacher_reads_memory_and_parent_gets_safe_progress(monkeypatch):
+    assignments = _install_memory_repo(monkeypatch)
     _install_learning_sources(monkeypatch)
     assignments["assignment-1"] = {
         "assignment_id": "assignment-1",
@@ -379,12 +367,15 @@ def test_teacher_refreshes_memory_and_parent_gets_safe_progress(monkeypatch):
         "updated_at": "2026-06-10T00:00:00+00:00",
     }
 
-    teacher_response = _app({"sub": "teacher-1", "role": "teacher"}).post(
-        "/adaptive/students/student-1/memory/refresh"
+    teacher_response = _app({"sub": "teacher-1", "role": "teacher"}).get(
+        "/adaptive/students/student-1/memory"
     )
 
     assert teacher_response.status_code == 200
-    assert snapshots[0]["topic_id"] == "linear-equations"
+    # "Linear equations" is a name the catalog does not know: its snapshot is
+    # worked out on this read (#675) and keyed by the name, and recommendations
+    # still file it under its slug, where the active assignment is.
+    assert teacher_response.json()["memorySnapshots"][0]["topic_id"] == "linear equations"
     assert teacher_response.json()["memorySnapshots"][0]["recent_questions"] == ["question-1"]
     assert all(item["topicId"] != "linear-equations" for item in teacher_response.json()["recommendations"])
     assert teacher_response.json()["locale"]["effectiveLocale"] == "de"
@@ -467,7 +458,7 @@ def test_adaptive_sequencing_ranks_reviewed_drafts_and_exposes_safe_signals(monk
 
 
 def test_adaptive_sequencing_suppresses_completed_exact_sources(monkeypatch):
-    _, assignments = _install_memory_repo(monkeypatch)
+    assignments = _install_memory_repo(monkeypatch)
     _install_learning_sources(monkeypatch)
     assignments["assignment-completed"] = {
         "assignment_id": "assignment-completed",
@@ -519,7 +510,7 @@ def test_adaptive_sequencing_suppresses_completed_exact_sources(monkeypatch):
 
 
 def test_assignment_automation_preview_selects_policy_bounded_candidates(monkeypatch):
-    _, assignments = _install_memory_repo(monkeypatch)
+    assignments = _install_memory_repo(monkeypatch)
     _install_learning_sources(monkeypatch)
     monkeypatch.setattr(
         adaptive_learning_service.curriculum_service,
@@ -656,7 +647,7 @@ def test_assignment_automation_preview_rejects_unsupported_policy_values(monkeyp
 
 
 def test_assignment_automation_execute_creates_assignments_idempotently(monkeypatch):
-    _, assignments = _install_memory_repo(monkeypatch)
+    assignments = _install_memory_repo(monkeypatch)
     _install_learning_sources(monkeypatch)
     monkeypatch.setattr(adaptive_learning_service.curriculum_service, "topic_exercise_reader", lambda **kwargs: lambda *_a: [])
     monkeypatch.setattr(
@@ -749,7 +740,7 @@ def test_assignment_automation_execute_creates_assignments_idempotently(monkeypa
 
 
 def test_assignment_automation_execute_returns_partial_batch_results(monkeypatch):
-    _, assignments = _install_memory_repo(monkeypatch)
+    assignments = _install_memory_repo(monkeypatch)
     monkeypatch.setattr(
         adaptive_learning_service.question_repo,
         "list_by_student",
@@ -922,7 +913,7 @@ def test_assignment_automation_execute_rejects_stale_or_forged_candidates(monkey
 
 
 def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibility(monkeypatch):
-    _, assignments = _install_memory_repo(monkeypatch)
+    assignments = _install_memory_repo(monkeypatch)
     monkeypatch.setattr(
         adaptive_learning_service.question_repo,
         "list_by_student",
@@ -1449,7 +1440,6 @@ def _typed(value: object) -> str:
         ({"sub": "parent-1", "role": "parent"}, "get", "/adaptive/students/student-1/memory"),
         ({"sub": "teacher-1", "role": "teacher"}, "get", "/adaptive/students/student-1/memory"),
         ({"sub": "admin-1", "role": "admin"}, "get", "/adaptive/students/student-1/memory"),
-        ({"sub": "teacher-1", "role": "teacher"}, "post", "/adaptive/students/student-1/memory/refresh"),
     ],
 )
 def test_memory_summary_model_holds_what_the_service_returns(monkeypatch, user, method, path):
@@ -1466,38 +1456,6 @@ def test_memory_summary_model_holds_what_the_service_returns(monkeypatch, user, 
     assert response.status_code == 200
     (summary,) = returned
     adaptive.MemorySummaryResponse.model_validate(summary)
-    assert _typed(response.json()) == _typed(_without_response_model(summary))
-
-
-@pytest.mark.parametrize(
-    ("user", "path"),
-    [
-        ({"sub": "student-1", "role": "student"}, "/adaptive/students/me/memory"),
-        ({"sub": "parent-1", "role": "parent"}, "/adaptive/students/student-1/memory"),
-        ({"sub": "teacher-1", "role": "teacher"}, "/adaptive/students/student-1/memory"),
-    ],
-)
-def test_stored_memory_keeps_the_number_types_it_had_without_a_response_model(
-    monkeypatch, user, path
-):
-    # A refreshed snapshot is read back from the table with Decimal numbers.
-    # Without a response model FastAPI sent those as JSON numbers; the model must
-    # not turn them into strings (#81 review).
-    snapshots, _ = _install_memory_repo(monkeypatch)
-    _install_learning_sources(monkeypatch)
-    refresh = _app({"sub": "teacher-1", "role": "teacher"}).post(
-        "/adaptive/students/student-1/memory/refresh"
-    )
-    assert refresh.status_code == 200
-    assert isinstance(snapshots[0]["freshness"]["staleAfterDays"], Decimal)
-    returned = _capture_memory_summaries(monkeypatch)
-
-    response = _app(user).get(path)
-
-    assert response.status_code == 200
-    (summary,) = returned
-    stale_after = response.json()["memorySnapshots"][0]["freshness"]["staleAfterDays"]
-    assert stale_after == 14 and type(stale_after) is int
     assert _typed(response.json()) == _typed(_without_response_model(summary))
 
 

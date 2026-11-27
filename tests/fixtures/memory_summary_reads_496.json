@@ -666,46 +666,18 @@
     "recent_exercise_attempts": [],
     "recent_questions": [],
     "recommended_next_steps": [
-     "Review kopfrechnen-im-alltag with a teacher-approved practice item."
+     "Review kopfrechnen im alltag with a teacher-approved practice item."
     ],
     "strengths": [],
     "struggling_concepts": [
-     "kopfrechnen-im-alltag"
+     "kopfrechnen im alltag"
     ],
     "student_id": "student-1",
     "subject": "math",
     "teacher_notes": [],
-    "topic_id": "kopfrechnen-im-alltag",
+    "topic_id": "kopfrechnen im alltag",
     "weak_topics": [
-     "kopfrechnen-im-alltag"
-    ]
-   },
-   {
-    "freshness": {
-     "ageDays": 4,
-     "lastEvidenceAt": "2026-11-14T10:00:00+00:00",
-     "staleAfterDays": 14,
-     "status": "fresh"
-    },
-    "last_updated_at": "2026-11-18T12:00:00+00:00",
-    "mastered_concepts": [],
-    "preferred_explanation_style": "step_by_step",
-    "recent_curriculum_progress": [],
-    "recent_exercise_attempts": [],
-    "recent_questions": [],
-    "recommended_next_steps": [
-     "Review kr-fte with a teacher-approved practice item."
-    ],
-    "strengths": [],
-    "struggling_concepts": [
-     "kr-fte"
-    ],
-    "student_id": "student-1",
-    "subject": "physics",
-    "teacher_notes": [],
-    "topic_id": "kr-fte",
-    "weak_topics": [
-     "kr-fte"
+     "kopfrechnen im alltag"
     ]
    },
    {
@@ -738,8 +710,8 @@
    },
    {
     "freshness": {
-     "ageDays": 5,
-     "lastEvidenceAt": "2026-11-13T10:00:00+00:00",
+     "ageDays": 4,
+     "lastEvidenceAt": "2026-11-14T10:00:00+00:00",
      "staleAfterDays": 14,
      "status": "fresh"
     },
@@ -750,18 +722,18 @@
     "recent_exercise_attempts": [],
     "recent_questions": [],
     "recommended_next_steps": [
-     "Review groessen with a teacher-approved practice item."
+     "Review kräfte with a teacher-approved practice item."
     ],
     "strengths": [],
     "struggling_concepts": [
-     "groessen"
+     "kräfte"
     ],
     "student_id": "student-1",
-    "subject": "math",
+    "subject": "physics",
     "teacher_notes": [],
-    "topic_id": "groessen",
+    "topic_id": "kräfte",
     "weak_topics": [
-     "groessen"
+     "kräfte"
     ]
    },
    {
@@ -790,6 +762,34 @@
     "topic_id": "daten",
     "weak_topics": [
      "daten"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 5,
+     "lastEvidenceAt": "2026-11-13T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review groessen with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "groessen"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "groessen",
+    "weak_topics": [
+     "groessen"
     ]
    },
    {
@@ -1289,46 +1289,18 @@
     "recent_exercise_attempts": [],
     "recent_questions": [],
     "recommended_next_steps": [
-     "Review kopfrechnen-im-alltag with a teacher-approved practice item."
+     "Review kopfrechnen im alltag with a teacher-approved practice item."
     ],
     "strengths": [],
     "struggling_concepts": [
-     "kopfrechnen-im-alltag"
+     "kopfrechnen im alltag"
     ],
     "student_id": "student-1",
     "subject": "math",
     "teacher_notes": [],
-    "topic_id": "kopfrechnen-im-alltag",
+    "topic_id": "kopfrechnen im alltag",
     "weak_topics": [
-     "kopfrechnen-im-alltag"
-    ]
-   },
-   {
-    "freshness": {
-     "ageDays": 5,
-     "lastEvidenceAt": "2026-11-13T10:00:00+00:00",
-     "staleAfterDays": 14,
-     "status": "fresh"
-    },
-    "last_updated_at": "2026-11-18T12:00:00+00:00",
-    "mastered_concepts": [],
-    "preferred_explanation_style": "step_by_step",
-    "recent_curriculum_progress": [],
-    "recent_exercise_attempts": [],
-    "recent_questions": [],
-    "recommended_next_steps": [
-     "Review groessen with a teacher-approved practice item."
-    ],
-    "strengths": [],
-    "struggling_concepts": [
-     "groessen"
-    ],
-    "student_id": "student-1",
-    "subject": "math",
-    "teacher_notes": [],
-    "topic_id": "groessen",
-    "weak_topics": [
-     "groessen"
+     "kopfrechnen im alltag"
     ]
    },
    {
@@ -1357,6 +1329,34 @@
     "topic_id": "daten",
     "weak_topics": [
      "daten"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 5,
+     "lastEvidenceAt": "2026-11-13T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review groessen with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "groessen"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "groessen",
+    "weak_topics": [
+     "groessen"
     ]
    },
    {
@@ -1828,18 +1828,18 @@
     "recent_exercise_attempts": [],
     "recent_questions": [],
     "recommended_next_steps": [
-     "Review kr-fte with a teacher-approved practice item."
+     "Review energie with a teacher-approved practice item."
     ],
     "strengths": [],
     "struggling_concepts": [
-     "kr-fte"
+     "energie"
     ],
     "student_id": "student-1",
     "subject": "physics",
     "teacher_notes": [],
-    "topic_id": "kr-fte",
+    "topic_id": "energie",
     "weak_topics": [
-     "kr-fte"
+     "energie"
     ]
    },
    {
@@ -1856,18 +1856,18 @@
     "recent_exercise_attempts": [],
     "recent_questions": [],
     "recommended_next_steps": [
-     "Review energie with a teacher-approved practice item."
+     "Review kräfte with a teacher-approved practice item."
     ],
     "strengths": [],
     "struggling_concepts": [
-     "energie"
+     "kräfte"
     ],
     "student_id": "student-1",
     "subject": "physics",
     "teacher_notes": [],
-    "topic_id": "energie",
+    "topic_id": "kräfte",
     "weak_topics": [
-     "energie"
+     "kräfte"
     ]
    }
   ],
@@ -2160,46 +2160,18 @@
     "recent_exercise_attempts": [],
     "recent_questions": [],
     "recommended_next_steps": [
-     "Review kopfrechnen-im-alltag with a teacher-approved practice item."
+     "Review kopfrechnen im alltag with a teacher-approved practice item."
     ],
     "strengths": [],
     "struggling_concepts": [
-     "kopfrechnen-im-alltag"
+     "kopfrechnen im alltag"
     ],
     "student_id": "student-1",
     "subject": "math",
     "teacher_notes": [],
-    "topic_id": "kopfrechnen-im-alltag",
+    "topic_id": "kopfrechnen im alltag",
     "weak_topics": [
-     "kopfrechnen-im-alltag"
-    ]
-   },
-   {
-    "freshness": {
-     "ageDays": 5,
-     "lastEvidenceAt": "2026-11-13T10:00:00+00:00",
-     "staleAfterDays": 14,
-     "status": "fresh"
-    },
-    "last_updated_at": "2026-11-18T12:00:00+00:00",
-    "mastered_concepts": [],
-    "preferred_explanation_style": "step_by_step",
-    "recent_curriculum_progress": [],
-    "recent_exercise_attempts": [],
-    "recent_questions": [],
-    "recommended_next_steps": [
-     "Review groessen with a teacher-approved practice item."
-    ],
-    "strengths": [],
-    "struggling_concepts": [
-     "groessen"
-    ],
-    "student_id": "student-1",
-    "subject": "math",
-    "teacher_notes": [],
-    "topic_id": "groessen",
-    "weak_topics": [
-     "groessen"
+     "kopfrechnen im alltag"
     ]
    },
    {
@@ -2228,6 +2200,34 @@
     "topic_id": "daten",
     "weak_topics": [
      "daten"
+    ]
+   },
+   {
+    "freshness": {
+     "ageDays": 5,
+     "lastEvidenceAt": "2026-11-13T10:00:00+00:00",
+     "staleAfterDays": 14,
+     "status": "fresh"
+    },
+    "last_updated_at": "2026-11-18T12:00:00+00:00",
+    "mastered_concepts": [],
+    "preferred_explanation_style": "step_by_step",
+    "recent_curriculum_progress": [],
+    "recent_exercise_attempts": [],
+    "recent_questions": [],
+    "recommended_next_steps": [
+     "Review groessen with a teacher-approved practice item."
+    ],
+    "strengths": [],
+    "struggling_concepts": [
+     "groessen"
+    ],
+    "student_id": "student-1",
+    "subject": "math",
+    "teacher_notes": [],
+    "topic_id": "groessen",
+    "weak_topics": [
+     "groessen"
     ]
    },
    {

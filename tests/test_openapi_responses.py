@@ -71,10 +71,9 @@ def test_memory_summary_declares_the_fields_the_handler_returns():
         "updatedAt",
     }
     assert set(body["required"]) == set(body["properties"])
-    # The other two routes that return the same summary declare the same model.
+    # The other route that returns the same summary declares the same model.
     me = _schema_of(schema, "/adaptive/students/me/memory", "get")
     assert _schema_of(schema, "/adaptive/students/{student_id}/memory", "get") == me
-    assert _schema_of(schema, "/adaptive/students/{student_id}/memory/refresh", "post") == me
 
 
 def _schema_of(schema: dict, path: str, method: str) -> dict:

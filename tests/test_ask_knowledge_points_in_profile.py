@@ -284,8 +284,9 @@ def test_adaptive_memory_remembers_what_was_asked_about(
         TITLES["kraefte"]["fr"],
         FREE["fr"],
     }
+    # The snapshots are the weak topics, worked out on the read (#675).
     snapshots = {(row["subject"], row["topic_id"]) for row in memory["memorySnapshots"]}
-    assert ("math", "forces-et-mouvement") in snapshots
+    assert snapshots == {(topic["subject"], topic["topicId"]) for topic in memory["weakTopics"]}
 
 
 def test_asking_about_a_star_does_not_change_its_state(world, bedrock, star_map) -> None:

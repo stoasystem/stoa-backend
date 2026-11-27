@@ -113,7 +113,7 @@ class Names:
             return known.lesson_units[lesson_id]
         for spelling in spellings:
             if isinstance(spelling, str) and spelling.strip():
-                found = known.aliases.get(_slug(spelling))
+                found = known.aliases.get(slug(spelling))
                 if found:
                     return found
         return None
@@ -190,7 +190,7 @@ class _Spellings:
     def _claim(self, target: str, *spellings: object) -> None:
         for spelling in spellings:
             if isinstance(spelling, str) and spelling.strip():
-                self.aliases.setdefault(_slug(spelling), target)
+                self.aliases.setdefault(slug(spelling), target)
 
 
 def _rows(catalog: Mapping[str, Any], key: str) -> list[Mapping[str, Any]]:
@@ -226,11 +226,13 @@ def _without_aside(title: str | None) -> str | None:
     return re.sub(r"\s*\([^)]*\)\s*$", "", title)
 
 
-def _slug(spelling: str) -> str:
+def slug(spelling: str) -> str:
     """A spelling as compared: lowercase, runs of anything else one hyphen.
 
-    The same as `learning_profile_service.normalize_topic_id`, so an old slug
-    a stored row carries resolves like the title it was made of.
+    The slug older rows were keyed by (the retired memory snapshots, #675,
+    and older practice rows), so such a slug resolves like the title it was
+    made of. Recommendations still file a name the catalog does not know
+    under its slug.
     """
     value = re.sub(r"[^a-z0-9]+", "-", spelling.strip().lower()).strip("-")
     return value or "general"

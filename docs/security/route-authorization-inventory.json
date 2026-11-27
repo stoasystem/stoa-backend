@@ -2447,24 +2447,6 @@
   {
     "authorization": [
       {
-        "action": "update",
-        "capability": null,
-        "purpose": "learning_assignment",
-        "resource_type": "adaptive_profile"
-      }
-    ],
-    "classification": "authorized",
-    "family": "adaptive",
-    "identifiers": [
-      "student_id"
-    ],
-    "method": "POST",
-    "path": "/adaptive/students/{student_id}/memory/refresh",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
         "action": "read",
         "capability": "billing_operations_reader",
         "purpose": "billing_operations",

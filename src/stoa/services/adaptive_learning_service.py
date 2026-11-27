@@ -189,7 +189,6 @@ def get_memory_summary(
     student_id: str,
     user: dict[str, Any],
     subject: str | None = None,
-    persist: bool = False,
 ) -> dict[str, Any]:
     normalized_subject = _safe_subject(subject) if subject else None
     questions = _question_rows(student_id)
@@ -198,27 +197,19 @@ def get_memory_summary(
     # Its catalog is in the reader's language, which names the weak topics.
     locale = locale_service.resolve_locale(user)
     evidence = student_evidence.for_student(student_id, locale=locale)
-    mistakes = list(evidence.mistakes)
     asked = asked_knowledge_repo.list_for_student(student_id)
+    # Counted once: the profile's weak topics and the snapshots are the same
+    # projection (#673); nothing about them is stored (#675).
+    weak = weak_topics_projection.for_student(evidence, [*questions, *asked], locale=locale)
     profile = learning_profile_service.build_learning_profile(
         student_id=student_id,
         questions=questions,
         evidence=evidence,
         asked=asked,
         locale=locale,
+        weak=weak,
     )
-    snapshots = _build_memory_snapshots(
-        student=evidence,
-        questions=questions,
-        mistakes=mistakes,
-        subject=normalized_subject,
-        asked=asked,
-    )
-    stored = adaptive_learning_repo.list_memory_snapshots(student_id, normalized_subject)
-    if persist:
-        for snapshot in snapshots:
-            adaptive_learning_repo.put_memory_snapshot(snapshot)
-        stored = snapshots
+    snapshots = _build_memory_snapshots(student=evidence, weak=weak, subject=normalized_subject)
     recommendations = _next_practice_recommendations(
         student_id,
         profile,
@@ -236,8 +227,7 @@ def get_memory_summary(
         student_id=student_id,
         user=user,
         profile=profile,
-        generated_snapshots=snapshots,
-        stored_snapshots=stored,
+        snapshots=snapshots,
         recommendations=recommendations,
         assignments=assignments,
     )
@@ -1476,88 +1466,45 @@ def _sequencing_summary_explanation(recommendations: list[dict[str, Any]], statu
 def _build_memory_snapshots(
     *,
     student: student_evidence.StudentEvidence,
-    questions: list[dict[str, Any]],
-    mistakes: list[dict[str, Any]],
+    weak: list[weak_topics_projection.WeakTopic],
     subject: str | None,
-    asked: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    student_id = student.student_id
+    """One snapshot per weak topic, the heaviest twenty, worked out on each read (#675).
+
+    The topics are `weak_topics`' (#673); a snapshot's exercise attempts are
+    the topic's wrong answers that still count. Nothing here is stored.
+    """
     now = now_iso()
-    topic_counts: Counter[tuple[str, str]] = Counter()
-    evidence: dict[tuple[str, str], list[str]] = {}
-    latest: dict[tuple[str, str], str] = {}
-    feedback_by_topic: dict[tuple[str, str], list[int]] = {}
-
-    for question in questions:
-        question_subject = _safe_subject(question.get("subject"))
-        if subject and question_subject != subject:
-            continue
-        question_id = str(question.get("question_id") or question.get("id") or "")
-        timestamp = str(question.get("created_at") or question.get("createdAt") or now)
-        labels = list(question.get("knowledge_points") or [])
-        labels.extend(_topic_labels(question.get("topic_seeds")))
-        if not labels:
-            labels = [question_subject]
-        for label in labels:
-            topic_id = learning_profile_service.normalize_topic_id(str(label))
-            key = (question_subject, topic_id)
-            topic_counts[key] += 1
-            evidence.setdefault(key, [])
-            if question_id and question_id not in evidence[key]:
-                evidence[key].append(question_id)
-            if timestamp > latest.get(key, ""):
-                latest[key] = timestamp
-            feedback = question.get("student_feedback")
-            if isinstance(feedback, int):
-                feedback_by_topic.setdefault(key, []).append(feedback)
-
-    # What Ask questions named (#143): topics with no question behind them.
-    for record in asked or []:
-        record_subject = _safe_subject(record.get("subject"))
-        if subject and record_subject != subject:
-            continue
-        timestamp = str(record.get("created_at") or now)
-        for label in record.get("knowledge_points") or []:
-            key = (record_subject, learning_profile_service.normalize_topic_id(str(label)))
-            topic_counts[key] += 1
-            if timestamp > latest.get(key, ""):
-                latest[key] = timestamp
-
-    for mistake in mistakes:
-        mistake_subject = _safe_subject(mistake.get("subject_id") or mistake.get("subject"))
-        if subject and mistake_subject != subject:
-            continue
-        topic_id = learning_profile_service.normalize_topic_id(str(mistake.get("topic_id") or "general"))
-        key = (mistake_subject, topic_id)
-        topic_counts[key] += 1
-        timestamp = str(mistake.get("created_at") or now)
-        if timestamp > latest.get(key, ""):
-            latest[key] = timestamp
-
     snapshots = []
-    for (subject_id, topic_id), count in topic_counts.most_common(20):
-        feedback_values = feedback_by_topic.get((subject_id, topic_id), [])
-        mastered = bool(feedback_values and sum(feedback_values) / len(feedback_values) >= 4 and count <= 2)
+    for topic in weak:
+        if subject and topic.subject != subject:
+            continue
         snapshots.append(
             {
-                "student_id": student_id,
-                "subject": subject_id,
-                "topic_id": topic_id,
-                "strengths": ["Positive feedback on recent answers"] if mastered else [],
-                "weak_topics": [topic_id] if not mastered else [],
-                "mastered_concepts": [topic_id] if mastered else [],
-                "struggling_concepts": [topic_id] if not mastered else [],
+                "student_id": student.student_id,
+                "subject": topic.subject,
+                "topic_id": topic.topic_id,
+                "strengths": [],
+                "weak_topics": [topic.topic_id],
+                "mastered_concepts": [],
+                "struggling_concepts": [topic.topic_id],
                 "preferred_explanation_style": "step_by_step",
-                "recent_questions": evidence.get((subject_id, topic_id), [])[:5],
-                "recent_curriculum_progress": _progress_for_topic(student, subject_id, topic_id),
-                "recent_exercise_attempts": _mistake_attempts_for_topic(mistakes, subject_id, topic_id),
+                "recent_questions": list(topic.evidence_question_ids[:5]),
+                "recent_curriculum_progress": _progress_for_topic(student, topic.subject, topic.topic_id),
+                "recent_exercise_attempts": _mistake_attempts(topic),
                 "teacher_notes": [],
-                "recommended_next_steps": _recommended_steps(subject_id, topic_id, mastered),
-                "freshness": _freshness(latest.get((subject_id, topic_id))),
+                "recommended_next_steps": [f"Review {topic.topic_id} with a teacher-approved practice item."],
+                "freshness": _freshness(topic.latest_evidence_at or None),
                 "last_updated_at": now,
             }
         )
+        if len(snapshots) == _MEMORY_SNAPSHOTS:
+            break
     return snapshots
+
+
+#: How many weak topics the memory summary gives a snapshot.
+_MEMORY_SNAPSHOTS = 20
 
 
 def _memory_response(
@@ -1565,13 +1512,12 @@ def _memory_response(
     student_id: str,
     user: dict[str, Any],
     profile: dict[str, Any],
-    generated_snapshots: list[dict[str, Any]],
-    stored_snapshots: list[dict[str, Any]],
+    snapshots: list[dict[str, Any]],
     recommendations: list[dict[str, Any]],
     assignments: list[dict[str, Any]],
 ) -> dict[str, Any]:
     role = str(user.get("role") or "")
-    visible_snapshots = stored_snapshots or generated_snapshots
+    visible_snapshots = snapshots
     weak_topics = profile.get("weakTopics", [])
     if role == "parent":
         visible_snapshots = [_parent_snapshot(snapshot) for snapshot in visible_snapshots]
@@ -1708,10 +1654,10 @@ def _curriculum_topic_of(catalog: Mapping[str, Any], locale: str) -> Callable[[s
     """The curriculum topic a weak topic or a memory snapshot is recommended under.
 
     Exercises are shelved, reviewed drafts and assignments filed, under a
-    curriculum topic. A weak topic is a unit, a topic or a free name (#673); a
-    stored snapshot keys its topic by a slug of whatever its row said (#675
-    retires them). Each is taken to the topic the curriculum files it under:
-    a unit's topic, the topic itself, and otherwise the slug, as before.
+    curriculum topic. A weak topic, and the snapshot made of it, is a unit, a
+    topic or a free name (#673, #675). Each is taken to the topic the
+    curriculum files it under: a unit's topic, the topic itself, and a free
+    name's slug, as recommendations always filed it.
     """
     names = curriculum_names.for_reader(locale, catalog=catalog)
     unit_topics = {
@@ -1723,7 +1669,7 @@ def _curriculum_topic_of(catalog: Mapping[str, Any], locale: str) -> Callable[[s
     def topic_of(topic_id: str) -> str:
         content_id = names.resolve(topic_id)
         if content_id is None:
-            return learning_profile_service.normalize_topic_id(topic_id)
+            return curriculum_names.slug(topic_id)
         return unit_topics.get(content_id, content_id)
 
     return topic_of
@@ -2071,29 +2017,23 @@ def _existing_assignment(assignment_id: str) -> dict[str, Any]:
 def _progress_for_topic(
     evidence: student_evidence.StudentEvidence, subject: str, topic_id: str
 ) -> list[dict[str, Any]]:
+    """The lessons finished in a weak topic: its unit's, or its curriculum topic's."""
     return [
         {"lessonId": item.lesson_id, "status": "completed", "completedAt": item.completed_at}
-        for item in evidence.completions_in(subject, topic_id=topic_id)
+        for item in evidence.completions_in(subject)
+        if topic_id in (item.unit_id, item.topic_id)
     ][:5]
 
 
-def _mistake_attempts_for_topic(mistakes: list[dict[str, Any]], subject: str, topic_id: str) -> list[dict[str, Any]]:
+def _mistake_attempts(topic: weak_topics_projection.WeakTopic) -> list[dict[str, Any]]:
     return [
         {
             "challengeId": item.get("challenge_id"),
             "lessonId": item.get("lesson_id"),
             "createdAt": item.get("created_at"),
         }
-        for item in mistakes
-        if _safe_subject(item.get("subject_id") or item.get("subject")) == subject
-        and learning_profile_service.normalize_topic_id(str(item.get("topic_id") or "")) == topic_id
+        for item in topic.mistakes
     ][:5]
-
-
-def _recommended_steps(subject: str, topic_id: str, mastered: bool) -> list[str]:
-    if mastered:
-        return [f"Keep {topic_id} fresh with one mixed {subject} practice item."]
-    return [f"Review {topic_id} with a teacher-approved practice item."]
 
 
 def _freshness(last_seen_at: str | None) -> dict[str, Any]:
@@ -2143,20 +2083,6 @@ def _parent_weak_topic(topic: dict[str, Any]) -> dict[str, Any]:
         "score": topic.get("score", 0),
         "latestEvidenceAt": topic.get("latestEvidenceAt"),
     }
-
-
-def _topic_labels(raw: Any) -> list[str]:
-    if not isinstance(raw, list):
-        return []
-    labels = []
-    for item in raw:
-        if isinstance(item, str):
-            labels.append(item)
-        elif isinstance(item, dict):
-            label = item.get("label") or item.get("topic") or item.get("topic_id")
-            if label:
-                labels.append(str(label))
-    return labels
 
 
 def _parse_time(value: str) -> datetime | None:

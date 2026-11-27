@@ -102,7 +102,7 @@ def _adaptive(user: dict[str, Any]) -> TestClient:
 def world(monkeypatch):
     from stoa.db.repositories import question_repo, user_repo
 
-    _snapshots, assignments = _install_memory_repo(monkeypatch)
+    assignments = _install_memory_repo(monkeypatch)
     drafts = _install_draft_repo(monkeypatch)
     # The teacher holds the student's help request: the #495 relationship.
     monkeypatch.setattr(
