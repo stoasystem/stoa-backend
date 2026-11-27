@@ -17,7 +17,7 @@ import pytest
 from fakes.dynamodb import FakeTable
 
 from stoa.db import table as db_table
-from stoa.services import curriculum_cache
+from stoa.services import curriculum_cache, curriculum_snapshot_store
 from test_curriculum_publish_projection import (
     LESSON_ID,
     _exercise,
@@ -150,23 +150,39 @@ def test_a_new_stamp_is_read_on_the_next_request(
     assert _title(lesson) == "Neu veröffentlicht"
 
 
-@pytest.mark.parametrize(
-    ("stamp", "ttl"),
-    [(None, curriculum_cache.UNSTAMPED_TTL), ("v1", curriculum_cache.STAMPED_TTL)],
-)
 def test_nothing_is_kept_past_its_ttl(
-    monkeypatch: pytest.MonkeyPatch, clock: list[float], stamp: str | None, ttl: float
+    monkeypatch: pytest.MonkeyPatch, clock: list[float]
 ) -> None:
     """A writer that writes no stamp is seen once the TTL has passed."""
     table, lesson = _table(monkeypatch, SMALL)
-    if stamp:
-        table.seed({**curriculum_cache.STAMP_KEY, "stamp": stamp})
     _get("catalog", lesson)
     _retitle(table, lesson, "Ohne Stempel")
 
-    clock[0] += ttl - 1
+    clock[0] += curriculum_cache.UNSTAMPED_TTL - 1
     assert _title(lesson) != "Ohne Stempel"
     clock[0] += 1
+    assert _title(lesson) == "Ohne Stempel"
+
+
+def test_under_a_stamp_the_stored_copy_bounds_a_writer_without_one(
+    monkeypatch: pytest.MonkeyPatch, clock: list[float]
+) -> None:
+    """#669: past `STAMPED_TTL` a container takes the stored copy again, not the
+    partition; a writer that writes no stamp is seen once that copy is `MAX_AGE` old."""
+    wall = [1_800_000_000.0]
+    monkeypatch.setattr(curriculum_cache, "_wall", lambda: wall[0])
+    table, lesson = _table(monkeypatch, SMALL)
+    table.seed({**curriculum_cache.STAMP_KEY, "stamp": "v1"})
+    _get("catalog", lesson)
+    _retitle(table, lesson, "Ohne Stempel")
+
+    clock[0] += curriculum_cache.STAMPED_TTL
+    _calls, queried = _round_trips(table, lambda: _title(lesson))
+    assert "PRACTICE" not in queried
+    assert _title(lesson) != "Ohne Stempel"
+
+    clock[0] += curriculum_cache.STAMPED_TTL
+    wall[0] += curriculum_snapshot_store.MAX_AGE
     assert _title(lesson) == "Ohne Stempel"
 
 
