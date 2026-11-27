@@ -762,7 +762,9 @@ def _collect_targets(*, job_type: str, filters: dict[str, Any], max_targets: int
     last_key = None
     pages = 0
     indexed = report_repo.reports_indexed()
-    while pages < MAX_SCAN_PAGES and len(targets) < max_targets:
+    # The index holds report summaries only, so it is read to its end; the scan
+    # it replaces keeps its page budget.
+    while (indexed or pages < MAX_SCAN_PAGES) and len(targets) < max_targets:
         result = report_repo.list_reports_for_admin(
             status=filters.get("status"),
             week_start=filters.get("week_start"),

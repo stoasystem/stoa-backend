@@ -133,6 +133,18 @@ def listing_fields(item: Mapping[str, Any]) -> dict[str, str]:
     return question_repo.listing_fields(item)
 
 
+def _untimed(item: Mapping[str, Any]) -> bool:
+    """A live report, recovery job or metric row its list would leave out for want of a time."""
+    if item.get("privacy_deleted") is True or account_deletion_repo.is_deletion_tombstone(item):
+        return False
+    pk = str(item.get("PK") or "")
+    if item.get("entity_type") == curriculum_analytics_repo.METRIC_ENTITY:
+        return not item.get("updated_at")
+    if item.get("SK") == "SUMMARY" and pk.startswith(("REPORT#", "REPORT_RECOVERY_JOB#")):
+        return not item.get("created_at")
+    return False
+
+
 def _row_key(item: Mapping[str, Any]) -> tuple[str, str]:
     return (str(item["PK"]), str(item["SK"]))
 
@@ -142,6 +154,8 @@ def count(items: Iterable[Mapping[str, Any]]) -> Counter[str]:
     counts: Counter[str] = Counter()
     for item in items:
         fields = listing_fields(item)
+        if not fields and _untimed(item):
+            counts["no timestamp, never listed"] += 1
         if not fields:
             # The old census counted every META row with a question status;
             # the index holds the questions only.
@@ -263,6 +277,7 @@ def run(
     counts = count(items)
     print(" | ".join(f"{name}: {counts[name]}" for name in (*LISTINGS, "in place", "to write")))
     print(f"not a question, no longer counted: {counts['not a question, no longer counted']}")
+    print(f"no timestamp, never listed: {counts['no timestamp, never listed']}")
     if verify_index:
         problems = verify(table, items)
         print(f"Index problems: {len(problems)}")

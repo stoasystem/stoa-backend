@@ -561,3 +561,45 @@ def test_new_reports_jobs_and_metrics_are_written_into_their_lists(fake_table: F
     assert _listed(fake_table, curriculum_analytics_repo.METRIC_LISTING) == {
         ("CURRICULUM_METRIC#lesson#l-1", "VERSION#unknown")
     }
+
+
+def test_a_students_signal_lists_the_metric_it_moves() -> None:
+    # Card 135 audit F1: the student path is the production one.
+    operations = curriculum_analytics_repo.build_curriculum_signal_transaction(
+        student_id="11111111-1111-4111-8111-111111111111",
+        generation=1,
+        item={
+            "signal_id": "sig-1",
+            "public_id": "l-1",
+            "content_type": "lesson",
+            "signal_type": "hint",
+            "source_type": "student",
+            "created_at": OLD,
+        },
+    )
+    [update] = [op["Update"] for op in operations if "Update" in op]
+    assert "#listing=:listing" in update["UpdateExpression"]
+    assert "#listed_at=:updated_at" in update["UpdateExpression"]
+    assert update["ExpressionAttributeValues"][":listing"] == curriculum_analytics_repo.METRIC_LISTING
+
+
+def test_recovery_targets_read_the_report_list_to_its_end(monkeypatch) -> None:
+    # Card 135 audit F2: the old page budget left targets past the 1000th report unseen.
+    from stoa.services import report_recovery_job_service as service
+
+    pages: list[int] = []
+
+    def list_reports_for_admin(**kwargs: Any) -> dict[str, Any]:
+        pages.append(1)
+        last = len(pages) >= 8
+        items = [{"report_id": "r-hit"}] if last else []
+        return {"Items": items} if last else {"Items": items, "LastEvaluatedKey": {"n": len(pages)}}
+
+    monkeypatch.setattr(service.report_repo, "reports_indexed", lambda table=None: True)
+    monkeypatch.setattr(service.report_repo, "list_reports_for_admin", list_reports_for_admin)
+    monkeypatch.setattr(service, "_target_preview", lambda report, job_type: dict(report))
+
+    targets, read = service._collect_targets(
+        job_type=service.RESEND_JOB_TYPE, filters={"status": "email_failed"}, max_targets=5
+    )
+    assert read == 8 and targets == [{"report_id": "r-hit"}]

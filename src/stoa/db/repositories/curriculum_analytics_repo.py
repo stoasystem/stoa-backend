@@ -189,7 +189,8 @@ def build_curriculum_signal_transaction(
                     "SET #entity_type=:entity_type, #public_id=:public_id, "
                     "#content_type=:content_type, #version_id=:version_id, "
                     "#subject_id=:subject_id, #topic_id=:topic_id, "
-                    "#updated_at=:updated_at ADD #total_count :one, "
+                    "#updated_at=:updated_at, #listing=:listing, #listed_at=:updated_at "
+                    "ADD #total_count :one, "
                     "#signal_count :one, #source_count :one"
                 ),
                 "ExpressionAttributeNames": {
@@ -200,6 +201,8 @@ def build_curriculum_signal_transaction(
                     "#subject_id": "subject_id",
                     "#topic_id": "topic_id",
                     "#updated_at": "updated_at",
+                    "#listing": "listing",
+                    "#listed_at": "listed_at",
                     "#total_count": "total_count",
                     "#signal_count": signal_field,
                     "#source_count": source_field,
@@ -212,6 +215,7 @@ def build_curriculum_signal_transaction(
                     ":subject_id": signal.get("subject_id") or "",
                     ":topic_id": signal.get("topic_id") or "",
                     ":updated_at": signal["created_at"],
+                    ":listing": METRIC_LISTING,
                     ":one": 1,
                 },
             }
