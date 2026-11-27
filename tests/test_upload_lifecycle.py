@@ -349,7 +349,7 @@ def test_issuing_lost_response_retains_exact_durable_cleanup_coordinate(table) -
     assert row["operation_kind"] == "staging_issuance"
     assert row["staging_object_key"] == orphan["Key"]
 
-    outcome = uploads.cleanup(dict(row), s3=s3, settings=SETTINGS, now=NOW, reference_scan_limit=100)
+    outcome = uploads.cleanup(dict(row), s3=s3, settings=SETTINGS, now=NOW)
 
     assert outcome == "deleted"
     assert s3.uploads == {}
@@ -934,7 +934,9 @@ def test_cleanup_is_bounded_idempotent_and_never_deletes_active_or_durable_uploa
     s3 = _S3()
     expired = _seed_cleanup(table, s3, "expired", "validated")
     invalid = _seed_cleanup(table, s3, "invalid", "invalid", usable_until=2_000_000_000)
-    durable = _seed_cleanup(table, s3, "durable", "expired")
+    durable = _seed_cleanup(
+        table, s3, "durable", "expired", durable_attachment_id="attachment-durable"
+    )
     active = _seed_cleanup(table, s3, "active", "validated", usable_until=2_000_000_000)
     _seed_cleanup(table, s3, "consumed", "consumed")
     _seed_attachment(table, "attachment-durable", source_upload_id="durable")
@@ -1046,29 +1048,23 @@ def test_stale_operation_cleanup_recovers_exact_targets_and_preserves_unrelated(
     }
 
 
-def test_exact_immutable_durable_reference_blocks_all_cleanup_provider_mutations(table) -> None:
-    """An attachment holding the exact immutable version protects the upload, by key and version."""
+def test_an_attachment_made_from_another_upload_is_not_looked_for(table) -> None:
+    """Only the upload's own `durable_attachment_id` protects it; the table is not scanned (#654).
+
+    Every promotion writes its bytes under a fresh key (`objects/{uuid}`), and an
+    attachment is made only in the transaction that spends its own upload and
+    names it there, so no other upload holds an attachment's bytes.
+    """
     s3 = _S3()
-    immutable_key = "objects/private/protected"
-    immutable_version = s3.seed_object(immutable_key, b"abc")
-    upload = _seed_cleanup(
-        table, s3, "tuple-protected", "validated",
-        immutable_object_key=immutable_key, immutable_version_id=immutable_version,
-    )
-    _seed_attachment(
-        table, "attachment-other-source",
-        source_upload_id="another-upload",
-        immutable_object_key=immutable_key,
-        immutable_version_id=immutable_version,
-    )
-    held = deepcopy(s3.objects)
+    _seed_cleanup(table, s3, "unrelated", "invalid")
+    _seed_attachment(table, "attachment-other-source", source_upload_id="another-upload")
+    scans = table.calls["scan"]
 
     result = _sweep(s3)
 
-    assert result.protected == 1
-    assert s3.objects == held and s3.deletes == []
-    assert s3.holds(upload["staging_object_key"], upload["staging_version_id"])
-    assert _row(table, "tuple-protected")["status"] == "cleanup_blocked"
+    assert result.deleted == 1
+    assert _row(table, "unrelated")["status"] == "cleanup_complete"
+    assert table.calls["scan"] == scans
 
 
 class _FailingDeleteS3(_S3):
@@ -1138,9 +1134,9 @@ def _first_table_fault(stage: str) -> Callable[[str, dict[str, Any]], BaseExcept
     """The table refuses, every time, one kind of request about the first candidate."""
 
     def matches(operation: str, request: dict[str, Any]) -> bool:
-        if stage == "repository_scan":
-            values = request.get("ExpressionAttributeValues") or {}
-            return operation == "scan" and values.get(":upload_id") == FIRST
+        if stage == "repository_attachment_read":
+            key = request.get("Key") or {}
+            return operation == "get_item" and key.get("PK") == f"ATTACHMENT#{FIRST}"
         if not _on(request, FIRST):
             return False
         if stage == "repository_get":
@@ -1200,7 +1196,7 @@ class _FirstCandidateS3(_S3):
     [
         "repository_get",
         "repository_claim",
-        "repository_scan",
+        "repository_attachment_read",
         "repository_progress",
         "repository_complete",
         "list_versions_failure",
@@ -1228,6 +1224,9 @@ def test_cleanup_batch_candidate_isolation_continues_after_first_failure(
             table, s3, FIRST, "invalid", staged=False,
             multipart_upload_id=s3.seed_multipart(_staging_key(FIRST)),
         )
+    elif failure_stage == "repository_attachment_read":
+        # The attachment it names cannot be read: not knowing, the upload is not cleaned.
+        _seed_cleanup(table, s3, FIRST, "invalid", durable_attachment_id=FIRST)
     else:
         _seed_cleanup(table, s3, FIRST, "invalid")
     later = _seed_cleanup(table, s3, LATER, "invalid")

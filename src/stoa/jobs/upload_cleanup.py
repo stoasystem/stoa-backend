@@ -108,7 +108,6 @@ def cleanup_expired_uploads(
                 s3=s3,
                 settings=settings_obj,
                 now=current,
-                reference_scan_limit=page_limit,
             )
             if outcome not in counts:
                 outcome = "retryable"

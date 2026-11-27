@@ -465,22 +465,61 @@ def test_an_upload_whose_attachment_is_gone_is_cleaned_with_its_staging_debt(tab
 
 
 def test_the_sweep_cleans_an_upload_whose_attachment_is_gone(table, s3):
-    """A pointer to an attachment no longer there no longer blocks the sweep."""
+    """A pointer to an attachment no longer there no longer blocks the sweep.
+
+    One pass, reading the upload and the attachment it names and nothing else:
+    no Scan of the table for other attachments made from it (#654).
+    """
     attachment = _file(table, s3)
+    _file(table, s3, "attachment-unrelated")
     upload = _consumed_upload(table, attachment, status="invalid")
     assert delete_attachment(attachment, s3=_client(), settings=SETTINGS, now=NOW) is LeaveOutcome.DONE
+    scans = table.calls["scan"]
 
     assert uploads.cleanup(upload, s3=_client(), settings=SETTINGS, now=NOW) == "deleted"
     assert table.rows[(upload["PK"], "META")]["status"] == "cleanup_complete"
+    assert table.calls["scan"] == scans
+
+
+def test_the_sweep_cleans_an_upload_that_names_no_attachment_without_a_scan(table, s3):
+    """An upload never spent names no attachment, so nothing holds its bytes (#654)."""
+    staging_version, staging_etag = _put_object(s3, "staging/upload-refused")
+    table.seed(
+        {
+            "PK": "UPLOAD#upload-refused",
+            "SK": "META",
+            "entity_type": "upload_intent",
+            "upload_id": "upload-refused",
+            "owner_id": OWNER,
+            "student_id": OWNER,
+            "status": "invalid",
+            "version": 3,
+            "staging_object_key": "staging/upload-refused",
+            "staging_version_id": staging_version,
+            "staging_etag": staging_etag,
+            "created_at": NOW.isoformat(),
+        }
+    )
+    _file(table, s3, "attachment-unrelated")
+    scans = table.calls["scan"]
+
+    assert uploads.cleanup(
+        table.rows[("UPLOAD#upload-refused", "META")], s3=_client(), settings=SETTINGS, now=NOW
+    ) == "deleted"
+    assert table.rows[("UPLOAD#upload-refused", "META")]["status"] == "cleanup_complete"
+    assert not s3.holds("staging/upload-refused", staging_version)
+    assert table.calls["scan"] == scans
 
 
 def test_the_sweep_still_blocks_an_upload_whose_attachment_is_there(table, s3):
     attachment = _file(table, s3)
     upload = _consumed_upload(table, attachment, status="invalid")
+    scans = table.calls["scan"]
 
     assert uploads.cleanup(upload, s3=_client(), settings=SETTINGS, now=NOW) == "protected"
     assert table.rows[(upload["PK"], "META")]["status"] == "cleanup_blocked"
     assert s3.holds(attachment["immutable_object_key"], attachment["immutable_version_id"])
+    assert table.calls["scan"] == scans
 
 
 def test_settling_staging_debt_no_longer_fails_on_a_missing_argument(table, s3):

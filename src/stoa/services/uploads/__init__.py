@@ -181,7 +181,6 @@ def cleanup(
     s3: Any,
     settings: Settings,
     now: datetime,
-    reference_scan_limit: int = 100,
     account_fence_generation: int | None = None,
 ) -> str:
     """Clean one upload a step further: `deleted`, `deferred`, `protected`, `retryable` or `skipped`.
@@ -205,7 +204,6 @@ def cleanup(
             s3=s3,
             settings=settings,
             now=now,
-            reference_scan_limit=reference_scan_limit,
         )
     owner_id = candidate.get("owner_id")
     if not isinstance(owner_id, str) or not owner_id:
@@ -235,7 +233,6 @@ def cleanup(
         s3=s3,
         settings=settings,
         now=now,
-        reference_scan_limit=reference_scan_limit,
     )
 
 
