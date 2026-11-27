@@ -1,5 +1,4 @@
 """Student routes — profile, learning summary, and question history."""
-from collections import Counter
 from collections.abc import Iterable, Mapping
 from decimal import Decimal
 from datetime import datetime, timezone
@@ -220,13 +219,6 @@ def _question_rows(value: object, correlation_id: str) -> list[dict[str, object]
             _invalid_stored_student_response(correlation_id, "question_item")
         rows.append(dict(value_row))
     return rows
-
-
-def _knowledge_points(row: Mapping[str, object], correlation_id: str) -> list[str]:
-    value = row.get("knowledge_points", [])
-    if not isinstance(value, list) or not all(isinstance(point, str) for point in value):
-        _invalid_stored_student_response(correlation_id, "knowledge_points")
-    return value
 
 
 class LearningHistoryItem(BaseModel):
@@ -600,7 +592,6 @@ class SummaryResponse(BaseModel):
     total_questions: int
     ai_resolved: int
     teacher_resolved: int
-    weak_knowledge_points: list[str]
 
 
 class QuestionListItem(BaseModel):
@@ -718,22 +709,11 @@ async def get_summary(
         if conversation.get("escalated") and conversation.get("escalation_status") == "resolved"
     )
 
-    kp_counter: Counter = Counter()
-    for q in questions:
-        for kp in _knowledge_points(q, correlation_id):
-            kp_counter[kp] += 1
-    # What Ask questions named counts the same (#143).
-    for record in asked_knowledge_repo.list_for_student(student_id):
-        for kp in _knowledge_points(record, correlation_id):
-            kp_counter[kp] += 1
-    weak_kps = [kp for kp, _ in kp_counter.most_common(10)]
-
     return SummaryResponse(
         student_id=student_id,
         total_questions=len(questions),
         ai_resolved=ai_resolved,
         teacher_resolved=teacher_resolved,
-        weak_knowledge_points=weak_kps,
     )
 
 
