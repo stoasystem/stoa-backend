@@ -11,7 +11,9 @@ a finished lesson that carries its own title). The fixture keeps, per route and
 language, every name the response carries and a digest of the whole response;
 both must be what main gave. The two learning profiles were recorded again when
 their weak topics began to come from `weak_topics` (#673): the same names, in
-the new order, each topic with its `score`.
+the new order, each topic with its `score`. The parent summary was recorded again
+when its weak topics became the learning profile's first ten (#674): the same
+names, in the profile's order.
 
 To record it again (on main, before a change to names):
 `STOA_RECORD_CURRICULUM_NAMES=1 pytest tests/test_curriculum_names_unchanged.py`.

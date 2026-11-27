@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from fakes import student_evidence as fake_evidence
+from fakes import weak_topic_students
 from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa import config
@@ -20,6 +21,7 @@ from stoa.routers.admin import _common as admin_router
 from stoa.security.authorization import AuthorizationFacts, ParentAuthorizationFacts
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.declared_authorization import get_authorization_fact_repository
+from stoa.services import weak_topics
 from stoa.services.account_errors import AccountViolation
 from stoa.services.current_relationship import SOURCE_LINK, Standing, Verdict
 
@@ -997,9 +999,11 @@ def test_parent_child_summary_empty_state(monkeypatch):
     }
 
 
-def test_parent_child_summary_weak_topics_leave_subjects_out(monkeypatch):
-    """A subject is not a weak topic: not a mistake's, and not one an older
-    weekly report stored among its weak points (#631)."""
+def test_parent_child_summary_weak_topics_are_not_the_latest_report_s_again(monkeypatch):
+    """The dashboard counts the evidence once, by the one rule (#674): what the
+    latest weekly report stored among its weak points is not added back, so a
+    subject an older report stored (#631) cannot come back either. A mistake
+    weighs two, a named point one."""
     monkeypatch.setattr(
         parents.question_repo,
         "list_by_student",
@@ -1039,14 +1043,58 @@ def test_parent_child_summary_weak_topics_leave_subjects_out(monkeypatch):
     )
     monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
     report = _report()
-    report["weak_knowledge_points"] = ["mathematics", "fractions", "Mathematik", "math"]
+    report["weak_knowledge_points"] = ["mathematics", "fractions", "fractions", "ratios", "Mathematik"]
     monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: report)
 
     client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
     response = client.get("/parents/me/children/child-1/summary")
 
     assert response.status_code == 200
-    assert response.json()["weakTopics"] == ["fractions", "geometry"]
+    assert response.json()["weakTopics"] == ["geometry", "fractions"]
+
+
+@pytest.mark.parametrize("student", weak_topic_students.STUDENTS, ids=lambda student: student.key)
+def test_parent_child_summary_weak_topics_are_the_learning_profile_s_first_ten(monkeypatch, student):
+    """The dashboard and the learning profile give the parent the same ten
+    weak topics, in the same order, for each typical student (#674)."""
+    questions = [
+        {"PK": f"QUESTION#{row['question_id']}", "SK": "META", **row} for row in student.questions
+    ]
+    monkeypatch.setattr(
+        parents.question_repo,
+        "list_by_student",
+        lambda child_id, limit=20, last_key=None: {"Items": questions},
+    )
+    monkeypatch.setattr(
+        parents.asked_knowledge_repo, "list_for_student", lambda child_id, **_kwargs: list(student.asked)
+    )
+    evidence = fake_evidence.evidence(
+        "child-1",
+        catalog=weak_topic_students.catalog(),
+        attempts=student.answers,
+        now=weak_topic_students.NOW,
+    )
+    fake_evidence.install(monkeypatch, evidence)
+    monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
+    report = _report()
+    report["weak_knowledge_points"] = ["Bewegung", "Winkel messen"]
+    monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: report)
+    expected = [
+        topic.name
+        for topic in weak_topics.for_student(
+            evidence, [*questions, *student.asked], locale="de"
+        )[:10]
+    ]
+
+    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
+    summary = client.get("/parents/me/children/child-1/summary")
+    profile = client.get("/parents/me/children/child-1/learning-profile")
+
+    assert summary.status_code == 200
+    assert profile.status_code == 200
+    assert expected
+    assert summary.json()["weakTopics"] == expected
+    assert [topic["label"] for topic in profile.json()["weakTopics"]] == expected
 
 
 def test_parent_child_summary_rejects_unlinked_before_data_reads(monkeypatch):
