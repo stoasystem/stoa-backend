@@ -266,6 +266,7 @@ def _preview(manifest: dict[str, Any]) -> _Preview:
                 "expectedPublishedVersionId": row.get("expectedPublishedVersionId"),
                 "validationIssues": row.get("validationIssues") or [],
                 "conflicts": row.get("conflicts") or [],
+                "missingTitleLocales": row.get("missingTitleLocales") or [],
             }
             for row in rows
         ],
@@ -281,7 +282,7 @@ def _summary_evidence(migration_id: str, summary: Mapping[str, Any]) -> str:
     return (
         f"{migration_id} creates:{summary.get('creates', 0)} updates:{summary.get('updates', 0)} "
         f"skips:{summary.get('skips', 0)} conflicts:{summary.get('conflicts', 0)} "
-        f"errors:{summary.get('errors', 0)}"
+        f"errors:{summary.get('errors', 0)} missingTitles:{summary.get('missingTitles', 0)}"
     )
 
 

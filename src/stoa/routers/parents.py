@@ -1047,7 +1047,10 @@ def _practice_history_events(
 
 def _topic_names(evidence: student_evidence.StudentEvidence) -> curriculum_names.Names:
     """The curriculum's names for the child's knowledge points, in the reader's language."""
-    return curriculum_names.for_reader(evidence.content.locale, catalog=evidence.content.catalog)
+    content = evidence.content
+    return curriculum_names.for_reader(
+        content.locale, catalog=content.catalog, rows=content.named_rows
+    )
 
 
 def _conversation_history_events(child_id: str) -> list[ParentChildActivity]:

@@ -382,9 +382,10 @@ def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
     ]
     locale = locale_service.resolve_locale(None)
     # An older progress row kept the lesson's title beside it, and that is the
-    # stored title it is named by; only the other lessons' rows are read.
+    # German name it is named by; its row, read like every other finished
+    # lesson's, names it in the other languages (#661).
     kept = [{"lesson_id": lesson.lesson_id, "title": lesson.title} for lesson in finished if lesson.title]
-    read = _lesson_rows(lesson.lesson_id for lesson in finished if not lesson.title)
+    read = _lesson_rows(lesson.lesson_id for lesson in finished)
     names = curriculum_names.for_reader(locale, rows=[*kept, *read])
     for lesson in finished:
         items.append(

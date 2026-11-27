@@ -190,6 +190,8 @@ def _analyze_row(row: dict[str, Any]) -> dict[str, Any]:
         "targetVersionId": row.get("targetVersionId"),
         "validationIssues": validation_issues,
         "conflicts": conflicts,
+        # Not an error: a reader sees these languages' name in German (#661).
+        "missingTitleLocales": curriculum_ops_service.lesson_missing_locales(row["lesson"]),
         "rollbackHint": row.get("rollbackHint"),
         "lesson": row["lesson"],
         "exercises": row["exercises"],
@@ -322,8 +324,18 @@ def _publish_manifest(
 
 
 def _summary(rows: list[dict[str, Any]]) -> dict[str, int]:
-    counts = {"total": len(rows), "creates": 0, "updates": 0, "skips": 0, "conflicts": 0, "errors": 0}
+    counts = {
+        "total": len(rows),
+        "creates": 0,
+        "updates": 0,
+        "skips": 0,
+        "conflicts": 0,
+        "errors": 0,
+        "missingTitles": 0,
+    }
     for row in rows:
+        if row.get("missingTitleLocales"):
+            counts["missingTitles"] += 1
         action = row.get("action") or row.get("status")
         if action == "create":
             counts["creates"] += 1
@@ -346,6 +358,7 @@ def _public_row(row: dict[str, Any]) -> dict[str, Any]:
         "publishIntent": row.get("publishIntent", False),
         "validationIssues": row.get("validationIssues") or [],
         "conflicts": row.get("conflicts") or [],
+        "missingTitleLocales": row.get("missingTitleLocales") or [],
     }
 
 

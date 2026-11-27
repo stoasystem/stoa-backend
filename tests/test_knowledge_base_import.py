@@ -447,6 +447,12 @@ def test_every_practice_set_is_a_draft_of_one_small_star_in_four_languages(tmp_p
     assert word_problems["lesson"]["unitId"] == "brueche-brueche-addieren"
     assert word_problems["lesson"]["topicId"] == "brueche"
     assert word_problems["lesson"]["title"] == "Sachaufgaben"
+    # Named in the four languages on the row itself (#661), as the vocabulary names it.
+    assert word_problems["lesson"]["titles"] == vocabulary["practiceSets"][
+        "brueche-brueche-addieren--sachaufgaben--1"
+    ]
+    assert word_problems["lesson"]["titles"]["de"] == "Sachaufgaben"
+    assert set(word_problems["lesson"]["titles"]) == {"de", "en", "fr", "it"}
     assert word_problems["lesson"]["gradeLevel"] == "grade_5_primary"
     assert word_problems["lesson"]["extension"] is False
     # p101 needs p100, which sits in another star: the set says so, it is not locked.

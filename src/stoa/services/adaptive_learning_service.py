@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 import hashlib
@@ -225,7 +225,9 @@ def get_memory_summary(
         snapshots,
         normalized_subject,
         user,
-        topic_of=_curriculum_topic_of(evidence.content.catalog, locale),
+        topic_of=_curriculum_topic_of(
+            evidence.content.catalog, locale, rows=evidence.content.named_rows
+        ),
     )
     assignments = adaptive_learning_repo.list_assignments(
         student_id=student_id,
@@ -1704,7 +1706,9 @@ def _next_practice_recommendations(
     return [_recommendation_response(candidate) for candidate in ranked[:5]]
 
 
-def _curriculum_topic_of(catalog: Mapping[str, Any], locale: str) -> Callable[[str], str]:
+def _curriculum_topic_of(
+    catalog: Mapping[str, Any], locale: str, *, rows: Iterable[Mapping[str, Any]] = ()
+) -> Callable[[str], str]:
     """The curriculum topic a weak topic or a memory snapshot is recommended under.
 
     Exercises are shelved, reviewed drafts and assignments filed, under a
@@ -1713,7 +1717,7 @@ def _curriculum_topic_of(catalog: Mapping[str, Any], locale: str) -> Callable[[s
     retires them). Each is taken to the topic the curriculum files it under:
     a unit's topic, the topic itself, and otherwise the slug, as before.
     """
-    names = curriculum_names.for_reader(locale, catalog=catalog)
+    names = curriculum_names.for_reader(locale, catalog=catalog, rows=rows)
     unit_topics = {
         str(row["id"]): str(row.get("topicId") or row["id"])
         for row in catalog.get("units") or ()

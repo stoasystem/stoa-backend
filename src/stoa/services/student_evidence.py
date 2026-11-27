@@ -155,6 +155,16 @@ class Content:
             )
         return self._indexed
 
+    @property
+    def named_rows(self) -> tuple[Mapping[str, Any], ...]:
+        """The kept curriculum's topic, unit and lesson rows.
+
+        Each carries its names in every language (#661), so a spelling written
+        in any of them resolves (`curriculum_names.for_reader(..., rows=)`).
+        """
+        kept = self._kept()
+        return (*kept.topics, *kept.units, *kept.lessons)
+
     def rows(self, key: str) -> list[Mapping[str, Any]]:
         return [item for item in self.catalog.get(key) or () if isinstance(item, Mapping)]
 

@@ -12,11 +12,14 @@ asks it two things:
   the four languages, or the slug made of one (#390). None when the
   curriculum does not know the spelling.
 
-Where the names come from is the same as before this module (#661 moves them
-onto the content rows): a content row's stored German `title`, the English,
-French and Italian titles in `curriculum_translations.TITLE_TRANSLATIONS`
-(the knowledge base's titles merged in), and `SKILL_TITLES` for a skill point,
-which has no row. Only this module reads them to name content;
+Where the names come from: a content row carries its own, `titles` - German,
+English, French and Italian, the shape `normalized_titles` gives (#661) - with
+the German one also in its `title` for the readers that read only that. Until
+the rows written before #661 have theirs (`scripts/backfill_content_titles.py`),
+a language a row does not name is still looked up in
+`curriculum_translations.TITLE_TRANSLATIONS`, and German falls back to the
+stored `title`. A skill point has no row: `SKILL_TITLES` and its translations
+name it. Only this module reads them to name content;
 `tests/test_curriculum_names.py` keeps it that way.
 """
 
@@ -30,9 +33,36 @@ from typing import Any
 
 from stoa.services import curriculum_translations, knowledge_base_catalog
 
+#: The languages a content row is named in; German is the one every row has.
+LOCALES = ("de", "en", "fr", "it")
+
 #: The id a stored content row is named under: its own, the most specific it
 #: carries (a lesson row also names its unit and topic).
 _OWN_ID_KEYS = ("lesson_id", "unit_id", "topic_id")
+
+
+def normalized_titles(value: object, *, german: object = None) -> dict[str, str]:
+    """A content row's `titles` as it is stored (#661): the name in each of the
+    four languages that has one, stripped, in `LOCALES` order.
+
+    `german` is the row's `title`, its German name: where it is given it is the
+    German name, whatever `value` says, so `title` and `titles["de"]` never
+    disagree. Anything that is not a language's name is left out.
+    """
+    names: dict[str, str] = {}
+    if isinstance(value, Mapping):
+        for locale in LOCALES:
+            text = value.get(locale)
+            if isinstance(text, str) and text.strip():
+                names[locale] = text.strip()
+    if isinstance(german, str) and german.strip():
+        names["de"] = german.strip()
+    return {locale: names[locale] for locale in LOCALES if locale in names}
+
+
+def missing_locales(titles: Mapping[str, str]) -> list[str]:
+    """The languages `titles` has no name in, which a reader then sees in German."""
+    return [locale for locale in LOCALES if locale not in titles]
 
 
 def for_reader(
@@ -48,9 +78,12 @@ def for_reader(
     it): its titles are what the reader is shown, and it is what `resolve`
     recognises spellings against. `rows` are stored content rows the caller
     has read itself - the catalog's own builder, or a route that reads one
-    topic or a few lessons rather than the whole curriculum - named by their
-    stored titles. With neither, a content id is named by its translations
-    and a skill point by its own name; nothing resolves.
+    topic or a few lessons rather than the whole curriculum - named by the
+    names they carry. Of two rows with one id, each language's name is taken
+    from the first that has one. Given with `catalog`, the rows also tell
+    `resolve` every language's spelling of the content the catalog shows.
+    With neither, a content id is named by its translations and a skill point
+    by its own name; nothing resolves.
     """
     return Names(locale, catalog or {}, rows)
 
@@ -70,32 +103,40 @@ class Names:
                 title = row.get("title")
                 if _is_name(title):
                     self._shown.setdefault(content_id, title)
-        self._stored: dict[str, str] = {}
+        self._stored: dict[str, dict[str, str]] = {}
         for row in rows:
-            content_id, title = _own_id(row), row.get("title")
-            if content_id and _is_name(title):
-                self._stored.setdefault(content_id, title)
+            content_id = _own_id(row)
+            if not content_id:
+                continue
+            stored = self._stored.setdefault(content_id, {})
+            for locale, text in _row_names(row).items():
+                stored.setdefault(locale, text)
         self._spellings: _Spellings | None = None
 
     def name(self, content_id: object) -> str | None:
         """What the topic, unit, lesson or skill point `content_id` is called, or None.
 
         The catalog's title where the catalog has it, as it is already in the
-        reader's language; else the translation into that language; else the
-        stored German title, then a skill point's own name.
+        reader's language; else the name its row carries in that language;
+        else the translation into that language; else the row's German name,
+        then a skill point's own name.
         """
         if not isinstance(content_id, str) or not content_id:
             return None
         shown = self._shown.get(content_id)
         if shown is not None:
             return shown
+        stored = self._stored.get(content_id, {})
+        own = stored.get(self._locale)
+        if own is not None:
+            return own
         if self._locale != "de":
             translated = curriculum_translations.TITLE_TRANSLATIONS.get(content_id, {}).get(
                 self._locale
             )
             if translated is not None:
                 return translated
-        return self._stored.get(content_id) or curriculum_translations.SKILL_TITLES.get(content_id)
+        return stored.get("de") or curriculum_translations.SKILL_TITLES.get(content_id)
 
     def resolve(
         self, *spellings: object, unit_id: object = None, lesson_id: object = None
@@ -120,7 +161,7 @@ class Names:
 
     def _spellings_known(self) -> _Spellings:
         if self._spellings is None:
-            self._spellings = _Spellings.of(self._catalog)
+            self._spellings = _Spellings.of(self._catalog, self._stored)
         return self._spellings
 
 
@@ -141,12 +182,19 @@ class _Spellings:
     aliases: dict[str, str] = field(default_factory=dict)
 
     @classmethod
-    def of(cls, catalog: Mapping[str, Any]) -> _Spellings:
+    def of(
+        cls, catalog: Mapping[str, Any], stored: Mapping[str, Mapping[str, str]]
+    ) -> _Spellings:
         # Read here, not at import: the curriculum service names its catalog
         # through this module.
         from stoa.services import curriculum_service
 
         units, topics = _by_id(catalog, "units"), _by_id(catalog, "topics")
+
+        def every_name(content_id: str) -> tuple[str, ...]:
+            """What a content row calls itself in any language, and its translations."""
+            return (*stored.get(content_id, {}).values(), *_every_translation(content_id))
+
         known = cls(
             units=set(units),
             lesson_units={
@@ -162,7 +210,7 @@ class _Spellings:
         # names of what hangs under it, and those before a topic's.
         for unit_id, row in units.items():
             zap_title = knowledge_base_catalog.ZAP_UNITS.get(unit_id)
-            known._claim(unit_id, unit_id, row.get("title"), *_every_translation(unit_id))
+            known._claim(unit_id, unit_id, row.get("title"), *every_name(unit_id))
             known._claim(unit_id, zap_title, _without_aside(zap_title))
         for skill_id, unit_id in curriculum_service.skill_unit_ids().items():
             if unit_id in units:
@@ -179,12 +227,12 @@ class _Spellings:
                     known.lesson_units[lesson_id],
                     lesson_id,
                     row.get("title"),
-                    *_every_translation(lesson_id),
+                    *every_name(lesson_id),
                 )
         for topic_id, row in topics.items():
             under = units_of_topic.get(topic_id, [])
             target = under[0] if len(under) == 1 else topic_id
-            known._claim(target, topic_id, row.get("title"), *_every_translation(topic_id))
+            known._claim(target, topic_id, row.get("title"), *every_name(topic_id))
         return known
 
     def _claim(self, target: str, *spellings: object) -> None:
@@ -208,6 +256,15 @@ def _own_id(row: Mapping[str, Any]) -> str:
         if isinstance(value, str) and value:
             return value
     return ""
+
+
+def _row_names(row: Mapping[str, Any]) -> dict[str, str]:
+    """The names a stored content row carries: its `titles`, and its `title` as
+    the German one where `titles` has none (a row written before #661)."""
+    names = normalized_titles(row.get("titles"))
+    if "de" not in names:
+        names = normalized_titles(names, german=row.get("title"))
+    return names
 
 
 def _is_name(value: object) -> bool:
