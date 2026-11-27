@@ -27,7 +27,12 @@ from fastapi.testclient import TestClient
 from stoa import aws
 from stoa.aws import Kind
 from stoa.routers import notifications
-from stoa.services import email_unsubscribe, notification_service, notify_service
+from stoa.services import (
+    email_unsubscribe,
+    notification_service,
+    notify_service,
+    one_off_email,
+)
 from stoa.services.email_unsubscribe import EmailKind
 
 import test_notifications
@@ -355,10 +360,10 @@ def test_one_off_emails_carry_no_unsubscribe() -> None:
 
     ses = RecordingSes()
     aws.install({Kind.SES: ses})
-    notify_service.send_account_invitation_email(
+    one_off_email.send_account_invitation_email(
         "a@stoa.test", activation_token="t", expires_at="2026-12-01"
     )
-    notify_service.send_teacher_invitation_email(
+    one_off_email.send_teacher_invitation_email(
         "b@stoa.test", activation_token="t", expires_at="2026-12-01"
     )
     password_change_code_service.send_code_email("c@stoa.test", "123456")

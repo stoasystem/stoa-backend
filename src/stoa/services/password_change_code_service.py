@@ -13,7 +13,7 @@ import hashlib
 import secrets
 
 from stoa.db import table as db_table
-from stoa.services import email_layout, locale_service, message_catalog, notify_service
+from stoa.services import email_layout, locale_service, message_catalog, one_off_email
 
 
 CODE_DIGITS = 6
@@ -367,7 +367,7 @@ def code_email(code: str, *, locale: str | None = None) -> email_layout.Rendered
 def send_code_email(recipient: str, code: str, *, locale: str | None = None) -> None:
     """Deliver the code to the account's own mailbox and nowhere else."""
 
-    notify_service.send_one_off_email(recipient, code_email(code, locale=locale))
+    one_off_email.send_one_off_email(recipient, code_email(code, locale=locale))
 
 
 def issue(

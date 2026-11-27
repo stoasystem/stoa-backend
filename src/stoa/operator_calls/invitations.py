@@ -37,7 +37,7 @@ from stoa.operator_calls.catalog import (
     RevokeInvitationArguments,
 )
 from stoa.operator_calls.outcome import OperatorCallRefused, Outcome
-from stoa.services import account_provisioning_service, notify_service
+from stoa.services import account_provisioning_service, one_off_email
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
 
 
@@ -65,7 +65,7 @@ def operator_actor() -> dict[str, Any]:
 
 
 def _language(locale: str | None) -> tuple[str, str]:
-    code = notify_service.account_invitation_locale(locale)
+    code = one_off_email.account_invitation_locale(locale)
     if code is None:
         return ALL_LANGUAGES, "four-language (German, French, Italian, English)"
     return code, LANGUAGES.get(code, code)
@@ -131,7 +131,7 @@ def invite_account(arguments: InviteAccountArguments) -> Outcome:
         full_name=arguments.fullName,
         date_of_birth=arguments.dateOfBirth,
         invitation_expiry_seconds=expiry,
-        deliver=notify_service.account_invitation_delivery(locale),
+        deliver=one_off_email.account_invitation_delivery(locale),
     )
     user_id = str(issued.get("userId") or "")
     number = str(issued.get("accountNumber") or "")
@@ -309,7 +309,7 @@ def reissue_invitation(arguments: ReissueInvitationArguments) -> Outcome:
         actor=operator_actor(),
         invitation_id=str(state["invitationId"]),
         invitation_expiry_seconds=expiry,
-        deliver=notify_service.account_invitation_delivery(locale),
+        deliver=one_off_email.account_invitation_delivery(locale),
     )
     new_id = str(issued.get("invitationId") or "")
     delivered = issued.get("invitationDelivered") is True

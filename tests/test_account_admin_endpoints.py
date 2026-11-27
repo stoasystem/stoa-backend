@@ -26,7 +26,7 @@ from stoa.db.repositories import (
 )
 from stoa.routers import admin, auth, parents, students
 from stoa.routers.admin import users as admin_users
-from stoa.services import locale_service, message_catalog, notify_service
+from stoa.services import locale_service, message_catalog, one_off_email
 from stoa.security.route_inventory import explicit_route_classification, inventory_application
 from stoa.services import (
     account_numbering_service,
@@ -1438,7 +1438,7 @@ def test_邀请端点真的把信交给了SES并带上激活链接(
 def test_四语邮件各自成文且用对了变音字符() -> None:
     subjects = {}
     for locale in ("de", "fr", "it", "en"):
-        email = notify_service.account_invitation_message(
+        email = one_off_email.account_invitation_message(
             activation_token="tok", expires_at="2026-03-04T09:00:00+00:00", locale=locale
         )
         subjects[locale] = email.subject
@@ -1447,12 +1447,12 @@ def test_四语邮件各自成文且用对了变音字符() -> None:
     assert len(set(subjects.values())) == 4
     assert subjects["de"] == message_catalog.text("email.account_invitation.subject", "de")
     # Swiss time and a month in words, never the raw timestamp (#374).
-    de = notify_service.account_invitation_message(
+    de = one_off_email.account_invitation_message(
         activation_token="tok", expires_at="2026-03-04T09:00:00+00:00", locale="de"
     )
     assert "4. März 2026, 10:00" in de.text
     assert "2026-03-04T09" not in de.html
-    assert "é" in notify_service.account_invitation_message(
+    assert "é" in one_off_email.account_invitation_message(
         activation_token="tok", expires_at="x", locale="fr"
     ).html
 
@@ -1463,12 +1463,12 @@ def test_没给角色时邮件不点角色_给了角色只说那一个角色(
         role: message_catalog.text(f"email.account_invitation.role.{role}", "de")
         for role in ("student", "parent", "teacher", "admin")
     }
-    plain = notify_service.account_invitation_message(
+    plain = one_off_email.account_invitation_message(
         activation_token="tok", expires_at="x", locale="de"
     )
     assert not any(line in plain.text for line in role_words.values())
     for role, line in role_words.items():
-        email = notify_service.account_invitation_message(
+        email = one_off_email.account_invitation_message(
             activation_token="tok", expires_at="x", locale="de", role=role
         )
         assert line in email.text

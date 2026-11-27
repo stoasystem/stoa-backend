@@ -11,7 +11,7 @@ from stoa import main
 from stoa.db.repositories import account_email_claim_repo, security_audit_repo
 from stoa.operator_calls import caller_identity, catalog, entry
 from stoa.security.identity import AccountStatus, CanonicalRole
-from stoa.services import account_provisioning_service, notify_service, usage_period
+from stoa.services import account_provisioning_service, one_off_email, usage_period
 
 
 ACCOUNT_ID = "562923011260"
@@ -517,7 +517,7 @@ def mailbox(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     def send(recipient: str, **kwargs: Any) -> None:
         sent.append({"recipient": recipient, **kwargs})
 
-    monkeypatch.setattr(notify_service, "send_account_invitation_email", send)
+    monkeypatch.setattr(one_off_email, "send_account_invitation_email", send)
     return sent
 
 
@@ -660,7 +660,7 @@ def test_a_delivery_failure_is_said_not_hidden(fake_table, monkeypatch) -> None:
     def down(*_args: Any, **_kwargs: Any) -> None:
         raise RuntimeError("SES unavailable")
 
-    monkeypatch.setattr(notify_service, "send_account_invitation_email", down)
+    monkeypatch.setattr(one_off_email, "send_account_invitation_email", down)
 
     result = _invite()
 

@@ -21,7 +21,7 @@ from stoa.services import (
     account_lifecycle,
     account_provisioning_service,
     locale_service,
-    notify_service,
+    one_off_email,
     teacher_identity_provider,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
@@ -246,7 +246,7 @@ def _issue_invitation(
     # by whoever performed the review.
     delivered = True
     try:
-        notify_service.send_teacher_invitation_email(
+        one_off_email.send_teacher_invitation_email(
             recipient,
             activation_token=token,
             expires_at=expires_at.isoformat(),
