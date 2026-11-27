@@ -83,7 +83,9 @@ def for_student(
     """
     start = since if since is not None else evidence.now - WINDOW
     tally = _Tally(
-        curriculum_names.for_reader(locale, catalog=evidence.content.catalog),
+        curriculum_names.for_reader(
+            locale, catalog=evidence.content.catalog, rows=evidence.content.named_rows
+        ),
         _subjects_of(evidence.content.catalog),
     )
     corrected = evidence.last_answered_right

@@ -120,10 +120,12 @@ class Content:
         locale: str = "de",
         catalog: Mapping[str, Any] | None = None,
         indexed: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+        named_rows: Sequence[Mapping[str, Any]] | None = None,
     ) -> None:
         self.locale = locale
         self._catalog = catalog
         self._indexed = indexed
+        self._named_rows = tuple(named_rows) if named_rows is not None else None
         self._read_through: dict[str, list[dict[str, Any]]] = {}
         self._snapshot: curriculum_cache.Snapshot | None = None
 
@@ -154,6 +156,19 @@ class Content:
                 kept.once(("indexed",), lambda: indexed_lessons(kept.lessons))
             )
         return self._indexed
+
+    @property
+    def named_rows(self) -> tuple[Mapping[str, Any], ...]:
+        """The kept curriculum's topic, unit and lesson rows.
+
+        Each carries its names in every language (#661), so a spelling written
+        in any of them resolves (`curriculum_names.for_reader(..., rows=)`).
+        They may be handed in, like the catalog.
+        """
+        if self._named_rows is None:
+            kept = self._kept()
+            self._named_rows = (*kept.topics, *kept.units, *kept.lessons)
+        return self._named_rows
 
     def rows(self, key: str) -> list[Mapping[str, Any]]:
         return [item for item in self.catalog.get(key) or () if isinstance(item, Mapping)]

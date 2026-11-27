@@ -151,14 +151,17 @@ _TABLE_OWNERS = {"services/curriculum_translations.py", "services/knowledge_base
 _TABLES = {"TITLE_TRANSLATIONS", "SKILL_TRANSLATIONS", "SKILL_TITLES", "title_translations"}
 _RETIRED = {"translated_title", "skill_title", "TopicNames", "_every_title", "_subject_display_label"}
 
-#: Every read of a `title` in src/stoa outside curriculum_names, by module and
-#: function, and why it does not name a topic, unit, lesson or skill point from
-#: a stored content row. A new one is either one of these or goes through
-#: `curriculum_names`.
+#: Every read of a `title` or `titles` in src/stoa outside curriculum_names, by
+#: module and function, and why it does not name a topic, unit, lesson or skill
+#: point from a stored content row. A new one is either one of these or goes
+#: through `curriculum_names`.
 _CATALOG = "the student catalog's title, which curriculum_names gave it"
 _NOT_CONTENT = "the title of something that is not a topic, unit, lesson or skill point"
 _WRITER = "writes or checks a content row for an operator, not a reader"
+_SOURCE = "the knowledge base's own names, which the seed and the import write onto rows"
 TITLE_READS: dict[tuple[str, str], str] = {
+    ("db/repositories/curriculum_ops_repo.py", "_kept_titles"): _WRITER,
+    ("db/repositories/curriculum_ops_repo.py", "put_published_projection"): _WRITER,
     ("db/repositories/notification_repo.py", "_global_classification_facts"): _NOT_CONTENT,
     ("db/repositories/notification_repo.py", "validate_global_nonprivate_event"): _NOT_CONTENT,
     ("operator_calls/curriculum.py", "_title"): _WRITER,
@@ -180,6 +183,12 @@ TITLE_READS: dict[tuple[str, str], str] = {
     ("services/adaptive_learning_service.py", "assignment_response"): _NOT_CONTENT,
     ("services/curriculum_migration_service.py", "_normalize_row"): _WRITER,
     ("services/curriculum_ops_service.py", "_lesson_payload"): _WRITER,
+    ("services/curriculum_ops_service.py", "_patch_lesson"): _WRITER,
+    ("services/curriculum_ops_service.py", "lesson_missing_locales"): _WRITER,
+    ("services/curriculum_ops_service.py", "named_lesson"): _WRITER,
+    ("services/curriculum_translations.py", "<module>"): _SOURCE,
+    ("services/knowledge_base_catalog.py", "title_translations"): _SOURCE,
+    ("services/knowledge_base_catalog.py", "unit_choices"): _SOURCE,
     ("services/knowledge_map_service.py", "_practice_sets"): _CATALOG,
     ("services/knowledge_map_service.py", "build_map"): _CATALOG,
     ("services/knowledge_mastery_service.py", "judge_unit"): _CATALOG,
@@ -218,8 +227,11 @@ def _identifiers(tree: ast.AST) -> set[str]:
     return found
 
 
+_NAME_KEYS = {"title", "titles"}
+
+
 def _title_reads(tree: ast.Module) -> set[str]:
-    """The functions that read a `title` key: `x["title"]` or `x.get("title", ...)`."""
+    """The functions that read a `title` or `titles` key: `x["title"]` or `x.get("title", ...)`."""
     found: set[str] = set()
 
     def visit(node: ast.AST, where: str) -> None:
@@ -231,14 +243,14 @@ def _title_reads(tree: ast.Module) -> set[str]:
                 isinstance(child, ast.Subscript)
                 and isinstance(child.ctx, ast.Load)
                 and isinstance(child.slice, ast.Constant)
-                and child.slice.value == "title"
+                and child.slice.value in _NAME_KEYS
             ) or (
                 isinstance(child, ast.Call)
                 and isinstance(child.func, ast.Attribute)
                 and child.func.attr in {"get", "pop", "setdefault"}
                 and child.args
                 and isinstance(child.args[0], ast.Constant)
-                and child.args[0].value == "title"
+                and child.args[0].value in _NAME_KEYS
             ):
                 found.add(where)
             visit(child, inner)

@@ -35,7 +35,13 @@ from pathlib import Path
 from stoa.db.repositories import practice_repo
 from stoa.models.practice import DirectionalHintTemplateId
 from stoa.security.aws_operator_identity import require_sso_operator_session
-from stoa.services import curriculum_cache, knowledge_base_catalog, practice_projection_service
+from stoa.services import (
+    curriculum_cache,
+    curriculum_names,
+    curriculum_translations,
+    knowledge_base_catalog,
+    practice_projection_service,
+)
 
 
 DEFAULT_AWS_ACCOUNT_ID = "562923011260"
@@ -1106,7 +1112,8 @@ def knowledge_base_rows(*, live: bool | Collection[str]):
         {
             "topic_id": row["topic_id"], "subject_id": row["subject_id"], "grade_level": "",
             "grade_levels": list(grade_levels[row["subject_id"]]),
-            "title": row["titles"]["de"], "description": "", "order": row["order"],
+            "title": row["titles"]["de"], "titles": dict(row["titles"]),
+            "description": "", "order": row["order"],
             "status": "available", "rollout_state": state(row["subject_id"]),
         }
         for row in knowledge_base_catalog.topics()
@@ -1116,7 +1123,8 @@ def knowledge_base_rows(*, live: bool | Collection[str]):
             "unit_id": unit["unit_id"], "topic_id": unit["topic_id"],
             "subject_id": unit["subject_id"],
             "grade_level": "grade_6_primary" if unit["subject_id"] == "mathematics" else "",
-            "title": unit["titles"]["de"], "description": unit["description"],
+            "title": unit["titles"]["de"], "titles": dict(unit["titles"]),
+            "description": unit["description"],
             "order": unit["order"],
             "prerequisite_unit_ids": list(unit.get("prerequisites") or []),
             "rollout_state": state(unit["subject_id"]),
@@ -1195,16 +1203,16 @@ SEED_OWNED_FIELDS: dict[str, frozenset[str]] = {
         {"subject_id", "name", "description", "grade_levels", "accent", "order"}
     ),
     "TOPIC": frozenset({
-        "topic_id", "subject_id", "grade_level", "grade_levels", "title",
+        "topic_id", "subject_id", "grade_level", "grade_levels", "title", "titles",
         "description", "order", "status", "rollout_state",
     }),
     "UNIT": frozenset({
-        "unit_id", "topic_id", "subject_id", "grade_level", "title", "description",
+        "unit_id", "topic_id", "subject_id", "grade_level", "title", "titles", "description",
         "order", "prerequisite_unit_ids", "rollout_state", *practice_repo.TOPIC_SHELF_FIELDS,
     }),
     "LESSON": frozenset({
         "lesson_id", "unit_id", "topic_id", "subject_id", "grade_level", "topic_title",
-        "title", "difficulty", "estimated_minutes", "order", "challenge_count",
+        "title", "titles", "difficulty", "estimated_minutes", "order", "challenge_count",
         "rollout_state", "exercise_index", *practice_repo.TOPIC_SHELF_FIELDS,
     }),
     # Every field of a challenge row but its key: the row's version is a hash of
@@ -1247,6 +1255,16 @@ def row_kind(row: dict) -> str:
     return kind
 
 
+def _named(row: dict, content_id: str) -> dict:
+    """`row` with its names in the four languages (#661): its German `title` and
+    the English, French and Italian names the readers show for it. A row that
+    brings its own (the knowledge base's) keeps them."""
+    if "titles" in row:
+        return row
+    translated = curriculum_translations.TITLE_TRANSLATIONS.get(content_id)
+    return {**row, "titles": curriculum_names.normalized_titles(translated, german=row["title"])}
+
+
 def seed_rows(*, knowledge_base: str | None = None) -> list[dict]:
     """Every row the seed writes, holding only the fields it owns, in write order."""
     all_topics, all_units, all_lessons, all_challenges = [], [], [], []
@@ -1277,8 +1295,14 @@ def seed_rows(*, knowledge_base: str | None = None) -> list[dict]:
         {"PK": "PRACTICE", "SK": f"SUBJECT#{subject['subject_id']}", **subject}
         for subject in (SUBJECT, *kb_subjects)
     ]
-    rows += [{"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **t} for t in all_topics]
-    rows += [{"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u} for u in all_units]
+    rows += [
+        {"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **_named(t, t["topic_id"])}
+        for t in all_topics
+    ]
+    rows += [
+        {"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **_named(u, u["unit_id"])}
+        for u in all_units
+    ]
     # Lessons, each with the index of its exercises the star map reads.
     for lesson in all_lessons:
         index = practice_repo.exercise_index(
@@ -1286,8 +1310,8 @@ def seed_rows(*, knowledge_base: str | None = None) -> list[dict]:
             if challenge["lesson_id"] == lesson["lesson_id"]
         )
         rows.append(
-            {"PK": "PRACTICE", "SK": f"LESSON#{lesson['lesson_id']}", **lesson,
-             "exercise_index": index}
+            {"PK": "PRACTICE", "SK": f"LESSON#{lesson['lesson_id']}",
+             **_named(lesson, lesson["lesson_id"]), "exercise_index": index}
         )
     # Validate all IDs before any write, then add canonical rows and direct pointers.
     rows.extend(prepare_challenge_items(all_challenges))

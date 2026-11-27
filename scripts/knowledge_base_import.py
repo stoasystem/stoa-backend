@@ -1164,6 +1164,7 @@ def manifests(
                         "publish": False,
                         "lesson": {
                             "title": titles["de"],
+                            "titles": dict(titles),
                             "objective": star["description"],
                             "description": star["description"],
                             "subjectId": subject,
@@ -1221,6 +1222,7 @@ def manifests(
                 "publish": False,
                 "lesson": {
                     "title": titles["de"],
+                    "titles": dict(titles),
                     "objective": star["description"],
                     "description": star["description"],
                     "subjectId": "mathematics",

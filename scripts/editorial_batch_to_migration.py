@@ -67,6 +67,15 @@ MINUTES_PER_EXERCISE = 3
 #: Imported lessons follow the seeded lessons of their star, which number theirs from 1.
 FIRST_IMPORTED_ORDER = 101
 PART_SUFFIX = " · Teil {part}"
+#: The suffix of a part in each language a card's title is given in (#661).
+PART_SUFFIXES = {
+    "de": PART_SUFFIX,
+    "en": " · Part {part}",
+    "fr": " · Partie {part}",
+    "it": " · Parte {part}",
+}
+#: The languages a lesson is named in on its row.
+TITLE_LOCALES = ("de", "en", "fr", "it")
 
 #: Statuses an editorial record must have reached to become a draft (work guide:
 #: draft → extracted → mapped → reviewed → ready_for_adapter; blocked is a stop).
@@ -109,6 +118,18 @@ def _german(value: object) -> str:
     if isinstance(value, Mapping):
         return str(value.get("de") or "").strip()
     return str(value or "").strip()
+
+
+def _titles(value: object) -> dict[str, str]:
+    """A card title's names in the languages a lesson row holds, when it gives more than German."""
+    if not isinstance(value, Mapping):
+        return {}
+    names = {
+        locale: str(value.get(locale) or "").strip()
+        for locale in TITLE_LOCALES
+        if str(value.get(locale) or "").strip()
+    }
+    return names if set(names) - {"de"} and "de" in names else {}
 
 
 def _explanation(solution: object) -> str:
@@ -243,6 +264,11 @@ def _split(lesson: dict[str, Any], max_exercises: int) -> list[dict[str, Any]]:
         if count > 1:
             part["publicLessonId"] = f"{lesson['publicLessonId']}-{index + 1}"
             part["lesson"]["title"] += PART_SUFFIX.format(part=index + 1)
+            if "titles" in part["lesson"]:
+                part["lesson"]["titles"] = {
+                    locale: name + PART_SUFFIXES[locale].format(part=index + 1)
+                    for locale, name in part["lesson"]["titles"].items()
+                }
         part["lesson"]["estimatedMinutes"] = max(5, MINUTES_PER_EXERCISE * len(chunk))
         for order, exercise in enumerate(chunk, start=1):
             exercise["order"] = order
@@ -360,6 +386,7 @@ def convert(
                 "publish": False,
                 "lesson": {
                     "title": _german(card.get("title")),
+                    **({"titles": names} if (names := _titles(card.get("title"))) else {}),
                     "objective": str(card.get("learning_objective") or "").strip(),
                     "subjectId": refs.get("subject_id"),
                     "topicId": refs.get("topic_id"),

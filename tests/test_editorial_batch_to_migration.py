@@ -451,6 +451,37 @@ def _steps(count: int) -> list[dict[str, Any]]:
     return [{"step": index, "text": f"Schritt {index}."} for index in range(1, count + 1)]
 
 
+def test_a_card_titled_in_every_language_names_its_lessons_in_them() -> None:
+    """The manifest carries the names onto the lesson rows (#661), each part's too."""
+    questions = [_question(f"EX-D0001-{index:02d}") for index in range(10)]
+    batch = _batch(*questions)
+    batch["knowledge"][0]["title"] = {
+        "de": "Anteil einer Menge",
+        "en": "Part of a set",
+        "fr": "Part d'un ensemble",
+        "it": "Parte di un insieme",
+        "zh": "卡片",
+    }
+
+    manifest, _report = converter.convert(batch, max_exercises=8)
+
+    first, second = manifest["lessons"]
+    assert first["lesson"]["titles"] == {
+        "de": "Anteil einer Menge · Teil 1",
+        "en": "Part of a set · Part 1",
+        "fr": "Part d'un ensemble · Partie 1",
+        "it": "Parte di un insieme · Parte 1",
+    }
+    assert second["lesson"]["titles"]["fr"] == "Part d'un ensemble · Partie 2"
+    assert first["lesson"]["title"] == first["lesson"]["titles"]["de"]
+
+
+def test_a_card_titled_in_german_only_gives_no_titles() -> None:
+    manifest, _report = converter.convert(_batch(_question("EX-D0001-01")))
+
+    assert "titles" not in manifest["lessons"][0]["lesson"]
+
+
 def test_a_large_card_becomes_parts_of_near_equal_size_easiest_first() -> None:
     questions = [
         _question(

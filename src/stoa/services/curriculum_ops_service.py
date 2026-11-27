@@ -13,6 +13,7 @@ from stoa.services import (
     answer_judging,
     curriculum_analytics_service,
     curriculum_cache,
+    curriculum_names,
     curriculum_service,
     curriculum_translations,
     error_causes,
@@ -42,6 +43,7 @@ ROLLBACK_STATES = {"approved", "published", "superseded", "archived"}
 
 LESSON_FIELD_ALIASES = {
     "title": "title",
+    "titles": "titles",
     "order": "order",
     "objective": "objective",
     "description": "description",
@@ -454,9 +456,10 @@ def _existing_version(public_id: str, version_id: str) -> dict[str, Any]:
 
 
 def _lesson_payload(public_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    return {
+    return named_lesson({
         "lesson_id": public_id,
         "title": str(payload.get("title") or "").strip(),
+        **({"titles": payload["titles"]} if "titles" in payload else {}),
         "objective": str(payload.get("objective") or payload.get("description") or "").strip(),
         "description": str(payload.get("description") or payload.get("objective") or "").strip(),
         "subject_id": _clean_id(payload.get("subject_id") or payload.get("subjectId")),
@@ -473,7 +476,39 @@ def _lesson_payload(public_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         ),
         **_lesson_order(payload.get("order")),
         **_lesson_readiness(payload),
-    }
+    })
+
+
+def named_lesson(lesson: dict[str, Any]) -> dict[str, Any]:
+    """The lesson with its names in agreement (#661).
+
+    `titles` holds its name in each language it has one in
+    (`curriculum_names.normalized_titles`); `title` is the German one, the
+    same as `titles["de"]`. When both are given `title` wins; a lesson that
+    gives only `titles` takes its German name as `title`. A lesson without
+    `titles` is left as it is, so a manifest written before #661 normalizes
+    as it did and its migration id does not change. A language the lesson has
+    no name in is shown in German; the migration dry run lists it
+    (`missingTitleLocales`).
+    """
+    if "titles" not in lesson:
+        return lesson
+    given = curriculum_names.normalized_titles(lesson["titles"])
+    german = str(lesson.get("title") or "").strip() or given.get("de", "")
+    titles = curriculum_names.normalized_titles(given, german=german)
+    named = {**lesson, "titles": titles}
+    if german:
+        named["title"] = german
+    if not titles:
+        named.pop("titles")
+    return named
+
+
+def lesson_missing_locales(lesson: dict[str, Any]) -> list[str]:
+    """The languages the lesson has no name in, which a reader sees in German."""
+    return curriculum_names.missing_locales(
+        curriculum_names.normalized_titles(lesson.get("titles"), german=lesson.get("title"))
+    )
 
 
 def _lesson_readiness(payload: dict[str, Any]) -> dict[str, Any]:
@@ -702,6 +737,11 @@ def _patch_lesson(public_id: str, current: dict[str, Any], payload: dict[str, An
     for source, target in LESSON_FIELD_ALIASES.items():
         if source in patch and patch[source] is not None:
             lesson[target] = patch[source]
+    # Names given only in `titles` rename the lesson in German too.
+    given = curriculum_names.normalized_titles(patch.get("titles"))
+    if "de" in given and patch.get("title") is None:
+        lesson["title"] = given["de"]
+    lesson = named_lesson(lesson)
     if "estimated_minutes" in lesson:
         lesson["estimated_minutes"] = int(lesson["estimated_minutes"])
     if "order" in lesson:

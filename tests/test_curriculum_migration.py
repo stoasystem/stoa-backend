@@ -165,7 +165,17 @@ def test_curriculum_migration_dry_run_is_non_mutating(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["publishReady"] is True
-    assert body["summary"] == {"total": 1, "creates": 1, "updates": 0, "skips": 0, "conflicts": 0, "errors": 0}
+    assert body["summary"] == {
+        "total": 1,
+        "creates": 1,
+        "updates": 0,
+        "skips": 0,
+        "conflicts": 0,
+        "errors": 0,
+        "missingTitles": 1,
+    }
+    # The manifest names its lesson in German only (#661).
+    assert body["rows"][0]["missingTitleLocales"] == ["en", "fr", "it"]
     assert body["rows"][0]["action"] == "create"
     assert state["versions"] == {}
     assert state["pointers"] == {}

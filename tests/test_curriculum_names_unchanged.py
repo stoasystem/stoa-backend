@@ -32,8 +32,15 @@ import pytest
 import time_machine
 
 import test_curriculum_reads as reads
+from scripts import backfill_content_titles
+from stoa.db import table as db_table
 from stoa.main import RequestLocaleMiddleware
-from stoa.services import curriculum_service, locale_service
+from stoa.services import (
+    curriculum_service,
+    curriculum_translations,
+    knowledge_base_catalog,
+    locale_service,
+)
 
 GOLDEN = Path(__file__).parent / "fixtures" / "curriculum_names_660.json"
 LOCALES = ("de", "en", "fr", "it")
@@ -188,6 +195,45 @@ def test_every_name_reads_as_main_gave_it(fixture_lesson: dict[str, Any]) -> Non
             got = answers[name][locale]
             assert got["names"] == expected["names"], f"{name} {locale}"
             assert got["digest"] == expected["digest"], f"{name} {locale}"
+
+
+def _recorded_answers_match(answers: dict[str, dict[str, Any]]) -> None:
+    recorded = json.loads(GOLDEN.read_text(encoding="utf-8"))
+    assert set(answers) == set(recorded)
+    for name, by_locale in recorded.items():
+        for locale, expected in by_locale.items():
+            got = answers[name][locale]
+            assert got["names"] == expected["names"], f"{name} {locale}"
+            assert got["digest"] == expected["digest"], f"{name} {locale}"
+
+
+def test_after_the_backfill_the_names_need_no_translation_table(
+    fixture_lesson: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#661: once the rows carry their names, the table's content entries can go.
+
+    The rows lose the `titles` the writers now give them, as production's rows
+    have none; the backfill writes them; then only the subjects' and the skill
+    points' entries are left in `TITLE_TRANSLATIONS`, and every route still
+    answers word for word as main did.
+    """
+    table = db_table.table()
+    for (pk, sk), row in table.rows.items():
+        if pk == "PRACTICE" and sk.split("#", 1)[0] in backfill_content_titles.KINDS:
+            row.pop("titles", None)
+    assert backfill_content_titles.run(table, apply_writes=True, verify_rows=False) == 0
+    kept = {
+        "mathematics",
+        *(subject["subject_id"] for subject in knowledge_base_catalog.SUBJECTS),
+        *curriculum_translations.SKILL_TITLES,
+    }
+    monkeypatch.setattr(
+        curriculum_translations,
+        "TITLE_TRANSLATIONS",
+        {key: value for key, value in curriculum_translations.TITLE_TRANSLATIONS.items() if key in kept},
+    )
+
+    _recorded_answers_match(_answers(fixture_lesson))
 
 
 def test_the_fixture_names_content_in_each_language() -> None:

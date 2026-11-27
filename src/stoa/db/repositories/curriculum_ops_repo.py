@@ -464,6 +464,10 @@ def put_published_projection(version: CurriculumItem, manifest: CurriculumItem) 
     lesson["manifest_id"] = manifest["manifest_id"]
     lesson["challenge_count"] = len(rows)
     lesson["exercise_index"] = practice_repo.exercise_index(rows)
+    if "titles" not in lesson:
+        kept = _kept_titles(table, public_id, lesson.get("title"))
+        if kept is not None:
+            lesson["titles"] = kept
     lesson_row = {"PK": PRACTICE_PK, "SK": f"LESSON#{public_id}", **lesson}
     _put_item(table, Item={**lesson_row, **practice_repo.topic_shelf_fields(lesson_row)})
 
@@ -487,6 +491,23 @@ def put_published_projection(version: CurriculumItem, manifest: CurriculumItem) 
         except db_table.WriteRefused:
             # No pointer was ever written for it, or the id now points elsewhere.
             pass
+
+
+def _kept_titles(table: object, public_id: str, title: object) -> object | None:
+    """The names in every language the lesson's row carries, for a version without its own.
+
+    A version written before lessons carried `titles` (#661) - a rollback to it,
+    or a manifest of then applied again - would otherwise take the names the
+    backfill gave the row away. They are kept only while the German name is
+    the same: a lesson renamed in German has to be named again in the others.
+    """
+    stored = _get_item(table, Key={"PK": PRACTICE_PK, "SK": f"LESSON#{public_id}"}).get("Item")
+    if not isinstance(stored, Mapping):
+        return None
+    titles = stored.get("titles")
+    if isinstance(titles, Mapping) and title and titles.get("de") == title:
+        return titles
+    return None
 
 
 def get_practice_unit(unit_id: str) -> CurriculumItem | None:
