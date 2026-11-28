@@ -49,7 +49,6 @@ from stoa.db.repositories import (
     account_deletion_repo,
     attachment_repo,
     curriculum_analytics_repo,
-    notification_repo,
     report_repo,
 )
 from stoa.services import (
@@ -57,6 +56,7 @@ from stoa.services import (
     attachment_service,
     help_requests,
     moderation_service,
+    notifications,
     uploads,
 )
 
@@ -297,7 +297,7 @@ def _scrub_help_request(row: Mapping[str, Any], visit: _Visit) -> str:
 
 
 def _scrub_notification(row: Mapping[str, Any], visit: _Visit) -> str:
-    notification_repo.scrub_notification_identity_references(
+    notifications.scrub_notification_identity_references(
         row, owner_id=visit.account, generation=visit.generation
     )
     return DONE
