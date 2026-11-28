@@ -1943,8 +1943,11 @@ def test_the_escalation_lands_in_the_queue_the_teacher_actually_reads(monkeypatc
     assert [item["escalation_request_id"] for item in listed] == [request_id]
     assert listed[0]["subject"] == "physics"
     assert listed[0]["escalation_status"] == "pending"
-    # And in the list the admin statistics read (card 133).
-    assert help_requests.list_listed(table=table) == listed
+    # And in the list the admin statistics read (card 133, #697).
+    from datetime import datetime, timezone
+
+    since = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    assert help_requests.list_asked_since(since, table=table) == listed
 
 
 def test_the_case_the_student_spent_is_on_the_table_too(monkeypatch):

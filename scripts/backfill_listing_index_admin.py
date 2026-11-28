@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Put the rows the admin pages count and list in GSI-Listing (cards 133, 135).
 
-`/admin/stats` reads the legacy questions and the help requests, and the
-curriculum worklist reads the lesson versions and pointers, through GSI-Listing
-instead of a scan of the whole table. A help request carries the keys from the
+`/admin/stats` reads the help requests (and until #697 read the legacy
+questions), and the curriculum worklist reads the lesson versions and pointers,
+through GSI-Listing instead of a scan of the whole table. A help request carries the keys from the
 release that writes them on (`help_requests.listing_fields`), a version or a
 pointer from every write after it (`curriculum_ops_repo.listing_fields`); a
 legacy question is no longer written at all (`question_repo.listing_fields`).

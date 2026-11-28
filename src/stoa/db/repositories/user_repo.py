@@ -362,40 +362,6 @@ def list_accounts(
     )
 
 
-def profile_role_census(
-    *, page_budget: int, table: object | None = None
-) -> tuple[list[UserItem], bool]:
-    """Every profile's role, and whether the walk read the whole table.
-
-    A single scan answers from at most one megabyte of rows read, so on any table
-    past that size one call is a sample and not a census. Counting from a sample
-    produces a number that looks like an answer, which is worse than no number.
-    Since card 133 the walk is the profiles' partition of GSI-Listing, not the table.
-    """
-    rows: list[UserItem] = []
-    for page in islice(
-        db_table.pages(
-            "query",
-            table=table or db_table.table(),
-            key=ACCOUNT_LIST_INDEX_KEY,
-            IndexName=ACCOUNT_LIST_INDEX,
-            KeyConditionExpression="#listing = :listing",
-            FilterExpression="SK = :profile",
-            ExpressionAttributeValues={
-                ":listing": account_deletion_repo.ACCOUNT_LISTING,
-                ":profile": "PROFILE",
-            },
-            ProjectionExpression="#role",
-            ExpressionAttributeNames={"#role": "role", "#listing": "listing"},
-        ),
-        page_budget,
-    ):
-        rows.extend(page.items)
-        if page.last_key is None:
-            return rows, True
-    return rows, False
-
-
 def active_admin_condition(user_id: str) -> TransactionOperation:
     """Holds while `user_id` is still an active administrator, at commit time."""
     return {

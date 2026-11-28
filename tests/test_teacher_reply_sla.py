@@ -1,10 +1,12 @@
+from datetime import datetime, timezone
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from fakes.dynamodb import FakeTable, without_owner_registry
 from stoa.db import table as db_table
-from stoa.db.repositories import question_repo
 from stoa.routers import admin, teachers
+from stoa.routers.admin import stats
 from stoa.services import help_requests
 from actor_helpers import install_actor_overrides
 
@@ -40,38 +42,33 @@ def _help_requests_table(*records: dict) -> FakeTable:
     return table
 
 
-def _question_table() -> FakeTable:
-    """Legacy question rows, in GSI-Listing as the census reads them (card 133)."""
-    table = FakeTable()
-    for index, row in enumerate(
-        (
-            {
-                "status": "resolved",
-                "teacher_requested_at": "2026-06-08T08:00:00+00:00",
-                "teacher_first_replied_at": "2026-06-08T08:10:00+00:00",
-                "sla_request_to_takeover_seconds": 300,
-                "sla_request_to_first_reply_seconds": 600,
-                "sla_request_to_resolved_seconds": 1200,
-                "teacher_first_reply_sla_bucket": "within_target",
-            },
-            {
-                "status": "teacher_active",
-                "teacher_requested_at": "2026-06-08T08:00:00+00:00",
-                "teacher_first_replied_at": "2026-06-08T08:35:00+00:00",
-                "sla_request_to_takeover_seconds": 900,
-                "sla_request_to_first_reply_seconds": 2100,
-                "teacher_first_reply_sla_bucket": "breached",
-            },
-            {"status": "ai_answered"},
-        )
-    ):
-        stored = {"PK": f"QUESTION#q-{index}", "SK": "META", "entity_type": "question", **row}
-        table.seed({**stored, **question_repo.listing_fields(stored)})
-    return table
-
-
 def test_admin_stats_exposes_aggregate_teacher_sla_without_content(monkeypatch):
-    db_table.install(_question_table())
+    # Help requests in the period (#697), each with a teacher's reply.
+    monkeypatch.setattr(stats, "_now", lambda: datetime(2026, 6, 10, tzinfo=timezone.utc))
+    table = _help_requests_table(
+        {
+            "conversation_id": "c-1",
+            "student_id": "student-1",
+            "escalation_status": "resolved",
+            "created_at": "2026-06-08T08:00:00+00:00",
+            "escalated_at": "2026-06-08T08:00:00+00:00",
+            "accepted_at": "2026-06-08T08:05:00+00:00",
+            "first_teacher_action_at": "2026-06-08T08:10:00+00:00",
+            "content": "private question text",
+        },
+        {
+            "conversation_id": "c-2",
+            "student_id": "student-1",
+            "escalation_status": "in_progress",
+            "created_at": "2026-06-08T08:00:00+00:00",
+            "escalated_at": "2026-06-08T08:00:00+00:00",
+            "accepted_at": "2026-06-08T08:15:00+00:00",
+            "first_teacher_action_at": "2026-06-08T08:35:00+00:00",
+        },
+    )
+    for row in list(table.rows.values()):
+        table.seed({**row, **help_requests.listing_fields(row)})
+    db_table.install(table)
 
     client = _app(admin.router, "/admin", {"sub": "admin-1", "role": "admin"})
     response = client.get("/admin/stats")
@@ -92,7 +89,8 @@ def test_admin_stats_exposes_aggregate_teacher_sla_without_content(monkeypatch):
     }
     serialized = str(data)
     assert "content" not in serialized
-    assert "private/" not in serialized
+    assert "private" not in serialized
+    assert "student-1" not in serialized
     assert "weekly-reports/" not in serialized
 
 

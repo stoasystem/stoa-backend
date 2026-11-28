@@ -313,31 +313,6 @@ def test_the_deletion_tombstone_keeps_no_index_key() -> None:
     )
 
 
-# -- the role census ---------------------------------------------------------------
-
-
-def test_the_census_counts_listed_profiles_and_nothing_else() -> None:
-    table = FakeTable()
-    _noise(table, 50)
-    table.seed(_profile("parent-1", role="parent"), _profile("student-1"))
-
-    rows, complete = user_repo.profile_role_census(page_budget=5, table=table)
-
-    assert sorted(str(row["role"]) for row in rows) == ["parent", "student"]
-    assert complete is True
-    assert dict(table.calls) == {"query": 1}
-
-
-def test_a_census_cut_short_says_so() -> None:
-    table = FakeTable(page_item_cap=1)
-    table.seed(_profile("parent-1", role="parent"), _profile("student-1"))
-
-    rows, complete = user_repo.profile_role_census(page_budget=1, table=table)
-
-    assert len(rows) == 1
-    assert complete is False
-
-
 # -- invitation ids ----------------------------------------------------------------
 
 

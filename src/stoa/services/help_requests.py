@@ -144,8 +144,8 @@ LISTING_INDEX_FIELDS = ("listing", "listed_at")
 _LISTING_INDEX_KEY = ("PK", "SK", *LISTING_INDEX_FIELDS)
 
 # The question words a request's state is told in. Their one reader is
-# `sla_metrics`: the admin stats count requests beside the legacy question rows,
-# in those rows' words.
+# `sla_metrics`, for `teacher_reply_service.aggregate_teacher_sla`, which still
+# speaks the words of the legacy question rows it once counted too.
 _QUESTION_STATUS = {
     PENDING: "escalated",
     IN_PROGRESS: "teacher_active",
@@ -359,18 +359,21 @@ def list_all(*, table: Any | None = None) -> list[dict[str, Any]]:
     raise HelpRequestUnavailable("scan page limit reached")
 
 
-def list_listed(*, table: Any | None = None) -> list[dict[str, Any]]:
-    """Every request, ended ones included: one query of GSI-Listing (card 133).
+def list_asked_since(since: datetime, *, table: Any | None = None) -> list[dict[str, Any]]:
+    """Every request asked at or after `since`, ended ones included (#697).
 
-    What it reads follows how many requests there are, not the size of the
-    table. Eventually consistent. For the admin statistics; the backfills read
-    `list_all`, which also finds a request written before it had the keys.
+    One query of GSI-Listing (card 133), cut at `listed_at`, so what it reads
+    follows how many requests were asked in the period - not the size of the
+    table, nor every request ever asked. Eventually consistent. For the admin
+    statistics; the backfills read `list_all`, which also finds a request
+    written before it had the keys.
     """
     return _indexed_records(
         table,
         key=_LISTING_INDEX_KEY,
         IndexName=LISTING_INDEX,
-        KeyConditionExpression=Key("listing").eq(LISTING_NAME),
+        KeyConditionExpression=Key("listing").eq(LISTING_NAME)
+        & Key("listed_at").gte(since.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
     )
 
 

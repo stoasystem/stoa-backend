@@ -4,8 +4,8 @@
 A profile carries the keys of GSI-Listing - `listing = "account_profile"` and
 `listed_at`, its creation time - from the backend release that writes them on
 (`account_deletion_repo.account_listing_fields`). The administrators' account
-list and the role census of `/admin/stats` read that index, so a profile written
-before is missing from both until this script writes its keys. Run it once the
+list reads that index (so did the role census of `/admin/stats` until #697), so
+a profile written before is missing from it until this script writes its keys. Run it once the
 release that writes the keys is deployed.
 
     python scripts/backfill_account_listing_index.py            # dry run: counts, writes nothing

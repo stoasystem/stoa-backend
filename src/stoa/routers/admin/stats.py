@@ -1,18 +1,14 @@
-"""Admin platform statistics."""
+"""Admin platform statistics: how fast teachers answer help requests (#697)."""
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from stoa.db import table as db_table
-from stoa.db.repositories import (
-    question_repo,
-    user_repo,
-)
 from stoa.security.admin_authorization import admin_operation
 from stoa.security.identity import Actor
-from stoa.models.question import QuestionStatus
 from stoa.services import (
     help_requests,
     teacher_reply_service,
@@ -21,77 +17,36 @@ from stoa.services import (
 
 router = APIRouter()
 
+# The period `teacher_sla` measures: requests asked in the last 30 days (#697),
+# so the card shows how teachers answer now and the read follows the requests
+# of the period, not every request ever asked.
+TEACHER_SLA_PERIOD_DAYS = 30
+
 
 class StatsResponse(BaseModel):
-    total_users: int
-    total_students: int
-    total_parents: int
-    total_teachers: int
-    total_questions: int
-    ai_resolved: int
-    teacher_resolved: int
-    escalated: int
     teacher_sla: dict[str, Any]
-    # False when a census stopped at its page budget, so the counts below are a
-    # floor rather than a total. Additive: absent means the walk finished.
-    counts_complete: bool = True
+    # How many days back `teacher_sla` counts, for the card to say so.
+    period_days: int
 
 
-# The budget on each census's pages: what stops a runaway read turning the
-# dashboard into a timeout. Questions and help requests are read through
-# GSI-Listing (card 133), so their pages follow how many there are.
-ADMIN_STATS_MAX_PAGES = 50
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats(actor: Actor = Depends(admin_operation)):
-    """Return aggregate platform metrics."""
-    table = db_table.table()
+    """How fast teachers answered the help requests asked in the period.
 
-    # Count user profiles
-    users, users_complete = user_repo.profile_role_census(
-        page_budget=ADMIN_STATS_MAX_PAGES, table=table
-    )
-
-    counts = {"student": 0, "parent": 0, "teacher": 0}
-    for u in users:
-        r = u.get("role", "")
-        if r in counts:
-            counts[r] += 1
-
-    # Count questions by status
-    meta_rows, questions_complete = question_repo.question_meta_census(
-        page_budget=ADMIN_STATS_MAX_PAGES, table=table
-    )
-    question_statuses = {status.value for status in QuestionStatus}
-    questions = [
-        question
-        for question in meta_rows
-        if isinstance(question_status := question.get("status"), str)
-        and question_status in question_statuses
+    Only help requests count: the legacy question rows have no writer and come
+    from early test accounts. The account and question totals this answered
+    before had no reader and were retired (#697).
+    """
+    since = _now() - timedelta(days=TEACHER_SLA_PERIOD_DAYS)
+    metrics = [
+        help_requests.sla_metrics(record)
+        for record in help_requests.list_asked_since(since, table=db_table.table())
     ]
-
-    # A help request is not a question row since #189; it is counted, and its
-    # response times measured, from its own record.
-    help_metrics = [help_requests.sla_metrics(record) for record in help_requests.list_listed(table=table)]
-    ai_resolved = sum(1 for q in questions if q.get("status") == QuestionStatus.AI_ANSWERED.value)
-    teacher_resolved = sum(
-        1 for q in (*questions, *help_metrics) if q.get("status") == QuestionStatus.RESOLVED.value
-    )
-    escalated = sum(
-        1 for q in (*questions, *help_metrics)
-        if q.get("status") in (QuestionStatus.ESCALATED.value, QuestionStatus.TEACHER_ACTIVE.value)
-    )
-
     return StatsResponse(
-        total_users=len(users),
-        total_students=counts["student"],
-        total_parents=counts["parent"],
-        total_teachers=counts["teacher"],
-        total_questions=len(questions),
-        ai_resolved=ai_resolved,
-        teacher_resolved=teacher_resolved,
-        escalated=escalated,
-        teacher_sla=teacher_reply_service.aggregate_teacher_sla([*questions, *help_metrics]),
-        counts_complete=users_complete and questions_complete,
+        teacher_sla=teacher_reply_service.aggregate_teacher_sla(metrics),
+        period_days=TEACHER_SLA_PERIOD_DAYS,
     )
