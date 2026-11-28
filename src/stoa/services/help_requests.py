@@ -72,6 +72,9 @@ RESOLVED = "resolved"
 WITHDRAWN = "withdrawn"
 EXPIRED = "expired"
 OPEN = frozenset({PENDING, IN_PROGRESS})
+#: The states in which a request holds a case of the student's week: the
+#: allowance gives the case back only when a request ends withdrawn or expired.
+HOLDING_CASE = frozenset({PENDING, IN_PROGRESS, RESOLVED})
 #: What a teacher moves a request to.
 TEACHER_TARGETS = (IN_PROGRESS, RESOLVED)
 
@@ -605,6 +608,21 @@ def mode(record: Mapping[str, Any]) -> HelpMode:
 def stored_status(record: Mapping[str, Any]) -> str:
     """The request's own state word, as stored: `pending` until a teacher takes it."""
     return str(record.get("escalation_status") or PENDING)
+
+
+def holds_case(record: Mapping[str, Any]) -> bool:
+    """Whether the request holds a case of the week, as the allowance counts it (#633).
+
+    What every count of "asked a teacher" goes by - the parent's dashboard and
+    history, the weekly report, the learning profile - so a withdrawn or
+    expired request, whose case went back, is counted by none of them.
+    """
+    return stored_status(record) in HOLDING_CASE
+
+
+def asked_at(record: Mapping[str, Any]) -> str:
+    """When the student asked, as stored: the moment the request counts in."""
+    return str(record.get("escalated_at") or record.get("created_at") or "")
 
 
 def student_view(record: Mapping[str, Any], *, now: str | None = None) -> tuple[str, str]:

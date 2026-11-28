@@ -3,7 +3,7 @@ import logging
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Annotated, Any, Literal, cast
 from uuid import uuid4
@@ -44,14 +44,13 @@ from stoa.services import (
     account_operations_service,
     allowance_service,
     billing_reconciliation_service,
-    curriculum_names,
     current_relationship,
     learning_profile_service,
-    learning_session,
     locale_service,
     message_catalog,
     parent_link_service,
     report_service,
+    student_activity,
     student_evidence,
     subscription_service,
     teacher_support_allowance_service,
@@ -832,45 +831,6 @@ def _parse_iso_datetime(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def _utc_week_start(now: datetime | None = None) -> date:
-    current = now or datetime.now(timezone.utc)
-    current = current.astimezone(timezone.utc)
-    return (current - timedelta(days=current.weekday())).date()
-
-
-def _current_week() -> tuple[datetime, datetime]:
-    """This UTC week, Monday 00:00 to the next, as `[start, end)`."""
-    start = datetime.combine(_utc_week_start(), time.min, tzinfo=timezone.utc)
-    return start, start + timedelta(days=7)
-
-
-def _is_current_week(value: Any) -> bool:
-    parsed = _parse_iso_datetime(value)
-    if parsed is None:
-        return False
-    return _utc_week_start(parsed) == _utc_week_start()
-
-
-# One child's conversation list keeps at most this many conversations.
-_CHILD_CONVERSATION_LIMIT = 50
-
-
-def _list_conversations_for_child(
-    child_id: str, limit: int = _CHILD_CONVERSATION_LIMIT
-) -> list[dict[str, Any]]:
-    """This child's conversations, newest first, with their help requests.
-
-    The listing is `learning_session.list_for_student`, reading `limit` index
-    rows a page as this list always has. A list cut short is not shown to the
-    parent as such.
-    """
-    listed = learning_session.list_for_student(child_id, limit=limit, page_size=limit)
-    from stoa.services import help_requests
-
-    # Whether a teacher was asked is the request's, not the conversation's (#189).
-    return help_requests.with_requests(listed.items, child_id, table=db_table.table())
-
-
 def _latest_report_for_child(parent_user_id: str, child_id: str) -> dict[str, Any] | None:
     last_key: dict[str, object] | None = None
     while True:
@@ -881,94 +841,6 @@ def _latest_report_for_child(parent_user_id: str, child_id: str) -> dict[str, An
         last_key = _report_cursor(result.get("LastEvaluatedKey"))
         if not last_key:
             return None
-
-
-def _question_activity(question: dict[str, Any]) -> ParentChildActivity | None:
-    created_at = _response_text(question.get("created_at") or question.get("createdAt"))
-    if created_at is None or not _parse_iso_datetime(created_at):
-        return None
-    status = question.get("status", "")
-    # The parent is the reader, and these are labels this backend writes rather
-    # than anything the student wrote, so they follow the request's language.
-    locale = locale_service.resolve_locale(None)
-    key = "activity.question_answered" if status == "ai_answered" else "activity.question_asked"
-    if status in ("escalated", "teacher_requested"):
-        key = "activity.teacher_help_requested"
-    title = message_catalog.text(key, locale)
-    return ParentChildActivity(
-        id=_response_text(question.get("question_id") or question.get("id")) or f"question-{created_at}",
-        type="teacher_help" if status in ("escalated", "teacher_requested") else "question",
-        title=title,
-        summary=_response_text(question.get("summary") or question.get("prompt") or question.get("question")) or "",
-        subject=_response_text(question.get("subject")),
-        createdAt=created_at,
-    )
-
-
-def _history_event_from_activity(activity: ParentChildActivity) -> ParentChildHistoryEvent:
-    return ParentChildHistoryEvent(**activity.model_dump())
-
-
-def _lesson_activity(lesson: student_evidence.Completion) -> ParentChildActivity | None:
-    if not _parse_iso_datetime(lesson.completed_at):
-        return None
-    return ParentChildActivity(
-        id=lesson.lesson_id,
-        type="practice",
-        title=message_catalog.text(
-            "activity.practice_lesson_completed", locale_service.resolve_locale(None)
-        ),
-        summary=lesson.title or lesson.topic_id or lesson.subject_id,
-        subject=lesson.subject_id or None,
-        createdAt=lesson.completed_at,
-    )
-
-
-def _mistake_activity(
-    item: Mapping[str, Any], names: curriculum_names.Names | None = None
-) -> ParentChildActivity | None:
-    created_at = _response_text(item.get("created_at") or item.get("createdAt"))
-    if created_at is None or not _parse_iso_datetime(created_at):
-        return None
-    names = names or curriculum_names.for_reader(locale_service.resolve_locale(None))
-    return ParentChildActivity(
-        id=_response_text(item.get("lesson_id") or item.get("challenge_id"))
-        or f"practice_mistake-{created_at}",
-        type="practice_mistake",
-        title=message_catalog.text(
-            "activity.practice_mistake_logged", locale_service.resolve_locale(None)
-        ),
-        # The knowledge point as the curriculum names it, never its stored id (#390).
-        summary=names.name(
-            names.resolve(
-                item.get("topic_id"), unit_id=item.get("unit_id"), lesson_id=item.get("lesson_id")
-            )
-        )
-        or _response_text(item.get("topic_id") or item.get("subject_id"))
-        or "",
-        subject=_response_text(item.get("subject_id")),
-        createdAt=created_at,
-    )
-
-
-def _conversation_activity(item: dict[str, Any]) -> ParentChildActivity | None:
-    created_at = _response_text(item.get("updated_at") or item.get("created_at"))
-    if created_at is None or not _parse_iso_datetime(created_at):
-        return None
-    escalated = bool(item.get("escalated"))
-    return ParentChildActivity(
-        id=_response_text(item.get("conversation_id")) or f"conversation-{created_at}",
-        type="teacher_help" if escalated else "conversation",
-        title=message_catalog.text(
-            "activity.teacher_help_requested" if escalated else "activity.ai_conversation",
-            locale_service.resolve_locale(None),
-        ),
-        # A conversation's title and preview are the child's own words; a
-        # parent reads what was asked about, never the question (#143).
-        summary="",
-        subject=_response_text(item.get("subject")),
-        createdAt=created_at,
-    )
 
 
 def _star_answers(evidence: student_evidence.StudentEvidence) -> list[ParentChildStarAnswers]:
@@ -990,7 +862,8 @@ def _star_answers(evidence: student_evidence.StudentEvidence) -> list[ParentChil
     ]
 
 
-def _report_activity(report: dict[str, Any]) -> ParentChildActivity | None:
+def _report_activity(report: dict[str, Any], locale: str) -> student_activity.Activity | None:
+    """The parent's entry for one weekly report; the report is the parent's, not the child's."""
     created_at = _response_text(report.get("created_at") or report.get("week_start"))
     if not created_at:
         return None
@@ -998,78 +871,38 @@ def _report_activity(report: dict[str, Any]) -> ParentChildActivity | None:
         created_at = f"{created_at}T00:00:00+00:00"
     if not _parse_iso_datetime(created_at):
         return None
-    return ParentChildActivity(
+    return student_activity.Activity(
         id=_response_text(report.get("report_id")) or f"report-{created_at}",
         type="report",
-        title=message_catalog.text(
-            "activity.weekly_report_available", locale_service.resolve_locale(None)
-        ),
+        title=message_catalog.text("activity.weekly_report_available", locale),
         summary=_response_text(report.get("summary") or report.get("recommendations")) or "",
         subject=None,
-        createdAt=created_at,
+        created_at=created_at,
     )
 
 
-def _sort_activities(activities: list[ParentChildActivity], limit: int) -> list[ParentChildActivity]:
-    return sorted(
-        activities,
-        key=lambda item: (_parse_iso_datetime(item.createdAt) or datetime.min.replace(tzinfo=timezone.utc), item.id),
-        reverse=True,
-    )[:limit]
-
-
-def _question_history_events(child_id: str, limit: int = 100) -> list[ParentChildActivity]:
-    result = question_repo.list_questions_by_student(child_id, limit=limit)
-    return [
-        activity
-        for question in _response_items(result)
-        if (activity := _question_activity(question)) is not None
-    ]
-
-
-def _practice_history_events(
-    evidence: student_evidence.StudentEvidence,
-) -> list[ParentChildActivity]:
-    """The lessons the child finished and the answers they got wrong."""
-    names = _topic_names(evidence)
-    activities = [
-        activity
-        for lesson in evidence.completions
-        if (activity := _lesson_activity(lesson)) is not None
-    ]
-    activities.extend(
-        activity
-        for mistake in evidence.mistakes
-        if (activity := _mistake_activity(mistake, names)) is not None
-    )
-    return activities
-
-
-def _topic_names(evidence: student_evidence.StudentEvidence) -> curriculum_names.Names:
-    """The curriculum's names for the child's knowledge points, in the reader's language."""
-    content = evidence.content
-    return curriculum_names.for_reader(
-        content.locale, catalog=content.catalog, rows=content.named_rows
+def _parent_activity(entry: student_activity.Activity) -> ParentChildActivity:
+    return ParentChildActivity(
+        id=entry.id,
+        type=entry.type,
+        title=entry.title,
+        summary=entry.summary,
+        subject=entry.subject,
+        createdAt=entry.created_at,
     )
 
 
-def _conversation_history_events(child_id: str) -> list[ParentChildActivity]:
-    return [
-        activity
-        for conversation in _list_conversations_for_child(child_id)
-        if (activity := _conversation_activity(conversation)) is not None
-    ]
-
-
-def _report_history_events(parent_user_id: str, child_id: str) -> list[ParentChildActivity]:
-    activities: list[ParentChildActivity] = []
+def _report_history_events(
+    parent_user_id: str, child_id: str, locale: str
+) -> list[student_activity.Activity]:
+    activities: list[student_activity.Activity] = []
     last_key: dict[str, object] | None = None
     while True:
         result = report_repo.list_reports_for_parent(parent_user_id, last_key=last_key)
         for report in _response_items(result):
             if report.get("student_id") != child_id or not _is_parent_visible(report):
                 continue
-            activity = _report_activity(report)
+            activity = _report_activity(report, locale)
             if activity:
                 activities.append(activity)
         last_key = _report_cursor(result.get("LastEvaluatedKey"))
@@ -1501,45 +1334,31 @@ async def get_child_summary(
     child = dict(authorized_child.value)
     child_id = authorized_child.ref.student_id
 
+    locale = locale_service.resolve_locale(None)
+    evidence = student_evidence.for_student(child_id, locale=locale)
+    # "This week" is the Zurich week, turning over when the allowance does (#693).
+    week = student_activity.counts(
+        child_id, student_activity.zurich_week(evidence.now), evidence=evidence
+    )
+    latest_report = _latest_report_for_child(actor.user_id, child_id)
+
+    # The weak topics are the learning profile's first ten, from the same
+    # projection in the reader's language (#674). A stored report's weak points
+    # are what was sent that week; they are not counted again here. What the
+    # projection reads is #632's, unchanged here.
     questions = [
         row
         for row in _response_items(question_repo.list_questions_by_student(child_id, limit=500))
         if question_repo.is_question_record(row)
     ]
-    evidence = student_evidence.for_student(child_id, locale=locale_service.resolve_locale(None))
-    conversations = _list_conversations_for_child(child_id)
-    latest_report = _latest_report_for_child(actor.user_id, child_id)
-
-    current_week_questions = [item for item in questions if _is_current_week(item.get("created_at"))]
-    current_week_lessons = evidence.completions_between(*_current_week())
-    ai_resolved = sum(1 for item in current_week_questions if item.get("status") == "ai_answered")
-    teacher_help = sum(
-        1
-        for item in current_week_questions
-        if item.get("status") in ("escalated", "teacher_requested", "teacher_help")
-        or item.get("teacher_help_requested")
-    )
-    teacher_help += sum(
-        1
-        for item in conversations
-        if item.get("escalated")
-        and _is_current_week(item.get("escalated_at") or item.get("updated_at"))
-    )
-
-    # The weak topics are the learning profile's first ten, from the same
-    # projection in the reader's language (#674). A stored report's weak points
-    # are what was sent that week; they are not counted again here.
     weak = weak_topics.for_student(
         evidence,
         [*questions, *asked_knowledge_repo.list_for_student(child_id)],
         locale=evidence.content.locale,
     )
 
-    activities = []
-    activities.extend(_question_history_events(child_id, limit=20))
-    activities.extend(_practice_history_events(evidence))
-    activities.extend(_conversation_history_events(child_id))
-    if latest_report and (report_activity := _report_activity(latest_report)):
+    activities = student_activity.recent(child_id, limit=5, evidence=evidence, locale=locale)
+    if latest_report and (report_activity := _report_activity(latest_report, locale)):
         activities.append(report_activity)
 
     return ParentChildSummaryResponse(
@@ -1549,12 +1368,14 @@ async def get_child_summary(
             or (_response_text(child.get("email")) or "").split("@")[0],
             grade=_response_text(child.get("grade")),
         ),
-        questionsAskedThisWeek=len(current_week_questions),
-        aiResolvedThisWeek=ai_resolved,
-        teacherHelpRequestsThisWeek=teacher_help,
-        practiceLessonsCompletedThisWeek=len(current_week_lessons),
+        questionsAskedThisWeek=week.new_questions,
+        aiResolvedThisWeek=week.ai_resolved,
+        teacherHelpRequestsThisWeek=week.teacher_help,
+        practiceLessonsCompletedThisWeek=week.lessons_completed,
         weakTopics=[topic.name for topic in weak[:10]],
-        recentActivity=_sort_activities(activities, limit=5),
+        recentActivity=[
+            _parent_activity(entry) for entry in student_activity.newest_first(activities, 5)
+        ],
         starAnswers=_star_answers(evidence),
     )
 
@@ -1675,15 +1496,18 @@ async def get_child_history(
 ):
     child_id = authorized_child.ref.student_id
 
-    activities = []
-    activities.extend(_question_history_events(child_id, limit=100))
-    evidence = student_evidence.for_student(child_id, locale=locale_service.resolve_locale(None))
-    activities.extend(_practice_history_events(evidence))
-    activities.extend(_conversation_history_events(child_id))
-    activities.extend(_report_history_events(actor.user_id, child_id))
+    locale = locale_service.resolve_locale(None)
+    evidence = student_evidence.for_student(child_id, locale=locale)
+    # The child's most recent `limit` entries, with the parent's weekly reports
+    # mixed in; the newest `limit` of them all (#693).
+    activities = student_activity.recent(child_id, limit=limit, evidence=evidence, locale=locale)
+    activities.extend(_report_history_events(actor.user_id, child_id, locale))
 
     return ParentChildHistoryResponse(
-        items=[_history_event_from_activity(activity) for activity in _sort_activities(activities, limit)]
+        items=[
+            ParentChildHistoryEvent(**_parent_activity(entry).model_dump())
+            for entry in student_activity.newest_first(activities, limit)
+        ]
     )
 
 

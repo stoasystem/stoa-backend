@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from fakes import student_evidence as fake_evidence
+from fakes.help_requests import seed_request
+from fakes.learning_session import seed_conversation
 from fakes import weak_topic_students
 from stoa.db import owner_registry
 from stoa.db import table as db_table
@@ -879,7 +881,7 @@ def test_latest_report_for_child_pages_and_filters(monkeypatch):
     ]
 
 
-def test_parent_child_summary_aggregates_real_data(monkeypatch):
+def test_parent_child_summary_aggregates_real_data(monkeypatch, fake_table):
     monkeypatch.setattr(
         parents.question_repo,
         "list_by_student",
@@ -921,6 +923,7 @@ def test_parent_child_summary_aggregates_real_data(monkeypatch):
         monkeypatch,
         fake_evidence.evidence(
             "child-1",
+            now=datetime(2026, 6, 3, 12, 0, tzinfo=timezone.utc),
             progress=[
                 {
                     "lesson_id": "lesson-1",
@@ -940,26 +943,22 @@ def test_parent_child_summary_aggregates_real_data(monkeypatch):
             ],
         ),
     )
-    monkeypatch.setattr(
-        parents,
-        "_list_conversations_for_child",
-        lambda child_id: [
-            {
-                "conversation_id": "conv-1",
-                "entity_type": "conversation",
-                "escalated": True,
-                "last_message_preview": "Teacher follow-up needed",
-                "updated_at": "2026-06-02T12:00:00+00:00",
-            }
-        ],
+    # A conversation a teacher is helping with, asked this week.
+    seed_conversation(
+        fake_table,
+        conversation_id="conv-1",
+        student_id="child-1",
+        subject="math",
+        now="2026-06-02T12:00:00+00:00",
+    )
+    seed_request(
+        fake_table,
+        conversation_id="conv-1",
+        student_id="child-1",
+        status="in_progress",
+        asked_at="2026-06-02T12:05:00+00:00",
     )
     monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: _report())
-    monkeypatch.setattr(parents, "_is_current_week", lambda value: str(value).startswith("2026-06-02"))
-    monkeypatch.setattr(
-        parents,
-        "_current_week",
-        lambda: (datetime(2026, 6, 2, tzinfo=timezone.utc), datetime(2026, 6, 3, tzinfo=timezone.utc)),
-    )
 
     client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
     response = client.get("/parents/me/children/child-1/summary")
@@ -967,12 +966,15 @@ def test_parent_child_summary_aggregates_real_data(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["student"] == {"id": "child-1", "name": "Anna Keller", "grade": "Grade 8"}
-    assert data["questionsAskedThisWeek"] == 2
-    assert data["aiResolvedThisWeek"] == 1
-    assert data["teacherHelpRequestsThisWeek"] == 2
+    # The retired flow's question rows are no source of the week's numbers or
+    # of the entries (#693); they still feed the weak topics (#632).
+    assert data["questionsAskedThisWeek"] == 0
+    assert data["aiResolvedThisWeek"] == 0
+    assert data["teacherHelpRequestsThisWeek"] == 1
     assert data["practiceLessonsCompletedThisWeek"] == 1
     assert data["weakTopics"][:3] == ["fractions", "geometry", "algebra"]
-    assert [item["id"] for item in data["recentActivity"][:2]] == ["conv-1", "q-2"]
+    assert [item["id"] for item in data["recentActivity"][:3]] == ["conv-1", "lesson-1", "m-1"]
+    assert data["recentActivity"][0]["type"] == "teacher_help"
     # One evidence value serves the week, the weak topics and the activity.
     assert asked == ["child-1"]
 
@@ -980,7 +982,6 @@ def test_parent_child_summary_aggregates_real_data(monkeypatch):
 def test_parent_child_summary_empty_state(monkeypatch):
     monkeypatch.setattr(parents.question_repo, "list_by_student", lambda child_id, limit=20, last_key=None: {"Items": []})
     fake_evidence.install(monkeypatch)
-    monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
     monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: None)
 
     client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
@@ -1041,7 +1042,6 @@ def test_parent_child_summary_weak_topics_are_not_the_latest_report_s_again(monk
             ],
         ),
     )
-    monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
     report = _report()
     report["weak_knowledge_points"] = ["mathematics", "fractions", "fractions", "ratios", "Mathematik"]
     monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: report)
@@ -1075,7 +1075,6 @@ def test_parent_child_summary_weak_topics_are_the_learning_profile_s_first_ten(m
         now=weak_topic_students.NOW,
     )
     fake_evidence.install(monkeypatch, evidence)
-    monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
     report = _report()
     report["weak_knowledge_points"] = ["Bewegung", "Winkel messen"]
     monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: report)
@@ -1104,7 +1103,8 @@ def test_parent_child_summary_rejects_unlinked_before_data_reads(monkeypatch):
 
     monkeypatch.setattr(parents.question_repo, "list_by_student", fail)
     monkeypatch.setattr(parents.student_evidence, "for_student", fail)
-    monkeypatch.setattr(parents, "_list_conversations_for_child", fail)
+    monkeypatch.setattr(parents.student_activity, "counts", fail)
+    monkeypatch.setattr(parents.student_activity, "recent", fail)
     monkeypatch.setattr(parents, "_latest_report_for_child", fail)
 
     client = TestClient(
@@ -1126,7 +1126,7 @@ def test_parent_child_summary_rejects_non_parent_roles(role):
     assert response.status_code == (403 if role == "admin" else 404)
 
 
-def test_parent_child_history_returns_newest_first_with_limit(monkeypatch):
+def test_parent_child_history_returns_newest_first_with_limit(monkeypatch, fake_table):
     monkeypatch.setattr(
         parents.question_repo,
         "list_by_student",
@@ -1155,10 +1155,8 @@ def test_parent_child_history_returns_newest_first_with_limit(monkeypatch):
             ],
         ),
     )
-    monkeypatch.setattr(
-        parents,
-        "_list_conversations_for_child",
-        lambda child_id: [{"conversation_id": "conv-1", "updated_at": "2026-06-02T12:00:00+00:00"}],
+    seed_conversation(
+        fake_table, conversation_id="conv-1", student_id="child-1", now="2026-06-02T12:00:00+00:00"
     )
     monkeypatch.setattr(parents.report_repo, "list_reports_for_parent", lambda parent_id, limit=25, last_key=None: {"Items": [_report()]})
 
@@ -1166,7 +1164,8 @@ def test_parent_child_history_returns_newest_first_with_limit(monkeypatch):
     response = client.get("/parents/me/children/child-1/history?limit=2")
 
     assert response.status_code == 200
-    assert [item["id"] for item in response.json()["items"]] == ["conv-1", "q-1"]
+    # The retired flow's question row (10:00) is no entry any more (#693).
+    assert [item["id"] for item in response.json()["items"]] == ["conv-1", "lesson-1"]
 
 
 def test_parent_child_history_names_finished_lessons_and_wrong_answers(monkeypatch):
@@ -1186,7 +1185,6 @@ def test_parent_child_history_names_finished_lessons_and_wrong_answers(monkeypat
             ],
         ),
     )
-    monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
     monkeypatch.setattr(parents.report_repo, "list_reports_for_parent", lambda *_a, **_k: {"Items": []})
 
     client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
@@ -1198,14 +1196,14 @@ def test_parent_child_history_names_finished_lessons_and_wrong_answers(monkeypat
         for item in response.json()["items"]
     ] == [
         ("lesson-1", "practice", "Fractions", "math"),
-        ("lesson-2", "practice_mistake", "geometry", "math"),
+        # `geometry` is no knowledge point the curriculum knows: named by nothing.
+        ("lesson-2", "practice_mistake", "", "math"),
     ]
 
 
 def test_parent_child_history_empty_state(monkeypatch):
     monkeypatch.setattr(parents.question_repo, "list_by_student", lambda child_id, limit=20, last_key=None: {"Items": []})
     fake_evidence.install(monkeypatch)
-    monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
     monkeypatch.setattr(parents.report_repo, "list_reports_for_parent", lambda parent_id, limit=25, last_key=None: {"Items": []})
 
     client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
@@ -1222,7 +1220,8 @@ def test_parent_child_history_rejects_unlinked_before_data_reads(monkeypatch):
 
     monkeypatch.setattr(parents.question_repo, "list_by_student", fail)
     monkeypatch.setattr(parents.student_evidence, "for_student", fail)
-    monkeypatch.setattr(parents, "_list_conversations_for_child", fail)
+    monkeypatch.setattr(parents.student_activity, "counts", fail)
+    monkeypatch.setattr(parents.student_activity, "recent", fail)
     monkeypatch.setattr(parents.report_repo, "list_reports_for_parent", fail)
 
     client = TestClient(
@@ -1458,7 +1457,6 @@ _STAR_CATALOG = {
 
 def _quiet_summary_sources(monkeypatch) -> None:
     monkeypatch.setattr(parents.question_repo, "list_by_student", lambda child_id, limit=20, last_key=None: {"Items": []})
-    monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
     monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: None)
 
 
