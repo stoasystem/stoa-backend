@@ -6,9 +6,6 @@ from stoa.routers import students
 from stoa.security import declared_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 from audit_helpers import MemoryAuthorizationAuditSink
-from fakes import student_evidence as fake_evidence
-from fakes.dynamodb import FakeTable
-from fakes.learning_session import seed_conversation, seed_message
 
 
 def _actor(role, user_id, grants=()):
@@ -65,99 +62,7 @@ def _profiles(monkeypatch):
     monkeypatch.setattr(
         students.question_repo, "list_by_student", lambda *_args, **_kwargs: {"Items": []}
     )
-    # The summary also counts resolved chat help requests from conversations (#77).
-    monkeypatch.setattr(
-        students.conversation_routes,
-        "_list_conversations",
-        lambda *_args, **_kwargs: students.conversation_routes.ConversationListPage([], False),
-    )
     return profiles
-
-
-# The student index is keyed on student_id, which every one of these carries.
-# The rows the student index carries, planted where they are made.
-_PLANTED = FakeTable()
-MIXED_STUDENT_INDEX_ROWS = [
-    {
-        "PK": "QUESTION#q-1",
-        "SK": "META",
-        "question_id": "q-1",
-        "student_id": "student-1",
-        "status": "ai_answered",
-        "subject": "math",
-        "prompt": "Why does this factor?",
-        "created_at": "2026-08-20T10:00:00+00:00",
-    },
-    seed_conversation(
-        _PLANTED,
-        conversation_id="c-1",
-        student_id="student-1",
-        subject="physics",
-        title="Physics - 9",
-        now="2026-08-21T10:00:00+00:00",
-    ),
-    {
-        "PK": "USAGE_LEDGER#student-1",
-        "SK": "EVENT#question#2026-08-21",
-        "entity_type": "usage_ledger_event",
-        "student_id": "student-1",
-        "created_at": "2026-08-21T10:00:01+00:00",
-    },
-    seed_message(
-        _PLANTED,
-        conversation_id="c-1",
-        role="student",
-        message_id="m-1",
-        student_id="student-1",
-        content="",
-        created_at="2026-08-21T10:00:02+00:00",
-    ),
-    {
-        "PK": "REPORT#weekly-1",
-        "SK": "SUMMARY",
-        "student_id": "student-1",
-        "created_at": "2026-08-22T04:00:00+00:00",
-    },
-]
-
-
-def test_summary_counts_questions_not_every_row_sharing_the_student_index(monkeypatch):
-    _profiles(monkeypatch)
-    monkeypatch.setattr(
-        students.question_repo,
-        "list_by_student",
-        lambda *_args, **_kwargs: {"Items": MIXED_STUDENT_INDEX_ROWS},
-    )
-
-    response = _client(_actor(CanonicalRole.STUDENT, "student-1")).get(
-        "/students/student-1/summary"
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["total_questions"] == 1
-    assert body["ai_resolved"] == 1
-    # The summary counts questions; weak topics live in the learning profile (#676).
-    assert set(body) == {"student_id", "total_questions", "ai_resolved", "teacher_resolved"}
-
-
-def test_learning_history_reports_questions_and_conversations_only(monkeypatch):
-    _profiles(monkeypatch)
-    monkeypatch.setattr(
-        students.question_repo,
-        "list_by_student",
-        lambda *_args, **_kwargs: {"Items": MIXED_STUDENT_INDEX_ROWS},
-    )
-    fake_evidence.install(monkeypatch)
-
-    response = _client(_actor(CanonicalRole.STUDENT, "student-1")).get(
-        "/students/me/learning-history"
-    )
-
-    assert response.status_code == 200
-    items = response.json()["items"]
-    assert [item["id"] for item in items] == ["c-1", "q-1"]
-    assert items[0]["summary"] == "Physics - 9"
 
 
 def test_student_profile_uses_canonical_actor_user_id_without_email_fallback(monkeypatch):
@@ -172,23 +77,23 @@ def test_student_profile_uses_canonical_actor_user_id_without_email_fallback(mon
 def test_sec_002_other_student_and_unrelated_parent_are_hidden(monkeypatch):
     _profiles(monkeypatch)
     other = _client(_actor(CanonicalRole.STUDENT, "student-2")).get(
-        "/students/student-1/summary"
+        "/students/student-1/questions"
     )
     parent = _client(_actor(CanonicalRole.PARENT, "parent-1")).get(
-        "/students/student-1/summary"
+        "/students/student-1/questions"
     )
     assert other.status_code == parent.status_code == 404
     assert other.json()["detail"]["code"] == parent.json()["detail"]["code"] == "resource_not_found"
 
 
-def test_active_bidirectional_parent_can_read_summary(monkeypatch, link_rows):
+def test_active_bidirectional_parent_can_read_the_question_history(monkeypatch, link_rows):
     _profiles(monkeypatch)
     link_rows.link("parent-1", "student-1")
     response = _client(_actor(CanonicalRole.PARENT, "parent-1")).get(
-        "/students/student-1/summary"
+        "/students/student-1/questions"
     )
     assert response.status_code == 200
-    assert response.json()["student_id"] == "student-1"
+    assert response.json()["items"] == []
 
 
 def test_guardian_status_is_linked_only_by_a_current_link(monkeypatch, link_rows):
@@ -224,7 +129,7 @@ def test_scoped_teacher_and_exact_admin_content_capability_positive_controls(mon
     )
     grant = CapabilityGrant("student_content_review", "student:student-1", 1)
     admin = _client(_actor(CanonicalRole.ADMIN, "admin-1", (grant,))).get(
-        "/students/student-1/summary"
+        "/students/student-1/questions"
     )
     assert teacher.status_code == admin.status_code == 200
 
@@ -232,7 +137,7 @@ def test_scoped_teacher_and_exact_admin_content_capability_positive_controls(mon
 def test_admin_role_only_is_known_403_and_outage_precedes_profile_mutation(monkeypatch):
     _profiles(monkeypatch)
     denied = _client(_actor(CanonicalRole.ADMIN, "admin-1")).get(
-        "/students/student-1/summary"
+        "/students/student-1/questions"
     )
     assert denied.status_code == 403
     assert denied.json()["detail"]["code"] == "action_not_allowed"
@@ -254,44 +159,6 @@ def test_admin_role_only_is_known_403_and_outage_precedes_profile_mutation(monke
     assert outage.status_code == 503
     assert outage.json()["detail"]["code"] == "authorization_temporarily_unavailable"
     assert writes == []
-
-
-def test_practice_history_names_the_lesson_not_its_topic(monkeypatch):
-    """Progress rows record which lesson, not what it was called."""
-    _profiles(monkeypatch)
-    monkeypatch.setattr(
-        students.question_repo, "list_by_student", lambda *_a, **_k: {"Items": []}
-    )
-    fake_evidence.install(
-        monkeypatch,
-        fake_evidence.evidence(
-            "student-1",
-            progress=[
-                {
-                    "status": "completed",
-                    "lesson_id": "brueche-l1",
-                    "topic_id": "brueche",
-                    "subject_id": "mathematics",
-                    "completed_at": "2026-08-25T10:00:00+00:00",
-                }
-            ],
-        ),
-    )
-    # Read by its key, not out of every lesson row (#513).
-    monkeypatch.setattr(
-        students.practice_repo,
-        "get_lesson",
-        lambda lesson_id: {"lesson_id": "brueche-l1", "title": "Brüche lesen und kürzen"}
-        if lesson_id == "brueche-l1"
-        else None,
-    )
-
-    response = _client(_actor(CanonicalRole.STUDENT, "student-1")).get(
-        "/students/me/learning-history"
-    )
-
-    assert response.status_code == 200
-    assert response.json()["items"][0]["summary"] == "Brüche lesen und kürzen"
 
 
 def test_a_student_can_read_their_own_plan(monkeypatch):

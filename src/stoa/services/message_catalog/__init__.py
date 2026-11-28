@@ -389,29 +389,11 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "Erreur notée",
         "it": "Errore annotato",
     },
-    "activity.practice_path_lesson": {
-        "de": "Lektion im Übungspfad",
-        "en": "Practice Path lesson",
-        "fr": "Leçon du parcours d'exercices",
-        "it": "Lezione del percorso di esercizi",
-    },
     "activity.weekly_report_available": {
         "de": "Wochenbericht verfügbar",
         "en": "Weekly report available",
         "fr": "Rapport hebdomadaire disponible",
         "it": "Rapporto settimanale disponibile",
-    },
-    "activity.source.questions": {
-        "de": "Fragen",
-        "en": "Questions",
-        "fr": "Questions",
-        "it": "Domande",
-    },
-    "activity.source.practice_path": {
-        "de": "Übungspfad",
-        "en": "Practice Path",
-        "fr": "Parcours d'exercices",
-        "it": "Percorso di esercizi",
     },
     "activity.subject.unknown": {
         "de": "Allgemein",

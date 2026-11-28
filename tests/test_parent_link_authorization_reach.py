@@ -18,7 +18,6 @@ from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.db import table as db_table
-from stoa.routers.conversations import ConversationListPage
 from stoa.db.repositories import parent_link_repo, question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import adaptive, students
@@ -68,11 +67,6 @@ def table(
     db_table.install(fake)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(accounts.get(user_id)))
     monkeypatch.setattr(question_repo, "list_by_student", lambda *_a, **_k: {"Items": []})
-    # The student summary also counts resolved chat help requests (#77).
-    monkeypatch.setattr(
-        "stoa.routers.conversations._list_conversations",
-        lambda *_a, **_k: ConversationListPage([], False),
-    )
     monkeypatch.setattr(
         adaptive.adaptive_learning_service,
         "parent_progress_signal",
@@ -103,11 +97,11 @@ def _client(parent_id: str = PARENT) -> TestClient:
 # factory, which is what A3 was actually about: the old patch covered one router.
 # The question read route was the third until #148 retired it.
 ADAPTIVE_PROGRESS = f"/adaptive/parents/me/children/{STUDENT}/progress"
-STUDENT_SUMMARY = f"/students/{STUDENT}/summary"
+STUDENT_QUESTIONS = f"/students/{STUDENT}/questions"
 
 CROSS_ROUTER_ROUTES = (
     pytest.param(ADAPTIVE_PROGRESS, id="adaptive-parent-progress"),
-    pytest.param(STUDENT_SUMMARY, id="students-summary"),
+    pytest.param(STUDENT_QUESTIONS, id="students-questions"),
 )
 
 

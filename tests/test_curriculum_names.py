@@ -190,7 +190,6 @@ TITLE_READS: dict[tuple[str, str], str] = {
     ("routers/conversations.py", "_adopt_question_as_title"): _NOT_CONTENT,
     ("routers/conversations.py", "_conversation_title"): _NOT_CONTENT,
     ("routers/parents.py", "_star_answers"): _CATALOG,
-    ("routers/students.py", "_question_history_items"): _NOT_CONTENT,
     ("routers/teachers.py", "_ai_helped_stars"): _CATALOG,
     ("routers/teachers.py", "_asked_stars"): _CATALOG,
     ("services/adaptive_learning_service.py", "_assignment_source"): _NOT_CONTENT,

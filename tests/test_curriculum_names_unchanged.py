@@ -53,7 +53,6 @@ ROUTES: dict[str, tuple[str, str]] = {
             "catalog",
             "lesson",
             "roadmap",
-            "learning_history",
             "learning_profile",
             "parent_summary",
             "parent_learning_profile",

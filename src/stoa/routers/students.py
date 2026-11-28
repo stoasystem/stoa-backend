@@ -1,9 +1,9 @@
-"""Student routes — profile, learning summary, and question history."""
-from collections.abc import Iterable, Mapping
+"""Student routes — profile, learning profile, and question history."""
+from collections.abc import Mapping
 from decimal import Decimal
 from datetime import datetime, timezone
 import logging
-from typing import Any, Literal, NoReturn, Optional
+from typing import Literal, NoReturn, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
@@ -13,7 +13,6 @@ from stoa.db import table as db_table
 from stoa.db.repositories import (
     asked_knowledge_repo,
     parent_link_repo,
-    practice_repo,
     question_repo,
     user_repo,
 )
@@ -31,20 +30,16 @@ from stoa.services.account_errors import AccountErrorCode, AccountViolation
 from stoa.services import (
     allowance_service,
     current_relationship,
-    curriculum_names,
     curriculum_service,
     entitlement_service,
-    help_requests,
     learning_profile_service,
     locale_service,
-    message_catalog,
     parent_link_service,
     student_evidence,
     voice_audio,
     voice_questions,
     voice_transcription,
 )
-from stoa.routers import conversations as conversation_routes
 from stoa.routers.parents import (
     admit_parent_link_request,
     parent_link_request_conflict,
@@ -221,23 +216,6 @@ def _question_rows(value: object, correlation_id: str) -> list[dict[str, object]
     return rows
 
 
-class LearningHistoryItem(BaseModel):
-    id: str
-    subject: str
-    title: str
-    summary: str
-    createdAt: str
-    sourceLabel: str
-    # The labels above are English fallbacks. The client renders these two in
-    # the reader's language, so a translated screen never shows an English row.
-    kind: str
-    source: str
-
-
-class LearningHistoryResponse(BaseModel):
-    items: list[LearningHistoryItem] = Field(default_factory=list)
-
-
 def _plan_includes_teacher_support(plan: str) -> bool:
     """Whether this plan carries any teacher-support cases at all."""
     try:
@@ -281,134 +259,6 @@ def _stored_limit(value: object) -> int | None:
     if isinstance(value, Decimal) and value == value.to_integral_value():
         return int(value)
     return None
-
-
-def _history_text(value: object) -> str:
-    return value.strip() if isinstance(value, str) else ""
-
-
-def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
-    """Build history from the student's conversations.
-
-    The student index is shared by every record carrying a student_id, so rows
-    are selected by entity type rather than taken wholesale.
-    """
-    result = question_repo.list_by_student(student_id, limit=200)
-    items = []
-    # The same policy its sibling `_practice_history_items` already uses: the
-    # language the client is rendering in right now. These entries are labels
-    # this backend writes, not content, so they follow the reader (#124).
-    locale = locale_service.resolve_locale(None)
-    # Whether a teacher was asked is the request's, not the conversation's (#189).
-    raw_rows = result.get("Items", [])
-    rows = help_requests.with_requests(
-        [row for row in (raw_rows if isinstance(raw_rows, list) else []) if isinstance(row, Mapping)],
-        student_id,
-        table=db_table.table(),
-    )
-    for row in rows:
-        created_at = _history_text(row.get("created_at"))
-        if not created_at:
-            continue
-        if row.get("entity_type") == "conversation":
-            escalated = bool(row.get("escalated"))
-            items.append(
-                LearningHistoryItem(
-                    id=_history_text(row.get("conversation_id")) or f"conversation-{created_at}",
-                    subject=_history_text(row.get("subject"))
-                    or message_catalog.text("activity.subject.unknown", locale),
-                    title=message_catalog.text(
-                        "activity.teacher_help_requested"
-                        if escalated
-                        else "activity.question_asked",
-                        locale,
-                    ),
-                    summary=(
-                        _history_text(row.get("escalation_message"))
-                        or _history_text(row.get("title"))
-                    ),
-                    createdAt=created_at,
-                    sourceLabel=message_catalog.text("activity.source.questions", locale),
-                    kind="teacher_help" if escalated else "question_asked",
-                    source="questions",
-                )
-            )
-        elif question_repo.is_question_record(row):
-            status = _history_text(row.get("status"))
-            answered = status == "ai_answered"
-            items.append(
-                LearningHistoryItem(
-                    id=_history_text(row.get("question_id")) or f"question-{created_at}",
-                    subject=_history_text(row.get("subject"))
-                    or message_catalog.text("activity.subject.unknown", locale),
-                    title=message_catalog.text(
-                        "activity.question_answered"
-                        if answered
-                        else "activity.question_asked",
-                        locale,
-                    ),
-                    summary=(
-                        _history_text(row.get("summary")) or _history_text(row.get("prompt"))
-                    ),
-                    createdAt=created_at,
-                    sourceLabel=message_catalog.text("activity.source.questions", locale),
-                    kind="question_answered" if answered else "question_asked",
-                    source="questions",
-                )
-            )
-    return items
-
-
-def _lesson_rows(lesson_ids: Iterable[str]) -> list[Mapping[str, Any]]:
-    """Progress rows record which lesson, not what it was called.
-
-    These lessons' rows, to name them by, each lesson read by its key: every
-    lesson row was read for them before, which grew with the published
-    curriculum (#513)."""
-    try:
-        lessons = [practice_repo.get_lesson(lesson_id) for lesson_id in sorted(set(lesson_ids))]
-    except Exception:
-        return []
-    return [lesson for lesson in lessons if isinstance(lesson, Mapping)]
-
-
-def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
-    """The lessons this student finished, from their evidence (#214)."""
-    items = []
-    finished = [
-        lesson
-        for lesson in student_evidence.for_student(student_id).completions
-        if lesson.completed_at
-    ]
-    locale = locale_service.resolve_locale(None)
-    # An older progress row kept the lesson's title beside it, and that is the
-    # German name it is named by; its row, read like every other finished
-    # lesson's, names it in the other languages (#661).
-    kept = [{"lesson_id": lesson.lesson_id, "title": lesson.title} for lesson in finished if lesson.title]
-    read = _lesson_rows(lesson.lesson_id for lesson in finished)
-    names = curriculum_names.for_reader(locale, rows=[*kept, *read])
-    for lesson in finished:
-        items.append(
-            LearningHistoryItem(
-                id=lesson.lesson_id,
-                subject=(
-                    (names.name(lesson.subject_id) or lesson.subject_id)
-                    if lesson.subject_id
-                    else "Practice"
-                ),
-                title=message_catalog.text("activity.practice_path_lesson", locale),
-                # The lesson name is curriculum content, so it gets the same
-                # title translation the roadmap and the lesson header use.
-                summary=_history_text(names.name(lesson.lesson_id))
-                or lesson.title
-                or lesson.topic_id,
-                createdAt=lesson.completed_at,
-                sourceLabel=message_catalog.text("activity.source.practice_path", locale),
-                kind="practice_lesson",
-                source="practice_path",
-            )
-        )
-    return items
 
 
 # ---------------------------------------------------------------------------
@@ -474,17 +324,6 @@ async def get_my_entitlement(
         ),
         renewalContactEmail=config.settings().renewal_contact_email,
     )
-
-
-@router.get("/me/learning-history", response_model=LearningHistoryResponse)
-async def get_my_learning_history(
-    actor: Actor = Depends(_own_account_read),
-):
-    """Return the student's own questions and practice lessons, newest first."""
-    student_id = actor.user_id
-    items = _question_history_items(student_id) + _practice_history_items(student_id)
-    items.sort(key=lambda item: item.createdAt, reverse=True)
-    return LearningHistoryResponse(items=items)
 
 
 def _grade_to_store(sent: str) -> str:
@@ -588,13 +427,6 @@ async def update_my_profile(
     )
 
 
-class SummaryResponse(BaseModel):
-    student_id: str
-    total_questions: int
-    ai_resolved: int
-    teacher_resolved: int
-
-
 class QuestionListItem(BaseModel):
     """One question in a student's history: what they asked and where it stands.
 
@@ -682,43 +514,6 @@ class LearningProfileResponse(BaseModel):
     weakTopics: list[LearningWeakTopic]
     strengthTopics: list[dict] = Field(default_factory=list)
     updatedAt: str
-
-
-@router.get("/{student_id}/summary", response_model=SummaryResponse)
-async def get_summary(
-    authorized: AuthorizedResource = Depends(_student_content_read),
-    correlation_id: str = Depends(get_request_correlation_id),
-):
-    """Return aggregated learning stats for a student (student, parent, admin)."""
-    student_id = authorized.ref.student_id
-
-    result = question_repo.list_questions_by_student(student_id, limit=500)
-    questions = [
-        row
-        for row in _question_rows(result.get("Items", []), correlation_id)
-        if question_repo.is_question_record(row)
-    ]
-
-    ai_resolved = sum(1 for q in questions if q.get("status") == "ai_answered")
-    teacher_resolved = sum(1 for q in questions if q.get("status") == "resolved")
-    # A chat help request is not a question (#77); a resolved one is counted
-    # through its conversation (user decision, 2026-09-29).
-    teacher_resolved += sum(
-        1
-        for conversation in help_requests.with_requests(
-            conversation_routes._list_conversations(student_id).items,
-            student_id,
-            table=db_table.table(),
-        )
-        if conversation.get("escalated") and conversation.get("escalation_status") == "resolved"
-    )
-
-    return SummaryResponse(
-        student_id=student_id,
-        total_questions=len(questions),
-        ai_resolved=ai_resolved,
-        teacher_resolved=teacher_resolved,
-    )
 
 
 @router.get("/{student_id}/learning-profile", response_model=LearningProfileResponse)

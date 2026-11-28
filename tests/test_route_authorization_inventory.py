@@ -43,7 +43,6 @@ REAL_NESTED_IDENTIFIER_ROUTES = {
     # `student_id` parameter leaked onto them as an ignored query parameter.
     ("GET", "/students/me/profile"): (),
     ("PATCH", "/students/me/profile"): (),
-    ("GET", "/students/{student_id}/summary"): ("student_id",),
     ("GET", "/students/{student_id}/learning-profile"): ("student_id",),
     ("GET", "/students/{student_id}/questions"): ("student_id",),
     ("GET", "/adaptive/students/me/memory"): (),
