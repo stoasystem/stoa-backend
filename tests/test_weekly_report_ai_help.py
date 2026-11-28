@@ -19,6 +19,8 @@ from typing import Any
 import pytest
 
 from fakes import student_evidence as fake_evidence
+from fakes.dynamodb import FakeTable
+from stoa.db import table as db_table
 from stoa.services import (
     knowledge_mastery_service,
     locale_service,
@@ -125,8 +127,8 @@ def _install_week(monkeypatch: pytest.MonkeyPatch, *, locale: str, attempts, lit
         "_get_linked_student_profile",
         lambda _parent, student: {"user_id": student, "name": "Mia", "grade": 5},
     )
-    monkeypatch.setattr(report_service, "_list_all_questions", lambda _student: [])
-    monkeypatch.setattr(report_service, "_list_conversations_for_student", lambda _student: [])
+    # No sessions and no help requests: an empty table.
+    db_table.install(FakeTable())
     monkeypatch.setattr(
         report_service.asked_knowledge_repo, "list_for_student", lambda *_args, **_kwargs: []
     )
