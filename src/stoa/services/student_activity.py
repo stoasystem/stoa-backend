@@ -1,9 +1,9 @@
 """What a student did in a stretch of time: one place, one set of rules (#633, #693).
 
-The parent's dashboard and the parent's history ask this module and nothing
-else; the weekly report (#694) and the learning profile's totals (#695) are to
-follow. It keeps no copy of anything: it puts together what the modules that
-own each piece read.
+The parent's dashboard, the parent's history and the learning profile's totals
+(#695) ask this module and nothing else; the weekly report (#694) is to follow.
+It keeps no copy of anything: it puts together what the modules that own each
+piece read.
 
 - **A stretch of time** is a `Period`, `[start, end)` with time zones. A week
   is the Zurich week (`zurich_week`: Monday 00:00 Europe/Zurich to the next,
