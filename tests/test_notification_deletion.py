@@ -11,7 +11,8 @@ import pytest
 from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, notification_repo, websocket_repo
-from stoa.services import account_deletion_service, notification_service
+from stoa.services import account_deletion_service
+from stoa.services.notifications import _ledger
 from fakes.dynamodb import FakeTable, from_wire
 
 
@@ -144,7 +145,7 @@ def test_private_event_and_connection_write_builders_start_with_exact_fence() ->
 
 
 def test_private_role_broadcast_requires_authoritative_owner_or_sealed_global_classification() -> None:
-    classify = _contract(notification_service, "classify_notification_owner")
+    classify = _contract(_ledger, "classify_notification_owner")
     owner = classify(
         recipient_id=None,
         target_type="question",
@@ -210,7 +211,7 @@ def test_delivery_claim_rechecks_fence_immediately_before_provider_effect(
     monkeypatch.setattr(
         notification_repo, "cancel_delivery_intent", cancel_delivery_intent
     )
-    result = _contract(notification_service, "run_delivery_intent")(
+    result = _contract(_ledger, "run_delivery_intent")(
         owner_id=STUDENT_ID,
         generation=GENERATION,
         operation_id="delivery-private",
@@ -260,7 +261,7 @@ def test_commit_then_raise_is_unknown_and_same_operation_is_not_blindly_retried(
         provider_calls.append("accepted")
         raise TimeoutError("lost provider response with private diagnostics")
 
-    result = _contract(notification_service, "run_delivery_intent")(
+    result = _contract(_ledger, "run_delivery_intent")(
         owner_id=STUDENT_ID,
         generation=GENERATION,
         operation_id="delivery-ambiguous",

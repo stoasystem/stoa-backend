@@ -43,7 +43,7 @@ from stoa.services import (
     billing_reconciliation_service,
     current_relationship,
     entitlement_service,
-    notification_service,
+    notifications,
     paid_entitlement_service,
 )
 from stoa.services.billing_callback_service import build_checkout_return_urls
@@ -2912,12 +2912,14 @@ def create_parent_request(
                 detail="Parent already has an open subscription request",
             ) from exc
         raise
-    notification_service.emit_subscription_update(
-        request_item=item,
-        recipient_id=None,
-        recipient_role="admin",
-        actor_id=parent_id,
-        actor_role="parent",
+    notifications.happened(
+        notifications.SubscriptionRequestChanged(
+            request=item,
+            recipient_id=None,
+            recipient_role="admin",
+            actor_id=parent_id,
+            actor_role="parent",
+        )
     )
     return _request_response(item)
 
@@ -2998,12 +3000,14 @@ def update_request_status(
         expected_status=current,
         clear_open_guard=status in TERMINAL_STATUSES,
     )
-    notification_service.emit_subscription_update(
-        request_item=updated,
-        recipient_id=str(updated.get("parent_id") or ""),
-        recipient_role="parent",
-        actor_id=_actor_id(user),
-        actor_role=str(user.get("role") or "admin"),
+    notifications.happened(
+        notifications.SubscriptionRequestChanged(
+            request=updated,
+            recipient_id=str(updated.get("parent_id") or ""),
+            recipient_role="parent",
+            actor_id=_actor_id(user),
+            actor_role=str(user.get("role") or "admin"),
+        )
     )
     return _request_response(updated)
 
@@ -3059,12 +3063,14 @@ def apply_request(
         source_request_id=request_id,
         at=now,
     )
-    notification_service.emit_subscription_update(
-        request_item=updated,
-        recipient_id=str(updated.get("parent_id") or ""),
-        recipient_role="parent",
-        actor_id=actor,
-        actor_role=str(user.get("role") or "admin"),
+    notifications.happened(
+        notifications.SubscriptionRequestChanged(
+            request=updated,
+            recipient_id=str(updated.get("parent_id") or ""),
+            recipient_role="parent",
+            actor_id=actor,
+            actor_role=str(user.get("role") or "admin"),
+        )
     )
     return _request_response(updated)
 

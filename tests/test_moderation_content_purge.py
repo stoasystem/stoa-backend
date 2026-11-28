@@ -163,9 +163,9 @@ def test_moderation_create_binds_authoritative_owner_generation_and_handoff(
         lambda *_args, **_kwargs: pytest.fail("initial case/event must be atomic"),
     )
     monkeypatch.setattr(
-        moderation_service.notification_service,
-        "emit_moderation_created",
-        lambda **kwargs: handoff.update(kwargs),
+        moderation_service.notifications,
+        "happened",
+        lambda happening: handoff.update(vars(happening)),
     )
 
     created = moderation_service.create_case(
@@ -263,9 +263,9 @@ def test_moderation_service_updates_inherit_case_owner_not_actor(
         lambda *_args, **_kwargs: list(events),
     )
     monkeypatch.setattr(
-        moderation_service.notification_service,
-        "emit_moderation_update",
-        lambda **kwargs: handoff.update(kwargs),
+        moderation_service.notifications,
+        "happened",
+        lambda happening: handoff.update(vars(happening)),
     )
 
     moderation_service.add_note(

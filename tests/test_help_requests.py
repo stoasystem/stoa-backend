@@ -18,6 +18,7 @@ from fakes.learning_session import seed_conversation
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import help_requests, teacher_dispatch_service, teacher_support_allowance_service
+from stoa.services.notifications import _tell
 from fakes.admission import seed_period_active
 
 STUDENT = "student-189"
@@ -93,7 +94,7 @@ class World:
         return help_requests.sweep(now=now, table=self.table)
 
     def paused(self) -> list[dict]:
-        return [kwargs for name, kwargs in self.events if name == "emit_teacher_dispatch_paused"]
+        return [kwargs for name, kwargs in self.events if name == "TeacherPausedAfterLapse"]
 
     @property
     def record(self) -> dict:
@@ -149,19 +150,12 @@ def world(monkeypatch) -> World:
 
     monkeypatch.setattr(teacher_support_allowance_service, "admit_teacher_support_case", admit)
     monkeypatch.setattr(teacher_support_allowance_service, "refund_teacher_support_case", refund)
-    for name in (
-        "emit_teacher_help_dispatched",
-        "emit_teacher_help_expired",
-        "emit_teacher_help_takeover",
-        "emit_teacher_help_reply",
-        "close_teacher_help_offer",
-        "emit_teacher_dispatch_paused",
-    ):
-        monkeypatch.setattr(
-            help_requests.notification_service,
-            name,
-            lambda name=name, **kwargs: built.events.append((name, kwargs)),
-        )
+    # What the module told: each happening by its kind, with what it said.
+    monkeypatch.setattr(
+        help_requests.notifications,
+        "happened",
+        lambda happening: built.events.append((type(happening).__name__, dict(vars(happening)))),
+    )
     return built
 
 
@@ -184,7 +178,7 @@ def test_asking_writes_one_record_and_offers_it_to_a_free_teacher(world) -> None
     assert not [row for row in world.table.rows if row[0].startswith("QUESTION#")]
     # The system message that opens the request is in the conversation.
     assert world.table.rows[(f"CONV#{CONV}", f"MSG#{CONV}")]["role"] == "system"
-    assert [name for name, _ in world.events] == ["emit_teacher_help_dispatched"]
+    assert [name for name, _ in world.events] == ["HelpOffered"]
     assert help_requests.student_view(record, now=at(1)) == ("assigned", TEACHER)
 
 
@@ -224,11 +218,11 @@ def test_nobody_free_is_said_and_the_student_told_so(world) -> None:
 
 
 def _closed(world: World) -> list[dict]:
-    return [kwargs for name, kwargs in world.events if name == "close_teacher_help_offer"]
+    return [kwargs for name, kwargs in world.events if name == "HelpOfferClosed"]
 
 
 def _offers(world: World) -> list[dict]:
-    return [kwargs for name, kwargs in world.events if name == "emit_teacher_help_dispatched"]
+    return [kwargs for name, kwargs in world.events if name == "HelpOffered"]
 
 
 def test_a_lapsed_offer_goes_to_someone_else_first(world) -> None:
@@ -443,7 +437,7 @@ def test_a_request_nobody_took_in_24_hours_expires_and_its_case_goes_back(world,
     assert report["conversationsExpired"] == [CONV]
     assert world.record["escalation_status"] == "expired"
     assert world.refunds == ["expired"]
-    assert [name for name, _ in world.events] == ["emit_teacher_help_expired"]
+    assert [name for name, _ in world.events] == ["HelpRequestExpired"]
 
 
 def test_a_long_wait_with_nobody_free_is_reported(world, monkeypatch) -> None:
@@ -514,8 +508,8 @@ def test_once_accepted_the_reply_lands_and_the_student_hears_of_each(world) -> N
     assert record["first_teacher_action_at"] == at(3)
     assert (f"CONV#{CONV}", f"NOTE#{written.id}") in world.table.rows
     assert [name for name, _ in world.events] == [
-        "emit_teacher_help_takeover",
-        "emit_teacher_help_reply",
+        "TeacherTookHelpRequest",
+        "TeacherReplied",
     ]
 
 
@@ -927,7 +921,7 @@ def test_taking_tells_the_student_once_and_finishing_tells_nobody(world) -> None
     taken = help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
     help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="resolved", now=at(3), table=world.table)
 
-    assert [name for name, _ in world.events] == ["emit_teacher_help_takeover"]
+    assert [name for name, _ in world.events] == ["TeacherTookHelpRequest"]
     assert world.events[0][1] == {"conversation": taken, "teacher_id": TEACHER, "mode": "text"}
 
 
@@ -943,10 +937,12 @@ def test_a_refused_take_tells_nobody(world) -> None:
 def test_a_failed_notice_does_not_undo_the_take(world, monkeypatch) -> None:
     world.ask()
 
-    def fail(**_kwargs):
+    def fail(*_args, **_kwargs):
         raise RuntimeError("notifications down")
 
-    monkeypatch.setattr(help_requests.notification_service, "emit_teacher_help_takeover", fail)
+    # The real entry, with the bell behind it failing: it never raises (#686).
+    monkeypatch.setattr(help_requests.notifications, "happened", _tell.happened)
+    monkeypatch.setattr(_tell, "recipient_locale", fail)
 
     taken = help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
 
@@ -985,7 +981,7 @@ def test_a_reply_is_one_transaction_and_one_notice(world, monkeypatch) -> None:
         "Subtract 5 from both sides.",
         [],
     )
-    assert [name for name, _ in world.events] == ["emit_teacher_help_reply"]
+    assert [name for name, _ in world.events] == ["TeacherReplied"]
     assert world.events[0][1]["reply_id"] == written.id
 
 

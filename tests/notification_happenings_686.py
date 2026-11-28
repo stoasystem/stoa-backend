@@ -2,13 +2,15 @@
 
 The one part of the snapshot test that names the notification code's entry
 points; everything it records is read from the table and the provider doubles.
+Before #686 these called `notification_service.emit_*`; now each is one
+happening handed to `notifications.happened`.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from stoa.services import notification_service
+from stoa.services import notifications
 
 STUDENT = "student-686"
 TEACHER = "teacher-686"
@@ -31,6 +33,7 @@ CASE = {
     "severity": "high",
     "reason": "offensive",
 }
+CHANGE_ID = "2026-11-28T10:00:00+00:00#0123456789abcdef0123456789abcdef"
 REQUEST = {
     "request_id": "subreq-686",
     "parent_id": PARENT,
@@ -42,7 +45,7 @@ REQUEST = {
 
 
 def switch_push_on(user_id: str) -> None:
-    notification_service.update_preferences(
+    notifications.update_preferences(
         user_id,
         {
             category: {"in_app": True, "realtime": True, "push": True}
@@ -52,101 +55,119 @@ def switch_push_on(user_id: str) -> None:
 
 
 def register_push_device(actor: dict[str, str], token: str) -> None:
-    notification_service.register_push_token(actor, platform="ios", token=token)
+    notifications.register_push_token(actor, platform="ios", token=token)
 
 
 def bell(actor: dict[str, str]) -> list[dict[str, Any]]:
-    return notification_service.list_user_events(actor, limit=50)
+    return notifications.list_user_events(actor, limit=50)
 
 
 def teacher_took(*, mode: str) -> None:
-    notification_service.emit_teacher_help_takeover(
-        conversation=CONVERSATION, teacher_id=TEACHER, mode=mode
+    notifications.happened(
+        notifications.TeacherTookHelpRequest(conversation=CONVERSATION, teacher_id=TEACHER, mode=mode)
     )
 
 
 def teacher_replied() -> None:
-    notification_service.emit_teacher_help_reply(
-        conversation=CONVERSATION, teacher_id=TEACHER, reply_id="reply-686"
+    notifications.happened(
+        notifications.TeacherReplied(conversation=CONVERSATION, teacher_id=TEACHER, reply_id="reply-686")
     )
 
 
 def request_expired(*, case_returned: bool) -> None:
-    notification_service.emit_teacher_help_expired(
-        conversation=CONVERSATION, case_returned=case_returned
+    notifications.happened(
+        notifications.HelpRequestExpired(conversation=CONVERSATION, case_returned=case_returned)
     )
 
 
 def help_offered(*, standing: bool) -> None:
-    notification_service.emit_teacher_help_dispatched(
-        conversation=CONVERSATION,
-        teacher_id=TEACHER,
-        dispatch_id="dispatch-686",
-        deadline_at="2026-11-28T10:10:00+00:00",
-        accept_minutes=10,
-        standing=standing,
+    notifications.happened(
+        notifications.HelpOffered(
+            conversation=CONVERSATION,
+            teacher_id=TEACHER,
+            dispatch_id="dispatch-686",
+            deadline_at="2026-11-28T10:10:00+00:00",
+            accept_minutes=10,
+            standing=standing,
+        )
     )
 
 
 def teacher_paused() -> None:
-    notification_service.emit_teacher_dispatch_paused(
-        teacher_id=TEACHER, dispatch_id="dispatch-686", accept_minutes=10
+    notifications.happened(
+        notifications.TeacherPausedAfterLapse(
+            teacher_id=TEACHER, dispatch_id="dispatch-686", accept_minutes=10
+        )
     )
 
 
 def offer_closed(state: str) -> None:
     help_offered(standing=False)
-    notification_service.close_teacher_help_offer(
-        dispatch_id="dispatch-686", state=state, now="2026-11-28T10:11:00+00:00"
+    notifications.happened(
+        notifications.HelpOfferClosed(
+            dispatch_id="dispatch-686", state=state, now="2026-11-28T10:11:00+00:00"
+        )
     )
 
 
 def moderation_opened() -> None:
-    notification_service.emit_moderation_created(
-        case_item=dict(CASE),
-        actor_id=STUDENT,
-        actor_role="student",
-        owner_id=STUDENT,
-        privacy_generation=GENERATION,
+    notifications.happened(
+        notifications.ModerationCaseOpened(
+            case=dict(CASE),
+            actor_id=STUDENT,
+            actor_role="student",
+            owner_id=STUDENT,
+            privacy_generation=GENERATION,
+        )
     )
 
 
 def moderation_updated() -> None:
-    notification_service.emit_moderation_update(
-        case_item=dict(CASE),
-        actor_id=ADMIN,
-        actor_role="admin",
-        owner_id=STUDENT,
-        privacy_generation=GENERATION,
+    notifications.happened(
+        notifications.ModerationCaseUpdated(
+            case=dict(CASE),
+            actor_id=ADMIN,
+            actor_role="admin",
+            owner_id=STUDENT,
+            privacy_generation=GENERATION,
+            change_id=CHANGE_ID,
+        )
     )
 
 
 def moderation_updated_admin_report() -> None:
     # A case an admin or moderation itself opened has nobody to tell (#139).
-    notification_service.emit_moderation_update(
-        case_item={**CASE, "reporter_id": ADMIN, "reporter_role": "admin"},
-        actor_id=ADMIN,
-        actor_role="admin",
-        owner_id=STUDENT,
-        privacy_generation=GENERATION,
+    notifications.happened(
+        notifications.ModerationCaseUpdated(
+            case={**CASE, "reporter_id": ADMIN, "reporter_role": "admin"},
+            actor_id=ADMIN,
+            actor_role="admin",
+            owner_id=STUDENT,
+            privacy_generation=GENERATION,
+            change_id=CHANGE_ID,
+        )
     )
 
 
 def subscription_requested() -> None:
-    notification_service.emit_subscription_update(
-        request_item=dict(REQUEST),
-        recipient_id=None,
-        recipient_role="admin",
-        actor_id=PARENT,
-        actor_role="parent",
+    notifications.happened(
+        notifications.SubscriptionRequestChanged(
+            request=dict(REQUEST),
+            recipient_id=None,
+            recipient_role="admin",
+            actor_id=PARENT,
+            actor_role="parent",
+        )
     )
 
 
 def subscription_approved() -> None:
-    notification_service.emit_subscription_update(
-        request_item={**REQUEST, "status": "approved"},
-        recipient_id=PARENT,
-        recipient_role="parent",
-        actor_id=ADMIN,
-        actor_role="admin",
+    notifications.happened(
+        notifications.SubscriptionRequestChanged(
+            request={**REQUEST, "status": "approved"},
+            recipient_id=PARENT,
+            recipient_role="parent",
+            actor_id=ADMIN,
+            actor_role="admin",
+        )
     )

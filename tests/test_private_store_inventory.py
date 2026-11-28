@@ -227,7 +227,7 @@ def test_all_five_findings_have_exact_lower_source_seals_and_selectors():
             "(#effect=:registered OR (#effect=:inflight AND ",
         ),
         (
-            "src/stoa/services/notification_service.py",
+            "src/stoa/services/notifications/_ledger.py",
             "begin_result = notification_repo.begin_delivery_effect(\n"
             "        scope=scope,\n"
             "        claim=claimed,\n"
@@ -238,14 +238,14 @@ def test_all_five_findings_have_exact_lower_source_seals_and_selectors():
             "    )",
         ),
         (
-            "src/stoa/services/notification_service.py",
+            "src/stoa/services/notifications/_ledger.py",
             "inflight_claim = begin_result.claim",
             "inflight_claim = claimed",
         ),
         (
-            "src/stoa/services/websocket_service.py",
-            "batch = notification_service.load_authoritative_delivery_events([event_id])",
-            "batch = notification_service.AuthoritativeDeliveryBatch(events=(item,), ownership=item.get('metadata'), event_set_digest=event_id)",
+            "src/stoa/services/notifications/_realtime.py",
+            "batch = _ledger.load_authoritative_delivery_events([event_id])",
+            "batch = _ledger.AuthoritativeDeliveryBatch(events=(item,), ownership=item.get('metadata'), event_set_digest=event_id)",
         ),
     ],
 )

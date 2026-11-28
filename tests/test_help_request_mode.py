@@ -19,7 +19,8 @@ from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
 from fakes.admission import seed_period_active
-from stoa.services import help_requests, message_catalog, notification_service
+from stoa.services import help_requests, message_catalog
+from stoa.services.notifications import _bell, _tell
 from stoa.services import teacher_support_allowance_service as allowance
 from test_chat_help_request_lifecycle import (
     CONV,
@@ -174,7 +175,7 @@ def test_taking_the_request_does_not_change_its_mode(table) -> None:
 def sent(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     monkeypatch.setattr(
-        notification_service,
+        _bell,
         "create_event_safe",
         lambda **kwargs: (
             events.append(kwargs) if kwargs.get("recipient_role") == "student" else None
@@ -188,7 +189,7 @@ def sent(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 def test_taking_a_classroom_request_tells_the_student_to_enter_the_classroom(
     table, sent, monkeypatch, locale
 ) -> None:
-    monkeypatch.setattr(notification_service, "_recipient_locale", lambda _id: locale)
+    monkeypatch.setattr(_tell, "recipient_locale", lambda _id: locale)
     _help(table)["mode"] = "classroom"
     _dispatch_to(table, TEACHER)
 

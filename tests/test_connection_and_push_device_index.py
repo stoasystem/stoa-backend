@@ -26,7 +26,8 @@ from stoa.config import Settings
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, notification_repo, websocket_repo
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
-from stoa.services import notification_service, websocket_service
+from stoa.services import websocket_service
+from stoa.services import notifications
 
 STUDENT = "student-1"
 OTHER_STUDENT = "student-2"
@@ -244,7 +245,7 @@ def _push_row(table: FakeTable, user_id: str, token_reference: str) -> dict[str,
 
 
 def _register(user_id: str, **kwargs: Any) -> dict[str, Any]:
-    return notification_service.register_push_token(_user(user_id), platform="ios", **kwargs)
+    return notifications.register_push_token(_user(user_id), platform="ios", **kwargs)
 
 
 def _sha(value: str) -> str:
@@ -342,7 +343,9 @@ def test_revoking_a_device_leaves_it_where_it_is(table) -> None:
         _push_row(table, STUDENT, created["tokenReference"])
     )
 
-    notification_service.revoke_push_token(_user(STUDENT), created["tokenReference"])
+    notifications.revoke_authorized_push_token(
+        {"user_id": _user(STUDENT)["sub"], "token_reference": created["tokenReference"]}
+    )
 
     row = _push_row(table, STUDENT, created["tokenReference"])
     assert notification_repo.carried_push_token_index_fields(row) == before
@@ -365,7 +368,9 @@ def test_a_device_written_before_the_keys_gets_them_when_it_is_revoked(table) ->
     row = _legacy_device(table, STUDENT, "device-token")
     assert notification_repo.list_user_push_tokens(STUDENT) == []
 
-    notification_service.revoke_push_token(_user(STUDENT), row["token_reference"])
+    notifications.revoke_authorized_push_token(
+        {"user_id": _user(STUDENT)["sub"], "token_reference": row["token_reference"]}
+    )
 
     assert _refs(notification_repo.list_user_push_tokens(STUDENT)) == [
         (STUDENT, row["token_reference"])

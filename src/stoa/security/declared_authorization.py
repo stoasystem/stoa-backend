@@ -60,7 +60,6 @@ from fastapi import Depends, Path, Query, Request
 from stoa.db.repositories import (
     adaptive_learning_repo,
     attachment_repo,
-    notification_repo,
     practice_repo,
     user_repo,
 )
@@ -555,7 +554,9 @@ def _owned(
 
 async def _load_notification_event(event_id: str, _actor: Actor) -> AuthorizedResource | None:
     """An event, bound to its canonical recipient."""
-    item = notification_repo.get_event(event_id)
+    from stoa.services import notifications
+
+    item = notifications.get_event(event_id)
     if not item or not item.get("recipient_id"):
         return None
     return _owned(ResourceType.NOTIFICATION_EVENT, event_id, item, str(item["recipient_id"]))
@@ -563,7 +564,9 @@ async def _load_notification_event(event_id: str, _actor: Actor) -> AuthorizedRe
 
 async def _load_push_token(token_reference: str, actor: Actor) -> AuthorizedResource | None:
     """A push token is looked up under the Actor's own account, by its reference."""
-    item = notification_repo.get_push_token(actor.user_id, token_reference)
+    from stoa.services import notifications
+
+    item = notifications.get_push_token(actor.user_id, token_reference)
     if not item:
         return None
     return _owned(

@@ -16,7 +16,8 @@ from stoa.db import table as db_table
 from stoa.config import DEVELOPMENT_AUDIT_KEY, Settings
 from stoa.db.repositories.security_audit_repo import DynamoAuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
-from stoa.routers import admin, notifications
+from stoa.routers import admin, notifications as notifications_router
+from stoa.services import notifications
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationFacts,
@@ -39,7 +40,6 @@ from stoa.security.declared_authorization import (
     get_authorization_fact_repository,
 )
 from stoa.security.declared_authorization import path as path_source
-from stoa.services import notification_service
 
 
 def _actor(role: CanonicalRole, user_id: str, *capabilities: str) -> Actor:
@@ -419,9 +419,9 @@ def test_all_production_authorization_call_sites_use_recording_gateway():
 
 def test_real_admin_dependency_uses_one_correlation_for_response_and_evidence(monkeypatch):
     sink = MemoryAuthorizationAuditSink()
-    monkeypatch.setattr(notification_service, "list_admin_events", lambda **_kwargs: [])
+    monkeypatch.setattr(notifications, "list_admin_events", lambda **_kwargs: [])
     app = FastAPI()
-    app.include_router(notifications.admin_router, prefix="/admin")
+    app.include_router(notifications_router.admin_router, prefix="/admin")
     app.dependency_overrides[get_actor] = lambda: _actor(
         CanonicalRole.ADMIN, "admin-1", "notification_event_inspector"
     )
@@ -434,9 +434,9 @@ def test_real_admin_dependency_uses_one_correlation_for_response_and_evidence(mo
 
 def test_real_admin_mandatory_allow_outage_returns_safe_correlated_503(monkeypatch):
     effects = []
-    monkeypatch.setattr(notification_service, "list_admin_events", lambda **_kwargs: effects.append(True))
+    monkeypatch.setattr(notifications, "list_admin_events", lambda **_kwargs: effects.append(True))
     app = FastAPI()
-    app.include_router(notifications.admin_router, prefix="/admin")
+    app.include_router(notifications_router.admin_router, prefix="/admin")
     app.dependency_overrides[get_actor] = lambda: _actor(
         CanonicalRole.ADMIN, "admin-1", "notification_event_inspector"
     )

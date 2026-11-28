@@ -20,7 +20,7 @@ from stoa import config
 from stoa.config import Settings
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, notification_repo
-from stoa.services import notification_service
+from stoa.services import notifications
 
 STUDENT = "student-1"
 GENERATION = 3
@@ -51,7 +51,7 @@ def _user() -> dict[str, str]:
 
 
 def _register(**kwargs: Any) -> dict[str, Any]:
-    return notification_service.register_push_token(_user(), platform="ios", **kwargs)
+    return notifications.register_push_token(_user(), platform="ios", **kwargs)
 
 
 def _devices(table: FakeTable) -> list[dict[str, Any]]:
@@ -78,7 +78,9 @@ def test_registering_the_same_device_twice_keeps_one_active_row(table) -> None:
 
 def test_registering_a_revoked_device_again_makes_it_active(table) -> None:
     created = _register(token="device-token")
-    notification_service.revoke_push_token(_user(), created["tokenReference"])
+    notifications.revoke_authorized_push_token(
+        {"user_id": _user()["sub"], "token_reference": created["tokenReference"]}
+    )
     (revoked,) = _devices(table)
     assert revoked["status"] == "revoked"
     assert revoked["revoked_at"]

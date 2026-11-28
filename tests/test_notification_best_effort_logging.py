@@ -9,19 +9,19 @@ from __future__ import annotations
 
 import logging
 
-from stoa.services import notification_service
+from stoa.services.notifications import _bell
 
 
 def test_a_failed_best_effort_notification_is_logged_not_raised(monkeypatch, caplog):
-    monkeypatch.setattr(notification_service, "_best_effort_disabled", lambda: False)
+    monkeypatch.setattr(_bell, "_best_effort_disabled", lambda: False)
 
     def refuse(**_kwargs):
         raise RuntimeError("conditional account lifecycle conflict")
 
-    monkeypatch.setattr(notification_service, "create_event", refuse)
+    monkeypatch.setattr(_bell, "create_event", refuse)
 
-    with caplog.at_level(logging.WARNING, logger=notification_service.logger.name):
-        result = notification_service.create_event_safe(
+    with caplog.at_level(logging.WARNING, logger=_bell.logger.name):
+        result = _bell.create_event_safe(
             recipient_id="student-79",
             event_type="teacher_reply",
             title="Teacher replied",

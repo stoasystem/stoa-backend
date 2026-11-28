@@ -303,7 +303,7 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation(mo
             operations = from_wire(TransactItems)
             help_ops.extend(operations)
 
-    monkeypatch.setattr(help_requests.notification_service, "emit_teacher_help_reply", lambda **_kwargs: None)
+    monkeypatch.setattr(help_requests.notifications, "happened", lambda _happening: None)
     help_requests.reply(
         {
             "conversation_id": "c-1",

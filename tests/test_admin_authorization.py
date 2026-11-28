@@ -8,13 +8,13 @@ import pytest
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.main import app as main_app
-from stoa.routers import admin, notifications
+from stoa.routers import admin, notifications as notifications_router
+from stoa.services import notifications
 from stoa.routers.admin import privileged_identities as admin_privileged_identities, recovery_jobs as admin_recovery_jobs, users as admin_users
 from stoa.db.repositories import parent_link_repo, report_repo
 from stoa.security.admin_authorization import admin_operation, classify_admin_route
 from stoa.security.authorization import ResourceRef, operator_capability_permits, project_support_lookup
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
-from stoa.services import notification_service
 from stoa.services.current_relationship import Standing, Verdict
 from rule_violation_helpers import assert_violation
 
@@ -453,9 +453,9 @@ def test_admin_role_and_break_glass_cannot_provision_privilege(monkeypatch):
     ],
 )
 def test_notification_admin_routes_require_distinct_exact_capabilities(monkeypatch, path, capability, wrong):
-    monkeypatch.setattr(notification_service, "list_admin_events", lambda **kwargs: [])
+    monkeypatch.setattr(notifications, "list_admin_events", lambda **kwargs: [])
     monkeypatch.setattr(
-        notification_service,
+        notifications,
         "delivery_status",
         lambda **kwargs: {
             "websocketConfigured": False,
@@ -468,7 +468,7 @@ def test_notification_admin_routes_require_distinct_exact_capabilities(monkeypat
         },
     )
     app = FastAPI()
-    app.include_router(notifications.admin_router, prefix="/admin")
+    app.include_router(notifications_router.admin_router, prefix="/admin")
     app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     app.dependency_overrides[get_actor] = lambda: _actor(wrong)
     assert TestClient(app).get(path).status_code == 403

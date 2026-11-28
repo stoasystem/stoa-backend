@@ -60,11 +60,11 @@ from stoa.db.repositories import (
     attachment_repo,
     curriculum_analytics_repo,
     moderation_repo,
-    notification_repo,
     practice_repo,
     report_repo,
     websocket_repo,
 )
+from stoa.services import notifications
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ DELETION_SCANS: tuple[Callable[..., Any], ...] = (
     attachment_repo.scan_conversation_private_rows,
     curriculum_analytics_repo.scan_curriculum_signal_manifests,
     moderation_repo.scan_moderation_private_rows,
-    notification_repo.scan_notification_private_rows,
+    notifications.scan_notification_private_rows,
     practice_repo.scan_practice_private_rows,
     report_repo.scan_report_private_rows,
     websocket_repo.scan_account_connections,

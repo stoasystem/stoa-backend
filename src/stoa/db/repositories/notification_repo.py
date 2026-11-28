@@ -605,7 +605,7 @@ def index_fields(item: Mapping[str, object]) -> dict[str, str]:
     Every notification with a creation time is in the site's list
     (`LISTING_INDEX_FIELDS`). It is in an inbox too (`INBOX_INDEX_FIELDS`) when
     it says who it is for: one with no `recipient_id` is for everyone in its
-    `recipient_role`, as `notification_service._visible_to_user` reads it, and
+    `recipient_role`, as `notifications.visible_to_user` reads it, and
     one that names neither is in no inbox. An index key is never written empty.
     """
     if item.get("entity_type") != NOTIFICATION_ENTITY:

@@ -359,12 +359,12 @@ def test_all_new_authority_fields_have_closed_parsers_and_exact_finding_selector
             "int(command.get(\"command_version\") or command.get(\"version\") or 1)",
         ),
         (
-            "src/stoa/services/notification_service.py",
+            "src/stoa/services/notifications/_ledger.py",
             "classification = event.get(\"owner_classification\")",
             "classification = event.get(\"owner_classification\") or event.get(\"event_type\")",
         ),
         (
-            "src/stoa/services/notification_service.py",
+            "src/stoa/services/notifications/_ledger.py",
             "return resolve_legacy_delivery_owner(event, table=table)",
             "return AuthoritativeDeliveryOwnership.private_owner(owner_id=str(event.get('recipient_id')), generation=1)",
         ),

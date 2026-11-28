@@ -26,13 +26,15 @@ from fastapi.testclient import TestClient
 
 from stoa import aws
 from stoa.aws import Kind
-from stoa.routers import notifications
+from stoa.routers import notifications as notifications_router
 from stoa.services import (
     email_unsubscribe,
-    notification_service,
+    notifications,
     notify_service,
     one_off_email,
 )
+from stoa.services.notifications import _preferences
+from stoa.db.repositories import notification_repo
 from stoa.services.email_unsubscribe import EmailKind
 
 import test_notifications
@@ -75,7 +77,7 @@ def _header_token(mail: dict[str, Any]) -> str:
 
 def _public_client() -> TestClient:
     app = FastAPI()
-    app.include_router(notifications.router, prefix="/notifications")
+    app.include_router(notifications_router.router, prefix="/notifications")
     return TestClient(app)
 
 
@@ -157,7 +159,7 @@ def test_unsubscribing_from_dispatch_reminders_switches_dispatch_email_off(prefe
 
     assert response.status_code == 200, response.text
     assert response.json() == {"kind": "dispatch_reminder", "subscribed": False}
-    assert notification_service.dispatch_email_enabled(TEACHER) is False
+    assert _preferences.dispatch_email_enabled(TEACHER) is False
 
 
 def test_the_one_click_post_of_rfc_8058_unsubscribes(preferences) -> None:
@@ -170,7 +172,7 @@ def test_the_one_click_post_of_rfc_8058_unsubscribes(preferences) -> None:
     )
 
     assert response.status_code == 200, response.text
-    assert notification_service.dispatch_email_enabled(TEACHER) is False
+    assert _preferences.dispatch_email_enabled(TEACHER) is False
 
 
 def test_a_signed_link_for_the_retired_digest_is_refused_like_any_other(preferences) -> None:
@@ -194,26 +196,26 @@ def test_a_signed_link_for_the_retired_digest_is_refused_like_any_other(preferen
 
 
 def test_the_weekly_report_switch_is_on_by_default_and_the_link_turns_it_off(preferences) -> None:
-    assert notification_service.weekly_report_email_enabled(PARENT) is True
-    assert notification_service.preferences_response(PARENT)["weeklyReportEmail"] is True
+    assert notifications.weekly_report_email_enabled(PARENT) is True
+    assert notifications.preferences_response(PARENT)["weeklyReportEmail"] is True
     token = email_unsubscribe.issue_token(PARENT, EmailKind.WEEKLY_REPORT)
 
     client = _public_client()
     assert client.post("/notifications/email-unsubscribe", params={"token": token}).status_code == 200
-    assert notification_service.weekly_report_email_enabled(PARENT) is False
+    assert notifications.weekly_report_email_enabled(PARENT) is False
 
     assert client.post("/notifications/email-resubscribe", params={"token": token}).json() == {
         "kind": "weekly_report",
         "subscribed": True,
     }
-    assert notification_service.weekly_report_email_enabled(PARENT) is True
+    assert notifications.weekly_report_email_enabled(PARENT) is True
 
 
 def test_a_parent_can_switch_the_weekly_report_email_in_settings(preferences) -> None:
     from actor_helpers import install_actor_overrides
 
     app = FastAPI()
-    app.include_router(notifications.router, prefix="/notifications")
+    app.include_router(notifications_router.router, prefix="/notifications")
     install_actor_overrides(app, {"sub": PARENT, "role": "parent"})
     client = TestClient(app)
 
@@ -422,7 +424,7 @@ def test_a_link_for_an_account_deleted_since_is_refused_like_any_other(
     def fenced_off(_item):
         raise account_deletion_repo.AccountDeletionConflict("account fence is not active")
 
-    monkeypatch.setattr(notification_service.notification_repo, "put_preferences", fenced_off)
+    monkeypatch.setattr(notification_repo, "put_preferences", fenced_off)
     token = email_unsubscribe.issue_token(PARENT, EmailKind.WEEKLY_REPORT)
 
     status, body = _refused(token)
