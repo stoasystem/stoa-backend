@@ -16,7 +16,7 @@ worker's sweep (`_sweep`). The entry points:
 - `sweep` is the Scheduler's: it answers what the direct invocation missed and
   settles what nothing else will, and returns a `SweepSummary`.
 - `cancel_for_account_deletion` is account deletion's: it cancels a command
-  still active when the account's private rows are scrubbed.
+  still active before the catalog's tombstone replaces it.
 
 Who answers a committed command is `dispatch`'s to decide. A question's own
 failures carry an `AskQuestionErrorCode`.
@@ -281,7 +281,7 @@ def cancel_for_account_deletion(
     deletion_generation: int,
     now_iso: str,
 ) -> bool:
-    """Cancel `row` if it is a command still active, as account deletion scans it.
+    """Cancel `row` if it is a command still active, as account deletion meets it.
 
     Returns whether it was canceled; any other private row is the caller's.
     A command of another owner is refused (`AttachmentRepositoryConflict`).

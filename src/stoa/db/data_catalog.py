@@ -31,9 +31,10 @@ entry declares:
   `Delete`, `Tombstone` (with the fields the tombstone keeps) or `Keep` (with
   why); for a row that only names the account, `Scrub` or `Keep` - and what it
   does outside the row first (`Effect`: an S3 object, the sign-in provider,
-  attachments, a curriculum count). Written down from what the deletion
+  attachments, a curriculum count). Written down from what the old deletion
   branches did (#639); since #641 the deletion does exactly this, row by row
-  (`stoa.services.account_deletion_flow`), sealed with `catalog_sha256`.
+  (`stoa.services.account_deletion_flow`), sealed with `catalog_sha256`, and
+  since #642 nothing else says how a row is deleted.
 - **The owning module** - where the type's rows are written.
 
 `mentions(row)` and `names(row, account)` read one row against its entry and
@@ -50,9 +51,9 @@ account, because a caller walking the whole table (the sweep) has to get
 through rows written before a type had a name; and
 `mentions_strict` raises `UnknownDataType`, for a caller that must not guess.
 
-Account deletion reads it (#588): `owns`, `names` and `role_of` are the one
-answer to "whose is this row" for every deletion scan, and each scan keeps
-only its own choice of which kinds it handles and how. The owner registry
+Account deletion reads it (#588, #641): `owns`, `names` and `role_of` are the
+one answer to "whose is this row", and `DELETIONS` the one answer to what is
+done with it. The owner registry
 reads it too (#589): a write registers its partition under every account
 `mentions` gives, in the role given (`owner_registry.registry_operations`),
 and an Update that sets one of the `POINTER_PATHS` has to say how its row
@@ -76,7 +77,8 @@ REFERENCE: Final = "reference"
 type Lifecycle = Literal["written", "no_longer_written", "legacy"]
 """`written`: something in `src/stoa` writes it. `no_longer_written`: nothing does any
 more, but stored rows may remain (the deletion still has to reach them).
-`legacy`: older still, read by the deletion only; no writer in this codebase."""
+`legacy`: older still, with no writer in this codebase; only the deletion reaches its
+rows, through the catalog like any other."""
 
 _SEPARATORS: Final = ("#", ":", "/")
 _SUMMARY_ENTRY_FIELDS: Final = ("user_id", "student_id", "child_id")
@@ -443,7 +445,13 @@ _ENTRIES: tuple[DataType, ...] = (
         _owner("user_id"),
         _not("who bound the identity (the account itself, or an operator)", "created_by"),
     ),
-    DataType("identity_deletion_evidence", _repo("account_deletion_repo"), ()),
+    # Left by the old identity branch (`terminalize_identity_row`) until #642.
+    DataType(
+        "identity_deletion_evidence",
+        _repo("account_deletion_repo"),
+        (),
+        lifecycle="no_longer_written",
+    ),
     DataType("provider_identity_revoke_debt", _repo("account_deletion_repo"), _owner("user_id")),
     DataType("public_identity_command", _repo("public_identity_repo"), _owner("user_id")),
     DataType("user_identity_inventory", _repo("identity_repo"), _owner("user_id")),
@@ -551,7 +559,7 @@ _ENTRIES: tuple[DataType, ...] = (
         "stoa.services.rate_limit",
         (*_owner("owner_id"), _owned_by_partition("USAGE#")),
     ),
-    # `USAGE#{id}`: the practice branch takes it by its partition.
+    # `USAGE#{id}`: owned by its partition.
     DataType(
         "rate_counter",
         "stoa.services.rate_limit",
@@ -655,7 +663,7 @@ _ENTRIES: tuple[DataType, ...] = (
         (),
         _not(_ADMIN, "updated_by"),
     ),
-    # Its `student_id` is matched today, though no branch acts on it (KEPT).
+    # Its `student_id` is matched; the deletion keeps it (see `DELETIONS`).
     DataType(
         "subscription_request",
         "stoa.services.subscription_service",
@@ -773,7 +781,7 @@ _ENTRIES: tuple[DataType, ...] = (
     # up through the question (`_resolve_private_owner`) is a deletion-time check.
     DataType(
         "moderation_case",
-        _repo("moderation_repo"),
+        "stoa.services.moderation_service",
         _owner("student_id"),
         (
             *_not("the administrator handling the case", "assigned_admin_id"),
@@ -909,8 +917,14 @@ _ENTRIES: tuple[DataType, ...] = (
         _repo("practice_repo"),
         (*_owner("student_id", "user_id", "owner_id"), _owned_by_partition("ATTEMPTS#")),
     ),
-    DataType("practice_deletion_tombstone", _repo("practice_repo"), ()),
-    DataType("practice_accounting_tombstone", _repo("practice_repo"), ()),
+    # Left by the old practice branch until #642; the catalog's tombstone keeps the
+    # row's own `entity_type` now.
+    DataType(
+        "practice_deletion_tombstone", _repo("practice_repo"), (), lifecycle="no_longer_written"
+    ),
+    DataType(
+        "practice_accounting_tombstone", _repo("practice_repo"), (), lifecycle="no_longer_written"
+    ),
     DataType(
         "learning_assignment",
         _repo("adaptive_learning_repo"),
@@ -921,8 +935,19 @@ _ENTRIES: tuple[DataType, ...] = (
             "created_by",
         ),
     ),
-    DataType("ai_teacher_draft_deletion_tombstone", _repo("ai_teacher_tools_repo"), ()),
-    DataType("teacher_session_deletion_tombstone", _repo("account_deletion_repo"), ()),
+    # Left by the old AI draft and question branches until #642.
+    DataType(
+        "ai_teacher_draft_deletion_tombstone",
+        _repo("ai_teacher_tools_repo"),
+        (),
+        lifecycle="no_longer_written",
+    ),
+    DataType(
+        "teacher_session_deletion_tombstone",
+        _repo("account_deletion_repo"),
+        (),
+        lifecycle="no_longer_written",
+    ),
     # -- notifications and realtime -----------------------------------------------------
     DataType(
         "notification_event",
@@ -996,7 +1021,7 @@ _ENTRIES: tuple[DataType, ...] = (
         _owner("owner_id"),
         lifecycle="no_longer_written",
     ),
-    # -- legacy: no writer in this codebase; the deletion still reads them --------------
+    # -- legacy: no writer in this codebase; the deletion still reaches them ------------
     DataType(
         "question",
         _repo("account_deletion_repo"),
@@ -1007,7 +1032,6 @@ _ENTRIES: tuple[DataType, ...] = (
         ),
         lifecycle="legacy",
     ),
-    # A teacher's deletion tombstones the session (`replace_teacher_session_with_tombstone`).
     DataType(
         "teacher_session",
         _repo("account_deletion_repo"),
@@ -1064,7 +1088,7 @@ UNTYPED: tuple[DataType, ...] = (
         untyped_key=KeyShape("STORAGE#", sk="USAGE"),
     ),
     # Rows with no `entity_type` that no writer here makes any more, which the
-    # practice deletion branch still takes (#588): any row in a student's
+    # deletion still takes (#588): any row in a student's
     # practice partition, owned by the partition as before #588; and practice
     # rows from before those partitions, owned by their owner fields.
     *(
@@ -1137,15 +1161,15 @@ UNTYPED: tuple[DataType, ...] = (
 #
 # Every type that points to an account says here what its deletion does, for each
 # role its pointers declare; a type that points to none is not listed. Written down
-# from what the deletion branches do (#639); the tombstone fields are each family's
-# allowlist, which `tests/test_account_deletion_branch_coverage.py` holds them to.
+# from what the old deletion branches did (#639), whose per-family tombstone
+# allowlists live on here as the `keeps` of each `Tombstone` (#642).
 
 _KEEPS_QUESTION: Final = frozenset(
     {"PK", "SK", "entity_type", "schema_version", "question_id", "status",
      "owner_deletion_generation", "created_at", "deleted_at"}
 )
 _KEEPS_SESSION: Final = _KEEPS_QUESTION | {"session_id"}
-# `terminalize_identity_row`: keyed evidence that an identity or grant existed.
+# Keyed evidence that an identity or grant existed.
 _KEEPS_IDENTITY_EVIDENCE: Final = frozenset(
     {"PK", "SK", "entity_type", "status", "owner_deletion_generation", "deleted_at", "version"}
 )
@@ -1332,8 +1356,8 @@ UNTYPED = tuple(_with_deletion(entry) for entry in UNTYPED)
 
 # What a deletion leaves in place of a row and names after it,
 # `{entity_type}_deletion_tombstone`: a status, a generation and timestamps,
-# never an account (`account_deletion_repo`, `adaptive_learning_repo`,
-# `notification_repo` build them).
+# never an account (`account_deletion_repo` builds them; the old deletion
+# branches built them in their own modules before #642).
 DELETION_TOMBSTONES: Final = DataType(
     f"*{DELETION_TOMBSTONE_SUFFIX}", _repo("account_deletion_repo"), ()
 )

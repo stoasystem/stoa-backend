@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from decimal import Decimal
 from typing import Any
 
@@ -15,7 +14,6 @@ from stoa.db.repositories import (
     curriculum_analytics_repo,
     practice_repo,
 )
-from stoa.services import account_deletion_service
 from fakes.dynamodb import from_wire
 
 
@@ -189,77 +187,6 @@ def test_curriculum_signal_is_random_owner_manifested_and_fenced_without_student
     assert "Update" in operations[3]
 
 
-def test_private_scans_are_strong_paginated_and_scrubs_are_strict_allowlists() -> None:
-    families = (
-        (
-            practice_repo,
-            "scan_practice_private_rows",
-            "scrub_practice_private_row",
-            "PRACTICE_TOMBSTONE_ALLOWLIST",
-            {
-                "PK": f"ATTEMPTS#{STUDENT_ID}",
-                "SK": "ATTEMPT#a",
-                "student_id": STUDENT_ID,
-                "submitted_answer": "private-answer-canary",
-                "standard_answer": "private-standard-canary",
-            },
-        ),
-        (
-            adaptive_learning_repo,
-            "scan_adaptive_private_rows",
-            "scrub_adaptive_private_row",
-            "ADAPTIVE_TOMBSTONE_ALLOWLIST",
-            {
-                "PK": "ASSIGNMENT#a",
-                "SK": "META",
-                "entity_type": "learning_assignment",
-                "student_id": STUDENT_ID,
-                "items": [{"prompt": "private-item-canary"}],
-                "answer_key": [{"answer": "private-key-canary"}],
-            },
-        ),
-        (
-            ai_teacher_tools_repo,
-            "scan_ai_draft_private_rows",
-            "scrub_ai_draft_private_row",
-            "AI_DRAFT_TOMBSTONE_ALLOWLIST",
-            {
-                "PK": "AI_TEACHER_DRAFT#a",
-                "SK": "META",
-                "entity_type": "ai_teacher_draft",
-                "student_id": STUDENT_ID,
-                "session_summary": "private-summary-canary",
-                "answer_key": [{"answer": "private-draft-key"}],
-            },
-        ),
-    )
-    for module, scan_name, scrub_name, allowlist_name, row in families:
-        calls: list[dict[str, Any]] = []
-        tombstones: list[dict[str, Any]] = []
-
-        class _Table:
-            def scan(self, **kwargs: Any) -> dict[str, Any]:
-                calls.append(kwargs)
-                return {"Items": [row]}
-
-            def replace_learning_tombstone(self, _original: Any, tombstone: Any, *_args: Any) -> None:
-                tombstones.append(tombstone)
-
-        page = _contract(module, scan_name)(STUDENT_ID, table=_Table(), maximum_pages=1)
-        for item in page.items:
-            _contract(module, scrub_name)(
-                item,
-                owner_id=STUDENT_ID,
-                generation=GENERATION,
-                now_iso=NOW,
-                table=_Table(),
-            )
-        allowlist = _contract(module, allowlist_name)
-        assert all(call.get("ConsistentRead") is True and "IndexName" not in call for call in calls)
-        assert tombstones and set(tombstones[0]) <= allowlist
-        assert "private-" not in repr(tombstones)
-
-
 def test_curriculum_reconciliation_is_exact_once_across_retry() -> None:
     reconcile = _contract(curriculum_analytics_repo, "reconcile_curriculum_signal")
     calls: list[list[dict[str, Any]]] = []
@@ -292,35 +219,6 @@ def test_curriculum_reconciliation_is_exact_once_across_retry() -> None:
     assert len(calls) == 1
     assert sum("Update" in operation for operation in calls[0]) >= 1
     assert sum("Delete" in operation for operation in calls[0]) == 2
-
-
-def test_five_restartable_branches_are_registered_and_require_later_zero_scan(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    expected = {
-        "practice_progress",
-        "adaptive_assignment",
-        "learning_memory",
-        "ai_teacher_draft",
-        "curriculum_signal",
-    }
-    assert expected <= set(account_deletion_service.BRANCH_HANDLERS)
-    page_type = _contract(practice_repo, "PracticePrivatePage")
-    pages = [
-        page_type(items=({"PK": f"PROGRESS#{STUDENT_ID}", "SK": "LESSON#late"},)),
-        page_type(items=()),
-        page_type(items=()),
-    ]
-    monkeypatch.setattr(practice_repo, "scan_practice_private_rows", lambda *_a, **_k: pages.pop(0))
-    monkeypatch.setattr(practice_repo, "scrub_practice_private_row", lambda *_a, **_k: None)
-    branch = account_deletion_service.BRANCH_HANDLERS["practice_progress"]
-    command = {"user_id": STUDENT_ID, "generation": GENERATION}
-    first = branch(command=command, previous={})
-    second = branch(command=command, previous=asdict(first))
-    third = branch(command=command, previous=asdict(second))
-    assert first.status == "retryable" and first.epoch == 0
-    assert second.status == "retryable" and second.epoch == 1
-    assert third.status == "complete" and third.quiescent is True and third.epoch == 2
 
 
 def test_learning_row_updates_keep_the_generation_the_row_carries(

@@ -340,21 +340,23 @@ def test_通用删除拒绝删掉profile行():
         )
 
 
-def test_通用删除照常删掉不是profile的行():
+def test_通用删除照常删掉不是profile的行(fake_table):
     """The negative control: a guard that refuses everything guards nothing."""
     from stoa.db.repositories import account_deletion_repo
 
-    deleted: list[tuple[str, str]] = []
-
-    class _Table:
-        def delete_owned_row(self, item, user_id, generation):
-            deleted.append((item["PK"], item["SK"]))
+    fake_table.seed(
+        {
+            **account_deletion_repo.account_fence_key("someone"),
+            "status": "deletion_pending",
+            "generation": 1,
+        },
+        {"PK": "USER#someone", "SK": "QUESTION#1", "student_id": "someone"},
+    )
 
     account_deletion_repo.delete_owned_row(
         {"PK": "USER#someone", "SK": "QUESTION#1"},
         user_id="someone",
         generation=1,
-        table=_Table(),
     )
 
-    assert deleted == [("USER#someone", "QUESTION#1")]
+    assert ("USER#someone", "QUESTION#1") not in fake_table.rows

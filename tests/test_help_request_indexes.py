@@ -14,10 +14,11 @@ indexes loses no request. The backfill puts the records written before in place.
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from typing import Any
 
 import pytest
+
+import deletion_helpers
 from fakes.dynamodb import DEFAULT_INDEXES, FakeTable, IndexSchema
 
 from scripts import backfill_help_request_index as backfill
@@ -26,7 +27,6 @@ from stoa.services import help_requests
 from stoa.services.ask_question import _store
 from test_chat_help_request_lifecycle import (
     CONV,
-    CREATED,
     OTHER_TEACHER,
     STUDENT,
     TEACHER,
@@ -227,9 +227,9 @@ def test_deleting_the_teacher_puts_a_held_request_back_in_the_open_index_only(ta
     _dispatch_to(table, TEACHER)
     assert _set_status(_client(), "in_progress").status_code == 200
 
-    results = _delete_teacher(table)
+    command = _delete_teacher(table)
 
-    assert results[-1].status == "complete", [asdict(result) for result in results]
+    assert command["status"] == "complete"
     record = _help(table)
     assert record["escalation_status"] == "pending"
     assert record["sweep_bucket"] == help_requests.OPEN_BUCKET
@@ -242,9 +242,9 @@ def test_deleting_the_teacher_takes_a_resolved_request_out_of_both_indexes(table
     _dispatch_to(table, TEACHER)
     assert _set_status(_client(), "resolved").status_code == 200
 
-    results = _delete_teacher(table)
+    command = _delete_teacher(table)
 
-    assert results[-1].status == "complete", [asdict(result) for result in results]
+    assert command["status"] == "complete"
     assert not set(help_requests.INDEX_FIELDS) & set(_help(table))
     _assert_indexes_hold_what_the_scan_finds(table)
 
@@ -252,11 +252,9 @@ def test_deleting_the_teacher_takes_a_resolved_request_out_of_both_indexes(table
 def test_the_students_deletion_leaves_a_tombstone_in_neither_index(table) -> None:
     _dispatch_to(table, TEACHER)
     assert _set_status(_client(), "in_progress").status_code == 200
-    table.rows[(f"USER#{STUDENT}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
 
-    account_deletion_repo.replace_with_deletion_tombstone(
-        dict(_help(table)), user_id=STUDENT, generation=1, now_iso=CREATED, table=table
-    )
+    # The student's whole deletion: the catalog's tombstone for the request (#642).
+    deletion_helpers.delete_account(STUDENT)
 
     tombstone = _help(table)
     assert account_deletion_repo.is_deletion_tombstone(tombstone)

@@ -16,7 +16,8 @@ from stoa import deps
 from stoa.db.repositories import account_deletion_repo
 from stoa.routers import auth
 from stoa.security.tokens import VerifiedAccessToken
-from stoa.services import account_deletion_service, owner_registry_sweep
+from fakes.dynamodb import from_wire
+from stoa.services import account_deletion_flow, account_deletion_service, owner_registry_sweep
 
 
 USER_ID = "student-deleted-1"
@@ -63,7 +64,7 @@ class _DeletionTable:
         }
         self.command: dict[str, Any] | None = None
         self.effects = {
-            "branch_handlers": 0,
+            "row_handlers": 0,
             "cleanup_calls": 0,
             "command_claims": 0,
             "command_writes": 0,
@@ -93,33 +94,24 @@ class _DeletionTable:
             return {"Items": [deepcopy(self.command)]}
         return {"Items": []}
 
-    def begin_account_deletion(
-        self, fence: dict[str, Any], command: dict[str, Any]
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        assert self.fence["status"] == "active"
-        command = {
-            **command,
-            "accepted_at": ACCEPTED_AT,
-            "created_at": ACCEPTED_AT,
-            "updated_at": ACCEPTED_AT,
-        }
-        fence = {
-            **fence,
-            "deletion_accepted_at": ACCEPTED_AT,
-            "updated_at": ACCEPTED_AT,
-        }
-        self.fence = deepcopy(fence)
-        self.command = deepcopy(command)
-        self.effects["fence_writes"] += 1
-        self.effects["command_writes"] += 1
-        return deepcopy(self.fence), deepcopy(self.command)
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        """The acceptance commit: the fence moves and the command is written, together."""
+        for operation in from_wire(TransactItems):
+            item = (operation.get("Put") or {}).get("Item")
+            if item is None:
+                continue
+            if item["SK"] == "ACCOUNT_FENCE":
+                assert self.fence["status"] == "active"
+                self.fence = deepcopy(item)
+                self.effects["fence_writes"] += 1
+            elif str(item["SK"]).startswith("DELETE_COMMAND#"):
+                self.command = deepcopy(item)
+                self.effects["command_writes"] += 1
 
     def complete(self, command_id: str) -> None:
         assert self.command and self.command["command_id"] == command_id
         self.effects["command_claims"] += 1
-        self.effects["branch_handlers"] += len(
-            account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS
-        )
+        self.effects["row_handlers"] += 1
         self.effects["cleanup_calls"] += 1
         terminal = {
             key: deepcopy(self.command[key])
@@ -165,7 +157,6 @@ class _DeletionTable:
         self.effects["fence_writes"] += 1
 
     def seed_terminal(self, token: VerifiedAccessToken) -> None:
-        seal = account_deletion_service.load_private_store_seal()
         command_id = "delete-command-terminal"
         fingerprint = account_deletion_service.deletion_command_fingerprint(
             verified=token,
@@ -186,7 +177,8 @@ class _DeletionTable:
             "status": "complete",
             "accepted_at": ACCEPTED_AT,
             "completed_at": COMPLETED_AT,
-            "inventory_sha256": seal["inventory_sha256"],
+            "flow": account_deletion_flow.CATALOG_FLOW,
+            "catalog_sha256": account_deletion_flow.current_catalog_sha256(),
             "issuer_hash": account_deletion_repo.normalized_identity_hash(ISSUER),
             "subject_hash": account_deletion_repo.normalized_identity_hash(SUBJECT),
             "fingerprint": fingerprint,
@@ -283,9 +275,9 @@ def test_completed_deletion_replays_stored_receipt_without_new_effects(
     # compact terminal command is found, no destructive discovery, branch/provider
     # work, scheduling, or persistence boundary may reopen.
     monkeypatch.setattr(
-        account_deletion_repo,
-        "scan_owned_private_rows",
-        fail_if_called("private-row discovery"),
+        account_deletion_flow.CatalogDeletion,
+        "continue_command",
+        fail_if_called("row handling"),
     )
     monkeypatch.setattr(
         db_table, "transact", fail_if_called("repository transaction")
@@ -295,20 +287,11 @@ def test_completed_deletion_replays_stored_receipt_without_new_effects(
             return fail_if_called("provider client")
 
     aws.install({kind: FailingProviderClient() for kind in Kind})
-    for branch_id in account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS:
-        monkeypatch.setitem(
-            account_deletion_service.BRANCH_HANDLERS,
-            branch_id,
-            fail_if_called(f"{branch_id} cleanup"),
-        )
     monkeypatch.setattr(
         auth, "continue_deletion_command", fail_if_called("continuation scheduler")
     )
     monkeypatch.setattr(
         BackgroundTasks, "add_task", fail_if_called("background scheduler")
-    )
-    monkeypatch.setattr(
-        table, "begin_account_deletion", fail_if_called("deletion write")
     )
     for method in ("put_item", "update_item", "delete_item", "transact_write_items"):
         monkeypatch.setattr(table, method, fail_if_called(method), raising=False)

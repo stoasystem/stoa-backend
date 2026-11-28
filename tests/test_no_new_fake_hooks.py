@@ -7,8 +7,9 @@ method silently skips the step: `release_resource_attachments` ran without its
 retention fence for any repository without `activate_retention_fence`.
 
 #629 removed the fifteen hooks no fake used any more. The ones listed below are
-still in use; candidate I (#634) removes the account-deletion ones. The attachment
-service's went with its three leave actions (#653), the notification one with #684.
+still in use. The account-deletion ones went with the old deletion branches (#642),
+the attachment service's with its three leave actions (#653), the notification one
+with #684.
 A hook not listed may not appear, and a listed hook that is gone must be taken off.
 """
 
@@ -25,59 +26,17 @@ SEAMS = {"table", "target", "repository"}
 
 Hook = tuple[str, str, str]  # (file, enclosing function, attribute asked for)
 
-ACCOUNT_DELETION = "src/stoa/db/repositories/account_deletion_repo.py"
-
 ALLOWED: Counter[Hook] = Counter(
     {
-        # Candidate I (#634).
-        (ACCOUNT_DELETION, "ensure_active_account_fence", "'backfill_account_fence'"): 1,
-        (ACCOUNT_DELETION, "begin_account_deletion", "'begin_account_deletion'"): 1,
-        (ACCOUNT_DELETION, "get_command_by_id", "'get_command_by_id'"): 1,
-        (
-            ACCOUNT_DELETION,
-            "replace_with_deletion_tombstone",
-            "'replace_with_deletion_tombstone'",
-        ): 1,
-        (ACCOUNT_DELETION, "delete_owned_row", "'delete_owned_row'"): 1,
-        (ACCOUNT_DELETION, "scrub_parent_profile_child", "'scrub_parent_profile_child'"): 1,
-        (ACCOUNT_DELETION, "terminalize_identity_row", "'replace_with_deletion_tombstone'"): 1,
-        (ACCOUNT_DELETION, "persist_branch_result", "'persist_branch_result'"): 1,
-        (ACCOUNT_DELETION, "finalize_account_deletion", "'get_deletion_command'"): 1,
-        (ACCOUNT_DELETION, "finalize_account_deletion", "'finalize_account_deletion'"): 2,
         # Other repositories, as found when the gate was added.
-        (
-            "src/stoa/db/repositories/adaptive_learning_repo.py",
-            "scrub_adaptive_private_row",
-            "'replace_learning_tombstone'",
-        ): 1,
         ("src/stoa/db/repositories/allowance_repo.py", "_strong_get", "'get_item'"): 1,
-        (
-            "src/stoa/db/repositories/attachment_repo.py",
-            "scrub_conversation_private_row",
-            "'scrub_conversation_private_row'",
-        ): 1,
         ("src/stoa/db/repositories/identity_repo.py", "create_identity_binding", "'meta'"): 1,
-        (
-            "src/stoa/db/repositories/moderation_repo.py",
-            "scrub_moderation_row",
-            "'scrub_moderation_row'",
-        ): 1,
-        (
-            "src/stoa/db/repositories/practice_repo.py",
-            "scrub_practice_private_row",
-            "'replace_learning_tombstone'",
-        ): 1,
         (
             "src/stoa/db/repositories/public_identity_repo.py",
             "create_or_get_public_identity_command",
             "'meta'",
         ): 1,
         ("src/stoa/db/repositories/public_identity_repo.py", "require_command_fence", "'meta'"): 1,
-        (
-            "src/stoa/db/repositories/websocket_repo.py",
-            "revoke_account_connection",
-            "'delete_connection_for_account'",
-        ): 1,
         ("src/stoa/db/repositories/weekly_counter.py", "read", "'get_item'"): 1,
     }
 )

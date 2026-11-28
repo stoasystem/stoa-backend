@@ -2,9 +2,8 @@
 
 One counter row per student and UTC day, in the student's own partition
 (`STUDENT#<student>/VOICE_TRANSCRIPTIONS_DAY#<YYYY-MM-DD>`). Account deletion
-removes it by its `entity_type`, listed in the account profile branch
-(`account_deletion_service._account_profile_branch`), and finds it by the
-`student_id` it carries. It has no `created_at`, so it stays out of
+deletes it as the data type catalog says (`data_catalog.DELETIONS`), and finds it
+by the `student_id` it carries. It has no `created_at`, so it stays out of
 GSI-StudentId. `expires_at`, the table's TTL attribute, lets the row go a day
 after its day ends; deletion does not wait for that.
 

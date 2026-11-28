@@ -8,9 +8,8 @@ gates hold it in place:
 1. **Closed world.** Every `entity_type` the code writes
    (`entity_type_scan.written_entity_types`) has an entry, and every entry is a
    type the code writes - or one it no longer writes but whose rows the
-   deletion still reaches (`no_longer_written`, matching the branch gate's
-   `NO_LONGER_WRITTEN`), or a `legacy` type the deletion reads and nothing
-   here writes.
+   deletion still reaches (`no_longer_written`, matching `NO_LONGER_WRITTEN`),
+   or a `legacy` type the deletion reaches and nothing here writes.
 2. **Writer fields.** Every attribute a writer puts beside an `entity_type`
    that looks like an account id (`looks_like_account`) is declared in that
    type's entry, as a pointer or as a reasoned `NotPointer`. A writer whose
@@ -18,9 +17,7 @@ gates hold it in place:
    `FIELDS_READ_BY_HAND` with where the fields come from; its entry was
    declared by reading the code.
 3. **Pointers read.** For every entry, a synthetic row with an id in each
-   declared pointer is read as naming it; and every row the deletion branch
-   gate builds (`deleted_by_branch`) is a known kind that names the account
-   its branch deletes it for.
+   declared pointer is read as naming it.
 
 The comparison with the rules before #588-#589 (`scripts/compare_data_catalog.py`)
 ran over production before each step and is retired with #590.
@@ -70,6 +67,51 @@ def _writer_modules(writers: set[str]) -> set[str]:
     }
 
 
+# Writers whose `entity_type` the scan cannot resolve, and what they write
+# (moved from the branch gate, #642).
+UNRESOLVED_WRITERS: dict[str, str] = {
+    # `{entity}_deletion_tombstone`: the profile's tombstone (`user_repo`'s
+    # lifecycle writer); every other tombstone keeps its row's own type.
+    "src/stoa/db/repositories/account_deletion_repo.py::replace_with_deletion_tombstone": (
+        "deletion_flow"
+    ),
+    # A parameter: its callers pass `entity_type="billing_projection"` and the
+    # like, which the scan reads at the call.
+    "src/stoa/db/repositories/billing_fact_repo.py::_activation_item": "keyword_at_callers",
+    # `kind.entity_type`: the `CounterKind(entity_type=...)` constants in the
+    # same module, which the scan reads.
+    "src/stoa/db/repositories/weekly_counter.py::write": "keyword_at_callers",
+}
+
+# Types nothing writes any more whose stored rows may still be in the table: the
+# deletion still reaches them through the catalog. Each says what retired it.
+NO_LONGER_WRITTEN: dict[str, str] = {
+    # #518 retired the teacher assistance summary
+    # (`GET /teachers/questions/{id}/assistance-summary`), its only writer.
+    "teacher_assistance_summary_seed": "#518",
+    # #518 retired the routes that made and reviewed AI exercise drafts. Drafts
+    # already stored can still be set as an assignment (`sourceType: ai_draft`),
+    # which only updates them (`ai_teacher_tools_service.mark_delivered`).
+    "ai_teacher_draft": "#518",
+    # #675 retired `POST /adaptive/students/{id}/memory/refresh`, the only writer.
+    # The rows it stored are cleaned out once, but the deletion still reaches any.
+    "learning_memory_snapshot": "#675",
+    # #684 removed the payment expiry reminder's writers, which nothing called. The
+    # read moved to `billing_fact_repo`; the notification sweep still takes any row.
+    "payment_expiry_reminder": "#684",
+    # #687 sends the weekly report email through the notification ledger; its own
+    # send record, which never stopped a duplicate, is no longer written.
+    "report_email_intent": "#687",
+    # #642 removed the old deletion branches, which left these in place of what
+    # they removed; the catalog's tombstone keeps the row's own type instead.
+    "identity_deletion_evidence": "#642",
+    "practice_deletion_tombstone": "#642",
+    "practice_accounting_tombstone": "#642",
+    "ai_teacher_draft_deletion_tombstone": "#642",
+    "teacher_session_deletion_tombstone": "#642",
+}
+
+
 def test_every_written_entity_type_has_a_catalog_entry():
     found, _ = written_entity_types(ROOT)
     missing = {name: sorted(found[name]) for name in sorted(found.keys() - CATALOG.keys())}
@@ -77,12 +119,10 @@ def test_every_written_entity_type_has_a_catalog_entry():
         "rows written with an entity_type the data type catalog does not list: add an entry "
         f"to stoa.db.data_catalog (its account pointers, or none) - {missing}"
     )
-    assert len(found) >= 137
+    assert len(found) >= 130
 
 
 def test_the_catalog_lists_only_types_the_code_writes_or_the_deletion_still_reaches():
-    from test_account_deletion_branch_coverage import NO_LONGER_WRITTEN
-
     found, _ = written_entity_types(ROOT)
     stale = sorted(
         name
@@ -96,24 +136,69 @@ def test_the_catalog_lists_only_types_the_code_writes_or_the_deletion_still_reac
     assert not written_again, f"written again: mark it `written`: {written_again}"
     retired = {name for name, entry in CATALOG.items() if entry.lifecycle == "no_longer_written"}
     assert retired == set(NO_LONGER_WRITTEN), (
-        "`no_longer_written` entries and the branch gate's NO_LONGER_WRITTEN must agree"
+        "`no_longer_written` entries and NO_LONGER_WRITTEN must agree"
     )
 
 
-def test_a_legacy_type_is_one_the_deletion_still_reads():
-    deletion = "".join(
-        (ROOT / path).read_text(encoding="utf-8")
-        for path in (
-            "src/stoa/db/repositories/account_deletion_repo.py",
-            "src/stoa/services/account_deletion_service.py",
-        )
-    )
-    unread = sorted(
+def test_a_legacy_type_is_one_the_deletion_still_reaches():
+    """No writer here, so the one thing that reads it is the deletion, through its entry."""
+    unreached = sorted(
         name
         for name, entry in CATALOG.items()
-        if entry.lifecycle == "legacy" and f'"{name}"' not in deletion
+        if entry.lifecycle == "legacy" and (not entry.accounts or entry.deletion is None)
     )
-    assert not unread, f"no writer and the deletion no longer reads it: remove it: {unread}"
+    assert not unreached, f"no writer and the deletion does not reach it: remove it: {unreached}"
+
+
+def test_every_unresolved_writer_is_reviewed():
+    _, unresolved = written_entity_types(ROOT)
+    assert sorted(unresolved - UNRESOLVED_WRITERS.keys()) == [], (
+        "a writer whose entity_type the scan cannot read: say in UNRESOLVED_WRITERS what "
+        "it writes, and list those types"
+    )
+    assert sorted(UNRESOLVED_WRITERS.keys() - unresolved) == [], "stale UNRESOLVED_WRITERS"
+
+
+def test_the_scan_sees_a_new_entity_type(tmp_path):
+    source = tmp_path / "src" / "stoa"
+    (source / "db").mkdir(parents=True)
+    (source / "db" / "kinds.py").write_text('SHARED = "shared_row"\n', encoding="utf-8")
+    (source / "new_repo.py").write_text(
+        "\n".join(
+            [
+                "from stoa.db import kinds",
+                'LOCAL = "constant_row"',
+                "",
+                "def put_one(table, owner):",
+                '    table.put_item(Item={"PK": owner, "SK": "A", "entity_type": "literal_row"})',
+                '    table.put_item(Item={"PK": owner, "SK": "B", "entity_type": LOCAL})',
+                '    table.put_item(Item={"PK": owner, "SK": "C", "entity_type": kinds.SHARED})',
+                "",
+                "def count(table, owner):",
+                "    table.update_item(",
+                '        Key={"PK": owner, "SK": "D"},',
+                '        UpdateExpression="SET entity_type = :entity ADD hits :one",',
+                '        ExpressionAttributeValues={":entity": "updated_row", ":one": 1},',
+                "    )",
+                "",
+                "def only_reads(table, owner):",
+                "    table.update_item(",
+                '        Key={"PK": owner, "SK": "E"},',
+                '        UpdateExpression="SET hits = :one",',
+                '        ConditionExpression="entity_type = :entity",',
+                '        ExpressionAttributeValues={":entity": "read_row", ":one": 1},',
+                "    )",
+                "",
+                "def tombstone(table, item):",
+                '    table.put_item(Item={**item, "entity_type": f"{item[\'kind\']}_gone"})',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    found, unresolved = written_entity_types(tmp_path)
+    assert set(found) == {"literal_row", "constant_row", "shared_row", "updated_row"}
+    assert unresolved == {"src/stoa/new_repo.py::tombstone"}
 
 
 def test_each_entry_names_the_module_that_writes_it():
@@ -177,8 +262,7 @@ def test_every_type_that_points_to_an_account_says_what_its_deletion_does():
     A type that points to no account has no deletion; one whose rows can be an
     account's own says what happens to them (`Delete`, `Tombstone`, `Keep`);
     one whose rows can name an account says what happens to the name (`Scrub`,
-    `Keep`). What each action is checked against the branches in
-    `tests/test_account_deletion_branch_coverage.py`.
+    `Keep`). That the flow does each action is `tests/test_account_deletion_flow.py`'s.
     """
     wrong = {}
     for entry in (*CATALOG.values(), *UNTYPED):
@@ -602,11 +686,3 @@ def _entries() -> list[DataType]:
 def test_every_declared_pointer_is_read(entry):
     for label, row in _pointer_probes(entry):
         assert PROBE in data_catalog.mentions(row), (label, row)
-
-
-def test_the_rows_the_branch_gate_builds_are_known_and_name_their_account():
-    from test_account_deletion_branch_coverage import ACCOUNT, deleted_by_branch
-
-    for entity_type, (_, row) in sorted(deleted_by_branch().items()):
-        assert data_catalog.data_type_of(row) is not None, entity_type
-        assert data_catalog.names(row, ACCOUNT), entity_type

@@ -21,6 +21,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+
+import deletion_helpers
 from fakes.dynamodb import DEFAULT_INDEXES, FakeTable, IndexSchema
 
 from scripts import backfill_notification_inbox_index as backfill
@@ -313,18 +315,12 @@ def test_an_update_may_restate_who_a_notification_is_for(table) -> None:
 
 def test_the_owners_deletion_takes_a_notification_out_of_its_recipients_inbox(table) -> None:
     notification_repo.put_event(_event("e1", recipient_id=TEACHER, recipient_role="teacher"))
-    table.seed(_fence(STUDENT, status="deletion_pending"))
 
-    notification_repo.scrub_notification_private_row(
-        _row(table, "e1"),
-        owner_id=STUDENT,
-        generation=GENERATION,
-        now_iso="2026-11-25T00:00:00Z",
-        table=table,
-    )
+    # The owner's deletion, as production runs it: the catalog's tombstone (#642).
+    deletion_helpers.delete_account(STUDENT)
 
     tombstone = _row(table, "e1")
-    assert tombstone["entity_type"] == "notification_event_deletion_tombstone"
+    assert tombstone["status"] == "deleted"
     assert not INDEX_FIELDS & set(tombstone)
     assert notification_repo.list_inbox(user_id=TEACHER, role="teacher") == []
 
@@ -333,15 +329,8 @@ def test_scrubbing_a_mentioned_account_leaves_a_notification_in_its_inbox(table)
     notification_repo.put_event(
         _event("e1", recipient_id=STUDENT, recipient_role="student", metadata={"parent_id": PARENT})
     )
-    table.seed(_fence(PARENT, status="deletion_pending"))
 
-    notification_repo.scrub_notification_private_row(
-        _row(table, "e1"),
-        owner_id=PARENT,
-        generation=GENERATION,
-        now_iso="2026-11-25T00:00:00Z",
-        table=table,
-    )
+    deletion_helpers.delete_account(PARENT)
 
     assert _row(table, "e1")["metadata"] == {}
     assert _ids(notification_repo.list_inbox(user_id=STUDENT, role="student")) == ["e1"]
@@ -502,11 +491,8 @@ def test_every_notification_is_in_the_sites_list_and_a_tombstone_is_not(table) -
     assert _ids(notification_repo.list_site_events(want=10)) == ["e1", "g1"]
     assert notification_repo.list_site_events(want=0) == []
 
-    # The owner's deletion replaces the row with a tombstone of allowlisted fields.
-    table.seed(_fence(STUDENT, status="deletion_pending"))
-    notification_repo.scrub_notification_private_row(
-        _row(table, "e1"), owner_id=STUDENT, generation=GENERATION, now_iso=CREATED, table=table
-    )
+    # The owner's deletion replaces the row with the catalog's tombstone.
+    deletion_helpers.delete_account(STUDENT)
 
     assert not INDEX_FIELDS & set(_row(table, "e1"))
     assert _ids(notification_repo.list_site_events(want=10)) == ["g1"]

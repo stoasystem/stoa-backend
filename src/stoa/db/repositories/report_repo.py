@@ -3,38 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from hashlib import sha256
 from typing import Literal, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
-from stoa.db import data_catalog, listing_index
+from stoa.db import listing_index
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
-
-REPORT_PRIVATE_ROW_REGISTRY = {
-    "report_summary": ("REPORT#", "SUMMARY"),
-    "edit_draft": ("REPORT#", "EDIT_DRAFT#"),
-    "artifact_edit_draft": ("REPORT#", "ARTIFACT_EDIT_DRAFT#"),
-    "artifact_rollback_preview": ("REPORT#", "ARTIFACT_ROLLBACK_PREVIEW#"),
-    "report_audit": ("REPORT#", "AUDIT#"),
-    "recovery_summary": ("REPORT_RECOVERY_JOB#", "SUMMARY"),
-    "recovery_target": ("REPORT_RECOVERY_JOB#", "TARGET#"),
-    "recovery_audit": ("REPORT_RECOVERY_JOB#", "AUDIT#"),
-    "retention_manifest": ("AUDIT_RETENTION#", "IMMUTABLE_MANIFEST"),
-    "retention_audit": ("AUDIT_RETENTION#", "AUDIT#"),
-    "support_audit": ("SUPPORT_HANDOFF#", "AUDIT#"),
-    "support_delivery": ("SUPPORT_HANDOFF_DELIVERY#", "SUMMARY"),
-    "support_delivery_audit": ("SUPPORT_HANDOFF_DELIVERY#", "AUDIT#"),
-    "support_crm_message": ("SUPPORT_HANDOFF_DELIVERY#", "CRM_MESSAGE#"),
-    "support_delivery_feed": ("SUPPORT_HANDOFF_DELIVERY_FEED", "SUMMARY#"),
-    "support_crm_feed": ("SUPPORT_CRM_MESSAGE_FEED", "MESSAGE#"),
-    "report_object_intent": ("USER#", "REPORT_OBJECT#"),
-    # No longer written: the weekly report email crosses the notification
-    # ledger (#687). Stored rows stay until their account is deleted.
-    "report_email_intent": ("USER#", "REPORT_EMAIL#"),
-}
 
 REPORT_WRITER_REGISTRY = frozenset(
     {
@@ -68,85 +44,6 @@ REPORT_WRITER_REGISTRY = frozenset(
 
 REPORT_PROVIDER_REGISTRY = frozenset(
     {"s3_put_object", "s3_delete_object", "ses_send_email", "crm_send"}
-)
-
-REPORT_PRIVATE_FIELDS = frozenset(
-    {
-        "summary",
-        "strengths",
-        "weak_topics",
-        "weak_knowledge_points",
-        "recommendations",
-        "recommendation_items",
-        "teacher_note",
-        "student_name",
-        "parent_email",
-        "admin_note",
-        "editor_summary",
-        "status_note",
-        "reason",
-        "proposed_fields",
-        "diff",
-        "before",
-        "after",
-        "error_message",
-        "detail",
-        "metadata",
-        "filters",
-        "student_id",
-        "parent_id",
-        "actor",
-        "created_by",
-        "applied_by",
-        "requested_by",
-        "recipient",
-        "subject",
-        "body",
-        "payload_summary",
-        "provider_details",
-        "json_s3_key",
-        "html_s3_key",
-        "s3_key",
-        "source_json_s3_key",
-        "source_html_s3_key",
-        "target_json_s3_key",
-        "target_html_s3_key",
-        "object_key",
-        "body_sha256",
-        "etag",
-        "version_id",
-    }
-)
-
-REPORT_TOMBSTONE_ALLOWLIST = frozenset(
-    {
-        "PK",
-        "SK",
-        "entity_type",
-        "schema_version",
-        "report_id",
-        "job_id",
-        "target_id",
-        "manifest_id",
-        "package_id",
-        "delivery_id",
-        "message_id",
-        "event_id",
-        "operation_id",
-        "artifact_kind",
-        "status",
-        "state",
-        "owner_deletion_generation",
-        "privacy_deleted",
-        "created_at",
-        "updated_at",
-        "deleted_at",
-        "accepted_at",
-        "provider_acceptance",
-        "policy_authority",
-        "policy_scope",
-        "hold_expires_at",
-    }
 )
 
 
@@ -207,17 +104,6 @@ class _RecordObjectCoordinateHook(Protocol):
         intent: ReportItem,
         coordinate: dict[str, str],
         now_iso: str,
-    ) -> object: ...
-
-
-@runtime_checkable
-class _ScrubPrivateRowHook(Protocol):
-    def scrub_report_private_row(
-        self,
-        original: ReportItem,
-        tombstone: ReportItem,
-        owner_id: str,
-        generation: int,
     ) -> object: ...
 
 
@@ -328,13 +214,6 @@ def _page(
     if page.last_key is not None:
         result["LastEvaluatedKey"] = page.last_key
     return result
-
-
-@dataclass(frozen=True, slots=True)
-class ReportPrivatePage:
-    items: tuple[ReportItem, ...]
-    cursor: dict[str, str] | None = None
-    unresolved: int = 0
 
 
 REPORT_LISTING = "weekly_report"
@@ -1921,128 +1800,6 @@ def reconcile_report_object_version(
     raise account_deletion_repo.AccountDeletionConflict("report object response unresolved")
 
 
-def scan_report_private_rows(
-    owner_id: str,
-    *,
-    table: object | None = None,
-    cursor: Mapping[str, object] | None = None,
-    maximum_pages: int = 20,
-    page_limit: int = 100,
-) -> ReportPrivatePage:
-    """Strong base-table scan for report and denormalized support copies."""
-    if maximum_pages <= 0 or page_limit <= 0:
-        raise account_deletion_repo.AccountDeletionConflict("invalid report scan bound")
-    owner_id = account_deletion_repo.deletion_account(owner_id)
-    target = table or db_table.table()
-    current = (
-        account_deletion_repo.continuation_key(cursor, "report") if cursor is not None else None
-    )
-    seen = {(current["PK"], current["SK"])} if current else set()
-    rows: list[ReportItem] = []
-    unresolved = 0
-    for page in account_deletion_repo.sweep_pages(
-        "report",
-        table=target,
-        cursor=current,
-        page_limit=page_limit,
-        maximum_pages=maximum_pages,
-    ):
-        for item in page.items:
-            pk = str(item.get("PK") or "")
-            sk = str(item.get("SK") or "")
-            registered = any(
-                (pk == prefix or pk.startswith(prefix)) and sk.startswith(sk_prefix)
-                for prefix, sk_prefix in REPORT_PRIVATE_ROW_REGISTRY.values()
-            )
-            if not registered or item.get("privacy_deleted") is True:
-                continue
-            # Whose it is comes from the data type catalog (#588): a row's
-            # `student_id` / `owner_id`, and for a recovery job's summary and
-            # audit events, which belong to the operator's job and carry no
-            # top-level owner, the accounts its filters or metadata name.
-            if data_catalog.owns(item, owner_id):
-                rows.append(item)
-            elif _names_an_account(item) or _is_recovery_job_record(pk, sk):
-                # Someone else's row: not this deletion's, and not in doubt.
-                # A recovery job record that names no one is the operator's
-                # (#397): nothing would ever resolve it.
-                continue
-            elif pk.startswith(("SUPPORT_", "REPORT_RECOVERY_JOB#")):
-                # A support row or recovery target that names nobody could be
-                # this account's. Audit-retention rows are not counted (#397):
-                # they are bookkeeping about a manifest (digests, counts, the
-                # operator), carry no student by construction, and nothing ever
-                # resolves them - one such row kept every deletion dirty.
-                unresolved += 1
-        if page.last_key is None:
-            return ReportPrivatePage(tuple(rows), None, unresolved)
-        marker = (page.last_key["PK"], page.last_key["SK"])
-        if marker in seen:
-            raise account_deletion_repo.AccountDeletionConflict("repeating report cursor")
-        seen.add(marker)
-        current = page.last_key
-    return ReportPrivatePage(tuple(rows), current, unresolved)
-
-
-def _is_recovery_job_record(pk: str, sk: str) -> bool:
-    """A recovery job's own summary or audit event, as opposed to one of its targets."""
-    return pk.startswith("REPORT_RECOVERY_JOB#") and (sk == "SUMMARY" or sk.startswith("AUDIT#"))
-
-
-def _names_an_account(item: Mapping[str, object]) -> bool:
-    """Whether a report-family row says whose it is (`student_id` or `owner_id`)."""
-    return any(
-        isinstance(item.get(field), str) and str(item[field]).strip()
-        for field in ("student_id", "owner_id")
-    )
-
-
-def scrub_report_private_row(
-    item: Mapping[str, object],
-    *,
-    owner_id: str,
-    generation: int,
-    now_iso: str,
-    table: object | None = None,
-) -> ReportItem:
-    if not data_catalog.owns(item, account_deletion_repo.deletion_account(owner_id)):
-        raise account_deletion_repo.AccountDeletionConflict("report owner mismatch")
-    tombstone = {
-        key: value
-        for key, value in item.items()
-        if key in REPORT_TOMBSTONE_ALLOWLIST and key not in REPORT_PRIVATE_FIELDS
-    }
-    tombstone.update(
-        {
-            "PK": _required_private_string(item.get("PK"), "PK"),
-            "SK": _required_private_string(item.get("SK"), "SK"),
-            "privacy_deleted": True,
-            "owner_deletion_generation": generation,
-            "deleted_at": now_iso,
-            "updated_at": now_iso,
-        }
-    )
-    if not set(tombstone) <= REPORT_TOMBSTONE_ALLOWLIST:
-        raise account_deletion_repo.AccountDeletionConflict("report tombstone allowlist violation")
-    target = table or db_table.table()
-    if isinstance(target, _ScrubPrivateRowHook):
-        target.scrub_report_private_row(dict(item), tombstone, owner_id, generation)
-        return tombstone
-    db_table.transact(
-        [
-            account_deletion_repo.deletion_fence_condition(owner_id, generation),
-            {
-                "Put": {
-                    "Item": tombstone,
-                    "ConditionExpression": "attribute_exists(PK) AND attribute_exists(SK)",
-                }
-            },
-        ],
-        table=target,
-    )
-    return tombstone
-
-
 def prove_report_object_version_absent(
     *,
     s3_client: object,
@@ -2103,10 +1860,13 @@ def purge_report_object_intent(
     generation: int,
     bucket: str,
     s3_client: object,
-    now_iso: str,
     table: object | None = None,
 ) -> ReportItem:
-    """Delete one exact purgeable version and retain coordinates until absence."""
+    """Delete one exact purgeable version and prove it absent.
+
+    The intent row itself is left as it is: once this answers `purged`, account
+    deletion replaces it with the catalog's tombstone (#642).
+    """
     if not isinstance(s3_client, _ReportObjectDeletionClient):
         raise account_deletion_repo.AccountDeletionConflict(
             "report object dependency unavailable"
@@ -2133,11 +1893,4 @@ def purge_report_object_intent(
         version_id=version_id,
     ):
         return {"status": "retryable", "quiescent": False, "purged_count": 0}
-    scrub_report_private_row(
-        intent,
-        owner_id=owner_id,
-        generation=generation,
-        now_iso=now_iso,
-        table=table,
-    )
     return {"status": "purged", "quiescent": True, "purged_count": 1}

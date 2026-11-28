@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+import deletion_helpers
 from fakes.dynamodb import FakeTable
 from fakes import notification_email
 
@@ -25,7 +26,6 @@ from stoa.config import Settings
 from stoa.db.repositories import account_deletion_repo, parent_link_repo, user_repo
 from stoa.jobs import weekly_reports
 from stoa.services import (
-    account_deletion_service,
     account_operations_service,
     current_relationship,
     entitlement_service,
@@ -570,21 +570,8 @@ def test_the_fence_condition_travels_with_the_relationship_write(
 
 
 # ---------------------------------------------------------------------------
-# Issue #4: the account-profile deletion branch owns the new link rows
+# Issue #4: deleting either account removes both link directions
 # ---------------------------------------------------------------------------
-
-
-class _DeletionTable:
-    """Base-table scan plus the row-delete hook the branch reaches for."""
-
-    def __init__(self, items: list[dict[str, Any]]) -> None:
-        self.items = {(item["PK"], item["SK"]): dict(item) for item in items}
-
-    def scan(self, **_kwargs: object) -> dict[str, Any]:
-        return {"Items": [dict(item) for item in self.items.values()]}
-
-    def delete_owned_row(self, item: dict[str, Any], _user_id: str, _generation: int) -> None:
-        self.items.pop((item["PK"], item["SK"]), None)
 
 
 def _link_rows(parent_id: str, student_id: str) -> list[dict[str, Any]]:
@@ -606,58 +593,18 @@ def _link_rows(parent_id: str, student_id: str) -> list[dict[str, Any]]:
     ]
 
 
-def _run_profile_branch(table: _DeletionTable, user_id: str, passes: int) -> Any:
-    command = {"user_id": user_id, "generation": 7}
-    previous: dict[str, Any] = {}
-    result = None
-    for _ in range(passes):
-        result = account_deletion_service._account_profile_branch(
-            command=command, previous=previous
-        )
-        previous = {
-            "cursor": result.cursor,
-            "debt_counts": result.debt_counts,
-            "epoch": result.epoch,
-        }
-    return result
-
-
-def test_account_profile_deletion_completes_when_nothing_is_owed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Negative control: the branch must still be able to finish."""
-    table = _DeletionTable([])
-    db_table.install(table)
-
-    result = _run_profile_branch(table, PARENT, passes=2)
-
-    assert result.status == "complete" and result.quiescent is True
-
-
 @pytest.mark.parametrize("deleting", [PARENT, STUDENT], ids=["parent", "student"])
-def test_account_profile_deletion_cannot_finish_with_active_new_links(
-    monkeypatch: pytest.MonkeyPatch, deleting: str
-) -> None:
-    table = _DeletionTable(_link_rows(PARENT, STUDENT))
-    db_table.install(table)
+def test_deleting_either_account_removes_both_link_directions(fake_table, deleting: str) -> None:
+    """The whole deletion, as production runs it (#642): the catalog deletes the link rows."""
+    rows = _link_rows(PARENT, STUDENT)
+    fake_table.seed(*rows)
+    deletion_helpers.register(fake_table, *rows)
+    deletion_helpers.active_fence(fake_table, deleting, generation=7)
 
-    result = _run_profile_branch(table, deleting, passes=2)
+    command = deletion_helpers.delete_account(deleting)
 
-    assert result.status != "complete"
-    assert result.quiescent is False
-    assert table.items == {}
-
-
-@pytest.mark.parametrize("deleting", [PARENT, STUDENT], ids=["parent", "student"])
-def test_account_profile_deletion_removes_both_link_directions(
-    monkeypatch: pytest.MonkeyPatch, deleting: str
-) -> None:
-    table = _DeletionTable(_link_rows(PARENT, STUDENT))
-    db_table.install(table)
-
-    _run_profile_branch(table, deleting, passes=1)
-
-    assert table.items == {}
+    assert command["status"] == "complete"
+    assert not [key for key in fake_table.rows if key in {(r["PK"], r["SK"]) for r in rows}]
 
 
 # ---------------------------------------------------------------------------

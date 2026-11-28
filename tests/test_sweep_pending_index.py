@@ -32,7 +32,8 @@ from fakes.ask_question import (
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.dynamodb import DEFAULT_INDEXES, IndexSchema
-from stoa.db.repositories import attachment_repo
+from stoa.db import data_catalog
+from stoa.db.repositories import account_deletion_repo
 from stoa.services import learning_session
 from stoa.services.ask_question import _store
 
@@ -343,8 +344,9 @@ def test_a_command_canceled_by_account_deletion_leaves(table) -> None:
     row = _row(table)
     assert "sweep_bucket" in row
 
-    tombstone = attachment_repo._conversation_tombstone(
-        row, owner_id=STUDENT, generation=2, now_iso=datetime.now(UTC).isoformat()
+    keeps = data_catalog.DELETIONS["message_command"].owner.keeps
+    tombstone = account_deletion_repo.catalog_tombstone(
+        row, keeps=keeps, generation=2, now_iso=datetime.now(UTC).isoformat()
     )
 
     assert "sweep_bucket" not in tombstone and "sweep_due_at" not in tombstone

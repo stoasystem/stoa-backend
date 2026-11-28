@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+import deletion_helpers
 from fakes.dynamodb import FakeTable
 
 from test_account_admin_endpoints import (
@@ -25,7 +26,7 @@ from test_account_admin_endpoints import (
 
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
-from stoa.services import account_deletion_service, usage_period
+from stoa.services import usage_period
 from stoa.services.usage_period import (
     PaidBy,
     PeriodSource,
@@ -689,16 +690,7 @@ def _record_row(user_id: str) -> dict[str, Any]:
     }
 
 
-def _run_profile_branch(user_id: str, passes: int) -> Any:
-    previous: dict[str, Any] = {}
-    result = None
-    for _ in range(passes):
-        result = account_deletion_service._account_profile_branch(
-            command={"user_id": user_id, "generation": 7}, previous=previous
-        )
-        previous = {"cursor": result.cursor, "debt_counts": result.debt_counts,
-                    "epoch": result.epoch}
-    return result
+
 
 
 def _deletion_world(fence_status: str) -> FakeTable:
@@ -717,12 +709,11 @@ def _deletion_world(fence_status: str) -> FakeTable:
 
 
 def test_account_deletion_clears_the_usage_period_records(fake_table: FakeTable) -> None:
-    table = _deletion_world("deletion_pending")
+    table = _deletion_world("active")
     db_table.install(table)
 
-    result = _run_profile_branch(STUDENT, passes=4)
+    deletion_helpers.delete_account(STUDENT)
 
-    assert result is not None and result.status == "complete"
     remaining = {key for key in table.rows if key[1].startswith(usage_period.RECORD_SK_PREFIX)}
     assert remaining == {(f"USER#{PARENT}", _record_row(PARENT)["SK"])}
 
@@ -737,7 +728,7 @@ def test_a_record_is_not_deleted_behind_a_fence_that_is_not_this_deletions(
     with pytest.raises(
         account_deletion_repo.AccountDeletionConflict, match="conditional"
     ):
-        _run_profile_branch(STUDENT, passes=1)
+        account_deletion_repo.delete_owned_row(_record_row(STUDENT), user_id=STUDENT, generation=7)
 
     assert (f"USER#{STUDENT}", _record_row(STUDENT)["SK"]) in table.rows
 

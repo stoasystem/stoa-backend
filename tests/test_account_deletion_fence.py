@@ -22,7 +22,8 @@ from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import AccountStatus, resolve_actor
 from stoa.security.tokens import VerifiedAccessToken
 from stoa.services import help_requests, learning_session, owner_registry_sweep
-from fakes.dynamodb import from_wire
+from fakes.dynamodb import FakeTable, from_wire
+from stoa.services import account_deletion_flow as flow
 
 
 STUDENT_ID = "student-delete-1"
@@ -80,48 +81,41 @@ class _IdentityFacts:
         return []
 
 
-class _AccountTable:
-    """High-level fake that preserves conditional command semantics."""
+class _AccountTable(FakeTable):
+    """The shared table double, with the account's own rows at hand."""
 
     def __init__(self, *, profile: dict[str, Any] | None = None) -> None:
-        self.profile = profile
-        self.fence: dict[str, Any] | None = None
-        self.command: dict[str, Any] | None = None
-        self.branch_results: dict[str, Any] = {}
+        super().__init__()
+        # A clean daily registry sweep, as a new deletion requires (#641).
+        self.seed({**owner_registry_sweep.RUN_MARKER_KEY, "complete": True,
+                   "missing_registrations": 0, "completed_at": datetime.now(UTC).isoformat()})
+        if profile is not None:
+            self.seed(profile)
 
-    def get_item(self, *, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:
-        if Key == owner_registry_sweep.RUN_MARKER_KEY:
-            # A clean daily registry sweep, as a new deletion requires (#641).
-            return {"Item": {**Key, "complete": True, "missing_registrations": 0,
-                             "completed_at": datetime.now(UTC).isoformat()}}
-        if Key["SK"] == "PROFILE":
-            return {"Item": dict(self.profile)} if self.profile else {}
-        if Key["SK"] == "ACCOUNT_FENCE":
-            return {"Item": dict(self.fence)} if self.fence else {}
-        if Key["SK"].startswith("DELETE_COMMAND#"):
-            return {"Item": dict(self.command)} if self.command else {}
-        return {}
+    @property
+    def profile(self) -> dict[str, Any] | None:
+        return self.rows.get((f"USER#{STUDENT_ID}", "PROFILE"))
 
-    def backfill_account_fence(self, item: dict[str, Any]) -> dict[str, Any]:
-        if self.fence is None:
-            self.fence = dict(item)
-        return dict(self.fence)
+    @property
+    def fence(self) -> dict[str, Any] | None:
+        return self.rows.get((f"USER#{STUDENT_ID}", "ACCOUNT_FENCE"))
 
-    def begin_account_deletion(
-        self, fence: dict[str, Any], command: dict[str, Any]
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        if self.fence is None:
-            raise RuntimeError("missing fence")
-        if self.fence["status"] == "active":
-            self.fence = {**fence, "status": "deletion_pending", "version": 2}
-            self.command = dict(command)
-        elif not self.command or self.command["fingerprint"] != command["fingerprint"]:
-            raise RuntimeError("command conflict")
-        return dict(self.fence), dict(self.command)
+    @fence.setter
+    def fence(self, value: None) -> None:
+        assert value is None
+        self.rows.pop((f"USER#{STUDENT_ID}", "ACCOUNT_FENCE"), None)
+
+    @property
+    def command(self) -> dict[str, Any] | None:
+        return next(
+            (row for (pk, sk), row in self.rows.items()
+             if pk == f"USER#{STUDENT_ID}" and sk.startswith("DELETE_COMMAND#")),
+            None,
+        )
 
 
-def test_account_status_and_registry_are_closed_before_later_branches() -> None:
-    repository, service, _job = _deletion_modules()
+def test_deletion_is_the_account_fences_lifecycle_not_a_profile_status() -> None:
+    repository, _service, _job = _deletion_modules()
 
     # Deletion is the account fence's lifecycle, not a profile status (#289).
     assert "deletion_pending" not in {status.value for status in AccountStatus}
@@ -129,30 +123,6 @@ def test_account_status_and_registry_are_closed_before_later_branches() -> None:
         "PK": f"USER#{STUDENT_ID}",
         "SK": "ACCOUNT_FENCE",
     }
-    assert service.PRIMARY_BRANCH_IDS == {
-        "account_profile",
-        "identity_cross_account",
-        "capability_scope",
-        "question_ocr_session",
-        "attachments",
-    }
-    assert len(service.ACCOUNT_DELETION_BRANCH_IDS) == 17
-    assert service.can_finalize_account_deletion(service.PRIMARY_BRANCH_IDS) is False
-
-
-def test_plan35_requires_the_exact_source_sealed_registry_before_completion() -> None:
-    _repository, service, _job = _deletion_modules()
-    expected = {
-        "account_profile", "identity_cross_account", "capability_scope",
-        "question_ocr_session", "attachments", "moderation", "report_records",
-        "report_artifacts", "support_recovery_feed", "conversation_messages",
-        "practice_progress", "adaptive_assignment", "learning_memory",
-        "ai_teacher_draft", "curriculum_signal", "notification_device_realtime",
-        "external_delivery_debt",
-    }
-    assert set(service.ACCOUNT_DELETION_BRANCH_IDS) == expected
-    assert set(service.BRANCH_HANDLERS) == expected
-    assert hasattr(service, "load_private_store_seal")
 
 
 @pytest.mark.asyncio
@@ -422,18 +392,8 @@ class _PagedPrivateTable:
         return {"Items": []}
 
 
-def test_base_table_discovery_finds_owner_only_intents_and_late_pages() -> None:
-    repository, _service, _job = _deletion_modules()
-    table = _PagedPrivateTable()
-    page = repository.scan_owned_private_rows(STUDENT_ID, table=table, maximum_pages=4)
-    assert {item["entity_type"] for item in page.items} == {"upload_intent", "question"}
-    assert len(table.calls) == 2
-    with pytest.raises(AssertionError):
-        table.query(IndexName="GSI-StudentId", ConsistentRead=True)
-
-
-def test_question_and_session_scrub_allowlists_exclude_all_private_learning_fields() -> None:
-    repository, service, _job = _deletion_modules()
+def test_question_and_session_tombstones_keep_no_private_learning_field() -> None:
+    """What a question's or a session's tombstone keeps is the catalog's (#642)."""
     private = {
         "content",
         "original_content",
@@ -457,10 +417,8 @@ def test_question_and_session_scrub_allowlists_exclude_all_private_learning_fiel
         "notes",
         "resolution_note",
     }
-    assert private <= repository.PRIVATE_QUESTION_SESSION_FIELDS
-    assert private.isdisjoint(repository.QUESTION_TOMBSTONE_ALLOWLIST)
-    assert private.isdisjoint(repository.SESSION_TOMBSTONE_ALLOWLIST)
-    assert service.PRIMARY_BRANCH_IDS <= set(service.BRANCH_HANDLERS)
+    for name in ("question", "teacher_session", "teacher_escalation_intent", "user_profile"):
+        assert private.isdisjoint(data_catalog.DELETIONS[name].owner.keeps), name
 
 
 def test_scheduled_discovery_recovers_lost_route_trigger_and_reconstructs_service(
@@ -505,7 +463,6 @@ def test_scheduled_discovery_recovers_lost_route_trigger_and_reconstructs_servic
     assert calls[0].lease_owner
     assert result.discovered == 1 and result.claimed == 1
     assert result.retryable == 0
-    assert service.can_finalize_account_deletion(service.PRIMARY_BRANCH_IDS) is False
 
 
 def test_delete_route_is_explicit_and_depends_on_verified_token_not_actor() -> None:
@@ -534,52 +491,8 @@ def test_lost_trigger_coroutine_is_safe_to_run_after_response_commit() -> None:
     assert asyncio.run(function("missing-command", service=None)) is None
 
 
-@pytest.mark.parametrize(
-    "cursor",
-    [
-        {"PK": "only-pk"},
-        {"PK": "", "SK": "META"},
-        {"PK": "CURSOR#1", "SK": 7},
-    ],
-)
-def test_private_scan_rejects_malformed_progress(cursor: dict[str, Any]) -> None:
-    repository, _service, _job = _deletion_modules()
-
-    class _Malformed:
-        def scan(self, **_kwargs: Any) -> dict[str, Any]:
-            return {"Items": [], "LastEvaluatedKey": cursor}
-
-    with pytest.raises(repository.AccountDeletionConflict):
-        repository.scan_owned_private_rows(STUDENT_ID, table=_Malformed())
-
-
-def test_private_scan_accepts_last_item_cursor_but_rejects_repeated_page_cursor() -> None:
-    repository, _service, _job = _deletion_modules()
-
-    class _Repeating:
-        calls = 0
-
-        def scan(self, **_kwargs: Any) -> dict[str, Any]:
-            self.calls += 1
-            cursor = {"PK": "QUESTION#1", "SK": "META"}
-            return {
-                "Items": [
-                    {
-                        **cursor,
-                        "entity_type": "question",
-                        "student_id": STUDENT_ID,
-                    }
-                ],
-                "LastEvaluatedKey": cursor,
-            }
-
-    with pytest.raises(repository.AccountDeletionConflict, match="repeating"):
-        repository.scan_owned_private_rows(
-            STUDENT_ID, table=_Repeating(), maximum_pages=3
-        )
-
-
 def test_command_lookup_crosses_filtered_empty_pages_with_strong_base_reads() -> None:
+    """The one command lookup still by scan: a replay after the binding is gone."""
     repository, _service, _job = _deletion_modules()
     calls: list[dict[str, Any]] = []
 
@@ -601,111 +514,55 @@ def test_command_lookup_crosses_filtered_empty_pages_with_strong_base_reads() ->
                 ]
             }
 
-    command = repository.get_command_by_id("command-late", table=_Commands())
+    command = repository.find_deletion_command_for_identity(
+        "issuer-hash", "subject-hash", table=_Commands()
+    )
     assert command and command["command_id"] == "command-late"
     assert len(calls) == 2
     assert all(call.get("ConsistentRead") is True for call in calls)
     assert calls[1]["ExclusiveStartKey"] == {"PK": "OTHER#1", "SK": "META"}
 
 
-def test_primary_branch_persists_cursor_and_requires_two_clean_epochs(monkeypatch) -> None:
-    repository, service, _job = _deletion_modules()
-    pages = [
-        repository.OwnedPrivatePage(
-            (
-                {
-                    "PK": "QUESTION#1",
-                    "SK": "META",
-                    "entity_type": "question",
-                    "student_id": STUDENT_ID,
-                },
-            ),
-            {"PK": "QUESTION#1", "SK": "META"},
-        ),
-        repository.OwnedPrivatePage((), None),
-        repository.OwnedPrivatePage((), None),
-        repository.OwnedPrivatePage((), None),
-    ]
-    monkeypatch.setattr(repository, "scan_owned_private_rows", lambda *_args, **_kwargs: pages.pop(0))
-    mutated: list[str] = []
-    command = {"user_id": STUDENT_ID, "generation": 1}
-    previous: dict[str, Any] = {}
-    results = []
-    for _ in range(4):
-        result = service._run_base_branch(
-            command=command,
-            previous=previous,
-            predicate=lambda item: item.get("entity_type") == "question",
-            mutate=lambda item: mutated.append(str(item["PK"])),
-        )
-        results.append(result)
-        previous = result.persisted(NOW)
-    assert results[0].cursor == {"PK": "QUESTION#1", "SK": "META"}
-    assert [result.epoch for result in results] == [0, 0, 1, 2]
-    assert results[-1].status == "complete" and results[-1].quiescent is True
-    assert mutated == ["QUESTION#1"]
-
-
-def test_tombstone_replacement_retains_only_declared_noncontent_keys() -> None:
+def test_the_profile_tombstone_retains_only_the_catalogs_noncontent_keys(fake_table) -> None:
     repository, _service, _job = _deletion_modules()
-    captured: list[dict[str, Any]] = []
-
-    class _Tombstones:
-        def replace_with_deletion_tombstone(
-            self,
-            _item: dict[str, Any],
-            tombstone: dict[str, Any],
-            _user_id: str,
-            _generation: int,
-        ) -> None:
-            captured.append(tombstone)
+    profile = {
+        "PK": f"USER#{STUDENT_ID}",
+        "SK": "PROFILE",
+        "user_id": STUDENT_ID,
+        "role": "student",
+        "email": "private@example.ch",
+        "full_name": "Private Name",
+        "subject": "private learning context",
+        "created_at": NOW,
+    }
+    fake_table.seed(
+        profile,
+        {**repository.account_fence_key(STUDENT_ID), "status": "deletion_pending",
+         "generation": 3},
+    )
 
     repository.replace_with_deletion_tombstone(
-        {
-            "PK": "QUESTION#private",
-            "SK": "META",
-            "entity_type": "question",
-            "question_id": "private",
-            "student_id": STUDENT_ID,
-            "content": "secret",
-            "subject": "private learning context",
-            "ocr_metadata": {"raw": "private"},
-            "teacher_response_rich": {"text": "private"},
-            "created_at": NOW,
-        },
-        user_id=STUDENT_ID,
-        generation=3,
-        now_iso=NOW,
-        table=_Tombstones(),
+        profile, user_id=STUDENT_ID, generation=3, now_iso=NOW
     )
-    assert set(captured[0]) <= repository.QUESTION_TOMBSTONE_ALLOWLIST
-    assert repository.PRIVATE_QUESTION_SESSION_FIELDS.isdisjoint(captured[0])
+
+    tombstone = fake_table.rows[(f"USER#{STUDENT_ID}", "PROFILE")]
+    assert set(tombstone) <= data_catalog.DELETIONS["user_profile"].owner.keeps
+    assert not {"email", "full_name", "subject", "user_id", "role"} & set(tombstone)
+    assert repository.is_deletion_tombstone(tombstone)
 
 
-def test_base_scan_discovers_embedded_parent_profile_child_summary() -> None:
-    repository, _service, _job = _deletion_modules()
+def test_a_child_named_in_a_parents_profile_summary_is_taken_out_of_it() -> None:
+    parent = {
+        "PK": "USER#parent-1",
+        "SK": "PROFILE",
+        "entity_type": "user_profile",
+        "user_id": "parent-1",
+        "child_summaries": [{"student_id": STUDENT_ID, "name": "private child name"}],
+    }
 
-    class _ParentProfile:
-        def scan(self, **kwargs: Any) -> dict[str, Any]:
-            assert kwargs["ConsistentRead"] is True
-            return {
-                "Items": [
-                    {
-                        "PK": "USER#parent-1",
-                        "SK": "PROFILE",
-                        "entity_type": "user_profile",
-                        "user_id": "parent-1",
-                        "child_summaries": [
-                            {"student_id": STUDENT_ID, "name": "private child name"}
-                        ],
-                    }
-                ]
-            }
-
-    page = repository.scan_owned_private_rows(STUDENT_ID, table=_ParentProfile())
-    assert [(item["PK"], item["SK"]) for item in page.items] == [
-        ("USER#parent-1", "PROFILE")
-    ]
+    assert data_catalog.role_of(parent, STUDENT_ID) == data_catalog.REFERENCE
+    found = flow.action_for(parent, STUDENT_ID)
+    assert found is not None and isinstance(found[1], data_catalog.Scrub)
 
 
 def test_分支摘要对存储回来的数与写进去的数算出同一个值():
@@ -745,85 +602,16 @@ def test_分支摘要仍然拒绝它不认识的东西():
         repository.branch_results_digest({"account_profile": {"when": object()}})
 
 
-def test_分支结果版本认得表里存回来的数():
-    """One more `int` check on a value the table returns as `Decimal`.
-
-    It refused every branch result a real table had ever stored, so a claim
-    could be taken and then never persisted: the command's version climbed on
-    every run while no branch ever advanced. The digest and lease checks ahead
-    of it are exercised elsewhere; what this pins is that a stored version is
-    not the thing that stops it.
-    """
-    from decimal import Decimal
-
-    repository, _service, _job = _deletion_modules()
-    stored = {"account_profile": {"result_version": Decimal("2")}}
-    digest = repository.branch_results_digest(stored)
-
-    class _Table:
-        def get_item(self, *, Key, **_kwargs):
-            return {
-                "Item": {
-                    "PK": Key["PK"],
-                    "SK": Key["SK"],
-                    "command_id": "command-1",
-                    "generation": Decimal("1"),
-                    "version": Decimal("3"),
-                    "command_version": Decimal("3"),
-                    "lease_owner": "owner-1",
-                    "lease_expires_at": Decimal("2000000000"),
-                    "branch_results": dict(stored),
-                }
-            }
-
-        def update_item(self, **_kwargs):
-            return {"Attributes": {}}
-
-    claim = repository.DeletionCommandClaim(
-        command_id="command-1",
-        generation=1,
-        lease_owner="owner-1",
-        lease_expires_at=2_000_000_000,
-        command_version=3,
-        branch_results_digest=digest,
-    )
-
-    try:
-        repository.persist_branch_result(
-            {
-                "PK": "USER#someone",
-                "SK": "DELETE_COMMAND#command-1",
-                "user_id": "someone",
-                "branch_results": dict(stored),
-            },
-            "account_profile",
-            {"status": "retryable", "updated_at": "2026-09-21T03:00:00+00:00"},
-            claim=claim,
-            expected_branch_results_digest=digest,
-            expected_result_version=2,
-            now_epoch=1_000_000_000,
-            table=_Table(),
-        )
-    except repository.AccountDeletionConflict as exc:
-        assert "branch result version" not in str(exc), str(exc)
-    except repository.DeletionCommandClaimLost:
-        # Lease and digest races are this function's own business; the stored
-        # version is what this test is about and it got past it.
-        pass
-
-
 def test_练习分支不碰账号自己的生命周期行():
     """Carrying the student's id does not make a row practice data.
 
     The profile carries `user_id`, and an ownership attribute alone was enough
-    for this branch, so it reached the profile and wrote a practice tombstone
-    over it. That tombstone does not give the address back -- only the deletion
-    repository's does -- so after a real deletion the pair stayed claimed and
-    could never be opened again. Measured on the live table: the profile came
-    back as `practice_deletion_tombstone` and the claim was still there.
+    for the old practice branch, so it reached the profile and wrote a practice
+    tombstone over it. That tombstone does not give the address back -- only the
+    profile's own writer does -- so after a real deletion the pair stayed claimed
+    and could never be opened again. Since #641 the catalog says what a row is;
+    the account's lifecycle rows are never one of the practice kinds.
     """
-    from stoa.db.repositories import practice_repo
-
     owner = "student-1"
     lifecycle_rows = [
         {"PK": f"USER#{owner}", "SK": "PROFILE", "user_id": owner, "email": "a@b.ch"},
@@ -832,9 +620,11 @@ def test_练习分支不碰账号自己的生命周期行():
         {"PK": f"USER#{owner}", "SK": "IDENTITY#issuer#subject", "user_id": owner},
     ]
     for row in lifecycle_rows:
-        assert practice_repo._practice_owned(row, owner) is False, row["SK"]
+        kind = data_catalog.data_type_of(row)
+        assert kind is None or "practice" not in kind.name, row["SK"]
+    assert data_catalog.data_type_of(lifecycle_rows[0]).name == "user_profile"
 
-    # The negative control: the rows it does own are still owned.
+    # The negative control: the practice rows are still the student's.
     practice_rows = [
         {"PK": f"PROGRESS#{owner}", "SK": "TOPIC#x"},
         {"PK": f"ATTEMPTS#{owner}", "SK": "ATTEMPT#1"},
@@ -842,4 +632,4 @@ def test_练习分支不碰账号自己的生命周期行():
         {"PK": "PRACTICE_ATTEMPT#a1", "SK": "META", "student_id": owner},
     ]
     for row in practice_rows:
-        assert practice_repo._practice_owned(row, owner) is True, row["PK"]
+        assert data_catalog.owns(row, owner), row["PK"]

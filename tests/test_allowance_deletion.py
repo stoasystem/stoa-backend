@@ -5,8 +5,8 @@ counter, each question's reservation, the provider's usage evidence) and
 teacher-help allowance (each admission under `TEACHER_SUPPORT_CASE#<digest>`,
 the weekly figure an administrator set beside the profile) are the student's.
 They name the student as `beneficiary_id` (the assigned figure as
-`student_id`), and the account profile branch removes them, driven as
-`test_voice_question_consent_deletion` drives every branch until the seal holds.
+`student_id`), and the deletion removes them as the catalog says, run whole as
+`test_voice_question_consent_deletion` runs it until the command completes.
 
 - Deleting the student removes all five kinds, and leaves another student's.
 - Deleting the paying parent the admission names as `parent_id` leaves it.
@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+import deletion_helpers
 import test_chat_help_request_lifecycle as lifecycle
 import test_voice_question_consent_deletion as consent_deletion
 from stoa.db.repositories import allowance_repo, weekly_counter
@@ -84,11 +85,11 @@ def _rows_of(table, student_id: str) -> dict[tuple[str, str], str]:
 def table(monkeypatch):
     table = lifecycle.build_table(monkeypatch)
     lifecycle.keep_waiting(monkeypatch)
-    table.seed(
-        *consent_deletion._parent_rows(PARENT),
-        *_allowance_rows(STUDENT, "a" * 64),
-        *_allowance_rows(OTHER_STUDENT, "b" * 64),
-    )
+    allowance = [*_allowance_rows(STUDENT, "a" * 64), *_allowance_rows(OTHER_STUDENT, "b" * 64)]
+    table.seed(*consent_deletion._parent_rows(PARENT), *allowance)
+    # As their writers would have filed them: the deletion reads only the
+    # account's own and registered partitions.
+    deletion_helpers.register(table, *allowance)
     for student in (STUDENT, OTHER_STUDENT):
         table.seed_active_account(student)
         written = teacher_support_allowance_service.set_assigned_weekly_cases(
@@ -100,9 +101,7 @@ def table(monkeypatch):
 
 
 def test_deleting_the_student_removes_every_allowance_row(table) -> None:
-    sealed, history = consent_deletion._delete(table, STUDENT)
-
-    assert sealed, history
+    assert consent_deletion._delete(table, STUDENT)
     assert _rows_of(table, STUDENT) == {}
     assert sorted(_rows_of(table, OTHER_STUDENT).values()) == sorted(KINDS)
 
@@ -110,7 +109,5 @@ def test_deleting_the_student_removes_every_allowance_row(table) -> None:
 def test_deleting_the_paying_parent_leaves_the_childs_allowance(table) -> None:
     before = {key: dict(table.rows[key]) for key in _rows_of(table, STUDENT)}
 
-    sealed, history = consent_deletion._delete(table, PARENT)
-
-    assert sealed, history
+    assert consent_deletion._delete(table, PARENT)
     assert {key: table.rows[key] for key in _rows_of(table, STUDENT)} == before

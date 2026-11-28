@@ -18,6 +18,8 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+
+import deletion_helpers
 from fakes.dynamodb import DEFAULT_INDEXES, FakeTable, IndexSchema
 
 from scripts import backfill_push_token_index as backfill
@@ -381,15 +383,9 @@ def test_a_device_written_before_the_keys_gets_them_when_it_is_revoked(table) ->
 def test_the_owners_deletion_takes_a_device_out_of_both_indexes(table) -> None:
     created = _register(STUDENT, token="device-token")
     row = dict(_push_row(table, STUDENT, created["tokenReference"]))
-    table.seed(_fence(STUDENT, status="deletion_pending"))
 
-    notification_repo.scrub_notification_private_row(
-        row,
-        owner_id=STUDENT,
-        generation=GENERATION,
-        now_iso="2026-11-25T00:00:00Z",
-        table=table,
-    )
+    # The deletion as production runs it: the catalog's tombstone (#642).
+    deletion_helpers.delete_account(STUDENT)
 
     tombstone = table.rows[(row["PK"], row["SK"])]
     assert not PUSH_FIELDS & set(tombstone)

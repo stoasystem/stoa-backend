@@ -4,18 +4,15 @@ A deletion reads only the account's derived partitions and the partitions
 registered under `USER#{id}` - strongly, by key, never through an index - and
 is done when a whole pass over them finds nothing to handle. Since #641 every
 new deletion takes this path (the catalog's three steps), and only while the
-daily sweep vouches for the registry; the v1/v2 inventories and their
-acceptance switch stay until #642 removes them.
+daily sweep vouches for the registry; the v1/v2 inventories, their acceptance
+switch and the full-table path went with #642.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from hashlib import sha256
-import importlib.util
 import json
 from pathlib import Path
-import sys
 from typing import Any
 
 import pytest
@@ -23,7 +20,6 @@ import pytest
 import test_account_deletion_quick_fix as quick
 import test_chat_help_request_lifecycle as lifecycle
 from fakes.dynamodb import FakeTable
-from stoa import config
 from stoa.aws import Kind
 from stoa.db import data_catalog, owner_registry
 from stoa.db.repositories import account_deletion_repo
@@ -32,27 +28,9 @@ from stoa.services import account_deletion_service as service
 from stoa.services import owner_registry_sweep
 
 ROOT = Path(__file__).resolve().parents[1]
-V1 = ROOT / "docs" / "security" / "phase-473-private-store-inventory.json"
-V2 = ROOT / "docs" / "security" / "phase-473-private-store-inventory.v2.json"
-GENERATOR = ROOT / "scripts" / "generate_private_store_inventory_v2.py"
 
 table = quick.table
 providers = quick.providers
-
-
-def _generator():
-    spec = importlib.util.spec_from_file_location("phase473_inventory_v2", GENERATOR)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-@pytest.fixture
-def registry_path(monkeypatch: pytest.MonkeyPatch):
-    config.install(config.settings().model_copy(update={"account_deletion_registry_path": True}))
-    yield
-    config.install(None)
 
 
 def _sign_in(table: FakeTable, user_id: str) -> tuple[str, str]:
@@ -76,46 +54,7 @@ def _run(command_id: str, user_id: str, table: FakeTable) -> dict[str, Any]:
     return quick._command(table, user_id, command_id)
 
 
-# -- the inventories -------------------------------------------------------------------
-
-
-def test_v1_is_untouched_and_v2_is_derived_from_it_deterministically():
-    assert sha256(V1.read_bytes()).hexdigest() == quick.SEALED_INVENTORY_SHA256
-    module = _generator()
-    assert module.main(["--check"]) == 0
-    v1, v2 = json.loads(V1.read_bytes()), json.loads(V2.read_bytes())
-    assert v2["schema_version"] == "phase-473-private-store-inventory.v2"
-    assert v2["supersedes"] == {
-        "inventory_sha256": quick.SEALED_INVENTORY_SHA256,
-        "schema_version": "phase-473-private-store-inventory.v1",
-    }
-    assert v2["branch_ids"] == v1["branch_ids"]
-    # It says what it inherits and what it does not prove (#397 audit).
-    assert set(v2["coverage"]) == {"inherited_from_v1", "proven_by_v2", "not_proven",
-                                   "registry_writers", "registry_removers"}
-    assert "src/stoa/db/table.py:fenced" in v2["coverage"]["registry_writers"]
-    assert {b["handler_version"] for b in v2["branch_registry"]} == {"473-36.v2"}
-    assert {json.dumps(r["cursor_schema"], sort_keys=True) for r in v2["rows"]} == {
-        json.dumps(module.CURSOR_SCHEMA, sort_keys=True)
-    }
-    assert all(r["cursor_schema"]["complete_scan_required"] is False for r in v2["rows"])
-    # Nothing else moved: same rows, same allowlists, same quiescence.
-    def strip(row: dict) -> dict:
-        return {k: v for k, v in row.items() if k != "cursor_schema"}
-
-    assert [strip(r) for r in v2["rows"]] == [strip(r) for r in v1["rows"]]
-    assert all(r["quiescence"]["authoritative_zero_epochs"] == 2 for r in v2["rows"])
-
-
-def test_acceptance_seals_v2_only_with_the_switch_and_a_clean_recent_sweep(small_table, registry_path):
-    v2 = sha256(V2.read_bytes()).hexdigest()
-    config.install(None)
-    _vouch(small_table)
-    # Switch off: v1, whatever the sweep says.
-    assert service.acceptance_seal()["inventory_sha256"] == quick.SEALED_INVENTORY_SHA256
-    config.install(config.settings().model_copy(update={"account_deletion_registry_path": True}))
-    seal = service.acceptance_seal()
-    assert seal["registry_path"] is True and seal["inventory_sha256"] == v2
+# -- acceptance waits for the sweep ---------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -128,7 +67,7 @@ def test_acceptance_seals_v2_only_with_the_switch_and_a_clean_recent_sweep(small
         {"complete": True, "missing_registrations": 0, "completed_at": "not a time"},
     ],
 )
-def test_without_a_clean_recent_sweep_the_switch_falls_back_to_v1(small_table, registry_path, marker):
+def test_without_a_clean_recent_sweep_no_new_deletion_is_accepted(small_table, marker):
     small_table.rows.pop(
         (owner_registry_sweep.RUN_MARKER_KEY["PK"], owner_registry_sweep.RUN_MARKER_KEY["SK"])
     )
@@ -136,10 +75,11 @@ def test_without_a_clean_recent_sweep_the_switch_falls_back_to_v1(small_table, r
         small_table.seed({**owner_registry_sweep.RUN_MARKER_KEY,
                           "completed_at": datetime.now(UTC).isoformat(), **marker})
 
-    seal = service.acceptance_seal()
-
-    assert seal["inventory_sha256"] == quick.SEALED_INVENTORY_SHA256
-    assert not seal["registry_path"]
+    assert not service.registry_path_ready()
+    with pytest.raises(service.DeletionNotReady):
+        quick._accept("student-small")
+    fence = small_table.rows[("USER#student-small", "ACCOUNT_FENCE")]
+    assert fence["status"] == "active"
 
 
 small_table = quick.small_table
@@ -149,7 +89,7 @@ small_table = quick.small_table
 
 
 def test_a_registry_path_deletion_completes_without_scanning_the_table(
-    table: FakeTable, providers: dict[Kind, Any], registry_path
+    table: FakeTable, providers: dict[Kind, Any]
 ) -> None:
     student = lifecycle.STUDENT
     sign_in = _sign_in(table, student)
@@ -190,7 +130,7 @@ def test_a_registry_path_deletion_completes_without_scanning_the_table(
 
 
 def test_a_registry_path_deletion_of_a_parent_scrubs_the_recovery_audit_event_naming_it(
-    small_table: FakeTable, providers: dict[Kind, Any], registry_path
+    small_table: FakeTable, providers: dict[Kind, Any]
 ) -> None:
     """A parent named only as a recovery target, in an event's metadata (#573).
 
@@ -246,7 +186,7 @@ def test_without_the_backfill_a_new_deletion_is_refused(
 
 
 def test_the_registry_path_needs_the_registry(
-    table: FakeTable, providers: dict[Kind, Any], registry_path
+    table: FakeTable, providers: dict[Kind, Any]
 ) -> None:
     """What the guard prevents: a v2 deletion over an unbackfilled table misses rows."""
     student = lifecycle.STUDENT
@@ -263,19 +203,18 @@ def test_the_registry_path_needs_the_registry(
 
 
 def test_each_pass_reads_the_registry_strongly_and_queries_each_partition(
-    table: FakeTable, providers: dict[Kind, Any], registry_path
+    table: FakeTable, providers: dict[Kind, Any]
 ) -> None:
     student = lifecycle.STUDENT
     owner_registry_sweep.run(table=table, write=True)
-    with account_deletion_repo.registry_scope(student) as scope:
-        pass
+    partitions = account_deletion_repo.owner_partitions(student)
     registered = {
         row["registered_pk"] for key, row in table.rows.items()
         if key[0] == f"USER#{student}" and owner_registry.is_registry_row(row)
     }
     assert registered
-    assert set(scope.partitions) == set(owner_registry.derived_partitions(student)) | registered
-    assert list(scope.partitions) == sorted(scope.partitions)
+    assert set(partitions) == set(owner_registry.derived_partitions(student)) | registered
+    assert list(partitions) == sorted(partitions)
 
 
 def test_a_registry_pass_pages_and_resumes_by_partition_position():
@@ -296,23 +235,6 @@ def test_a_registry_pass_pages_and_resumes_by_partition_position():
     assert sorted(seen) == sorted((r["PK"], r["SK"]) for r in rows)
     assert len(seen) == len(set(seen))
     assert double.calls["scan"] == 0
-
-
-def test_a_command_under_neither_inventory_is_seal_drift(small_table: FakeTable) -> None:
-    worker = service.AccountDeletionService()
-    assert len(worker.seals) == 2
-    with pytest.raises(account_deletion_repo.AccountDeletionConflict, match="seal drift"):
-        worker._require_sealed_command({"inventory_sha256": "0" * 64})
-
-
-def test_a_v2_command_does_not_validate_against_v1_or_the_reverse() -> None:
-    worker = service.AccountDeletionService()
-    v1, v2 = (worker.seals[sha] for sha in sorted(worker.seals, key=lambda s: s != quick.SEALED_INVENTORY_SHA256))
-    assert v1["branch_contracts"] != v2["branch_contracts"]
-    command = {"inventory_sha256": v2["inventory_sha256"], "branch_ids": list(service.ACCOUNT_DELETION_BRANCH_IDS),
-               "branch_contracts": v1["branch_contracts"]}
-    with pytest.raises(account_deletion_repo.AccountDeletionConflict, match="seal drift"):
-        worker._require_sealed_command(command)
 
 
 def test_a_run_stops_at_a_position_in_the_accounts_own_partitions(
@@ -359,7 +281,7 @@ def _mentioning_event(field: str) -> dict[str, Any]:
 
 @pytest.mark.parametrize("field", ["parent_id", "actor_id"])
 def test_a_registry_path_deletion_scrubs_the_account_out_of_a_notification_it_is_named_in(
-    small_table: FakeTable, providers: dict[Kind, Any], registry_path, field: str
+    small_table: FakeTable, providers: dict[Kind, Any], field: str
 ) -> None:
     from stoa.db.repositories import notification_repo
 

@@ -3,7 +3,6 @@
 import hashlib
 import json
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from itertools import islice
@@ -11,7 +10,7 @@ from typing import Any, Protocol, runtime_checkable
 import uuid
 
 from boto3.dynamodb.conditions import Attr, Key
-from stoa.db import data_catalog, owner_registry
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -95,24 +94,6 @@ PRACTICE_PRIVATE_FIELDS = frozenset(
         "last_judged_at",
     }
 )
-PRACTICE_TOMBSTONE_ALLOWLIST = frozenset(
-    {
-        "PK",
-        "SK",
-        "entity_type",
-        "schema_version",
-        "status",
-        "action",
-        "quantity",
-        "count",
-        "quota_period",
-        "expires_at",
-        "retention_basis",
-        "owner_deletion_generation",
-        "created_at",
-        "deleted_at",
-    }
-)
 
 
 type PracticeItem = dict[str, object]
@@ -172,12 +153,6 @@ def _query(table: object, **kwargs: object) -> PracticeItem:
     if not isinstance(table, _QueryTable):
         raise ValueError("practice dependency unavailable")
     return _dependency_mapping(table.query(**kwargs))
-
-
-@dataclass(frozen=True, slots=True)
-class PracticePrivatePage:
-    items: tuple[dict[str, Any], ...]
-    cursor: dict[str, str] | None = None
 
 
 def _atomic_table(table: Any) -> bool:
@@ -421,7 +396,6 @@ def indexed_exercises(lesson: Mapping[str, Any]) -> list[dict[str, Any]] | None:
     if not isinstance(value, list):
         return None
     return [dict(entry) for entry in value if isinstance(entry, Mapping) and entry.get("id")]
-
 
 
 # ── One topic's curriculum (#513) ─────────────────────────────────────────
@@ -1146,127 +1120,6 @@ def record_attempt(
         attempt_id=attempt_id,
         self_reported=self_reported,
     )
-
-
-def scan_practice_private_rows(
-    owner_id: str,
-    *,
-    cursor: Mapping[str, Any] | None = None,
-    maximum_pages: int = 1,
-    table: Any | None = None,
-) -> PracticePrivatePage:
-    """Strongly scan current and legacy practice/usage rows owned by one student."""
-    target = table or db_table.table()
-    if maximum_pages <= 0:
-        raise account_deletion_repo.AccountDeletionConflict("invalid page bound")
-    marker = dict(cursor) if cursor is not None else None
-    found: list[dict[str, Any]] = []
-    for page in account_deletion_repo.sweep_pages(
-        "practice deletion", table=target, cursor=cursor, maximum_pages=maximum_pages
-    ):
-        found.extend(item for item in page.items if _practice_owned(item, owner_id))
-        if page.last_key is None:
-            return PracticePrivatePage(tuple(found))
-        if page.last_key == marker:
-            raise account_deletion_repo.AccountDeletionConflict("practice deletion cursor did not advance")
-        marker = page.last_key
-    return PracticePrivatePage(tuple(found), marker)
-
-
-def scrub_practice_private_row(
-    item: Mapping[str, Any],
-    *,
-    owner_id: str,
-    generation: int,
-    now_iso: str,
-    table: Any | None = None,
-) -> dict[str, Any]:
-    """Replace practice content with a strict noncontent/TTL tombstone."""
-    if not _practice_owned(item, owner_id):
-        raise account_deletion_repo.AccountDeletionConflict("practice row owner changed")
-    is_usage = str(item.get("PK") or "").startswith(("USAGE#", "USAGE_LEDGER#"))
-    retained: dict[str, Any] = {
-        "PK": item["PK"],
-        "SK": item["SK"],
-        "entity_type": "practice_accounting_tombstone"
-        if is_usage
-        else "practice_deletion_tombstone",
-        "schema_version": "practice-deletion-tombstone.v1",
-        "status": "deleted",
-        "owner_deletion_generation": generation,
-        "deleted_at": now_iso,
-    }
-    if is_usage and item.get("expires_at") and item.get("action"):
-        retained.update(
-            action=item.get("action"),
-            quantity=int(item.get("quantity") or 0),
-            count=int(item.get("count") or 0),
-            quota_period=item.get("quota_period"),
-            expires_at=int(item["expires_at"]),
-            retention_basis=str(item.get("retention_basis") or "usage_accounting"),
-        )
-    if item.get("created_at"):
-        retained["created_at"] = item["created_at"]
-    tombstone = {
-        key: value
-        for key, value in retained.items()
-        if key in PRACTICE_TOMBSTONE_ALLOWLIST and value is not None
-    }
-    target = table or db_table.table()
-    hook = getattr(target, "replace_learning_tombstone", None)
-    if callable(hook):
-        hook(dict(item), tombstone, owner_id, generation)
-    else:
-        db_table.transact(
-            [
-                account_deletion_repo.deletion_fence_condition(owner_id, generation),
-                {
-                    "Put": {
-                        "Item": tombstone,
-                        "ConditionExpression": ("attribute_exists(PK) AND attribute_exists(SK)"),
-                    }
-                },
-            ],
-            table=target,
-        )
-    return tombstone
-
-
-def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:
-    """Whether this row is one of the student's practice rows.
-
-    Carrying the student's id does not make a row practice data. The account's
-    own profile carries `user_id`, and an ownership attribute on its own was
-    enough here, so this branch reached the profile and replaced it with a
-    practice tombstone of its own making -- which does not give the address
-    back, because only the deletion repository's tombstone knows how to. Every
-    deleted address stayed claimed, and the pair could never be opened again.
-    """
-    if account_deletion_repo.is_deletion_tombstone(item):
-        # Its own tombstone keeps the PK, so matching on the PK alone found it
-        # again every pass and the branch never finished (#78).
-        return False
-    # Whose it is comes from the data type catalog (#588): a practice
-    # partition's rows are owned by the partition, the legacy practice rows by
-    # their owner fields. Which of the owner's rows are practice data is this
-    # family's call: its partitions, never the profile.
-    return str(item.get("PK") or "").startswith(_PRACTICE_PARTITIONS) and data_catalog.owns(
-        item, account_deletion_repo.deletion_account(owner_id)
-    )
-
-
-_PRACTICE_PARTITIONS = (
-    "PROGRESS#",
-    "ATTEMPTS#",
-    "REVIEW#",
-    "ACTIVITY#",
-    "USAGE#",
-    "USAGE_LEDGER#",
-    "QUIZ#",
-    "PRACTICE#",
-    "PRACTICE_ATTEMPT#",
-    "PRACTICE_PROGRESS#",
-)
 
 
 STUDY_DAY_PREFIX = "DAY#"

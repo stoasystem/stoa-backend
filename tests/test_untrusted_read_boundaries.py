@@ -9,34 +9,10 @@ import sys
 
 import pytest
 
-from sealed_test_renames import current_selector
-
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "scripts" / "generate_untrusted_read_inventory.py"
 INVENTORY = ROOT / "docs" / "security" / "untrusted-read-inventory.json"
-PRIVATE_INVENTORY = ROOT / "docs" / "security" / "phase-473-private-store-inventory.json"
-PRIVATE_GENERATOR = ROOT / "scripts" / "generate_private_store_inventory.py"
-
-EXPECTED_BRANCHES = (
-    "account_profile",
-    "identity_cross_account",
-    "capability_scope",
-    "question_ocr_session",
-    "attachments",
-    "moderation",
-    "report_records",
-    "report_artifacts",
-    "support_recovery_feed",
-    "conversation_messages",
-    "practice_progress",
-    "adaptive_assignment",
-    "learning_memory",
-    "ai_teacher_draft",
-    "curriculum_signal",
-    "notification_device_realtime",
-    "external_delivery_debt",
-)
 
 REQUIRED_ROW_FIELDS = {
     "boundary_id",
@@ -57,7 +33,7 @@ REQUIRED_ROW_FIELDS = {
 }
 
 FINDING_SELECTORS = {
-    "CR-01": "tests/test_account_deletion_claim_race.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+    "CR-01": "tests/test_account_deletion_claim_race.py::test_lease_renewal_requires_owner_version_digest_and_returns_next_claim",
     "CR-02": "tests/test_notification_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
     "WR-01": "tests/test_account_deletion_claim_race.py::test_repository_rejects_invalid_lifecycle_timestamps",
     "WR-02": "tests/test_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
@@ -68,9 +44,7 @@ REQUIRED_AUTHORITY_FIELDS = {
     "lease_expires_at",
     "now_epoch",
     "command_version",
-    "branch_results",
     "branch_results_digest",
-    "updated_at",
     "version",
     "effect_state",
     "intent_version",
@@ -217,37 +191,11 @@ def test_strict_provider_parsers_reject_partial_malformed_and_bool_as_int(
             function(invalid)
 
 
-def test_private_store_inventory_is_composed_exactly_once_and_not_duplicated():
+def test_the_private_store_inventory_is_no_longer_composed():
+    """The sealed private-store inventories went with the old deletion branches (#642)."""
     boundary = json.loads(INVENTORY.read_text())
-    private = json.loads(PRIVATE_INVENTORY.read_text())
-    composition = boundary["private_store_composition"]
-    assert tuple(composition["branch_ids"]) == EXPECTED_BRANCHES
-    assert composition["inventory_sha256"]
-    assert composition["row_count"] == len(private["rows"])
-    assert composition["write_ids"] == sorted(row["row_id"] for row in private["rows"])
-    assert "private_store_rows" not in boundary
-    assert {row["branch_id"] for row in private["branch_registry"]} == set(EXPECTED_BRANCHES)
-
-
-def test_missing_or_extra_private_join_and_absent_selector_fail():
-    module = _generator_module()
-    private = json.loads(PRIVATE_INVENTORY.read_text())
-    broken = json.loads(json.dumps(private))
-    broken["rows"].pop()
-    with pytest.raises(ValueError):
-        module.compose_private_store_inventory(ROOT, broken)
-    broken = json.loads(json.dumps(private))
-    broken["rows"][0]["purge_selector"] = "tests/does_not_exist.py::test_missing"
-    with pytest.raises(ValueError):
-        module.compose_private_store_inventory(ROOT, broken)
-    broken = json.loads(json.dumps(private))
-    broken["rows"][0]["fence_checkpoint"] = "USER#{owner_id}/PARALLEL_FENCE"
-    with pytest.raises(ValueError):
-        module.compose_private_store_inventory(ROOT, broken)
-    broken = json.loads(json.dumps(private))
-    broken["branch_registry"][0]["branch_id"] = "changed_branch"
-    with pytest.raises(ValueError):
-        module.compose_private_store_inventory(ROOT, broken)
+    assert "private_store_composition" not in boundary
+    assert not (ROOT / "docs" / "security" / "phase-473-private-store-inventory.json").exists()
 
 
 def test_lower_fake_observation_rejects_high_level_only_monkeypatch():
@@ -313,21 +261,6 @@ def test_every_read_selector_executes_and_observes_its_declared_lower_boundary()
     for row in rows:
         module.require_lower_fake_observed(counters, row["lower_fake_target"])
         assert row["malformed_selector"] in selectors
-
-
-def test_every_plan35_purge_and_no_resurrection_selector_executes():
-    private = json.loads(PRIVATE_INVENTORY.read_text())
-    selectors = {
-        current_selector(selector)
-        for row in private["rows"]
-        for selector in (row["purge_selector"], row["no_resurrection_selector"])
-    }
-    result = _execute_selectors(selectors)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert len(private["branch_registry"]) == len(EXPECTED_BRANCHES)
-    assert {row["branch_id"] for row in private["branch_registry"]} == set(
-        EXPECTED_BRANCHES
-    )
 
 
 def test_all_new_authority_fields_have_closed_parsers_and_exact_finding_selectors():

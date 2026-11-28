@@ -20,6 +20,7 @@ from stoa.db import table as db_table
 from stoa.rule_violation import RuleViolation
 import pytest
 from botocore.exceptions import ClientError
+import deletion_helpers
 from fakes.dynamodb import FakeTable
 
 from stoa.db.repositories import (
@@ -33,7 +34,6 @@ from stoa.db.repositories import (
 )
 from stoa.security.identity import AccountStatus
 from stoa.services import (
-    account_deletion_service,
     account_lifecycle,
     account_numbering_service,
     account_provisioning_service,
@@ -1562,34 +1562,22 @@ def test_还有哪些路径在不取占位行的情况下建号() -> None:
 
 
 def test_销户分支自己跑到底才算把地址还回去(table: FakeAccountTable) -> None:
-    """The other tests here call the repository; production calls the branch.
+    """The other tests here call the repository; production runs the whole deletion.
 
     That gap is how A-1 got in: card 009 added the claim, and nothing on the
     deletion side was asked about it. Putting a `raise` on the branch's profile
-    arm and running the whole suite was green, so this drives the branch itself
-    -- and requires it to reach `complete`, because a release that refuses turns
-    into a retry that never ends rather than into a failure anyone would see.
+    arm and running the whole suite was green, so this drives the deletion itself
+    (the catalog's flow since #641) -- and requires it to reach `complete`,
+    because a release that refuses turns into a retry that never ends rather
+    than into a failure anyone would see.
     """
     _invite(table, email="branch@example.ch")
     profile = _profile_for(table, "branch@example.ch")
     user_id = str(profile["user_id"])
-    fence = table.rows[(f"USER#{user_id}", "ACCOUNT_FENCE")]
-    fence["status"] = "deletion_pending"
-    fence["generation"] = 1
 
-    command = {"user_id": user_id, "generation": 1}
-    previous: dict[str, Any] = {}
-    statuses: list[str] = []
-    for _ in range(12):
-        result = account_deletion_service._account_profile_branch(
-            command=command, previous=previous
-        )
-        statuses.append(result.status)
-        previous = result.persisted(_moment(60).isoformat())
-        if result.status == "complete":
-            break
+    command = deletion_helpers.delete_account(user_id)
 
-    assert statuses[-1] == "complete", statuses
+    assert command["status"] == "complete"
     assert table.claims() == []
     assert (
         account_email_claim_repo.get_claim(email="branch@example.ch", role="student")

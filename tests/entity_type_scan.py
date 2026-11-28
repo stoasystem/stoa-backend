@@ -1,7 +1,7 @@
 """What `src/stoa` writes, read from the source: entity types and their fields.
 
-Shared by the deletion branch gate (`test_account_deletion_branch_coverage`,
-#534) and the data type catalog gates (`test_data_catalog`, #587).
+Used by the data type catalog gates (`test_data_catalog`, #587); the deletion
+branch gate (#534) that shared it went with the branches (#642).
 
 - `written_entity_types` collects every `entity_type` a row can be written
   with: the value under an `"entity_type"` key of a dict literal, an

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 
-from stoa.db import data_catalog, listing_index
+from stoa.db import listing_index
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -47,12 +46,6 @@ class _ScanTable(Protocol):
 @runtime_checkable
 class _UpdateTable(Protocol):
     def update_item(self, **kwargs: object) -> object: ...
-
-
-@dataclass(frozen=True, slots=True)
-class CurriculumSignalPage:
-    items: tuple[CurriculumSignalItem, ...]
-    cursor: dict[str, str] | None = None
 
 
 def _mapping(value: object) -> CurriculumSignalItem:
@@ -337,41 +330,6 @@ def list_metrics(
             )
         )
     return _scan_rows(table, want=limit or None, FilterExpression=filter_expr)
-
-
-def scan_curriculum_signal_manifests(
-    owner_id: str,
-    *,
-    cursor: Mapping[str, object] | None = None,
-    maximum_pages: int = 1,
-    table: object | None = None,
-) -> CurriculumSignalPage:
-    """Strongly scan the student's signal owner manifests.
-
-    Whose a manifest is comes from the data type catalog (#588): its
-    `CURRICULUM_SIGNAL_OWNER#{id}` partition. Signals written before the
-    manifests named their student only as `metadata.studentHash`; deletion no
-    longer looks them up by it (#586 decision 3: none were left in production
-    on 2026-11-23).
-    """
-    owner_id = account_deletion_repo.deletion_account(owner_id)
-    target = table or db_table.table()
-    marker = dict(cursor) if cursor is not None else None
-    found: list[CurriculumSignalItem] = []
-    for page in account_deletion_repo.sweep_pages(
-        "curriculum signal deletion", table=target, cursor=cursor, maximum_pages=maximum_pages
-    ):
-        for item in _items(page.items):
-            if item.get("entity_type") == OWNER_MANIFEST_ENTITY and data_catalog.owns(
-                item, owner_id
-            ):
-                found.append(item)
-        if page.last_key is None:
-            return CurriculumSignalPage(tuple(found))
-        if page.last_key == marker:
-            raise account_deletion_repo.AccountDeletionConflict("curriculum signal deletion cursor did not advance")
-        marker = page.last_key
-    return CurriculumSignalPage(tuple(found), marker)
 
 
 def reconcile_curriculum_signal(

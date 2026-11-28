@@ -19,7 +19,7 @@ from typing import Any
 
 from stoa.db import owner_registry
 from stoa.db import table as db_table
-from stoa.db.repositories import attachment_repo
+from stoa.db.repositories import account_deletion_repo, attachment_repo
 
 
 class MessageCommandDisposition(StrEnum):
@@ -278,35 +278,53 @@ CONVERSATION_ACTIVE_COMMAND_STATES = frozenset(
 
 
 def cancel_stale_message_command(
-    command: dict[str, object],
+    command: Mapping[str, object],
     *,
     owner_id: str,
     deletion_generation: int,
     now_iso: str,
     table: object | None = None,
 ) -> dict[str, object]:
-    """Invalidate one old-generation command and erase all replay/lease content."""
+    """Cancel one active command of a closing account, behind its deletion fence.
+
+    Cancelling only: the command becomes `canceled` and its lease is let go, so
+    no worker can claim, answer or retry it again. What the row keeps after that
+    is the catalog's tombstone, which account deletion writes next (#642). A
+    command that has already moved on, or is gone, is left to that tombstone.
+    """
     if command.get("owner_id") != owner_id and command.get("student_id") != owner_id:
         raise attachment_repo.AttachmentRepositoryConflict("conditional_conflict")
-    remove_fields = tuple(sorted(attachment_repo.CONVERSATION_PRIVATE_FIELDS))
-    target = table or db_table.table()
-    hook = getattr(target, "cancel_stale_message_command", None)
-    if callable(hook):
-        hook(
-            command=command,
-            owner_id=owner_id,
-            deletion_generation=deletion_generation,
-            remove_fields=remove_fields,
-            now_iso=now_iso,
+    try:
+        db_table.transact(
+            [
+                account_deletion_repo.deletion_fence_condition(owner_id, deletion_generation),
+                {
+                    "Update": {
+                        "Key": {"PK": command["PK"], "SK": command["SK"]},
+                        "UpdateExpression": (
+                            "SET #status=:canceled, updated_at=:now REMOVE leaseOwner, claimedAt"
+                        ),
+                        "ConditionExpression": (
+                            "attribute_exists(PK) AND #status IN (:claimed,:committed,:running,:failed) "
+                            "AND (owner_id=:owner OR student_id=:owner)"
+                        ),
+                        "ExpressionAttributeNames": {"#status": "status"},
+                        "ExpressionAttributeValues": {
+                            ":canceled": "canceled",
+                            ":now": now_iso,
+                            ":claimed": "claimed",
+                            ":committed": "message_committed",
+                            ":running": "ai_running",
+                            ":failed": "failed",
+                            ":owner": owner_id,
+                        },
+                    }
+                },
+            ],
+            table=table,
         )
-    else:
-        attachment_repo.scrub_conversation_private_row(
-            command,
-            owner_id=owner_id,
-            generation=deletion_generation,
-            now_iso=now_iso,
-            table=target,
-        )
+    except db_table.WriteRefused:
+        return {"status": "unchanged", "command_id": command.get("command_id")}
     return {"status": "canceled", "command_id": command.get("command_id")}
 
 

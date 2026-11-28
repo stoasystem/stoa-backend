@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Key
 
-from stoa.db import data_catalog, owner_registry
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -108,13 +107,6 @@ def _delete_item(table: object, **kwargs: object) -> object:
             "connection dependency unavailable"
         )
     return table.delete_item(**kwargs)
-
-
-@dataclass(frozen=True, slots=True)
-class ConnectionPrivatePage:
-    items: tuple[ConnectionItem, ...]
-    cursor: dict[str, str] | None = None
-    scanned: int = 0
 
 
 def connection_pk(connection_id: str) -> str:
@@ -409,70 +401,3 @@ def delete_stale_connections(*, now_epoch: int) -> list[str]:
     return removed
 
 
-def scan_account_connections(
-    owner_id: str,
-    *,
-    cursor: Mapping[str, str] | None = None,
-    maximum_pages: int = 1,
-    table: object | None = None,
-) -> ConnectionPrivatePage:
-    target = table or db_table.table()
-    current = cursor
-    seen: set[tuple[str, str]] = set()
-    found: list[ConnectionItem] = []
-    scanned = 0
-    for page in account_deletion_repo.sweep_pages(
-        "connection",
-        table=target,
-        cursor=cursor,
-        page_limit=100,
-        maximum_pages=max(maximum_pages, 1),
-    ):
-        items = page.items
-        scanned += len(items)
-        found.extend(
-            dict(item)
-            for item in items
-            if item.get("entity_type") == CONNECTION_ENTITY
-            and data_catalog.owns(item, account_deletion_repo.deletion_account(owner_id))
-        )
-        if page.last_key is None:
-            return ConnectionPrivatePage(tuple(found), None, scanned)
-        current = page.last_key
-        identity = (current["PK"], current["SK"])
-        if identity in seen:
-            raise account_deletion_repo.AccountDeletionConflict("repeated connection cursor")
-        seen.add(identity)
-    return ConnectionPrivatePage(tuple(found), current, scanned)
-
-
-def revoke_account_connection(
-    item: Mapping[str, object],
-    *,
-    owner_id: str,
-    generation: int,
-    table: object | None = None,
-) -> None:
-    if owner_id not in {item.get("owner_id"), item.get("user_id")}:
-        raise account_deletion_repo.AccountDeletionConflict("connection owner changed")
-    target = table or db_table.table()
-    hook = getattr(target, "delete_connection_for_account", None)
-    if callable(hook):
-        hook(dict(item), owner_id, generation)
-        return
-    db_table.transact(
-        [
-            account_deletion_repo.deletion_fence_condition(owner_id, generation),
-            {
-                "Delete": {
-                    "Key": {"PK": item["PK"], "SK": item["SK"]},
-                    "ConditionExpression": (
-                        "attribute_exists(PK) AND attribute_exists(SK) AND "
-                        "(owner_id=:owner OR user_id=:owner)"
-                    ),
-                    "ExpressionAttributeValues": {":owner": owner_id},
-                }
-            },
-        ],
-        table=target,
-    )

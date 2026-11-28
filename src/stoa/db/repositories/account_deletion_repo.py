@@ -4,16 +4,13 @@ from __future__ import annotations
 
 import logging
 
-from copy import deepcopy
 from dataclasses import dataclass
 from decimal import Decimal
 from datetime import datetime
 from hashlib import sha256
 import json
 from bisect import bisect_right
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
-from contextvars import ContextVar
+from collections.abc import Iterator
 from itertools import islice
 from typing import Any, Iterable, Mapping, Protocol, runtime_checkable
 
@@ -105,12 +102,6 @@ class DeletionCommandClaim:
     user_id: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class OwnedPrivatePage:
-    items: tuple[dict[str, Any], ...]
-    cursor: dict[str, str] | None = None
-
-
 def _valid_lifecycle_timestamp(value: object) -> str:
     if not isinstance(value, str) or not value.strip():
         raise AccountDeletionConflict("invalid lifecycle timestamp")
@@ -182,77 +173,6 @@ def _claim_from_command(command: Mapping[str, Any]) -> DeletionCommandClaim:
         user_id=user_id.strip() if isinstance(user_id, str) and user_id.strip() else None,
     )
 
-
-PRIVATE_QUESTION_SESSION_FIELDS = frozenset(
-    {
-        "content",
-        "original_content",
-        "corrected_text",
-        "attachment_id",
-        "attachment_ids",
-        "attachment_source_identity",
-        "image_s3_key",
-        "has_image",
-        "ocr_text",
-        "ocr_metadata",
-        "ai_response",
-        "teacher_response",
-        "teacher_response_text",
-        "teacher_response_rich",
-        "teacher_response_format",
-        "student_feedback",
-        "knowledge_points",
-        "topic_seeds",
-        "subject",
-        "student_id",
-        "teacher_id",
-        "notes",
-        "resolution_note",
-        "help_text",
-        "private_diagnostics",
-        "entitlement",
-        "previous_dispatch_teacher_ids",
-        "dispatch_reason",
-        "dispatch_no_candidate_reason",
-        "teacher_requested_at",
-        "queue_visible_at",
-        "teacher_started_at",
-        "teacher_taken_over_at",
-        "teacher_first_replied_at",
-        "teacher_first_reply_seconds",
-        "teacher_first_reply_sla_bucket",
-        "resolved_at",
-        "started_at",
-    }
-)
-
-QUESTION_TOMBSTONE_ALLOWLIST = frozenset(
-    {
-        "PK",
-        "SK",
-        "entity_type",
-        "schema_version",
-        "question_id",
-        "status",
-        "owner_deletion_generation",
-        "created_at",
-        "deleted_at",
-    }
-)
-SESSION_TOMBSTONE_ALLOWLIST = frozenset(
-    {
-        "PK",
-        "SK",
-        "entity_type",
-        "schema_version",
-        "session_id",
-        "question_id",
-        "status",
-        "owner_deletion_generation",
-        "created_at",
-        "deleted_at",
-    }
-)
 
 def account_fence_key(user_id: str) -> dict[str, str]:
     value = _required(user_id, "user_id")
@@ -481,10 +401,6 @@ def ensure_active_account_fence(
         "created_at": now_iso,
         "updated_at": now_iso,
     }
-    hook = getattr(target, "backfill_account_fence", None)
-    if callable(hook):
-        persisted = hook(item)
-        return require_active_account_fence(user_id, table=target) if persisted else persisted
     operations = [
         {
             "ConditionCheck": {
@@ -637,12 +553,6 @@ def begin_account_deletion(
         "updated_at": now_iso,
         "version": int(current.get("version") or 1) + 1,
     }
-    hook = getattr(target, "begin_account_deletion", None)
-    if callable(hook):
-        try:
-            return hook(next_fence, command)
-        except Exception as exc:
-            raise AccountDeletionConflict("deletion command conflict") from exc
     try:
         _transact(
             [
@@ -692,104 +602,6 @@ def begin_account_deletion(
     return next_fence, command
 
 
-def scan_owned_private_rows(
-    user_id: str,
-    *,
-    table: Any | None = None,
-    cursor: dict[str, str] | None = None,
-    maximum_pages: int = 20,
-    page_limit: int = 100,
-) -> OwnedPrivatePage:
-    """Strong base-table discovery of every row that names the account (#588).
-
-    Whose a row is comes from the data type catalog alone
-    (`data_catalog.names`): the account's own rows and the rows that only
-    mention it, which the branches tombstone, delete or scrub. GSIs never
-    establish deletion completeness.
-    """
-    if maximum_pages <= 0 or page_limit <= 0:
-        raise AccountDeletionConflict("invalid private row scan bound")
-    user_id = deletion_account(user_id)
-    target = table or db_table.table()
-    current = continuation_key(cursor, "private row") if cursor is not None else None
-    seen_rows: set[tuple[str, str]] = set()
-    seen_cursors: set[tuple[str, str]] = set()
-    if current is not None:
-        seen_cursors.add((current["PK"], current["SK"]))
-    rows: list[dict[str, Any]] = []
-    for page in sweep_pages(
-        "private row",
-        table=target,
-        cursor=current,
-        page_limit=page_limit,
-        maximum_pages=maximum_pages,
-    ):
-        for item in page.items:
-            if not data_catalog.names(item, user_id):
-                continue
-            identity = (str(item.get("PK") or ""), str(item.get("SK") or ""))
-            if not all(identity):
-                raise AccountDeletionConflict("malformed private row key")
-            if identity not in seen_rows:
-                seen_rows.add(identity)
-                rows.append(item)
-        if page.last_key is None:
-            return OwnedPrivatePage(tuple(rows), None)
-        identity = (page.last_key["PK"], page.last_key["SK"])
-        if identity in seen_cursors:
-            raise AccountDeletionConflict("repeating private row cursor")
-        seen_cursors.add(identity)
-        current = page.last_key
-    return OwnedPrivatePage(tuple(rows), current)
-
-
-def sweep_pages(
-    name: str,
-    *,
-    table: object,
-    cursor: Mapping[str, object] | None,
-    maximum_pages: int,
-    page_limit: int | None = None,
-    conflict: Callable[[str], Exception] | None = None,
-    **request: object,
-) -> Iterator[db_table.Page]:
-    """Up to `maximum_pages` strong base-table pages from `cursor`, for a deletion sweep.
-
-    The paging is the gateway's. A cursor it cannot continue from, or a table
-    that does not answer with a page, is a conflict (`AccountDeletionConflict`
-    unless the caller names its own): a sweep stops rather than skip rows.
-    Whether a cursor has come round again is the sweep's own rule and stays
-    with it.
-    """
-    refuse = conflict or AccountDeletionConflict
-    if page_limit is not None:
-        request["Limit"] = page_limit
-    scope = _REGISTRY_SCOPE.get()
-    try:
-        if scope is not None:
-            # A command sealed under the v2 inventory (#397): the same pages,
-            # read from the account's own and registered partitions instead
-            # of the whole table.
-            source = registry_pages(scope, start=cursor, table=table, **request)
-        else:
-            source = db_table.pages(
-                "scan", start=cursor, table=table, ConsistentRead=True, **request
-            )
-    except db_table.PageTokenInvalid as exc:
-        raise refuse(f"invalid {name} cursor") from exc
-    except db_table.TableUnavailable as exc:
-        raise refuse(f"{name} dependency unavailable") from exc
-    taken = islice(source, maximum_pages)
-    while True:
-        try:
-            page = next(taken)
-        except StopIteration:
-            return
-        except db_table.TableUnavailable as exc:
-            raise refuse(f"malformed {name} page") from exc
-        yield page
-
-
 # -- the owner registry path (#397) ---------------------------------------------------
 
 # A position after the last row of one partition. Never sent to the table: a
@@ -813,11 +625,6 @@ class RegistryScope:
     partitions: tuple[str, ...]
 
 
-_REGISTRY_SCOPE: ContextVar[RegistryScope | None] = ContextVar(
-    "account_deletion_registry_scope", default=None
-)
-
-
 def owner_partitions(user_id: str, *, table: Any | None = None) -> tuple[str, ...]:
     """The account's derived partitions and its registry, read strongly.
 
@@ -832,21 +639,6 @@ def owner_partitions(user_id: str, *, table: Any | None = None) -> tuple[str, ..
         and row["registered_pk"]
     }
     return tuple(sorted(set(owner_registry.derived_partitions(user_id)) | registered))
-
-
-def current_registry_scope() -> RegistryScope | None:
-    return _REGISTRY_SCOPE.get()
-
-
-@contextmanager
-def registry_scope(user_id: str, *, table: Any | None = None) -> Iterator[RegistryScope]:
-    """Within it, every deletion sweep reads the account's partitions, not the table."""
-    scope = RegistryScope(_required(user_id, "user_id"), owner_partitions(user_id, table=table))
-    token = _REGISTRY_SCOPE.set(scope)
-    try:
-        yield scope
-    finally:
-        _REGISTRY_SCOPE.reset(token)
 
 
 def registry_pages(
@@ -928,21 +720,6 @@ def _partition_query(pk: str, request: Mapping[str, object]) -> dict[str, object
     return query
 
 
-def is_sign_in_session(item: Mapping[str, Any], user_id: str) -> bool:
-    """A `USER#{id}/SIGNIN#...` refresh-token custody row of this account.
-
-    It carries no owner attribute: the catalog owns it by its partition
-    (`auth_sign_in_session`), so both deletion paths find it and the identity
-    branch deletes it. Before #588 only the v2 path did; on v1 its TTL did.
-    """
-    return item.get("entity_type") == SIGN_IN_SESSION_ENTITY and data_catalog.owns(
-        item, deletion_account(user_id)
-    )
-
-
-SIGN_IN_SESSION_ENTITY = "auth_sign_in_session"
-
-
 def delete_owner_registry(user_id: str, *, table: Any | None = None) -> int:
     """Remove the account's registry rows, once its deletion is final."""
     target = table or db_table.table()
@@ -956,32 +733,6 @@ def delete_owner_registry(user_id: str, *, table: Any | None = None) -> int:
             raise AccountDeletionConflict("owner registry cleanup unavailable") from exc
         removed += 1
     return removed
-
-
-def continuation_key(value: object, name: str = "continuation") -> dict[str, str]:
-    """A sweep's cursor, checked as the gateway checks every key; a refusal is a conflict."""
-    try:
-        return db_table.page_key(value)
-    except db_table.PageTokenInvalid as exc:
-        raise AccountDeletionConflict(f"invalid {name} cursor") from exc
-
-
-def get_command_by_id(
-    command_id: str, *, table: Any | None = None
-) -> dict[str, Any] | None:
-    target = table or db_table.table()
-    hook = getattr(target, "get_command_by_id", None)
-    if callable(hook):
-        value = hook(command_id)
-        return dict(value) if value else None
-    matches = _scan_commands(
-        target,
-        filter_expression="entity_type=:entity AND command_id=:command",
-        values={":entity": "account_deletion_command", ":command": command_id},
-    )
-    if len(matches) > 1:
-        raise AccountDeletionConflict("ambiguous deletion command")
-    return matches[0] if matches else None
 
 
 def find_deletion_command_for_identity(
@@ -1023,21 +774,29 @@ def _scan_commands(
     # No `Limit`: each page is the table's own (up to 1 MB), so the bound is a
     # hundred of those rather than ten thousand rows (#397). The deletion
     # itself no longer comes here: it reads its command by key.
-    for page in sweep_pages(
-        "deletion command",
-        table=target,
-        cursor=None,
-        maximum_pages=maximum_pages,
-        FilterExpression=filter_expression,
-        ExpressionAttributeValues=dict(values),
-    ):
-        matches.extend(page.items)
-        if page.last_key is None:
-            return matches
-        identity = (page.last_key["PK"], page.last_key["SK"])
-        if identity in seen:
-            raise AccountDeletionConflict("repeating deletion command cursor")
-        seen.add(identity)
+    try:
+        pages = islice(
+            db_table.pages(
+                "scan",
+                table=target,
+                ConsistentRead=True,
+                FilterExpression=filter_expression,
+                ExpressionAttributeValues=dict(values),
+            ),
+            maximum_pages,
+        )
+        for page in pages:
+            matches.extend(page.items)
+            if page.last_key is None:
+                return matches
+            identity = (page.last_key["PK"], page.last_key["SK"])
+            if identity in seen:
+                raise AccountDeletionConflict("repeating deletion command cursor")
+            seen.add(identity)
+    except db_table.PageTokenInvalid as exc:
+        raise AccountDeletionConflict("invalid deletion command cursor") from exc
+    except db_table.TableUnavailable as exc:
+        raise AccountDeletionConflict("deletion command dependency unavailable") from exc
     raise AccountDeletionConflict("deletion command scan bound exceeded")
 
 
@@ -1085,13 +844,17 @@ def replace_with_deletion_tombstone(
     now_iso: str,
     table: Any | None = None,
 ) -> None:
-    """Replace one private row with a strict noncontent tombstone."""
+    """Replace the closing account's profile with its tombstone, giving its address back.
+
+    The profile's own lifecycle writer (`user_repo.PROFILE_WRITER_REGISTRY`). What
+    the tombstone keeps is the catalog's (`user_profile`'s `Tombstone`); the
+    address claim is released in the same commit.
+    """
     target = table or db_table.table()
     pk = _required(item.get("PK"), "PK")
     sk = _required(item.get("SK"), "SK")
     entity = str(item.get("entity_type") or "private_row")
-    is_session = pk.startswith("SESSION#") or entity == "teacher_session"
-    allowlist = SESSION_TOMBSTONE_ALLOWLIST if is_session else QUESTION_TOMBSTONE_ALLOWLIST
+    keeps = _profile_tombstone_keeps()
     candidate = {
         "PK": pk,
         "SK": sk,
@@ -1104,16 +867,7 @@ def replace_with_deletion_tombstone(
     for field in ("question_id", "session_id", "created_at"):
         if field in item:
             candidate[field] = item[field]
-    tombstone = {key: value for key, value in candidate.items() if key in allowlist}
-    if not set(tombstone) <= allowlist:
-        raise AccountDeletionConflict("private tombstone allowlist violation")
-    hook = getattr(target, "replace_with_deletion_tombstone", None)
-    if callable(hook):
-        # A table that emulates this write owns the whole of it, including the
-        # claim release below. Production never takes this path - a boto3 Table
-        # has no such attribute - but a fake that grows one stops testing it.
-        hook(dict(item), tombstone, user_id, generation)
-        return
+    tombstone = {key: value for key, value in candidate.items() if key in keeps}
     _transact(
         [
             deletion_fence_condition(user_id, generation),
@@ -1131,6 +885,13 @@ def replace_with_deletion_tombstone(
         ],
         table=target,
     )
+
+
+def _profile_tombstone_keeps() -> frozenset[str]:
+    action = data_catalog.DELETIONS.get("user_profile")
+    if action is None or not isinstance(action.owner, data_catalog.Tombstone):
+        raise AccountDeletionConflict("the catalog does not tombstone the profile")
+    return action.owner.keeps
 
 
 _TEACHER_QUESTION_LINK_FIELDS = (
@@ -1257,88 +1018,6 @@ def scrub_teacher_question_reference(
         ) from exc
 
 
-def replace_teacher_session_with_tombstone(
-    item: Mapping[str, Any],
-    *,
-    teacher_user_id: str,
-    generation: int,
-    now_iso: str,
-    table: Any | None = None,
-) -> None:
-    """CAS-minimize one foreign-owned session that names a deleting teacher."""
-    teacher_id = _teacher_reference_coordinate(teacher_user_id, "teacher user_id")
-    pk = _teacher_reference_coordinate(item.get("PK"), "session PK")
-    sk = _teacher_reference_coordinate(item.get("SK"), "session SK")
-    session_id = _teacher_reference_coordinate(item.get("session_id"), "session_id")
-    question_id = _teacher_reference_coordinate(
-        item.get("question_id"), "question_id"
-    )
-    student_id = _teacher_reference_coordinate(item.get("student_id"), "student_id")
-    claim_id = _teacher_reference_coordinate(
-        item.get("teacher_takeover_claim_id"), "teacher takeover claim"
-    )
-    if (
-        pk != f"SESSION#{session_id}"
-        or sk != "META"
-        or item.get("entity_type") != "teacher_session"
-        or item.get("teacher_id") != teacher_id
-        or student_id == teacher_id
-    ):
-        raise AccountDeletionRowConflict("teacher session identity changed")
-    question_version = _teacher_reference_version(
-        item.get("question_version"), "session question version"
-    )
-    tombstone = {
-        "PK": pk,
-        "SK": sk,
-        "entity_type": "teacher_session_deletion_tombstone",
-        "schema_version": "account-deletion-tombstone.v1",
-        "session_id": session_id,
-        "question_id": question_id,
-        "status": "deleted",
-        "owner_deletion_generation": generation,
-        "deleted_at": now_iso,
-    }
-    if not set(tombstone) <= SESSION_TOMBSTONE_ALLOWLIST:
-        raise AccountDeletionConflict("session tombstone allowlist violation")
-    values = {
-        ":pk": pk,
-        ":sk": sk,
-        ":entity": "teacher_session",
-        ":session_id": session_id,
-        ":question_id": question_id,
-        ":student": student_id,
-        ":teacher": teacher_id,
-        ":claim": claim_id,
-        ":question_version": question_version,
-    }
-    try:
-        _transact(
-            [
-                deletion_fence_condition(teacher_id, generation),
-                {
-                    "Put": {
-                        "Item": tombstone,
-                        "ConditionExpression": (
-                            "attribute_exists(PK) AND attribute_exists(SK) AND "
-                            "PK=:pk AND SK=:sk AND entity_type=:entity AND "
-                            "session_id=:session_id AND question_id=:question_id AND "
-                            "student_id=:student AND teacher_id=:teacher AND "
-                            "teacher_takeover_claim_id=:claim AND "
-                            "question_version=:question_version"
-                        ),
-                        "ExpressionAttributeValues": values,
-                    }
-                },
-            ],
-            table=table or db_table.table(),
-        )
-    except AccountDeletionConflict as exc:
-        raise AccountDeletionRowConflict(
-            "teacher session changed during cleanup"
-        ) from exc
-
-
 def is_deletion_tombstone(row: Mapping[str, Any]) -> bool:
     """Whether a row is a tombstone an account deletion left in a row's place.
 
@@ -1349,13 +1028,6 @@ def is_deletion_tombstone(row: Mapping[str, Any]) -> bool:
     its own tombstones again unless it skips them (stoasystem/stoa-backend#78).
     """
     return row.get("status") == "deleted" and row.get("owner_deletion_generation") is not None
-
-
-def email_claim_release_operations(
-    row: Mapping[str, Any], user_id: str, *, table: Any | None = None
-) -> list[dict[str, Any]]:
-    """The operations that give the profile's address back, for its tombstone's commit."""
-    return _email_claim_release(row, user_id, table=table or db_table.table())
 
 
 def catalog_tombstone(
@@ -1377,8 +1049,6 @@ def catalog_tombstone(
     becomes `deleted`, which with the generation is what `is_deletion_tombstone`
     recognises. A row's `version`, where kept, moves on by one.
     """
-    # Spelled apart from `(now_iso)`: the inventory's semantic check counts the
-    # validations of that name, and this one must not stand in for another.
     stamp = _valid_lifecycle_timestamp(value=now_iso)
     tombstone: dict[str, Any] = {
         key: value for key, value in row.items() if key in keeps and value is not None
@@ -1486,8 +1156,6 @@ def persist_deletion_progress(
     if not isinstance(claim, DeletionCommandClaim):
         raise DeletionCommandClaimLost("opaque deletion claim required")
     now_epoch = _positive_int(now_epoch, "current epoch")
-    # Spelled apart from `(now_iso)`: the inventory's semantic check counts the
-    # validations of that name, and this one must not stand in for another.
     stamp = _valid_lifecycle_timestamp(value=now_iso)
     try:
         _update_item(
@@ -1545,8 +1213,6 @@ def finalize_catalog_deletion(
     the command still being sealed with `catalog_sha256`; the caller has
     already found nothing left to do under that catalog.
     """
-    # Spelled apart from `(now_iso)`: the inventory's semantic check counts the
-    # validations of that name, and this one must not stand in for another.
     stamp = _valid_lifecycle_timestamp(value=now_iso)
     now_epoch = _positive_int(now_epoch, "current epoch")
     if not isinstance(claim, DeletionCommandClaim):
@@ -1739,10 +1405,6 @@ def delete_owned_row(
     if str(item.get("SK") or "") == "PROFILE":
         raise AccountDeletionConflict("a profile row is tombstoned, never deleted")
     target = table or db_table.table()
-    hook = getattr(target, "delete_owned_row", None)
-    if callable(hook):
-        hook(dict(item), user_id, generation)
-        return
     _transact(
         [
             deletion_fence_condition(user_id, generation),
@@ -1787,22 +1449,7 @@ def scrub_parent_profile_child(
             expected_version = _positive_int(
                 stored_int(expected_version), "parent profile version"
             )
-        scrubbed = deepcopy(current)
-        for field in removed:
-            scrubbed.pop(field, None)
-        scrubbed.update(replacements)
-        hook = getattr(target, "scrub_parent_profile_child", None)
         try:
-            if callable(hook):
-                hook(
-                    dict(current),
-                    scrubbed,
-                    child_user_id,
-                    generation,
-                    int(parent_fence["generation"]),
-                    expected_version=expected_version,
-                )
-                return
             operations = [
                 deletion_fence_condition(child_user_id, generation),
                 active_fence_condition(parent_id, int(parent_fence["generation"])),
@@ -1930,44 +1577,6 @@ def _parent_profile_scrub_operation(
     }
 
 
-def terminalize_identity_row(
-    item: Mapping[str, Any],
-    *,
-    user_id: str,
-    generation: int,
-    now_iso: str,
-    table: Any | None = None,
-) -> None:
-    """Retain only keyed, scope-free security evidence for old identity state."""
-    now_iso = _valid_lifecycle_timestamp(now_iso)
-    evidence = {
-        "PK": item["PK"],
-        "SK": item["SK"],
-        "entity_type": "identity_deletion_evidence",
-        "status": "terminalized",
-        "owner_deletion_generation": generation,
-        "deleted_at": now_iso,
-        "version": int(item.get("version") or 1) + 1,
-    }
-    target = table or db_table.table()
-    hook = getattr(target, "replace_with_deletion_tombstone", None)
-    if callable(hook):
-        hook(dict(item), evidence, user_id, generation)
-        return
-    _transact(
-        [
-            deletion_fence_condition(user_id, generation),
-            {
-                "Put": {
-                    "Item": evidence,
-                    "ConditionExpression": "attribute_exists(PK) AND attribute_exists(SK)",
-                }
-            },
-        ],
-        table=target,
-    )
-
-
 def create_provider_revoke_debt(
     *,
     user_id: str,
@@ -2011,8 +1620,8 @@ def create_provider_revoke_debt(
         # A replay compares what was stored with what would be written. The
         # operations come back from the table as a list whatever sequence
         # wrote them; comparing a tuple against that list never matched, so
-        # every pass after the first refused its own debt and the identity
-        # branch could never finish (stoasystem/stoa-backend#78).
+        # every pass after the first refused its own debt and the deletion
+        # could never finish (stoasystem/stoa-backend#78).
         if not isinstance(existing, Mapping) or any(
             existing.get(field) != item[field]
             for field in ("user_id", "generation", "entity_type")
@@ -2078,15 +1687,13 @@ def close_unused_provider_revoke_debt(
 ) -> bool:
     """Close a revoke debt that no provider identity ever answered to.
 
-    The identity branch opens the debt before it knows whether the account has
-    a provider identity. An account that was invited and never signed in has
-    none, so nothing revoked it and the row said `pending` for good. Called once
-    the branch has found nothing left: a debt still pending then is recorded as
+    A debt can be opened before it is known whether the account has a provider
+    identity. An account that was invited and never signed in has none, so
+    nothing revoked it and the row said `pending` for good. Called once the
+    deletion has found nothing left: a debt still pending then is recorded as
     `nothing_to_revoke`, which says what happened instead of claiming a revoke.
     A debt already closed either way is left alone. Returns whether it wrote.
     """
-    # Named apart from `now_iso`: the inventory's semantic check counts the
-    # validations of that name, and this one must not stand in for another.
     closed_at = _valid_lifecycle_timestamp(closed_at)
     target = table or db_table.table()
     key = {"PK": f"USER#{user_id}", "SK": f"PROVIDER_REVOKE#{generation:020d}"}
@@ -2309,372 +1916,6 @@ def release_deletion_command_claim(
         branch_results_digest=claim.branch_results_digest,
         user_id=claim.user_id,
     )
-
-
-def persist_branch_result(
-    command: Mapping[str, Any],
-    branch_id: str,
-    result: Mapping[str, Any],
-    *,
-    claim: DeletionCommandClaim,
-    expected_branch_results_digest: str,
-    now_epoch: int,
-    expected_result_version: int | None = None,
-    table: Any | None = None,
-) -> DeletionCommandClaim:
-    if not isinstance(claim, DeletionCommandClaim):
-        raise DeletionCommandClaimLost("opaque deletion claim required")
-    if expected_branch_results_digest != claim.branch_results_digest:
-        raise DeletionCommandClaimLost("branch result digest changed")
-    now_epoch = _positive_int(now_epoch, "current epoch")
-    updated_at = _valid_lifecycle_timestamp(result.get("updated_at"))
-    current_results = command.get("branch_results") or {}
-    if not isinstance(current_results, Mapping):
-        raise AccountDeletionConflict("invalid deletion branch results")
-    if branch_results_digest(current_results) != expected_branch_results_digest:
-        raise DeletionCommandClaimLost("durable branch proof changed")
-    previous = current_results.get(branch_id) or {}
-    if not isinstance(previous, Mapping):
-        raise AccountDeletionConflict("invalid prior branch result")
-    # Read back from the command, so a `Decimal`. An `int` check here refused
-    # every branch result a real table had ever stored, which is the last of
-    # the reasons a deletion could not advance.
-    prior_result_version = stored_int(previous.get("result_version", 0))
-    if prior_result_version is None or prior_result_version < 0:
-        raise AccountDeletionConflict("invalid branch result version")
-    if expected_result_version is None:
-        expected_result_version = prior_result_version
-    if expected_result_version != prior_result_version:
-        raise DeletionCommandClaimLost("branch result version changed")
-    target = table or db_table.table()
-    safe_result = {
-        key: value
-        for key, value in result.items()
-        if key
-        in {
-            "status",
-            "cursor",
-            "debt_counts",
-            "quiescent",
-            "epoch",
-            "generation",
-            "handler_version",
-            "subfamilies",
-            "legal_retention_blocked",
-            "external_receipts",
-            "updated_at",
-        }
-    }
-    safe_result["updated_at"] = updated_at
-    safe_result["result_version"] = prior_result_version + 1
-    next_results = {key: dict(value) for key, value in current_results.items()}
-    next_results[branch_id] = safe_result
-    next_digest = branch_results_digest(next_results)
-    hook = getattr(target, "persist_branch_result", None)
-    if callable(hook):
-        persisted = hook(
-            dict(command),
-            branch_id,
-            safe_result,
-            claim=claim,
-            expected_branch_results_digest=expected_branch_results_digest,
-            expected_result_version=expected_result_version,
-            next_branch_results_digest=next_digest,
-            now_epoch=now_epoch,
-        )
-        if isinstance(persisted, DeletionCommandClaim):
-            return persisted
-        if isinstance(persisted, Mapping):
-            return _claim_from_command(persisted)
-        raise DeletionCommandClaimLost("branch result claim lost")
-    result_condition = (
-        "attribute_not_exists(branch_results.#branch)"
-        if expected_result_version == 0
-        else "branch_results.#branch.result_version=:result_version"
-    )
-    values: dict[str, Any] = {
-        ":result": safe_result,
-        ":generation": claim.generation,
-        ":running": "running",
-        ":owner": claim.lease_owner,
-        ":command_version": claim.command_version,
-        ":branch_results_digest": expected_branch_results_digest,
-        ":next_digest": next_digest,
-        ":now_epoch": now_epoch,
-        ":now": updated_at,
-        ":one": 1,
-    }
-    if expected_result_version:
-        values[":result_version"] = expected_result_version
-    try:
-        _update_item(
-            target,
-            Key={"PK": command["PK"], "SK": command["SK"]},
-            UpdateExpression=(
-                "SET branch_results.#branch=:result, updated_at=:now, "
-                "branch_results_digest=:next_digest, "
-                "command_version=command_version+:one, #version=#version+:one"
-            ),
-            ConditionExpression=(
-                "generation=:generation AND #status=:running AND lease_owner=:owner "
-                "AND command_version=:command_version "
-                "AND branch_results_digest=:branch_results_digest "
-                "AND lease_expires_at>=:now_epoch AND " + result_condition
-            ),
-            ExpressionAttributeNames={
-                "#branch": branch_id,
-                "#status": "status",
-                "#version": "version",
-            },
-            ExpressionAttributeValues=values,
-        )
-    except db_table.WriteRefused as exc:
-        raise DeletionCommandClaimLost("branch result claim lost") from exc
-    except db_table.TableUnavailable as exc:
-        raise AccountDeletionConflict("branch result unavailable") from exc
-    return DeletionCommandClaim(
-        command_id=claim.command_id,
-        generation=claim.generation,
-        lease_owner=claim.lease_owner,
-        lease_expires_at=claim.lease_expires_at,
-        command_version=claim.command_version + 1,
-        branch_results_digest=next_digest,
-        user_id=claim.user_id,
-    )
-
-
-def finalize_account_deletion(
-    *,
-    command: Mapping[str, Any],
-    fence: Mapping[str, Any],
-    seal: Mapping[str, Any],
-    claim: DeletionCommandClaim,
-    now_epoch: int,
-    now_iso: str,
-    table: Any | None = None,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Permanently terminalize one fully sealed command and fence exactly once."""
-    now_iso = _valid_lifecycle_timestamp(now_iso)
-    now_epoch = _positive_int(now_epoch, "current epoch")
-    if not isinstance(claim, DeletionCommandClaim):
-        raise DeletionCommandClaimLost("opaque deletion claim required")
-    if (
-        command.get("status") == "complete"
-        and fence.get("status") == "deleted"
-        and command.get("command_id") == fence.get("command_id")
-        and command.get("generation") == fence.get("generation")
-        and command.get("inventory_sha256") == seal.get("inventory_sha256")
-    ):
-        return dict(command), dict(fence)
-
-    target = table or db_table.table()
-    loader = getattr(target, "get_deletion_command", None)
-    if callable(loader):
-        loaded = loader(str(command["user_id"]), str(command["command_id"]))
-        if not isinstance(loaded, Mapping):
-            raise DeletionCommandClaimLost("deletion command disappeared")
-        command = dict(loaded)
-    elif not callable(getattr(target, "finalize_account_deletion", None)):
-        loaded = get_deletion_command(
-            str(command["user_id"]), str(command["command_id"]), table=target
-        )
-        if not loaded:
-            raise DeletionCommandClaimLost("deletion command disappeared")
-        command = loaded
-
-    durable_results = command.get("branch_results")
-    durable_digest = command.get("branch_results_digest")
-    if (
-        not isinstance(durable_results, Mapping)
-        or branch_results_digest(durable_results) != durable_digest
-        or durable_digest != claim.branch_results_digest
-        or command.get("command_id") != claim.command_id
-        or command.get("generation") != claim.generation
-        or command.get("lease_owner") != claim.lease_owner
-        or command.get("command_version") != claim.command_version
-        or stored_int(command.get("lease_expires_at")) is None
-        or int(command["lease_expires_at"]) < now_epoch
-    ):
-        raise DeletionCommandClaimLost("terminal deletion claim lost")
-
-    # Local import avoids a repository/service import cycle while still making
-    # the lower transactional boundary independently reject a weak caller.
-    from stoa.services import account_deletion_service
-
-    if not account_deletion_service.validate_deletion_seal(
-        command=command, fence=fence, seal=seal
-    ):
-        raise AccountDeletionConflict("account deletion seal is incomplete")
-    user_id = _required(command.get("user_id"), "user_id")
-    command_id = _required(command.get("command_id"), "command_id")
-    generation = stored_int(command.get("generation"))
-    command_version = stored_int(command.get("command_version"))
-    storage_version = stored_int(command.get("version"))
-    fence_version = stored_int(fence.get("version"))
-    if (
-        generation is None
-        or generation <= 0
-        or command_version is None
-        or command_version <= 0
-        or storage_version is None
-        or storage_version <= 0
-        or fence_version is None
-        or fence_version <= 0
-    ):
-        raise AccountDeletionConflict("invalid terminal lifecycle version")
-
-    external_result = command["branch_results"]["external_delivery_debt"]
-    receipts = external_result.get("external_receipts") or []
-    minimal_receipts = [
-        {
-            key: receipt[key]
-            for key in ("channel", "status", "count", "claim")
-            if key in receipt
-        }
-        for receipt in receipts
-        if isinstance(receipt, Mapping)
-    ]
-    terminal_command: dict[str, Any] = {
-        "PK": command["PK"],
-        "SK": command["SK"],
-        "entity_type": "account_deletion_command",
-        "schema_version": "account-deletion-command.v2",
-        "command_id": command_id,
-        "user_id": user_id,
-        "generation": generation,
-        "status": "complete",
-        "accepted_at": command.get("accepted_at", ""),
-        "completed_at": now_iso,
-        "inventory_sha256": seal["inventory_sha256"],
-        "receipt": {
-            "command_id": command_id,
-            "status": "deleted",
-            "completed_at": now_iso,
-        },
-        "accounting_identity": command.get("accounting_identity")
-        or f"DELETE_ACCOUNTING#{command_id}",
-        "external_receipts": minimal_receipts,
-        "evidence_references": list(command.get("evidence_references") or []),
-        "version": storage_version + 1,
-        "command_version": command_version + 1,
-        "branch_results_digest": durable_digest,
-    }
-    # Who asked, kept for replay and accountability: a self-deletion's token
-    # hashes and request, or an operator's id and its one-sentence reason (#396).
-    for field in (
-        "issuer_hash",
-        "subject_hash",
-        "fingerprint",
-        "method",
-        "path",
-        "request_body_sha256",
-        "initiated_by",
-        "reason",
-    ):
-        if field in command:
-            terminal_command[field] = command[field]
-    terminal_fence = {
-        "PK": fence["PK"],
-        "SK": fence["SK"],
-        "entity_type": "account_fence",
-        "schema_version": "account-fence.v2",
-        "user_id": user_id,
-        "status": "deleted",
-        "generation": generation,
-        "command_id": command_id,
-        "inventory_sha256": seal["inventory_sha256"],
-        "deletion_accepted_at": fence.get("deletion_accepted_at")
-        or command.get("accepted_at", ""),
-        "deleted_at": now_iso,
-        "updated_at": now_iso,
-        "version": fence_version + 1,
-    }
-    expected = {
-        "user_id": user_id,
-        "command_id": command_id,
-        "generation": generation,
-        "inventory_sha256": seal["inventory_sha256"],
-        "command_version": command_version,
-        "branch_results_digest": durable_digest,
-        "lease_owner": claim.lease_owner,
-        "lease_expires_at": claim.lease_expires_at,
-        "fence_version": fence_version,
-    }
-    hook = getattr(target, "finalize_account_deletion", None)
-    if callable(hook):
-        persisted_command, persisted_fence = hook(
-            expected, terminal_command, terminal_fence
-        )
-        return dict(persisted_command), dict(persisted_fence)
-    try:
-        _transact(
-            [
-                {
-                    "Put": {
-                        "Item": terminal_command,
-                        "ConditionExpression": (
-                            "#status=:running AND generation=:generation "
-                            "AND command_version=:command_version "
-                            "AND branch_results_digest=:branch_results_digest "
-                            "AND lease_owner=:lease_owner "
-                            "AND lease_expires_at>=:now_epoch "
-                            "AND inventory_sha256=:inventory"
-                        ),
-                        "ExpressionAttributeNames": {
-                            "#status": "status",
-                        },
-                        "ExpressionAttributeValues": {
-                            ":running": "running",
-                            ":generation": generation,
-                            ":command_version": command_version,
-                            ":branch_results_digest": durable_digest,
-                            ":lease_owner": claim.lease_owner,
-                            ":now_epoch": now_epoch,
-                            ":inventory": seal["inventory_sha256"],
-                        },
-                    }
-                },
-                {
-                    "Put": {
-                        "Item": terminal_fence,
-                        "ConditionExpression": (
-                            "#status=:pending AND generation=:generation AND "
-                            "#version=:fence_version AND command_id=:command"
-                        ),
-                        "ExpressionAttributeNames": {
-                            "#status": "status",
-                            "#version": "version",
-                        },
-                        "ExpressionAttributeValues": {
-                            ":pending": "deletion_pending",
-                            ":generation": generation,
-                            ":fence_version": fence_version,
-                            ":command": command_id,
-                        },
-                    }
-                },
-                # Finished, so no longer pending. A command accepted before the
-                # registry has no row, which an unconditional delete tolerates.
-                {"Delete": {"Key": pending_registry_key(user_id, command_id)}},
-            ],
-            table=target,
-        )
-    except AccountDeletionConflict:
-        replay_command = get_deletion_command(user_id, command_id, table=target)
-        replay_fence = get_account_fence(user_id, table=target)
-        if (
-            replay_command
-            and replay_fence
-            and replay_command.get("status") == "complete"
-            and replay_fence.get("status") == "deleted"
-            and replay_command.get("inventory_sha256") == seal["inventory_sha256"]
-            and replay_command.get("command_id") == command_id
-            and replay_fence.get("command_id") == command_id
-            and replay_command.get("branch_results_digest") == durable_digest
-        ):
-            return replay_command, replay_fence
-        raise
-    return terminal_command, terminal_fence
 
 
 def _transact(operations: Iterable[dict[str, Any]], *, table: Any | None = None) -> None:

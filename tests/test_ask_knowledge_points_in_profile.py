@@ -28,6 +28,7 @@ import time_machine
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import deletion_helpers
 from actor_helpers import install_actor_overrides
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa import aws
@@ -40,7 +41,6 @@ from stoa.db.repositories import (
     report_repo,
     user_repo,
 )
-from stoa.db.repositories import account_deletion_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.jobs import conversation_generation
 from stoa.routers import adaptive, conversations, parents, students
@@ -48,7 +48,6 @@ from stoa.security.authorization import CurrentAuthorizationFactRepository
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.declared_authorization import get_authorization_fact_repository
 from stoa.services import (
-    account_deletion_service,
     adaptive_learning_service,
     curriculum_service,
     locale_service,
@@ -493,19 +492,12 @@ def test_deleting_the_account_scrubs_the_record(world, bedrock, star_map) -> Non
     done = _ask("de")
     key = tuple(asked_knowledge_repo.record_key(CONV, done["messageId"]).values())
     assert world.rows[key]["knowledge_points"]
-    fence = world.rows[tuple(account_deletion_repo.account_fence_key(STUDENT).values())]
-    fence["status"] = "deletion_pending"
 
-    # The branch takes an S3 client up front; these messages carry no attachments.
+    # The deletion as production runs it (#642); these messages carry no attachments.
     aws.install({Kind.S3: object()})
-    previous: dict[str, Any] = {}
-    for _ in range(4):
-        result = account_deletion_service._conversation_messages_branch(
-            command={"user_id": STUDENT, "generation": 1}, previous=previous
-        )
-        previous = result.persisted(NOW)
+    command = deletion_helpers.delete_account(STUDENT)
 
-    assert result.quiescent is True
+    assert command["status"] == "complete"
     tombstone = world.rows[key]
     assert tombstone["status"] == "deleted"
     assert not {"knowledge_points", "unit_ids", "subject"} & set(tombstone)

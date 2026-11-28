@@ -203,11 +203,11 @@ def _delete_report_object(row: Mapping[str, Any], visit: _Visit) -> str:
         generation=visit.generation,
         bucket=bucket,
         s3_client=visit.s3,
-        now_iso=visit.now_iso,
     )
-    # Purged: the report module tombstoned the row itself. A version under
-    # legal hold stays, and so does the deletion, until the hold is lifted.
-    return DONE if result.get("status") == "purged" else WAIT
+    # Purged: the object is gone, and the row gets the catalog's tombstone. A
+    # version under legal hold stays, and so does the deletion, until the hold
+    # is lifted.
+    return READY if result.get("status") == "purged" else WAIT
 
 
 def _reconcile_curriculum_signal(row: Mapping[str, Any], _kind: Any, visit: _Visit) -> str:
