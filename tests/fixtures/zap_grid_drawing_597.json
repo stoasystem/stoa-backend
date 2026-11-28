@@ -1,0 +1,1937 @@
+{
+  "source": {
+    "sourceId": "zap1-grid-drawing-597",
+    "sourceVersion": "2026-11-28",
+    "sourceType": "manifest"
+  },
+  "operatorNote": "Batch 4 of the ZAP1 figure tasks (#597): 12 grid drawing exercises adapted from 11 ZAP1 originals (Form und Raum), new figures and numbers, four new practice sets, all drafts.",
+  "lessons": [
+    {
+      "publicLessonId": "geometrie-lage-richtung-und-koordinaten--darstellen--zap-2",
+      "publish": false,
+      "lesson": {
+        "title": "Darstellen und Zerlegen · ZAP · Teil 2",
+        "titles": {
+          "de": "Darstellen und Zerlegen · ZAP · Teil 2",
+          "en": "Representing and decomposing · ZAP · Part 2",
+          "fr": "Représenter et décomposer · ZAP · Partie 2",
+          "it": "Rappresentare e scomporre · ZAP · Parte 2"
+        },
+        "objective": "Lagen mit Richtungsangaben, Himmelsrichtungen, Entfernungen und Koordinaten beschreiben.",
+        "description": "Lagen mit Richtungsangaben, Himmelsrichtungen, Entfernungen und Koordinaten beschreiben.",
+        "subjectId": "mathematics",
+        "topicId": "geometrie",
+        "unitId": "geometrie-lage-richtung-und-koordinaten",
+        "gradeLevel": "grade_6_primary",
+        "difficulty": "practice",
+        "estimatedMinutes": 12,
+        "language": "de",
+        "order": 532,
+        "extension": true,
+        "requiresPoints": [],
+        "tags": [
+          "zap"
+        ]
+      },
+      "exercises": [
+        {
+          "exerciseId": "kb-zap-stoa-zap1-2024-2a-v1",
+          "type": "grid_drawing",
+          "difficulty": "zap",
+          "order": 1,
+          "prompt": "Trage die Punkte $K(3/7)$, $L(8/2)$ und $M(6/9)$ ins Koordinatensystem ein und beschrifte sie.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 10,
+            "yMin": 0,
+            "yMax": 10,
+            "step": 1,
+            "axes": true,
+            "axisLabels": true,
+            "labels": [
+              "K",
+              "L",
+              "M"
+            ]
+          },
+          "checks": [
+            {
+              "kind": "point",
+              "label": "K",
+              "x": 3,
+              "y": 7
+            },
+            {
+              "kind": "point",
+              "label": "L",
+              "x": 8,
+              "y": 2
+            },
+            {
+              "kind": "point",
+              "label": "M",
+              "x": 6,
+              "y": 9
+            },
+            {
+              "kind": "count",
+              "points": 3
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "K",
+                  "x": 3,
+                  "y": 7
+                },
+                {
+                  "label": "L",
+                  "x": 8,
+                  "y": 2
+                },
+                {
+                  "label": "M",
+                  "x": 6,
+                  "y": 9
+                }
+              ]
+            }
+          ],
+          "explanation": "Die erste Zahl gibt an, wie weit es nach rechts geht (x), die zweite, wie weit nach oben (y).\n$K(3/7)$: von 0 aus 3 nach rechts und 7 nach oben.\n$L(8/2)$: 8 nach rechts und 2 nach oben. $M(6/9)$: 6 nach rechts und 9 nach oben.",
+          "skills": [
+            "geometrie-lage-richtung-und-koordinaten--darstellen"
+          ],
+          "translations": {
+            "en": {
+              "prompt": "Plot the points $K(3/7)$, $L(8/2)$ and $M(6/9)$ in the coordinate system and label them.",
+              "explanation": "The first number says how far to go to the right (x), the second how far up (y).\n$K(3/7)$: from 0, go 3 to the right and 7 up.\n$L(8/2)$: 8 to the right and 2 up. $M(6/9)$: 6 to the right and 9 up."
+            },
+            "fr": {
+              "prompt": "Place les points $K(3/7)$, $L(8/2)$ et $M(6/9)$ dans le système de coordonnées et nomme-les.",
+              "explanation": "Le premier nombre indique de combien on va vers la droite (x), le deuxième de combien on monte (y).\n$K(3/7)$: à partir de 0, 3 vers la droite et 7 vers le haut.\n$L(8/2)$: 8 vers la droite et 2 vers le haut. $M(6/9)$: 6 vers la droite et 9 vers le haut."
+            },
+            "it": {
+              "prompt": "Segna i punti $K(3/7)$, $L(8/2)$ e $M(6/9)$ nel sistema di coordinate e scrivi i loro nomi.",
+              "explanation": "Il primo numero indica di quanto si va verso destra (x), il secondo di quanto si sale (y).\n$K(3/7)$: partendo da 0, 3 verso destra e 7 verso l'alto.\n$L(8/2)$: 8 verso destra e 2 verso l'alto. $M(6/9)$: 6 verso destra e 9 verso l'alto."
+            }
+          },
+          "tags": [
+            "zap",
+            "ORIG-ZAP1-2024-2a"
+          ]
+        },
+        {
+          "exerciseId": "kb-zap-stoa-zap1-d0833-1b-v1",
+          "type": "grid_drawing",
+          "difficulty": "zap",
+          "order": 2,
+          "prompt": "Im Koordinatensystem sind die Punkte $A$, $B$, $C$ und $D$ eingezeichnet. Die Gitterlinien haben den Abstand 0.5. Trage die Punkte $E(11.5/10)$, $F(6.5/7.5)$, $G(2.5/11.5)$ und $H(3.5/6)$ ein und beschrifte sie.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 12,
+            "yMin": 0,
+            "yMax": 12,
+            "step": 0.5,
+            "axes": true,
+            "axisLabels": true,
+            "labels": [
+              "E",
+              "F",
+              "G",
+              "H"
+            ],
+            "given": {
+              "points": [
+                {
+                  "label": "A",
+                  "x": 1,
+                  "y": 1.5
+                },
+                {
+                  "label": "B",
+                  "x": 5.5,
+                  "y": 3
+                },
+                {
+                  "label": "C",
+                  "x": 10.5,
+                  "y": 0.5
+                },
+                {
+                  "label": "D",
+                  "x": 8,
+                  "y": 5.5
+                }
+              ]
+            }
+          },
+          "checks": [
+            {
+              "kind": "point",
+              "label": "E",
+              "x": 11.5,
+              "y": 10
+            },
+            {
+              "kind": "point",
+              "label": "F",
+              "x": 6.5,
+              "y": 7.5
+            },
+            {
+              "kind": "point",
+              "label": "G",
+              "x": 2.5,
+              "y": 11.5
+            },
+            {
+              "kind": "point",
+              "label": "H",
+              "x": 3.5,
+              "y": 6
+            },
+            {
+              "kind": "count",
+              "points": 4
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "E",
+                  "x": 11.5,
+                  "y": 10
+                },
+                {
+                  "label": "F",
+                  "x": 6.5,
+                  "y": 7.5
+                },
+                {
+                  "label": "G",
+                  "x": 2.5,
+                  "y": 11.5
+                },
+                {
+                  "label": "H",
+                  "x": 3.5,
+                  "y": 6
+                }
+              ]
+            }
+          ],
+          "explanation": "Zwischen zwei beschrifteten Zahlen liegt genau eine Gitterlinie: Sie steht für die halbe Einheit.\n$E(11.5/10)$: 11.5 nach rechts, also eine Gitterlinie nach der 11, und 10 nach oben.\n$F(6.5/7.5)$ und $G(2.5/11.5)$ liegen bei beiden Zahlen zwischen zwei ganzen Werten, $H(3.5/6)$ nur beim x-Wert.",
+          "skills": [
+            "geometrie-lage-richtung-und-koordinaten--darstellen"
+          ],
+          "translations": {
+            "en": {
+              "prompt": "The points $A$, $B$, $C$ and $D$ are marked in the coordinate system. The grid lines are 0.5 apart. Plot the points $E(11.5/10)$, $F(6.5/7.5)$, $G(2.5/11.5)$ and $H(3.5/6)$ and label them.",
+              "explanation": "Between two numbered values there is exactly one grid line: it stands for half a unit.\n$E(11.5/10)$: 11.5 to the right, i.e. one grid line after 11, and 10 up.\n$F(6.5/7.5)$ and $G(2.5/11.5)$ lie between two whole values in both numbers, $H(3.5/6)$ only in the x-value."
+            },
+            "fr": {
+              "prompt": "Les points $A$, $B$, $C$ et $D$ sont marqués dans le système de coordonnées. Les lignes du quadrillage sont espacées de 0.5. Place les points $E(11.5/10)$, $F(6.5/7.5)$, $G(2.5/11.5)$ et $H(3.5/6)$ et nomme-les.",
+              "explanation": "Entre deux nombres indiqués, il y a exactement une ligne du quadrillage: elle correspond à une demi-unité.\n$E(11.5/10)$: 11.5 vers la droite, donc une ligne après le 11, et 10 vers le haut.\n$F(6.5/7.5)$ et $G(2.5/11.5)$ se trouvent entre deux valeurs entières pour les deux nombres, $H(3.5/6)$ seulement pour la valeur x."
+            },
+            "it": {
+              "prompt": "Nel sistema di coordinate sono segnati i punti $A$, $B$, $C$ e $D$. Le linee della griglia distano 0.5 l'una dall'altra. Segna i punti $E(11.5/10)$, $F(6.5/7.5)$, $G(2.5/11.5)$ e $H(3.5/6)$ e scrivi i loro nomi.",
+              "explanation": "Tra due numeri indicati c'è esattamente una linea della griglia: corrisponde a mezza unità.\n$E(11.5/10)$: 11.5 verso destra, cioè una linea dopo l'11, e 10 verso l'alto.\n$F(6.5/7.5)$ e $G(2.5/11.5)$ si trovano tra due valori interi per entrambi i numeri, $H(3.5/6)$ solo per il valore x."
+            }
+          },
+          "tags": [
+            "zap",
+            "ORIG-ZAP1-D0833-1b"
+          ]
+        },
+        {
+          "exerciseId": "kb-zap-stoa-zap1-d0833-1c-v1",
+          "type": "grid_drawing",
+          "difficulty": "zap",
+          "order": 3,
+          "prompt": "Im Koordinatensystem sind die Punkte $A$ bis $H$ eingezeichnet. Verbinde sie in der Reihenfolge des Alphabets mit geraden Strecken: $A$ mit $B$, $B$ mit $C$ und so weiter bis $H$, und zum Schluss $H$ wieder mit $A$.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 12,
+            "yMin": 0,
+            "yMax": 12,
+            "step": 0.5,
+            "axes": true,
+            "axisLabels": true,
+            "given": {
+              "points": [
+                {
+                  "label": "A",
+                  "x": 1,
+                  "y": 1.5
+                },
+                {
+                  "label": "B",
+                  "x": 5.5,
+                  "y": 3
+                },
+                {
+                  "label": "C",
+                  "x": 10.5,
+                  "y": 0.5
+                },
+                {
+                  "label": "D",
+                  "x": 8,
+                  "y": 5.5
+                },
+                {
+                  "label": "E",
+                  "x": 11.5,
+                  "y": 10
+                },
+                {
+                  "label": "F",
+                  "x": 6.5,
+                  "y": 7.5
+                },
+                {
+                  "label": "G",
+                  "x": 2.5,
+                  "y": 11.5
+                },
+                {
+                  "label": "H",
+                  "x": 3.5,
+                  "y": 6
+                }
+              ]
+            }
+          },
+          "checks": [
+            {
+              "kind": "segment",
+              "from": [
+                1,
+                1.5
+              ],
+              "to": [
+                5.5,
+                3
+              ]
+            },
+            {
+              "kind": "segment",
+              "from": [
+                5.5,
+                3
+              ],
+              "to": [
+                10.5,
+                0.5
+              ]
+            },
+            {
+              "kind": "segment",
+              "from": [
+                10.5,
+                0.5
+              ],
+              "to": [
+                8,
+                5.5
+              ]
+            },
+            {
+              "kind": "segment",
+              "from": [
+                8,
+                5.5
+              ],
+              "to": [
+                11.5,
+                10
+              ]
+            },
+            {
+              "kind": "segment",
+              "from": [
+                11.5,
+                10
+              ],
+              "to": [
+                6.5,
+                7.5
+              ]
+            },
+            {
+              "kind": "segment",
+              "from": [
+                6.5,
+                7.5
+              ],
+              "to": [
+                2.5,
+                11.5
+              ]
+            },
+            {
+              "kind": "segment",
+              "from": [
+                2.5,
+                11.5
+              ],
+              "to": [
+                3.5,
+                6
+              ]
+            },
+            {
+              "kind": "segment",
+              "from": [
+                3.5,
+                6
+              ],
+              "to": [
+                1,
+                1.5
+              ]
+            }
+          ],
+          "solutions": [
+            {
+              "segments": [
+                [
+                  "A",
+                  "B"
+                ],
+                [
+                  "B",
+                  "C"
+                ],
+                [
+                  "C",
+                  "D"
+                ],
+                [
+                  "D",
+                  "E"
+                ],
+                [
+                  "E",
+                  "F"
+                ],
+                [
+                  "F",
+                  "G"
+                ],
+                [
+                  "G",
+                  "H"
+                ],
+                [
+                  "H",
+                  "A"
+                ]
+              ]
+            },
+            {
+              "polygons": [
+                [
+                  "A",
+                  "B",
+                  "C",
+                  "D",
+                  "E",
+                  "F",
+                  "G",
+                  "H"
+                ]
+              ]
+            }
+          ],
+          "explanation": "Es braucht acht Strecken: $AB$, $BC$, $CD$, $DE$, $EF$, $FG$, $GH$ und $HA$.\nJeder Punkt wird nur mit seinem Vorgänger und seinem Nachfolger im Alphabet verbunden.\nEs entsteht ein geschlossener Stern mit vier Zacken.",
+          "skills": [
+            "geometrie-lage-richtung-und-koordinaten--darstellen"
+          ],
+          "translations": {
+            "en": {
+              "prompt": "The points $A$ to $H$ are marked in the coordinate system. Join them with straight segments in alphabetical order: $A$ to $B$, $B$ to $C$ and so on up to $H$, and finally $H$ back to $A$.",
+              "explanation": "Eight segments are needed: $AB$, $BC$, $CD$, $DE$, $EF$, $FG$, $GH$ and $HA$.\nEach point is joined only to the letter before it and the letter after it.\nThe result is a closed star with four points."
+            },
+            "fr": {
+              "prompt": "Les points $A$ à $H$ sont marqués dans le système de coordonnées. Relie-les par des segments dans l'ordre alphabétique: $A$ avec $B$, $B$ avec $C$ et ainsi de suite jusqu'à $H$, puis pour finir $H$ de nouveau avec $A$.",
+              "explanation": "Il faut huit segments: $AB$, $BC$, $CD$, $DE$, $EF$, $FG$, $GH$ et $HA$.\nChaque point n'est relié qu'à la lettre qui le précède et à celle qui le suit.\nOn obtient une étoile fermée à quatre branches."
+            },
+            "it": {
+              "prompt": "Nel sistema di coordinate sono segnati i punti da $A$ a $H$. Uniscili con segmenti in ordine alfabetico: $A$ con $B$, $B$ con $C$ e così via fino a $H$, e alla fine $H$ di nuovo con $A$.",
+              "explanation": "Servono otto segmenti: $AB$, $BC$, $CD$, $DE$, $EF$, $FG$, $GH$ e $HA$.\nOgni punto viene unito solo alla lettera che lo precede e a quella che lo segue.\nSi ottiene una stella chiusa a quattro punte."
+            }
+          },
+          "tags": [
+            "zap",
+            "ORIG-ZAP1-D0833-1c"
+          ]
+        },
+        {
+          "exerciseId": "kb-zap-stoa-zap1-2026-4a-v1",
+          "type": "grid_drawing",
+          "difficulty": "zap",
+          "order": 4,
+          "prompt": "Trage die Punkte $R(2/3)$, $S(10/5)$ und $T(4/11)$ ins Koordinatensystem ein und verbinde sie zum Dreieck $RST$.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 12,
+            "yMin": 0,
+            "yMax": 12,
+            "step": 1,
+            "axes": true,
+            "axisLabels": true,
+            "labels": [
+              "R",
+              "S",
+              "T"
+            ]
+          },
+          "checks": [
+            {
+              "kind": "point",
+              "label": "R",
+              "x": 2,
+              "y": 3
+            },
+            {
+              "kind": "point",
+              "label": "S",
+              "x": 10,
+              "y": 5
+            },
+            {
+              "kind": "point",
+              "label": "T",
+              "x": 4,
+              "y": 11
+            },
+            {
+              "kind": "segment",
+              "from": [
+                2,
+                3
+              ],
+              "to": [
+                10,
+                5
+              ]
+            },
+            {
+              "kind": "segment",
+              "from": [
+                10,
+                5
+              ],
+              "to": [
+                4,
+                11
+              ]
+            },
+            {
+              "kind": "segment",
+              "from": [
+                4,
+                11
+              ],
+              "to": [
+                2,
+                3
+              ]
+            },
+            {
+              "kind": "count",
+              "points": 3
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "R",
+                  "x": 2,
+                  "y": 3
+                },
+                {
+                  "label": "S",
+                  "x": 10,
+                  "y": 5
+                },
+                {
+                  "label": "T",
+                  "x": 4,
+                  "y": 11
+                }
+              ],
+              "polygons": [
+                [
+                  "R",
+                  "S",
+                  "T"
+                ]
+              ]
+            },
+            {
+              "points": [
+                {
+                  "label": "R",
+                  "x": 2,
+                  "y": 3
+                },
+                {
+                  "label": "S",
+                  "x": 10,
+                  "y": 5
+                },
+                {
+                  "label": "T",
+                  "x": 4,
+                  "y": 11
+                }
+              ],
+              "segments": [
+                [
+                  "R",
+                  "S"
+                ],
+                [
+                  "S",
+                  "T"
+                ],
+                [
+                  "T",
+                  "R"
+                ]
+              ]
+            }
+          ],
+          "explanation": "Zuerst die Punkte: $R$ liegt 2 nach rechts und 3 nach oben, $S$ 10 nach rechts und 5 nach oben, $T$ 4 nach rechts und 11 nach oben.\nDann die drei Seiten zeichnen: $RS$, $ST$ und $TR$.",
+          "skills": [
+            "geometrie-lage-richtung-und-koordinaten--darstellen"
+          ],
+          "translations": {
+            "en": {
+              "prompt": "Plot the points $R(2/3)$, $S(10/5)$ and $T(4/11)$ in the coordinate system and join them to make the triangle $RST$.",
+              "explanation": "First the points: $R$ is 2 to the right and 3 up, $S$ 10 to the right and 5 up, $T$ 4 to the right and 11 up.\nThen draw the three sides: $RS$, $ST$ and $TR$."
+            },
+            "fr": {
+              "prompt": "Place les points $R(2/3)$, $S(10/5)$ et $T(4/11)$ dans le système de coordonnées et relie-les pour former le triangle $RST$.",
+              "explanation": "D'abord les points: $R$ est à 2 vers la droite et 3 vers le haut, $S$ à 10 vers la droite et 5 vers le haut, $T$ à 4 vers la droite et 11 vers le haut.\nTrace ensuite les trois côtés: $RS$, $ST$ et $TR$."
+            },
+            "it": {
+              "prompt": "Segna i punti $R(2/3)$, $S(10/5)$ e $T(4/11)$ nel sistema di coordinate e uniscili per formare il triangolo $RST$.",
+              "explanation": "Prima i punti: $R$ si trova 2 verso destra e 3 verso l'alto, $S$ 10 verso destra e 5 verso l'alto, $T$ 4 verso destra e 11 verso l'alto.\nPoi disegna i tre lati: $RS$, $ST$ e $TR$."
+            }
+          },
+          "tags": [
+            "zap",
+            "ORIG-ZAP1-2026-4a"
+          ]
+        }
+      ]
+    },
+    {
+      "publicLessonId": "geometrie-umfang-und-flaeche-ebener-figuren--darstellen--zap",
+      "publish": false,
+      "lesson": {
+        "title": "Darstellen und Zerlegen · ZAP",
+        "titles": {
+          "de": "Darstellen und Zerlegen · ZAP",
+          "en": "Representing and decomposing · ZAP",
+          "fr": "Représenter et décomposer · ZAP",
+          "it": "Rappresentare e scomporre · ZAP"
+        },
+        "objective": "Umfang und Flächeninhalt von Rechteck, Quadrat, Parallelogramm, Dreieck, Trapez und zusammengesetzten Figuren berechnen.",
+        "description": "Umfang und Flächeninhalt von Rechteck, Quadrat, Parallelogramm, Dreieck, Trapez und zusammengesetzten Figuren berechnen.",
+        "subjectId": "mathematics",
+        "topicId": "geometrie",
+        "unitId": "geometrie-umfang-und-flaeche-ebener-figuren",
+        "gradeLevel": "grade_6_primary",
+        "difficulty": "practice",
+        "estimatedMinutes": 12,
+        "language": "de",
+        "order": 531,
+        "extension": true,
+        "requiresPoints": [],
+        "tags": [
+          "zap"
+        ]
+      },
+      "exercises": [
+        {
+          "exerciseId": "kb-zap-stoa-zap1-d0825-1a-v1",
+          "type": "grid_drawing",
+          "difficulty": "zap",
+          "order": 1,
+          "prompt": "Im Gitter ist jedes Häuschen 5 mm lang und 5 mm breit. Zeichne ein Rechteck mit dem Flächeninhalt 18 cm².",
+          "grid": {
+            "xMin": 0,
+            "xMax": 10,
+            "yMin": 0,
+            "yMax": 7,
+            "step": 0.5
+          },
+          "checks": [
+            {
+              "kind": "polygon",
+              "shape": "rectangle",
+              "area": 18
+            },
+            {
+              "kind": "count",
+              "polygons": 1
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "P",
+                  "x": 1,
+                  "y": 1
+                },
+                {
+                  "label": "Q",
+                  "x": 7,
+                  "y": 1
+                },
+                {
+                  "label": "R",
+                  "x": 7,
+                  "y": 4
+                },
+                {
+                  "label": "S",
+                  "x": 1,
+                  "y": 4
+                }
+              ],
+              "polygons": [
+                [
+                  "P",
+                  "Q",
+                  "R",
+                  "S"
+                ]
+              ]
+            },
+            {
+              "points": [
+                {
+                  "label": "P",
+                  "x": 0.5,
+                  "y": 2
+                },
+                {
+                  "label": "Q",
+                  "x": 9.5,
+                  "y": 2
+                },
+                {
+                  "label": "R",
+                  "x": 9.5,
+                  "y": 4
+                },
+                {
+                  "label": "S",
+                  "x": 0.5,
+                  "y": 4
+                }
+              ],
+              "polygons": [
+                [
+                  "P",
+                  "Q",
+                  "R",
+                  "S"
+                ]
+              ]
+            },
+            {
+              "points": [
+                {
+                  "label": "P",
+                  "x": 2,
+                  "y": 1
+                },
+                {
+                  "label": "Q",
+                  "x": 6.5,
+                  "y": 1
+                },
+                {
+                  "label": "R",
+                  "x": 6.5,
+                  "y": 5
+                },
+                {
+                  "label": "S",
+                  "x": 2,
+                  "y": 5
+                }
+              ],
+              "polygons": [
+                [
+                  "P",
+                  "Q",
+                  "R",
+                  "S"
+                ]
+              ]
+            }
+          ],
+          "explanation": "Zwei Häuschen nebeneinander sind 1 cm lang.\nLänge mal Breite muss 18 cm² ergeben, zum Beispiel $6 \\cdot 3 = 18$: 6 cm lang (12 Häuschen) und 3 cm breit (6 Häuschen).\nAuch 9 cm mal 2 cm oder 4.5 cm mal 4 cm sind richtig.",
+          "skills": [
+            "geometrie-umfang-und-flaeche-ebener-figuren--darstellen"
+          ],
+          "translations": {
+            "en": {
+              "prompt": "In the grid, each small square is 5 mm long and 5 mm wide. Draw a rectangle with an area of 18 cm².",
+              "explanation": "Two small squares side by side are 1 cm long.\nLength times width must give 18 cm², for example $6 \\cdot 3 = 18$: 6 cm long (12 squares) and 3 cm wide (6 squares).\n9 cm by 2 cm or 4.5 cm by 4 cm are also correct."
+            },
+            "fr": {
+              "prompt": "Dans le quadrillage, chaque carreau mesure 5 mm de long et 5 mm de large. Dessine un rectangle d'une aire de 18 cm².",
+              "explanation": "Deux carreaux côte à côte mesurent 1 cm.\nLongueur fois largeur doit donner 18 cm², par exemple $6 \\cdot 3 = 18$: 6 cm de long (12 carreaux) et 3 cm de large (6 carreaux).\n9 cm sur 2 cm ou 4.5 cm sur 4 cm sont aussi corrects."
+            },
+            "it": {
+              "prompt": "Nella griglia ogni quadretto è lungo 5 mm e largo 5 mm. Disegna un rettangolo con un'area di 18 cm².",
+              "explanation": "Due quadretti affiancati misurano 1 cm.\nLunghezza per larghezza deve dare 18 cm², per esempio $6 \\cdot 3 = 18$: lungo 6 cm (12 quadretti) e largo 3 cm (6 quadretti).\nAnche 9 cm per 2 cm oppure 4.5 cm per 4 cm sono corretti."
+            }
+          },
+          "tags": [
+            "zap",
+            "ORIG-ZAP1-D0825-1a"
+          ]
+        },
+        {
+          "exerciseId": "kb-zap-stoa-zap1-d0825-1b-v1",
+          "type": "grid_drawing",
+          "difficulty": "zap",
+          "order": 2,
+          "prompt": "Im Gitter ist jedes Häuschen 5 mm lang und 5 mm breit. Zeichne ein Quadrat mit dem Flächeninhalt 9 cm².",
+          "grid": {
+            "xMin": 0,
+            "xMax": 10,
+            "yMin": 0,
+            "yMax": 7,
+            "step": 0.5
+          },
+          "checks": [
+            {
+              "kind": "polygon",
+              "shape": "square",
+              "area": 9
+            },
+            {
+              "kind": "count",
+              "polygons": 1
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "P",
+                  "x": 1,
+                  "y": 1
+                },
+                {
+                  "label": "Q",
+                  "x": 4,
+                  "y": 1
+                },
+                {
+                  "label": "R",
+                  "x": 4,
+                  "y": 4
+                },
+                {
+                  "label": "S",
+                  "x": 1,
+                  "y": 4
+                }
+              ],
+              "polygons": [
+                [
+                  "P",
+                  "Q",
+                  "R",
+                  "S"
+                ]
+              ]
+            }
+          ],
+          "explanation": "Bei einem Quadrat sind alle Seiten gleich lang: Seite mal Seite muss 9 cm² ergeben.\n$3 \\cdot 3 = 9$, die Seite ist also 3 cm lang.\n3 cm sind 6 Häuschen: Das Quadrat ist 6 Häuschen lang und 6 Häuschen breit.",
+          "skills": [
+            "geometrie-umfang-und-flaeche-ebener-figuren--darstellen"
+          ],
+          "translations": {
+            "en": {
+              "prompt": "In the grid, each small square is 5 mm long and 5 mm wide. Draw a square with an area of 9 cm².",
+              "explanation": "In a square all sides have the same length: side times side must give 9 cm².\n$3 \\cdot 3 = 9$, so the side is 3 cm long.\n3 cm is 6 small squares: the square is 6 squares long and 6 squares wide."
+            },
+            "fr": {
+              "prompt": "Dans le quadrillage, chaque carreau mesure 5 mm de long et 5 mm de large. Dessine un carré d'une aire de 9 cm².",
+              "explanation": "Dans un carré, tous les côtés ont la même longueur: côté fois côté doit donner 9 cm².\n$3 \\cdot 3 = 9$, le côté mesure donc 3 cm.\n3 cm correspondent à 6 carreaux: le carré mesure 6 carreaux de long et 6 carreaux de large."
+            },
+            "it": {
+              "prompt": "Nella griglia ogni quadretto è lungo 5 mm e largo 5 mm. Disegna un quadrato con un'area di 9 cm².",
+              "explanation": "In un quadrato tutti i lati hanno la stessa lunghezza: lato per lato deve dare 9 cm².\n$3 \\cdot 3 = 9$, quindi il lato misura 3 cm.\n3 cm corrispondono a 6 quadretti: il quadrato è lungo 6 quadretti e largo 6 quadretti."
+            }
+          },
+          "tags": [
+            "zap",
+            "ORIG-ZAP1-D0825-1b"
+          ]
+        },
+        {
+          "exerciseId": "kb-zap-stoa-zap1-d0825-1c-v1",
+          "type": "grid_drawing",
+          "difficulty": "zap",
+          "order": 3,
+          "prompt": "Im Gitter ist jedes Häuschen 5 mm lang und 5 mm breit. Zeichne ein Rechteck mit dem Flächeninhalt 10 cm² und dem Umfang 14 cm.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 10,
+            "yMin": 0,
+            "yMax": 7,
+            "step": 0.5
+          },
+          "checks": [
+            {
+              "kind": "polygon",
+              "shape": "rectangle",
+              "area": 10,
+              "perimeter": 14
+            },
+            {
+              "kind": "count",
+              "polygons": 1
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "P",
+                  "x": 1,
+                  "y": 1
+                },
+                {
+                  "label": "Q",
+                  "x": 6,
+                  "y": 1
+                },
+                {
+                  "label": "R",
+                  "x": 6,
+                  "y": 3
+                },
+                {
+                  "label": "S",
+                  "x": 1,
+                  "y": 3
+                }
+              ],
+              "polygons": [
+                [
+                  "P",
+                  "Q",
+                  "R",
+                  "S"
+                ]
+              ]
+            },
+            {
+              "points": [
+                {
+                  "label": "P",
+                  "x": 2,
+                  "y": 1
+                },
+                {
+                  "label": "Q",
+                  "x": 4,
+                  "y": 1
+                },
+                {
+                  "label": "R",
+                  "x": 4,
+                  "y": 6
+                },
+                {
+                  "label": "S",
+                  "x": 2,
+                  "y": 6
+                }
+              ],
+              "polygons": [
+                [
+                  "P",
+                  "Q",
+                  "R",
+                  "S"
+                ]
+              ]
+            }
+          ],
+          "explanation": "Umfang 14 cm heisst: Länge und Breite sind zusammen $14 : 2 = 7$ cm.\nGesucht sind zwei Zahlen mit der Summe 7 und dem Produkt 10: Das sind 5 und 2.\nDas Rechteck ist 5 cm lang (10 Häuschen) und 2 cm breit (4 Häuschen).",
+          "skills": [
+            "geometrie-umfang-und-flaeche-ebener-figuren--darstellen"
+          ],
+          "translations": {
+            "en": {
+              "prompt": "In the grid, each small square is 5 mm long and 5 mm wide. Draw a rectangle with an area of 10 cm² and a perimeter of 14 cm.",
+              "explanation": "A perimeter of 14 cm means: length and width together are $14 : 2 = 7$ cm.\nWe need two numbers with the sum 7 and the product 10: these are 5 and 2.\nThe rectangle is 5 cm long (10 squares) and 2 cm wide (4 squares)."
+            },
+            "fr": {
+              "prompt": "Dans le quadrillage, chaque carreau mesure 5 mm de long et 5 mm de large. Dessine un rectangle d'une aire de 10 cm² et d'un périmètre de 14 cm.",
+              "explanation": "Un périmètre de 14 cm signifie: la longueur et la largeur font ensemble $14 : 2 = 7$ cm.\nOn cherche deux nombres dont la somme est 7 et le produit 10: ce sont 5 et 2.\nLe rectangle mesure 5 cm de long (10 carreaux) et 2 cm de large (4 carreaux)."
+            },
+            "it": {
+              "prompt": "Nella griglia ogni quadretto è lungo 5 mm e largo 5 mm. Disegna un rettangolo con un'area di 10 cm² e un perimetro di 14 cm.",
+              "explanation": "Un perimetro di 14 cm significa: lunghezza e larghezza insieme misurano $14 : 2 = 7$ cm.\nSi cercano due numeri con somma 7 e prodotto 10: sono 5 e 2.\nIl rettangolo è lungo 5 cm (10 quadretti) e largo 2 cm (4 quadretti)."
+            }
+          },
+          "tags": [
+            "zap",
+            "ORIG-ZAP1-D0825-1c"
+          ]
+        },
+        {
+          "exerciseId": "kb-zap-stoa-zap1-d0825-1d-v1",
+          "type": "grid_drawing",
+          "difficulty": "zap",
+          "order": 4,
+          "prompt": "Im Gitter ist jedes Häuschen 5 mm lang und 5 mm breit. Zeichne ein Quadrat mit dem Umfang 10 cm.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 10,
+            "yMin": 0,
+            "yMax": 7,
+            "step": 0.5
+          },
+          "checks": [
+            {
+              "kind": "polygon",
+              "shape": "square",
+              "perimeter": 10
+            },
+            {
+              "kind": "count",
+              "polygons": 1
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "P",
+                  "x": 1,
+                  "y": 1
+                },
+                {
+                  "label": "Q",
+                  "x": 3.5,
+                  "y": 1
+                },
+                {
+                  "label": "R",
+                  "x": 3.5,
+                  "y": 3.5
+                },
+                {
+                  "label": "S",
+                  "x": 1,
+                  "y": 3.5
+                }
+              ],
+              "polygons": [
+                [
+                  "P",
+                  "Q",
+                  "R",
+                  "S"
+                ]
+              ]
+            }
+          ],
+          "explanation": "Ein Quadrat hat vier gleich lange Seiten: $10 : 4 = 2.5$, jede Seite ist 2.5 cm lang.\n2.5 cm sind 5 Häuschen.\nDas Quadrat ist 5 Häuschen lang und 5 Häuschen breit.",
+          "skills": [
+            "geometrie-umfang-und-flaeche-ebener-figuren--darstellen"
+          ],
+          "translations": {
+            "en": {
+              "prompt": "In the grid, each small square is 5 mm long and 5 mm wide. Draw a square with a perimeter of 10 cm.",
+              "explanation": "A square has four sides of equal length: $10 : 4 = 2.5$, so each side is 2.5 cm long.\n2.5 cm is 5 small squares.\nThe square is 5 squares long and 5 squares wide."
+            },
+            "fr": {
+              "prompt": "Dans le quadrillage, chaque carreau mesure 5 mm de long et 5 mm de large. Dessine un carré d'un périmètre de 10 cm.",
+              "explanation": "Un carré a quatre côtés de même longueur: $10 : 4 = 2.5$, chaque côté mesure donc 2.5 cm.\n2.5 cm correspondent à 5 carreaux.\nLe carré mesure 5 carreaux de long et 5 carreaux de large."
+            },
+            "it": {
+              "prompt": "Nella griglia ogni quadretto è lungo 5 mm e largo 5 mm. Disegna un quadrato con un perimetro di 10 cm.",
+              "explanation": "Un quadrato ha quattro lati della stessa lunghezza: $10 : 4 = 2.5$, quindi ogni lato misura 2.5 cm.\n2.5 cm corrispondono a 5 quadretti.\nIl quadrato è lungo 5 quadretti e largo 5 quadretti."
+            }
+          },
+          "tags": [
+            "zap",
+            "ORIG-ZAP1-D0825-1d"
+          ]
+        }
+      ]
+    },
+    {
+      "publicLessonId": "geometrie-verschiebung-und-drehung--darstellen--zap",
+      "publish": false,
+      "lesson": {
+        "title": "Darstellen und Zerlegen · ZAP",
+        "titles": {
+          "de": "Darstellen und Zerlegen · ZAP",
+          "en": "Representing and decomposing · ZAP",
+          "fr": "Représenter et décomposer · ZAP",
+          "it": "Rappresentare e scomporre · ZAP"
+        },
+        "objective": "Bewegungen unterscheiden sowie Figuren verschieben und drehen, ihre Eigenschaften nutzen und konstruieren.",
+        "description": "Bewegungen unterscheiden sowie Figuren verschieben und drehen, ihre Eigenschaften nutzen und konstruieren.",
+        "subjectId": "mathematics",
+        "topicId": "geometrie",
+        "unitId": "geometrie-verschiebung-und-drehung",
+        "gradeLevel": "grade_6_primary",
+        "difficulty": "practice",
+        "estimatedMinutes": 8,
+        "language": "de",
+        "order": 531,
+        "extension": true,
+        "requiresPoints": [],
+        "tags": [
+          "zap"
+        ]
+      },
+      "exercises": [
+        {
+          "exerciseId": "kb-zap-stoa-zap1-2022-9a-v1",
+          "type": "grid_drawing",
+          "difficulty": "zap",
+          "order": 1,
+          "prompt": "Im Quadrat $ABCD$ ist die Linie $PQRS$ eingezeichnet. Das Quadrat wird samt Linie um den Eckpunkt $B$ um 90° im Uhrzeigersinn gedreht. Zeichne die Linie in ihrer neuen Lage ein.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 12,
+            "yMin": 0,
+            "yMax": 12,
+            "step": 1,
+            "labels": [
+              "P'",
+              "Q'",
+              "R'",
+              "S'"
+            ],
+            "given": {
+              "points": [
+                {
+                  "label": "A",
+                  "x": 1,
+                  "y": 6
+                },
+                {
+                  "label": "B",
+                  "x": 6,
+                  "y": 6
+                },
+                {
+                  "label": "C",
+                  "x": 6,
+                  "y": 11
+                },
+                {
+                  "label": "D",
+                  "x": 1,
+                  "y": 11
+                },
+                {
+                  "label": "P",
+                  "x": 2,
+                  "y": 10
+                },
+                {
+                  "label": "Q",
+                  "x": 2,
+                  "y": 7
+                },
+                {
+                  "label": "R",
+                  "x": 4,
+                  "y": 7
+                },
+                {
+                  "label": "S",
+                  "x": 5,
+                  "y": 10
+                }
+              ],
+              "polygons": [
+                [
+                  "A",
+                  "B",
+                  "C",
+                  "D"
+                ]
+              ],
+              "segments": [
+                [
+                  "P",
+                  "Q"
+                ],
+                [
+                  "Q",
+                  "R"
+                ],
+                [
+                  "R",
+                  "S"
+                ]
+              ]
+            }
+          },
+          "checks": [
+            {
+              "kind": "image",
+              "of": [
+                "P",
+                "Q"
+              ],
+              "rotate": {
+                "center": [
+                  6,
+                  6
+                ],
+                "angle": 270
+              }
+            },
+            {
+              "kind": "image",
+              "of": [
+                "Q",
+                "R"
+              ],
+              "rotate": {
+                "center": [
+                  6,
+                  6
+                ],
+                "angle": 270
+              }
+            },
+            {
+              "kind": "image",
+              "of": [
+                "R",
+                "S"
+              ],
+              "rotate": {
+                "center": [
+                  6,
+                  6
+                ],
+                "angle": 270
+              }
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "P'",
+                  "x": 10,
+                  "y": 10
+                },
+                {
+                  "label": "Q'",
+                  "x": 7,
+                  "y": 10
+                },
+                {
+                  "label": "R'",
+                  "x": 7,
+                  "y": 8
+                },
+                {
+                  "label": "S'",
+                  "x": 10,
+                  "y": 7
+                }
+              ],
+              "segments": [
+                [
+                  "P'",
+                  "Q'"
+                ],
+                [
+                  "Q'",
+                  "R'"
+                ],
+                [
+                  "R'",
+                  "S'"
+                ]
+              ]
+            }
+          ],
+          "explanation": "Bei der Drehung bleibt $B$ fest; das Quadrat liegt danach rechts neben seiner alten Lage.\nEin Punkt, der $a$ Häuschen links von $B$ und $b$ Häuschen über $B$ liegt, liegt nach der Drehung $b$ Häuschen rechts von $B$ und $a$ Häuschen über $B$.\n$P$ (4 links, 4 darüber) kommt nach 4 rechts, 4 darüber; $Q$ (4 links, 1 darüber) nach 1 rechts, 4 darüber; $R$ (2 links, 1 darüber) nach 1 rechts, 2 darüber; $S$ (1 links, 4 darüber) nach 4 rechts, 1 darüber.\nVerbinde die Bildpunkte in derselben Reihenfolge.",
+          "skills": [
+            "geometrie-verschiebung-und-drehung--darstellen"
+          ],
+          "translations": {
+            "en": {
+              "prompt": "The line $PQRS$ is drawn in the square $ABCD$. The square, together with the line, is rotated 90° clockwise about the corner $B$. Draw the line in its new position.",
+              "explanation": "In the rotation $B$ stays fixed; afterwards the square lies to the right of its old position.\nA point that is $a$ squares to the left of $B$ and $b$ squares above $B$ ends up $b$ squares to the right of $B$ and $a$ squares above $B$.\n$P$ (4 left, 4 above) goes to 4 right, 4 above; $Q$ (4 left, 1 above) to 1 right, 4 above; $R$ (2 left, 1 above) to 1 right, 2 above; $S$ (1 left, 4 above) to 4 right, 1 above.\nJoin the image points in the same order."
+            },
+            "fr": {
+              "prompt": "La ligne $PQRS$ est tracée dans le carré $ABCD$. On fait tourner le carré, avec la ligne, de 90° dans le sens des aiguilles d'une montre autour du sommet $B$. Dessine la ligne dans sa nouvelle position.",
+              "explanation": "Pendant la rotation, $B$ reste fixe; le carré se retrouve ensuite à droite de son ancienne position.\nUn point situé $a$ carreaux à gauche de $B$ et $b$ carreaux au-dessus de $B$ arrive $b$ carreaux à droite de $B$ et $a$ carreaux au-dessus de $B$.\n$P$ (4 à gauche, 4 au-dessus) va à 4 à droite, 4 au-dessus; $Q$ (4 à gauche, 1 au-dessus) à 1 à droite, 4 au-dessus; $R$ (2 à gauche, 1 au-dessus) à 1 à droite, 2 au-dessus; $S$ (1 à gauche, 4 au-dessus) à 4 à droite, 1 au-dessus.\nRelie les points images dans le même ordre."
+            },
+            "it": {
+              "prompt": "Nel quadrato $ABCD$ è disegnata la linea $PQRS$. Il quadrato, insieme alla linea, viene ruotato di 90° in senso orario attorno al vertice $B$. Disegna la linea nella sua nuova posizione.",
+              "explanation": "Nella rotazione $B$ resta fermo; il quadrato si trova poi a destra della sua vecchia posizione.\nUn punto che si trova $a$ quadretti a sinistra di $B$ e $b$ quadretti sopra $B$ arriva $b$ quadretti a destra di $B$ e $a$ quadretti sopra $B$.\n$P$ (4 a sinistra, 4 sopra) va a 4 a destra, 4 sopra; $Q$ (4 a sinistra, 1 sopra) a 1 a destra, 4 sopra; $R$ (2 a sinistra, 1 sopra) a 1 a destra, 2 sopra; $S$ (1 a sinistra, 4 sopra) a 4 a destra, 1 sopra.\nUnisci i punti immagine nello stesso ordine."
+            }
+          },
+          "tags": [
+            "zap",
+            "ORIG-ZAP1-2022-9a"
+          ]
+        },
+        {
+          "exerciseId": "kb-zap-stoa-zap1-2022-9a-v2",
+          "type": "grid_drawing",
+          "difficulty": "zap",
+          "order": 2,
+          "prompt": "Im Quadrat $ABCD$ ist die Linie $PQRS$ eingezeichnet. Das Quadrat wird samt Linie um den Eckpunkt $D$ um 90° im Gegenuhrzeigersinn gedreht. Zeichne die Linie in ihrer neuen Lage ein.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 12,
+            "yMin": 0,
+            "yMax": 12,
+            "step": 1,
+            "labels": [
+              "P'",
+              "Q'",
+              "R'",
+              "S'"
+            ],
+            "given": {
+              "points": [
+                {
+                  "label": "A",
+                  "x": 6,
+                  "y": 1
+                },
+                {
+                  "label": "B",
+                  "x": 11,
+                  "y": 1
+                },
+                {
+                  "label": "C",
+                  "x": 11,
+                  "y": 6
+                },
+                {
+                  "label": "D",
+                  "x": 6,
+                  "y": 6
+                },
+                {
+                  "label": "P",
+                  "x": 7,
+                  "y": 5
+                },
+                {
+                  "label": "Q",
+                  "x": 9,
+                  "y": 5
+                },
+                {
+                  "label": "R",
+                  "x": 10,
+                  "y": 3
+                },
+                {
+                  "label": "S",
+                  "x": 8,
+                  "y": 2
+                }
+              ],
+              "polygons": [
+                [
+                  "A",
+                  "B",
+                  "C",
+                  "D"
+                ]
+              ],
+              "segments": [
+                [
+                  "P",
+                  "Q"
+                ],
+                [
+                  "Q",
+                  "R"
+                ],
+                [
+                  "R",
+                  "S"
+                ]
+              ]
+            }
+          },
+          "checks": [
+            {
+              "kind": "image",
+              "of": [
+                "P",
+                "Q"
+              ],
+              "rotate": {
+                "center": [
+                  6,
+                  6
+                ],
+                "angle": 90
+              }
+            },
+            {
+              "kind": "image",
+              "of": [
+                "Q",
+                "R"
+              ],
+              "rotate": {
+                "center": [
+                  6,
+                  6
+                ],
+                "angle": 90
+              }
+            },
+            {
+              "kind": "image",
+              "of": [
+                "R",
+                "S"
+              ],
+              "rotate": {
+                "center": [
+                  6,
+                  6
+                ],
+                "angle": 90
+              }
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "P'",
+                  "x": 7,
+                  "y": 7
+                },
+                {
+                  "label": "Q'",
+                  "x": 7,
+                  "y": 9
+                },
+                {
+                  "label": "R'",
+                  "x": 9,
+                  "y": 10
+                },
+                {
+                  "label": "S'",
+                  "x": 10,
+                  "y": 8
+                }
+              ],
+              "segments": [
+                [
+                  "P'",
+                  "Q'"
+                ],
+                [
+                  "Q'",
+                  "R'"
+                ],
+                [
+                  "R'",
+                  "S'"
+                ]
+              ]
+            }
+          ],
+          "explanation": "Bei der Drehung bleibt $D$ fest; das Quadrat liegt danach über seiner alten Lage.\nEin Punkt, der $a$ Häuschen rechts von $D$ und $b$ Häuschen unter $D$ liegt, liegt nach der Drehung $b$ Häuschen rechts von $D$ und $a$ Häuschen über $D$.\n$P$ (1 rechts, 1 darunter) kommt nach 1 rechts, 1 darüber; $Q$ (3 rechts, 1 darunter) nach 1 rechts, 3 darüber; $R$ (4 rechts, 3 darunter) nach 3 rechts, 4 darüber; $S$ (2 rechts, 4 darunter) nach 4 rechts, 2 darüber.\nVerbinde die Bildpunkte in derselben Reihenfolge.",
+          "skills": [
+            "geometrie-verschiebung-und-drehung--darstellen"
+          ],
+          "translations": {
+            "en": {
+              "prompt": "The line $PQRS$ is drawn in the square $ABCD$. The square, together with the line, is rotated 90° anticlockwise about the corner $D$. Draw the line in its new position.",
+              "explanation": "In the rotation $D$ stays fixed; afterwards the square lies above its old position.\nA point that is $a$ squares to the right of $D$ and $b$ squares below $D$ ends up $b$ squares to the right of $D$ and $a$ squares above $D$.\n$P$ (1 right, 1 below) goes to 1 right, 1 above; $Q$ (3 right, 1 below) to 1 right, 3 above; $R$ (4 right, 3 below) to 3 right, 4 above; $S$ (2 right, 4 below) to 4 right, 2 above.\nJoin the image points in the same order."
+            },
+            "fr": {
+              "prompt": "La ligne $PQRS$ est tracée dans le carré $ABCD$. On fait tourner le carré, avec la ligne, de 90° dans le sens inverse des aiguilles d'une montre autour du sommet $D$. Dessine la ligne dans sa nouvelle position.",
+              "explanation": "Pendant la rotation, $D$ reste fixe; le carré se retrouve ensuite au-dessus de son ancienne position.\nUn point situé $a$ carreaux à droite de $D$ et $b$ carreaux en dessous de $D$ arrive $b$ carreaux à droite de $D$ et $a$ carreaux au-dessus de $D$.\n$P$ (1 à droite, 1 en dessous) va à 1 à droite, 1 au-dessus; $Q$ (3 à droite, 1 en dessous) à 1 à droite, 3 au-dessus; $R$ (4 à droite, 3 en dessous) à 3 à droite, 4 au-dessus; $S$ (2 à droite, 4 en dessous) à 4 à droite, 2 au-dessus.\nRelie les points images dans le même ordre."
+            },
+            "it": {
+              "prompt": "Nel quadrato $ABCD$ è disegnata la linea $PQRS$. Il quadrato, insieme alla linea, viene ruotato di 90° in senso antiorario attorno al vertice $D$. Disegna la linea nella sua nuova posizione.",
+              "explanation": "Nella rotazione $D$ resta fermo; il quadrato si trova poi sopra la sua vecchia posizione.\nUn punto che si trova $a$ quadretti a destra di $D$ e $b$ quadretti sotto $D$ arriva $b$ quadretti a destra di $D$ e $a$ quadretti sopra $D$.\n$P$ (1 a destra, 1 sotto) va a 1 a destra, 1 sopra; $Q$ (3 a destra, 1 sotto) a 1 a destra, 3 sopra; $R$ (4 a destra, 3 sotto) a 3 a destra, 4 sopra; $S$ (2 a destra, 4 sotto) a 4 a destra, 2 sopra.\nUnisci i punti immagine nello stesso ordine."
+            }
+          },
+          "tags": [
+            "zap",
+            "ORIG-ZAP1-2022-9a"
+          ]
+        }
+      ]
+    },
+    {
+      "publicLessonId": "geometrie-achsen-und-punktsymmetrie--darstellen--zap",
+      "publish": false,
+      "lesson": {
+        "title": "Darstellen und Zerlegen · ZAP",
+        "titles": {
+          "de": "Darstellen und Zerlegen · ZAP",
+          "en": "Representing and decomposing · ZAP",
+          "fr": "Représenter et décomposer · ZAP",
+          "it": "Rappresentare e scomporre · ZAP"
+        },
+        "objective": "Achsen- und punktsymmetrische Figuren erkennen, Figuren spiegeln und Spiegelungen anwenden.",
+        "description": "Achsen- und punktsymmetrische Figuren erkennen, Figuren spiegeln und Spiegelungen anwenden.",
+        "subjectId": "mathematics",
+        "topicId": "geometrie",
+        "unitId": "geometrie-achsen-und-punktsymmetrie",
+        "gradeLevel": "grade_6_primary",
+        "difficulty": "practice",
+        "estimatedMinutes": 8,
+        "language": "de",
+        "order": 531,
+        "extension": true,
+        "requiresPoints": [],
+        "tags": [
+          "zap"
+        ]
+      },
+      "exercises": [
+        {
+          "exerciseId": "kb-zap-stoa-zap1-2022-9b-v1",
+          "type": "grid_drawing",
+          "difficulty": "zap",
+          "order": 1,
+          "prompt": "Im Quadrat $ABCD$ ist die Linie $PQRS$ eingezeichnet. Das Quadrat wird samt Linie an der Seite $CD$ gespiegelt. Zeichne das Spiegelbild der Linie ein.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 9,
+            "yMin": 0,
+            "yMax": 12,
+            "step": 1,
+            "labels": [
+              "P'",
+              "Q'",
+              "R'",
+              "S'"
+            ],
+            "given": {
+              "points": [
+                {
+                  "label": "A",
+                  "x": 2,
+                  "y": 1
+                },
+                {
+                  "label": "B",
+                  "x": 7,
+                  "y": 1
+                },
+                {
+                  "label": "C",
+                  "x": 7,
+                  "y": 6
+                },
+                {
+                  "label": "D",
+                  "x": 2,
+                  "y": 6
+                },
+                {
+                  "label": "P",
+                  "x": 3,
+                  "y": 2
+                },
+                {
+                  "label": "Q",
+                  "x": 3,
+                  "y": 4
+                },
+                {
+                  "label": "R",
+                  "x": 5,
+                  "y": 5
+                },
+                {
+                  "label": "S",
+                  "x": 6,
+                  "y": 3
+                }
+              ],
+              "polygons": [
+                [
+                  "A",
+                  "B",
+                  "C",
+                  "D"
+                ]
+              ],
+              "segments": [
+                [
+                  "P",
+                  "Q"
+                ],
+                [
+                  "Q",
+                  "R"
+                ],
+                [
+                  "R",
+                  "S"
+                ]
+              ]
+            }
+          },
+          "checks": [
+            {
+              "kind": "image",
+              "of": [
+                "P",
+                "Q"
+              ],
+              "reflect": {
+                "through": [
+                  [
+                    2,
+                    6
+                  ],
+                  [
+                    7,
+                    6
+                  ]
+                ]
+              }
+            },
+            {
+              "kind": "image",
+              "of": [
+                "Q",
+                "R"
+              ],
+              "reflect": {
+                "through": [
+                  [
+                    2,
+                    6
+                  ],
+                  [
+                    7,
+                    6
+                  ]
+                ]
+              }
+            },
+            {
+              "kind": "image",
+              "of": [
+                "R",
+                "S"
+              ],
+              "reflect": {
+                "through": [
+                  [
+                    2,
+                    6
+                  ],
+                  [
+                    7,
+                    6
+                  ]
+                ]
+              }
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "P'",
+                  "x": 3,
+                  "y": 10
+                },
+                {
+                  "label": "Q'",
+                  "x": 3,
+                  "y": 8
+                },
+                {
+                  "label": "R'",
+                  "x": 5,
+                  "y": 7
+                },
+                {
+                  "label": "S'",
+                  "x": 6,
+                  "y": 9
+                }
+              ],
+              "segments": [
+                [
+                  "P'",
+                  "Q'"
+                ],
+                [
+                  "Q'",
+                  "R'"
+                ],
+                [
+                  "R'",
+                  "S'"
+                ]
+              ]
+            }
+          ],
+          "explanation": "Die Seite $CD$ ist die Spiegelachse: Jeder Bildpunkt liegt gleich weit über $CD$, wie der Punkt selbst darunter liegt, und genau senkrecht darüber.\n$P$ liegt 4 Häuschen unter $CD$, sein Bild 4 darüber; $Q$ liegt 2 darunter, $R$ 1 darunter und $S$ 3 darunter.\nVerbinde die Bildpunkte in derselben Reihenfolge.",
+          "skills": [
+            "geometrie-achsen-und-punktsymmetrie--darstellen"
+          ],
+          "translations": {
+            "en": {
+              "prompt": "The line $PQRS$ is drawn in the square $ABCD$. The square, together with the line, is reflected in the side $CD$. Draw the mirror image of the line.",
+              "explanation": "The side $CD$ is the mirror line: each image point lies as far above $CD$ as the point itself lies below it, and exactly vertically above it.\n$P$ is 4 squares below $CD$, its image 4 above; $Q$ is 2 below, $R$ 1 below and $S$ 3 below.\nJoin the image points in the same order."
+            },
+            "fr": {
+              "prompt": "La ligne $PQRS$ est tracée dans le carré $ABCD$. On applique au carré, avec la ligne, la symétrie axiale d'axe le côté $CD$. Dessine l'image de la ligne.",
+              "explanation": "Le côté $CD$ est l'axe de symétrie: chaque point image se trouve aussi loin au-dessus de $CD$ que le point lui-même en dessous, exactement à la verticale.\n$P$ est 4 carreaux en dessous de $CD$, son image 4 au-dessus; $Q$ est 2 en dessous, $R$ 1 en dessous et $S$ 3 en dessous.\nRelie les points images dans le même ordre."
+            },
+            "it": {
+              "prompt": "Nel quadrato $ABCD$ è disegnata la linea $PQRS$. Il quadrato, insieme alla linea, viene riflesso rispetto al lato $CD$. Disegna l'immagine speculare della linea.",
+              "explanation": "Il lato $CD$ è l'asse di simmetria: ogni punto immagine si trova sopra $CD$ alla stessa distanza a cui il punto si trova sotto, esattamente in verticale.\n$P$ si trova 4 quadretti sotto $CD$, la sua immagine 4 sopra; $Q$ si trova 2 sotto, $R$ 1 sotto e $S$ 3 sotto.\nUnisci i punti immagine nello stesso ordine."
+            }
+          },
+          "tags": [
+            "zap",
+            "ORIG-ZAP1-2022-9b"
+          ]
+        },
+        {
+          "exerciseId": "kb-zap-stoa-zap1-2022-9c-v1",
+          "type": "grid_drawing",
+          "difficulty": "zap",
+          "order": 2,
+          "prompt": "Im Quadrat $ABCD$ ist eine Linie aus zwei Strecken eingezeichnet. Ergänze die Figur so, dass beide Diagonalen des Quadrats Symmetrieachsen der Figur sind.",
+          "grid": {
+            "xMin": 0,
+            "xMax": 8,
+            "yMin": 0,
+            "yMax": 8,
+            "step": 1,
+            "given": {
+              "points": [
+                {
+                  "label": "A",
+                  "x": 1,
+                  "y": 1
+                },
+                {
+                  "label": "B",
+                  "x": 7,
+                  "y": 1
+                },
+                {
+                  "label": "C",
+                  "x": 7,
+                  "y": 7
+                },
+                {
+                  "label": "D",
+                  "x": 1,
+                  "y": 7
+                },
+                {
+                  "label": "E",
+                  "x": 7,
+                  "y": 3
+                },
+                {
+                  "label": "F",
+                  "x": 5,
+                  "y": 4
+                },
+                {
+                  "label": "G",
+                  "x": 6,
+                  "y": 5
+                }
+              ],
+              "polygons": [
+                [
+                  "A",
+                  "B",
+                  "C",
+                  "D"
+                ]
+              ],
+              "segments": [
+                [
+                  "E",
+                  "F"
+                ],
+                [
+                  "F",
+                  "G"
+                ]
+              ]
+            }
+          },
+          "checks": [
+            {
+              "kind": "symmetric",
+              "through": [
+                [
+                  1,
+                  1
+                ],
+                [
+                  7,
+                  7
+                ]
+              ]
+            },
+            {
+              "kind": "symmetric",
+              "through": [
+                [
+                  1,
+                  7
+                ],
+                [
+                  7,
+                  1
+                ]
+              ]
+            }
+          ],
+          "solutions": [
+            {
+              "points": [
+                {
+                  "label": "E1",
+                  "x": 3,
+                  "y": 7
+                },
+                {
+                  "label": "F1",
+                  "x": 4,
+                  "y": 5
+                },
+                {
+                  "label": "G1",
+                  "x": 5,
+                  "y": 6
+                },
+                {
+                  "label": "E2",
+                  "x": 5,
+                  "y": 1
+                },
+                {
+                  "label": "F2",
+                  "x": 4,
+                  "y": 3
+                },
+                {
+                  "label": "G2",
+                  "x": 3,
+                  "y": 2
+                },
+                {
+                  "label": "E3",
+                  "x": 1,
+                  "y": 5
+                },
+                {
+                  "label": "F3",
+                  "x": 3,
+                  "y": 4
+                },
+                {
+                  "label": "G3",
+                  "x": 2,
+                  "y": 3
+                }
+              ],
+              "segments": [
+                [
+                  "E1",
+                  "F1"
+                ],
+                [
+                  "F1",
+                  "G1"
+                ],
+                [
+                  "E2",
+                  "F2"
+                ],
+                [
+                  "F2",
+                  "G2"
+                ],
+                [
+                  "E3",
+                  "F3"
+                ],
+                [
+                  "F3",
+                  "G3"
+                ]
+              ]
+            }
+          ],
+          "explanation": "Spiegle die Linie zuerst an der Diagonale $AC$: Der Abstand nach rechts und der Abstand nach oben, von $A$ aus gemessen, werden vertauscht.\nSpiegle dann die Linie und ihr erstes Spiegelbild an der Diagonale $BD$.\nAm Schluss liegt die Linie viermal in der Figur: rechts, oben, links und unten.",
+          "skills": [
+            "geometrie-achsen-und-punktsymmetrie--darstellen"
+          ],
+          "translations": {
+            "en": {
+              "prompt": "A line made of two segments is drawn in the square $ABCD$. Complete the figure so that both diagonals of the square are lines of symmetry of the figure.",
+              "explanation": "First reflect the line in the diagonal $AC$: the distance to the right and the distance up, measured from $A$, are swapped.\nThen reflect the line and its first mirror image in the diagonal $BD$.\nIn the end the line appears four times in the figure: on the right, at the top, on the left and at the bottom."
+            },
+            "fr": {
+              "prompt": "Une ligne formée de deux segments est tracée dans le carré $ABCD$. Complète la figure de sorte que les deux diagonales du carré soient des axes de symétrie de la figure.",
+              "explanation": "Construis d'abord le symétrique de la ligne par rapport à la diagonale $AC$: la distance vers la droite et la distance vers le haut, mesurées depuis $A$, sont échangées.\nConstruis ensuite le symétrique de la ligne et de sa première image par rapport à la diagonale $BD$.\nÀ la fin, la ligne apparaît quatre fois dans la figure: à droite, en haut, à gauche et en bas."
+            },
+            "it": {
+              "prompt": "Nel quadrato $ABCD$ è disegnata una linea formata da due segmenti. Completa la figura in modo che entrambe le diagonali del quadrato siano assi di simmetria della figura.",
+              "explanation": "Rifletti prima la linea rispetto alla diagonale $AC$: la distanza verso destra e la distanza verso l'alto, misurate da $A$, si scambiano.\nRifletti poi la linea e la sua prima immagine rispetto alla diagonale $BD$.\nAlla fine la linea compare quattro volte nella figura: a destra, in alto, a sinistra e in basso."
+            }
+          },
+          "tags": [
+            "zap",
+            "ORIG-ZAP1-2022-9c"
+          ]
+        }
+      ]
+    }
+  ]
+}
