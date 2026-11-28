@@ -101,9 +101,11 @@ DEFAULT_TABLE = "stoa-main"
 DEFAULT_REGION = "eu-central-2"
 
 # How many rounds over the unfinished branches, and pages per branch step: the
-# scheduled run's own step (`STEP_PAGES`), and enough rounds for a branch that
-# needs a later round to settle.
-ROUNDS = 6
+# scheduled run's own step (`STEP_PAGES`), and enough rounds for every branch of
+# the largest production account to make its two clean passes (2026-11-28: an
+# account of 19,393 rows needed more than 6; with 40 only branches stuck on a
+# real error stayed unfinished, #640).
+ROUNDS = 40
 STEP_PAGES = service.STEP_PAGES
 GENERATION_FALLBACK = 1
 
@@ -802,6 +804,9 @@ class AccountRun:
     failures: dict[Key, list[str]]
     unfinished: list[str]
     scans: int
+    branch_state: dict[str, dict[str, Any]] = field(default_factory=dict)
+    s3_deletes: list[str] = field(default_factory=list)
+    provider_calls: list[str] = field(default_factory=list)
 
 
 def _where(exc: BaseException) -> str:
@@ -817,7 +822,12 @@ _DEBT_KEY = re.compile(r"^(?:[a-z_]+:)?(?P<pk>[^|]+)\|(?P<sk>.+)$")
 
 
 def run_account(
-    account: str, snapshot: Snapshot, live_s3: Any, *, now: Callable[[], str]
+    account: str,
+    snapshot: Snapshot,
+    live_s3: Any,
+    *,
+    now: Callable[[], str],
+    rounds: int = ROUNDS,
 ) -> AccountRun:
     """Run the old deletion for `account` against a copy of the snapshot; nothing is sent."""
     sandbox = SandboxTable(snapshot)
@@ -869,7 +879,7 @@ def run_account(
         except Exception as exc:  # noqa: BLE001 - the service logs and goes on, so does this
             note_error("known_key_fast_path", exc)
         results: dict[str, dict[str, Any]] = command["branch_results"]
-        for _round in range(ROUNDS):
+        for _round in range(rounds):
             pending = [
                 branch
                 for branch in service.ACCOUNT_DELETION_BRANCH_IDS
@@ -926,6 +936,15 @@ def run_account(
         failures=dict(effects.failures),
         unfinished=unfinished,
         scans=sandbox.scans,
+        branch_state={
+            branch: {
+                name: command["branch_results"].get(branch, {}).get(name)
+                for name in ("status", "epoch", "quiescent", "debt_counts")
+            }
+            for branch in unfinished
+        },
+        s3_deletes=[call["key"] for call in s3.calls if call["call"] == "delete_object"],
+        provider_calls=list(provider.calls),
     )
 
 
@@ -989,6 +1008,7 @@ def compare_account(
     differences: list[dict[str, Any]] = []
     side: list[dict[str, Any]] = []
     effects: dict[str, dict[str, Counter[str]]] = defaultdict(lambda: defaultdict(Counter))
+    effect_rows: list[dict[str, Any]] = []
     for key in sorted(run.rows):
         before, after = run.rows[key]
         old = old_action(before, after)
@@ -1013,6 +1033,19 @@ def compare_account(
                 declared = tuple(getattr(chosen, "effects", ()))
             for effect in declared:
                 effects[label]["declared"][effect] += 1
+            observed = run.effects.get(key, set())
+            for effect in sorted(set(declared) ^ set(observed)):
+                effect_rows.append(
+                    {
+                        "PK": mask(key[0]),
+                        "SK": mask(key[1]),
+                        "type": label,
+                        "effect": effect,
+                        "kind": "catalog only" if effect in declared else "old only",
+                        "old": old.kind,
+                        "status": str(before.get("status")),
+                    }
+                )
         for effect in run.effects.get(key, ()):
             effects[label]["observed"][effect] += 1
         reason = judge(old, new, after, account)
@@ -1055,6 +1088,12 @@ def compare_account(
         "errors": [{**error, "message": mask(error["message"])} for error in run.errors],
         "unfinished": run.unfinished,
         "scans": run.scans,
+        "effect_rows": effect_rows,
+        "branch_state": json.loads(
+            mask(json.dumps(run.branch_state, default=_json_default, sort_keys=True))
+        ),
+        "s3_deletes": [mask(key) for key in run.s3_deletes],
+        "provider_calls": run.provider_calls,
     }
 
 
@@ -1066,6 +1105,7 @@ def run(
     show_ids: bool = False,
     settings: Settings | None = None,
     progress: Callable[[str], None] = lambda _line: None,
+    rounds: int = ROUNDS,
 ) -> dict[str, Any]:
     """The whole comparison; `live_table` is only scanned and `live_s3` only read."""
     started = time.monotonic()
@@ -1081,7 +1121,11 @@ def run(
     try:
         for index, account in enumerate(chosen, 1):
             result = run_account(
-                account, snapshot, live_s3, now=lambda: datetime.now(UTC).isoformat()
+                account,
+                snapshot,
+                live_s3,
+                now=lambda: datetime.now(UTC).isoformat(),
+                rounds=rounds,
             )
             per_account.append(compare_account(result, named.get(account, set()), snapshot_rows, mask))
             progress(
@@ -1136,6 +1180,19 @@ def summarize(
         "rows_read": rows_read,
         "accounts_live": accounts_live,
         "accounts_compared": len(per_account),
+        "per_account": [
+            {
+                "account": result["account"],
+                "rows_compared": result["rows_compared"],
+                "differences": len(result["differences"]),
+                "unfinished": result["branch_state"],
+                "s3_deletes": result["s3_deletes"],
+                "provider_calls": result["provider_calls"],
+                "errors": result["errors"],
+            }
+            for result in per_account
+        ],
+        "effect_rows": [row for result in per_account for row in result["effect_rows"]],
         "rows_compared": sum(result["rows_compared"] for result in per_account),
         "rows_agreeing": sum(result["rows_agreeing"] for result in per_account),
         "differences": len(differences),
@@ -1201,6 +1258,12 @@ def print_report(report: Mapping[str, Any], *, limit: int, out: Path | None) -> 
         line(f"{error['branch']} | {error['error']} | {error['at']} | {error['message']} | {error['accounts']}")
     line()
     line(f"-- branches not complete after the run (branch: accounts): {report['branches_unfinished']}")
+    line()
+    line("-- per account: rows, differences, unfinished branches (status, epoch, debt)")
+    for entry in report["per_account"]:
+        line(f"{entry['account']}: {entry['rows_compared']} rows, {entry['differences']} differences")
+        for branch, state in entry["unfinished"].items():
+            line(f"    {branch}: {state['status']} epoch={state['epoch']} debt={state['debt_counts']}")
     if out is not None:
         line()
         line(f"full result: {out}")
@@ -1225,6 +1288,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--account", action="append", help="compare only this account (repeatable)")
     parser.add_argument("--out", type=Path, default=Path("compare-deletion-plan.json"))
     parser.add_argument("--limit", type=int, default=300, help="difference rows printed")
+    parser.add_argument(
+        "--rounds", type=int, default=ROUNDS, help="rounds over the unfinished branches"
+    )
     parser.add_argument("--show-ids", action="store_true", help="print account ids as stored")
     return parser.parse_args(argv)
 
@@ -1257,6 +1323,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             show_ids=args.show_ids,
             settings=settings,
             progress=lambda text: print(text, file=sys.stderr, flush=True),
+            rounds=args.rounds,
         )
     args.out.write_text(
         json.dumps(report, indent=2, sort_keys=True, default=_json_default) + "\n",
