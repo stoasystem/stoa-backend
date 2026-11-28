@@ -771,7 +771,16 @@ _ENTRIES: tuple[DataType, ...] = (
         "stoa.services.attachment_service",
         _owner("owner_id", "student_id"),
     ),
-    DataType("attachment_retention_fence", _repo("attachment_repo"), _owner("owner_id")),
+    # The per-resource retention fence (`OWNER#<id>` / `RETENTION#RESOURCE#...`): the
+    # old account deletion opened one per conversation; #655 removed it with its
+    # writers. The entry goes once `scripts/delete_resource_retention_fences.py`
+    # has cleared the stored rows.
+    DataType(
+        "attachment_retention_fence",
+        _repo("attachment_repo"),
+        _owner("owner_id"),
+        lifecycle="no_longer_written",
+    ),
     DataType(
         "upload_intent", "stoa.services.uploads._lifecycle", _owner("owner_id", "student_id")
     ),
@@ -1080,7 +1089,7 @@ UNTYPED: tuple[DataType, ...] = (
         (*_owner("owner_id", "student_id"), _owned_by_partition("USAGE#")),
         untyped_key=KeyShape("USAGE#"),
     ),
-    # The attachment quota row, the last one the attachment purge deletes.
+    # The attachment quota row: deleted once it is empty, after the files it counted.
     DataType(
         "attachment_storage_usage",
         _repo("attachment_repo"),

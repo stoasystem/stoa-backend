@@ -29,9 +29,7 @@ from stoa.services import attachment_service, learning_session, uploads
 from stoa.services.attachment_service import (
     LeaveOutcome,
     delete_attachment,
-    purge_student_attachments,
     release_reference,
-    release_resource_attachments,
 )
 
 OWNER = "student-1"
@@ -331,56 +329,6 @@ def test_a_reference_whose_file_is_gone_is_simply_deleted(table, s3):
     assert table.rows.get((reference["PK"], reference["SK"])) is None
 
 
-# -- the old per-resource release and account purge, now made of the actions ---------------
-
-
-def test_resource_release_and_purge_run_on_the_actions(table, s3):
-    row = _file(table, s3, ref_count=2)
-    _reference(table, "attachment-1", "conversation-1")
-    _reference(table, "attachment-1", "conversation-2")
-
-    first = release_resource_attachments(
-        OWNER, "conversation", "conversation-1", s3=_client(), settings=SETTINGS
-    )
-    assert first == {"released": 1, "deleted": 0}
-    assert first.disposition.value == "complete"
-    second = release_resource_attachments(
-        OWNER, "conversation", "conversation-2", s3=_client(), settings=SETTINGS
-    )
-    assert second == {"released": 1, "deleted": 1}
-    assert not s3.holds(row["immutable_object_key"], row["immutable_version_id"])
-    assert purge_student_attachments(OWNER, s3=_client(), settings=SETTINGS) == {
-        "released": 0,
-        "deleted": 0,
-    }
-
-
-def test_the_account_purge_deletes_every_file_and_upload_and_is_safe_to_repeat(table, s3):
-    held = _file(table, s3, "attachment-held", ref_count=1)
-    _reference(table, "attachment-held", "conversation-1")
-    free = _file(table, s3, "attachment-free")
-    upload = _consumed_upload(table, held)
-    table.seed({**account_deletion_repo.account_fence_key(OWNER), "status": "deletion_pending",
-                "generation": 1})
-
-    result = purge_student_attachments(
-        OWNER, account_fence_generation=1, s3=_client(), settings=SETTINGS
-    )
-    assert result.status.value == "complete", result.debt_counts
-    assert result == {"released": 1, "deleted": 2}
-    for gone in (held, free):
-        assert _row(table, gone["attachment_id"]) is None
-    assert table.rows.get((upload["PK"], upload["SK"])) is None
-    assert s3.objects == {}
-    assert ("STORAGE#" + OWNER, "USAGE") not in table.rows
-
-    again = purge_student_attachments(
-        OWNER, account_fence_generation=1, s3=_client(), settings=SETTINGS
-    )
-    assert again.status.value == "complete"
-    assert again == {"released": 0, "deleted": 0}
-
-
 # -- clean one upload -----------------------------------------------------------------------
 
 
@@ -458,6 +406,8 @@ def test_an_upload_whose_attachment_is_gone_is_cleaned_with_its_staging_debt(tab
     cleaned = table.rows[(upload["PK"], "META")]
     assert cleaned["status"] == "cleanup_complete"
     assert "staging_cleanup_status" not in cleaned
+    # Claiming it for the closing account left the pointer where it was (#636).
+    assert cleaned["durable_attachment_id"] == "attachment-1"
     assert s3.objects == {}
     assert uploads.cleanup(
         cleaned, s3=_client(), settings=SETTINGS, now=NOW, account_fence_generation=generation
@@ -520,29 +470,3 @@ def test_the_sweep_still_blocks_an_upload_whose_attachment_is_there(table, s3):
     assert table.rows[(upload["PK"], "META")]["status"] == "cleanup_blocked"
     assert s3.holds(attachment["immutable_object_key"], attachment["immutable_version_id"])
     assert table.calls["scan"] == scans
-
-
-def test_settling_staging_debt_no_longer_fails_on_a_missing_argument(table, s3):
-    """`settle_staging_debts` called `_reconcile_staging_cleanup_debt` without `repository=`."""
-    staging_version, staging_etag = _put_object(s3, "staging/upload-validated")
-    table.seed(
-        {
-            "PK": "UPLOAD#upload-validated",
-            "SK": "META",
-            "entity_type": "upload_intent",
-            "upload_id": "upload-validated",
-            "owner_id": OWNER,
-            "student_id": OWNER,
-            "status": "validated",
-            "version": 4,
-            "staging_object_key": "staging/upload-validated",
-            "staging_version_id": staging_version,
-            "staging_etag": staging_etag,
-            "staging_cleanup_status": "pending",
-            "created_at": NOW.isoformat(),
-        }
-    )
-
-    assert uploads.settle_staging_debts(OWNER, s3=_client(), settings=SETTINGS)
-    assert not s3.holds("staging/upload-validated", staging_version)
-    assert "staging_cleanup_status" not in table.rows[("UPLOAD#upload-validated", "META")]

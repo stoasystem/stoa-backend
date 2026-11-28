@@ -15,7 +15,6 @@ from typing import Protocol, runtime_checkable
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
-from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -251,7 +250,6 @@ class TransactionOperationKind(StrEnum):
     ASSISTANT_MESSAGE_PUT = "assistant_message_put"
     KNOWLEDGE_GAP_UPDATE = "knowledge_gap_update"
     ASKED_KNOWLEDGE_PUT = "asked_knowledge_put"
-    RESOURCE_RETENTION_FENCE_CHECK = "resource_retention_fence_check"
     ACCOUNT_RETENTION_FENCE_CHECK = "account_retention_fence_check"
 
 
@@ -291,27 +289,6 @@ def attachment_key(attachment_id: str) -> dict[str, str]:
 
 def storage_key(owner_id: str) -> dict[str, str]:
     return {"PK": f"STORAGE#{owner_id}", "SK": "USAGE"}
-
-
-def retention_fence_key(
-    owner_id: str,
-    *,
-    resource_type: str | None = None,
-    resource_id: str | None = None,
-) -> dict[str, str]:
-    if resource_type is None and resource_id is None:
-        return account_deletion_repo.account_fence_key(owner_id)
-    if (
-        not isinstance(resource_type, str)
-        or not resource_type.strip()
-        or not isinstance(resource_id, str)
-        or not resource_id.strip()
-    ):
-        raise AttachmentRepositoryConflict("conditional_conflict")
-    return {
-        "PK": f"OWNER#{owner_id}",
-        "SK": f"RETENTION#RESOURCE#{resource_type}#{resource_id}",
-    }
 
 
 def association_key(
@@ -641,7 +618,7 @@ def delete_empty_storage_usage(
     operations: list[dict[str, object]] = [
         {
             "ConditionCheck": {
-                "Key": retention_fence_key(owner_id),
+                "Key": account_deletion_repo.account_fence_key(owner_id),
                 "ConditionExpression": "#status=:pending AND generation=:generation",
                 "ExpressionAttributeNames": {"#status": "status"},
                 "ExpressionAttributeValues": {
@@ -706,31 +683,10 @@ def build_message_attachment_transaction(
     trailing_operations: Sequence[TransactionOperation] = (),
 ) -> list[TransactionOperation]:
     """The message's own operations; `transact(..., owner=owner_id)` puts the fence first."""
-    operations: list[TransactionOperation] = []
-    if associations:
-        resource_type = _required_text(
-            associations[0].get("resource_type") or "conversation"
-        )
-        resource_id = _required_text(associations[0].get("resource_id"))
-        operations.append(
-            TransactionOperation(
-                TransactionOperationKind.RESOURCE_RETENTION_FENCE_CHECK,
-                {
-                    "ConditionCheck": {
-                        "Key": retention_fence_key(
-                            owner_id,
-                            resource_type=resource_type,
-                            resource_id=resource_id,
-                        ),
-                        "ConditionExpression": "attribute_not_exists(PK) OR #status=:complete",
-                        "ExpressionAttributeNames": {"#status": "status"},
-                        "ExpressionAttributeValues": {":complete": "complete"},
-                    }
-                },
-            )
-        )
     # The message's own put, as `learning_session.append` made it (#227).
-    operations.append(TransactionOperation(TransactionOperationKind.MESSAGE_PUT, message_put))
+    operations: list[TransactionOperation] = [
+        TransactionOperation(TransactionOperationKind.MESSAGE_PUT, message_put)
+    ]
     # Each fresh attachment rides with the consume of the upload it was made
     # from, as `uploads.consume_operation` builds it.
     for consume, attachment in fresh:
@@ -823,8 +779,6 @@ def build_reply_image_operations(
     fresh: list[tuple[dict[str, object], dict[str, object]]],
     associations: list[dict[str, object]],
     owner_id: str,
-    account_fence_generation: int,
-    conversation_id: str,
     now_iso: str,
 ) -> list[dict[str, object]]:
     """A teacher's reply images, as part of the reply's own transaction (#145).
@@ -834,24 +788,13 @@ def build_reply_image_operations(
     the attachment it becomes to the owner, the student whose conversation it
     is: the upload row's cleanup belongs with the attachment it points at.
     Left the teacher's, it would hold the teacher's account deletion forever,
-    since the teacher's purge can neither clean it nor see the attachment that
+    since the teacher's deletion can neither clean it nor see the attachment that
     keeps it. The student's account fence is the reply's to check: one
     transaction cannot check a row twice. The owner's usage grows by the
     images, but the owner's quota does not refuse them: a teacher cannot free
     a student's storage.
     """
-    operations: list[dict[str, object]] = [
-        {
-            "ConditionCheck": {
-                "Key": retention_fence_key(
-                    owner_id, resource_type="conversation", resource_id=conversation_id
-                ),
-                "ConditionExpression": "attribute_not_exists(PK) OR #status=:complete",
-                "ExpressionAttributeNames": {"#status": "status"},
-                "ExpressionAttributeValues": {":complete": "complete"},
-            }
-        }
-    ]
+    operations: list[dict[str, object]] = []
     for consume, attachment in fresh:
         attachment_id = _required_text(attachment.get("attachment_id"))
         operations.append(consume)
@@ -898,229 +841,6 @@ def get_storage_usage(owner_id: str, *, table: object | None = None) -> int:
     response = _get_item(table, Key=storage_key(owner_id), ConsistentRead=True)
     item = _optional_mapping(response.get("Item")) or {}
     return _required_integer(item.get("used_bytes", 0))
-
-
-def list_owner_attachment_items(
-    owner_id: str,
-    *,
-    table: object | None = None,
-    maximum_pages: int | None = None,
-    maximum_items: int | None = None,
-    entity_types: frozenset[str] | None = frozenset(
-        {"attachment", "attachment_association"}
-    ),
-    fence: dict[str, object] | None = None,
-) -> list[dict[str, object]]:
-    """Exhaustively read the authoritative table before inferring reference absence.
-
-    DynamoDB GSIs cannot provide strongly consistent reads. Retention therefore scans
-    the base table with ConsistentRead and validates every pagination transition.
-
-    By default the read goes on until the table ends, a page at a time of whatever
-    the table returns (up to 1 MB). It used to stop at a hundred pages of a hundred
-    rows and fail, so once the table passed ten thousand rows every caller failed
-    with it, an account deletion's attachment branch included (#397). A caller that
-    wants a bound still passes one; a repeating or malformed cursor still fails.
-    """
-    if not isinstance(owner_id, str) or not data_catalog.is_account_id(owner_id):
-        raise AttachmentRepositoryConflict("conditional_conflict")
-    seen_cursors: set[tuple[str, str]] = set()
-    seen_keys: set[tuple[str, str]] = set()
-    result: list[dict[str, object]] = []
-    request: dict[str, object] = {"ConsistentRead": True}
-    if maximum_items is not None:
-        request["Limit"] = min(100, maximum_items)
-    try:
-        source = db_table.pages("scan", table=table, **request)
-    except Exception:
-        raise AttachmentRepositoryConflict("dependency_failure") from None
-    page_count = 0
-    while maximum_pages is None or page_count < maximum_pages:
-        page_count += 1
-        try:
-            page = next(source)
-        except AttachmentRepositoryConflict:
-            raise
-        except Exception:
-            raise AttachmentRepositoryConflict("dependency_failure") from None
-        for raw_item in page.items:
-            item = _mapping(raw_item)
-            if not data_catalog.owns(item, owner_id):
-                continue
-            if entity_types is not None and item.get("entity_type") not in entity_types:
-                continue
-            pk = item.get("PK")
-            sk = item.get("SK")
-            if not isinstance(pk, str) or not pk or not isinstance(sk, str) or not sk:
-                raise AttachmentRepositoryConflict("conditional_conflict")
-            identity = (pk, sk)
-            if identity in seen_keys:
-                continue
-            seen_keys.add(identity)
-            result.append(item)
-            if maximum_items is not None and len(result) > maximum_items:
-                raise AttachmentRepositoryConflict("dependency_failure")
-        if page.last_key is None:
-            if fence is not None and not advance_retention_fence_cursor(
-                fence, None, table=table
-            ):
-                raise AttachmentRepositoryConflict("conditional_conflict")
-            return result
-        cursor_pk, cursor_sk = page.last_key["PK"], page.last_key["SK"]
-        if not isinstance(cursor_pk, str) or not isinstance(cursor_sk, str):
-            raise AttachmentRepositoryConflict("dependency_failure")
-        cursor_identity = (cursor_pk, cursor_sk)
-        if cursor_identity in seen_cursors:
-            raise AttachmentRepositoryConflict("dependency_failure")
-        seen_cursors.add(cursor_identity)
-        cursor = {"PK": cursor_pk, "SK": cursor_sk}
-        if fence is not None and not advance_retention_fence_cursor(
-            fence, cursor, table=table
-        ):
-            raise AttachmentRepositoryConflict("conditional_conflict")
-    raise AttachmentRepositoryConflict("dependency_failure")
-
-
-def activate_retention_fence(
-    owner_id: str,
-    *,
-    resource_type: str | None = None,
-    resource_id: str | None = None,
-    now_iso: str,
-    table: object | None = None,
-) -> dict[str, object]:
-    """Create one durable active fence, or resume the existing generation."""
-    key = retention_fence_key(
-        owner_id, resource_type=resource_type, resource_id=resource_id
-    )
-    try:
-        _update_item(table,
-            Key=key,
-            UpdateExpression=(
-                "SET owner_id=:owner, entity_type=:entity, schema_version=:schema, "
-                "#status=:active, generation=if_not_exists(generation,:zero)+:one, "
-                "retention_stage=:fenced, updated_at=:now, quiescent_passes=:zero "
-                "REMOVE retention_cursor"
-            ),
-            ConditionExpression="attribute_not_exists(PK) OR #status=:complete",
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={
-                ":owner": owner_id,
-                ":entity": "attachment_retention_fence",
-                ":schema": "attachment-retention.v1",
-                ":active": "active",
-                ":complete": "complete",
-                ":fenced": "fenced",
-                ":zero": 0,
-                ":one": 1,
-                ":now": now_iso,
-            },
-        )
-    except db_table.WriteRefused:
-        pass
-    except Exception:
-        raise AttachmentRepositoryConflict("dependency_failure") from None
-    try:
-        response = _get_item(table, Key=key, ConsistentRead=True)
-    except Exception:
-        raise AttachmentRepositoryConflict("dependency_failure") from None
-    item = _optional_mapping(response.get("Item"))
-    if (
-        not isinstance(item, dict)
-        or item.get("owner_id") != owner_id
-        or item.get("status") != "active"
-    ):
-        raise AttachmentRepositoryConflict("conditional_conflict")
-    # The stored generation arrives as Decimal, so it goes through the normalizer.
-    _required_integer(item.get("generation"), minimum=1)
-    return item
-
-
-def complete_retention_fence(
-    fence: dict[str, object], *, now_iso: str, table: object | None = None
-) -> bool:
-    # The canonical account fence is permanent. Only resource-retention fences
-    # transition to complete; Plan 35 owns the terminal account lifecycle state.
-    if fence.get("SK") == "ACCOUNT_FENCE":
-        return False
-    fence_pk = _required_text(fence.get("PK"))
-    fence_sk = _required_text(fence.get("SK"))
-    generation = _required_integer(fence.get("generation"), minimum=1)
-    try:
-        _update_item(table,
-            Key={"PK": fence_pk, "SK": fence_sk},
-            UpdateExpression=(
-                "SET #status=:complete, retention_stage=:complete, updated_at=:now "
-                "REMOVE retention_cursor"
-            ),
-            ConditionExpression="#status=:active AND generation=:generation",
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={
-                ":active": "active",
-                ":complete": "complete",
-                ":generation": generation,
-                ":now": now_iso,
-            },
-        )
-    except db_table.WriteRefused:
-        return False
-    except Exception:
-        raise AttachmentRepositoryConflict("dependency_failure") from None
-    return True
-
-
-def advance_retention_fence_cursor(
-    fence: dict[str, object],
-    cursor: dict[str, str] | None,
-    *,
-    table: object | None = None,
-) -> bool:
-    """Persist validated scan progress and count completed quiescence passes."""
-    if cursor is None:
-        update = (
-            "SET retention_stage=:releasing, "
-            "quiescent_passes=if_not_exists(quiescent_passes,:zero)+:one "
-            "REMOVE retention_cursor"
-        )
-        values: dict[str, object] = {
-            ":releasing": "references_releasing",
-            ":zero": 0,
-            ":one": 1,
-        }
-    elif (
-        isinstance(cursor, dict)
-        and set(cursor) == {"PK", "SK"}
-        and all(isinstance(cursor[field], str) and cursor[field] for field in ("PK", "SK"))
-    ):
-        update = "SET retention_stage=:releasing, retention_cursor=:cursor"
-        values = {":releasing": "references_releasing", ":cursor": cursor}
-    else:
-        raise AttachmentRepositoryConflict("conditional_conflict")
-    fence_pk = _required_text(fence.get("PK"))
-    fence_sk = _required_text(fence.get("SK"))
-    generation = _required_integer(fence.get("generation"), minimum=1)
-    values.update(
-        {
-            ":active": "active",
-            ":pending": "deletion_pending",
-            ":generation": generation,
-        }
-    )
-    try:
-        _update_item(table,
-            Key={"PK": fence_pk, "SK": fence_sk},
-            UpdateExpression=update,
-            ConditionExpression=(
-                "#status IN (:active,:pending) AND generation=:generation"
-            ),
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues=values,
-        )
-    except db_table.WriteRefused:
-        return False
-    except Exception:
-        raise AttachmentRepositoryConflict("dependency_failure") from None
-    return True
 
 
 def build_release_reference_transaction(

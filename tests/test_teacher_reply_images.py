@@ -14,6 +14,7 @@ multipart double and Rekognition `fakes.rekognition`.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import hashlib
 from io import BytesIO
 import random
@@ -33,7 +34,8 @@ from stoa.aws import Kind
 from stoa.config import Settings
 from stoa.routers import conversations, files, teachers
 from stoa.security.declared_authorization import get_authorization_fact_repository
-from stoa.services import attachment_service
+from stoa.db import data_catalog
+from stoa.services import account_deletion_flow, attachment_service
 from test_chat_help_request_lifecycle import (
     CONV,
     OTHER_TEACHER,
@@ -278,9 +280,9 @@ def test_the_teacher_sees_their_image_in_the_request_too(table, api) -> None:
 
 
 def test_the_image_goes_with_the_students_conversation(table, api) -> None:
-    # The image is the student's, as the reply is (#74): the hook the student's
-    # account deletion releases each conversation's attachments through takes
-    # it too, stored image and all.
+    # The image is the student's, as the reply is (#74): letting go of the
+    # reply's reference, as the student's account deletion does row by row,
+    # takes it too, stored image and all.
     _dispatch_to(table, TEACHER)
     teacher = api.client()
     assert _set_status(teacher, "in_progress").status_code == 200
@@ -290,36 +292,50 @@ def test_the_image_goes_with_the_students_conversation(table, api) -> None:
     student = api.client(STUDENT, role="student")
     assert student.delete(f"/files/attachments/{sent['attachmentId']}").status_code == 409
 
-    released = attachment_service.release_conversation_attachments(
-        STUDENT, CONV, s3=api.s3, settings=Settings(s3_images_bucket=BUCKET)
+    [reference] = [
+        row
+        for row in table.rows.values()
+        if row.get("entity_type") == "attachment_association" and row["resource_id"] == CONV
+    ]
+    assert reference["owner_id"] == STUDENT
+    released = attachment_service.release_reference(
+        reference, s3=api.s3, settings=Settings(s3_images_bucket=BUCKET)
     )
 
-    assert (released.disposition, released["deleted"]) == ("complete", 1)
+    assert released is attachment_service.LeaveOutcome.DONE
     assert [key for key in api.s3.objects if key[0].startswith("objects/")] == []
     assert (f"ATTACHMENT#{sent['attachmentId']}", "META") not in table.rows
 
 
-PURGE_ROUNDS = 4
+LEAVE_ROUNDS = 4
+_LEAVING = ("attachment_association", "attachment", "upload_intent")
 
 
-def _purge_account(table, api: _Api, user_id: str) -> list[str]:
-    """Run the account purge's attachment branch for `user_id`, as the deletion job does.
+def _leave_account(table, api: _Api, user_id: str) -> list[tuple[str, str]]:
+    """Take `user_id`'s references, files and uploads as account deletion does; what is left.
 
-    Each round is one job pass; the job stops at the first one that completes.
+    Each row the catalog says the account owns goes by the flow's own hook for
+    its type (`account_deletion_flow`), a round being one pass of the job.
     """
     table.rows[(f"USER#{user_id}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
-    outcomes = []
-    for _round in range(PURGE_ROUNDS):
-        result = attachment_service.purge_student_attachments(
-            user_id,
-            account_fence_generation=1,
-            s3=api.s3,
-            settings=Settings(s3_images_bucket=BUCKET),
-        )
-        outcomes.append(result.status.value)
-        if result.status.value == "complete":
+    now = datetime.now(UTC)
+    visit = account_deletion_flow._Visit(
+        user_id, 1, now.isoformat(), int(now.timestamp()), _s3=api.s3
+    )
+
+    def owned() -> list[dict[str, Any]]:
+        return [
+            row
+            for row in list(table.rows.values())
+            if row.get("entity_type") in _LEAVING and data_catalog.owns(row, user_id)
+        ]
+
+    for _round in range(LEAVE_ROUNDS):
+        for row in sorted(owned(), key=lambda row: _LEAVING.index(row["entity_type"])):
+            account_deletion_flow.handle_row(row, visit)
+        if not owned():
             break
-    return outcomes
+    return [(row["PK"], row["SK"]) for row in owned()]
 
 
 def test_the_teachers_account_deletion_completes_and_the_image_stays_the_students(
@@ -334,9 +350,7 @@ def test_the_teachers_account_deletion_completes_and_the_image_stays_the_student
     upload_id = api.uploaded(teacher, data)
     [sent] = _reply(teacher, upload_id).json()["attachments"]
 
-    outcomes = _purge_account(table, api, TEACHER)
-
-    assert outcomes[-1] == "complete", outcomes
+    assert _leave_account(table, api, TEACHER) == []
     student = api.client(STUDENT, role="student")
     content = student.get(f"/files/attachments/{sent['attachmentId']}/content")
     assert content.status_code == 200, content.text
@@ -350,9 +364,7 @@ def test_the_students_account_deletion_takes_the_teachers_image(table, api) -> N
     upload_id = api.uploaded(teacher, _png())
     [sent] = _reply(teacher, upload_id).json()["attachments"]
 
-    outcomes = _purge_account(table, api, STUDENT)
-
-    assert outcomes[-1] == "complete", outcomes
+    assert _leave_account(table, api, STUDENT) == []
     assert [key for key in api.s3.objects if key[0].startswith("objects/")] == []
     assert (f"ATTACHMENT#{sent['attachmentId']}", "META") not in table.rows
     assert (f"UPLOAD#{upload_id}", "META") not in table.rows

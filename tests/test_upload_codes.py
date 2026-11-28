@@ -42,7 +42,7 @@ from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations, upload_codes
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services import attachment_service, upload_code_service
+from stoa.services import account_deletion_flow, upload_code_service
 from fakes.admission import seed_plan
 from fakes.ask_question import AtomicAllowanceTable, _patch_allowance_table
 from fakes.model import FakeModel, install
@@ -657,7 +657,8 @@ def test_a_code_from_an_earlier_account_generation_is_dead(monkeypatch, table) -
     assert _refusal(api.redeem(issued["code"])) == INVALID
 
 
-def test_account_deletion_sweeps_the_students_codes(monkeypatch, table) -> None:
+def test_account_deletion_takes_the_students_codes(monkeypatch, table) -> None:
+    """Account deletion handles each row as the catalog says (#641): a code is deleted."""
     api = _Api(monkeypatch, table)
     api.code()
     api.redeem(api.code()["code"])
@@ -665,9 +666,11 @@ def test_account_deletion_sweeps_the_students_codes(monkeypatch, table) -> None:
     assert foreign.status_code == 200
     _enter_deletion(table)
 
-    attachment_service.purge_student_attachments(
-        STUDENT, account_fence_generation=1, s3=api.s3, settings=api.settings
+    visit = account_deletion_flow._Visit(
+        STUDENT, 1, START.isoformat(), int(START.timestamp())
     )
+    for row in api.rows("upload_code"):
+        account_deletion_flow.handle_row(row, visit)
 
     assert [row["owner_id"] for row in api.rows("upload_code")] == [OTHER_STUDENT]
 

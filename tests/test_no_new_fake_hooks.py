@@ -3,8 +3,9 @@
 A hook such as `hook = getattr(target, "claim_delivery_intent", None)` lets a fake
 table or fake repository stand in for one step. The real boto3 Table has no such
 attribute, so production always takes the other branch, and a fake that lacks the
-method silently skips the step: `release_resource_attachments` ran without its
-retention fence for any repository without `activate_retention_fence`.
+method silently skips the step: the old per-resource attachment release ran
+without its retention fence for any repository lacking the method that opened
+it (both gone with #655).
 
 #629 removed the fifteen hooks no fake used any more. The ones listed below are
 still in use. The account-deletion ones went with the old deletion branches (#642),

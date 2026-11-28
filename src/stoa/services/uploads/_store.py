@@ -31,8 +31,6 @@ from stoa.db.repositories.attachment_repo import (
     _required_integer,
     _required_text,
     _update_item,
-    list_owner_attachment_items,
-    retention_fence_key,
     transact,
 )
 
@@ -855,13 +853,18 @@ def claim_account_upload_cleanup(
     account_fence_generation: int,
     table: object | None = None,
 ) -> dict[str, object] | None:
-    """Make any account-owned upload non-consumable under the account fence."""
+    """Make any account-owned upload non-consumable under the account fence.
+
+    The upload goes on naming the attachment it became (`durable_attachment_id`):
+    while that attachment is there the cleanup leaves the upload to it, and once
+    it is gone the cleanup takes the upload (#636).
+    """
     upload_id = _required_text(upload.get("upload_id"))
     upload_version = _required_integer(upload.get("version"), minimum=1)
     operations: list[dict[str, object]] = [
         {
             "ConditionCheck": {
-                "Key": retention_fence_key(owner_id),
+                "Key": account_deletion_repo.account_fence_key(owner_id),
                 "ConditionExpression": "#status=:pending AND generation=:generation",
                 "ExpressionAttributeNames": {"#status": "status"},
                 "ExpressionAttributeValues": {
@@ -879,7 +882,6 @@ def claim_account_upload_cleanup(
                 condition="#status<>:complete",
                 values={":complete": UploadStatus.CLEANUP_COMPLETE.value},
                 attributes={"cleanup_reason": "account_closure"},
-                remove=("durable_attachment_id",),
             )
         },
     ]
@@ -907,7 +909,7 @@ def delete_account_upload_tombstone(
     operations: list[dict[str, object]] = [
         {
             "ConditionCheck": {
-                "Key": retention_fence_key(owner_id),
+                "Key": account_deletion_repo.account_fence_key(owner_id),
                 "ConditionExpression": "#status=:pending AND generation=:generation",
                 "ExpressionAttributeNames": {"#status": "status"},
                 "ExpressionAttributeValues": {
@@ -1281,17 +1283,3 @@ def consume_operation(
             attributes=attributes,
         )
     }
-
-
-def list_owner_staging_cleanup_debts(
-    owner_id: str, *, table: object | None = None
-) -> list[dict[str, object]]:
-    return [
-        item
-        for item in list_owner_attachment_items(
-            owner_id,
-            table=table,
-            entity_types=None,
-        )
-        if item.get("staging_cleanup_status") == "pending"
-    ]

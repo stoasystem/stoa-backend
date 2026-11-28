@@ -85,7 +85,6 @@ HAND_WRITTEN_DOUBLES: dict[str, str] = {
         "script: records the scan request and answers nothing; the assertion is "
         "about what was asked for, not about what comes back"
     ),
-    "test_attachment_retention_reconciliation.py::_StrongPagedTable": "script",
     "test_account_deletion_completed_replay.py::_DeletionTable": "repo",
     "test_privileged_identity_reconciliation.py::CapabilityTable": "repo",
     "test_subscription_operations.py::FakeTable": "repo",

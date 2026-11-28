@@ -20,15 +20,14 @@ ready, failed or expired. The entry points:
   update that spends it, for the caller's own transaction.
 - `cleanup` cleans one upload: the sweep's (`jobs.upload_cleanup`), on what
   `cleanup_candidates` finds, and account deletion's, on each of the account's
-  upload rows. `purge_for_account` and `settle_staging_debts` are the old
-  account purge's, until #655.
+  upload rows.
 
 The durable attachment an upload becomes is `attachment_service`'s.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -59,8 +58,6 @@ __all__ = [
     "consume_operation",
     "phase",
     "preview",
-    "purge_for_account",
-    "settle_staging_debts",
     "sign_part",
     "start",
     "status",
@@ -277,59 +274,6 @@ def leave_for_account_deletion(
     except Exception:
         pass
     return _store.get_upload_intent(upload_id) is None
-
-
-def purge_for_account(
-    student_id: str,
-    owner_items: Iterable[Mapping[str, Any]],
-    *,
-    account_fence_generation: int,
-    live_attachment_ids: set[str],
-    s3: Any,
-    settings: Settings,
-    now: datetime,
-) -> None:
-    """Clean every upload among the deleted account's rows, by `cleanup` on each.
-
-    An upload whose attachment is still live goes with that attachment instead.
-    Each cleaned upload's tombstone is deleted under the account's deletion
-    fence. A step that fails leaves the upload for the purge's next pass.
-    """
-    for upload in owner_items:
-        if upload.get("entity_type") != "upload_intent":
-            continue
-        durable_attachment_id = upload.get("durable_attachment_id")
-        if isinstance(durable_attachment_id, str) and durable_attachment_id in live_attachment_ids:
-            continue
-        if upload.get("owner_id") != student_id:
-            continue
-        outcome = cleanup(
-            upload,
-            s3=s3,
-            settings=settings,
-            now=now,
-            account_fence_generation=account_fence_generation,
-        )
-        if outcome == "deleted":
-            try:
-                _store.delete_account_upload_tombstone(
-                    str(upload["upload_id"]),
-                    owner_id=student_id,
-                    account_fence_generation=account_fence_generation,
-                )
-            except Exception:
-                pass
-
-
-def settle_staging_debts(student_id: str, *, s3: Any, settings: Settings) -> bool:
-    """Delete every staging copy the owner's promoted uploads still owe; whether all went."""
-    debts = _store.list_owner_staging_cleanup_debts(student_id)
-    return all(
-        _lifecycle._reconcile_staging_cleanup_debt(
-            debt, s3=s3, settings=settings, repository=_store
-        )
-        for debt in debts
-    )
 
 
 def _read(upload_id: str) -> dict[str, Any] | None:
