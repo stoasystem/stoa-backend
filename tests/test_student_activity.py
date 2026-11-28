@@ -207,7 +207,7 @@ def test_the_entries_of_a_period_are_the_sessions_started_and_the_practice_in_it
     ]
 
 
-@pytest.mark.parametrize("locale", locale_service.SUPPORTED_LOCALES)
+@pytest.mark.parametrize("locale", sorted(locale_service.SUPPORTED_LOCALES))
 def test_the_titles_are_in_the_language_the_caller_asks_for(fake_table, locale: str) -> None:
     typical.seed(fake_table, typical.JONAS)
     typical.seed(fake_table, typical.LENA)
