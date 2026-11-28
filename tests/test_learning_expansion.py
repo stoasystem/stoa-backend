@@ -142,9 +142,12 @@ def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatc
     body = response.json()
     physics = next(item for item in body["subjectActivity"] if item["subject"] == "physics")
     german = next(item for item in body["subjectActivity"] if item["subject"] == "german")
-    assert physics["questionCount"] == 1
+    # Question rows of the retired flow are no activity (#695): only their
+    # rating and the knowledge points they named are still read.
+    assert physics["questionCount"] == 0
     assert physics["feedbackAverage"] == 4
-    assert german["teacherEscalationCount"] == 1
+    assert german["teacherEscalationCount"] == 0
+    assert german["feedbackAverage"] == 2
     assert body["weakTopics"][0]["topicId"] == "forces"
     assert body["weakTopics"][0]["count"] == 2
 

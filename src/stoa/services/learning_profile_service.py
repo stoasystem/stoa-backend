@@ -12,6 +12,7 @@ from stoa.services import (
     curriculum_service,
     locale_service,
     message_catalog,
+    student_activity,
     student_evidence,
     weak_topics,
 )
@@ -278,12 +279,19 @@ def build_learning_profile(
 ) -> dict[str, Any]:
     """The student's activity per subject and their weak topics.
 
-    `questions` are the retired flow's question rows: they make the activity,
-    and count among the weak topics as Ask records do. `asked` are the records
-    of what the student's Ask questions named (`asked_knowledge_repo`, #143).
-    The weak topics are `weak_topics.for_student`'s first ten, named in
-    `locale`; nothing here counts them (#673). A caller that already has them
-    from the same evidence passes them as `weak`.
+    The three totals of a subject (`questionCount`, `aiResolvedCount`,
+    `teacherEscalationCount`) are `student_activity`'s new questions, AI
+    resolved and asked a teacher (#633, #695), over the last 90 days to
+    `evidence.now`: the stretch the weak topics are judged over.
+
+    `questions` are the retired flow's question rows. They count among the
+    weak topics as Ask records do, and their `student_feedback` is all
+    `feedbackAverage` has; nothing writes them now, so it is None for a new
+    student. `asked` are the records of what the student's Ask questions
+    named (`asked_knowledge_repo`, #143). The weak topics are
+    `weak_topics.for_student`'s first ten, named in `locale`; nothing here
+    counts them (#673). A caller that already has them from the same evidence
+    passes them as `weak`.
     """
     activity: dict[str, dict[str, Any]] = {}
     feedback_totals: dict[str, list[int]] = defaultdict(list)
@@ -291,19 +299,18 @@ def build_learning_profile(
     for subject_id in curriculum_service.SUPPORTED_SUBJECTS:
         activity[subject_id] = _empty_subject_activity(subject_id)
 
-    for question in questions:
-        subject_id = _safe_subject(question.get("subject"))
+    period = student_activity.last_days(weak_topics.WINDOW.days, evidence.now)
+    counted = student_activity.counts(student_id, period, evidence=evidence)
+    for subject_id, numbers in counted.by_subject.items():
         item = activity.setdefault(subject_id, _empty_subject_activity(subject_id))
-        item["questionCount"] += 1
-        if question.get("status") == "ai_answered":
-            item["aiResolvedCount"] += 1
-        if question.get("status") in {"escalated", "teacher_requested", "teacher_active", "resolved"} or question.get(
-            "teacher_help_requested"
-        ):
-            item["teacherEscalationCount"] += 1
+        item["questionCount"] = numbers.new_questions
+        item["aiResolvedCount"] = numbers.ai_resolved
+        item["teacherEscalationCount"] = numbers.teacher_help
+
+    for question in questions:
         feedback = stored_int(question.get("student_feedback"))
         if feedback is not None:
-            feedback_totals[subject_id].append(feedback)
+            feedback_totals[_safe_subject(question.get("subject"))].append(feedback)
 
     for subject_id, values in feedback_totals.items():
         activity.setdefault(subject_id, _empty_subject_activity(subject_id))["feedbackAverage"] = round(
