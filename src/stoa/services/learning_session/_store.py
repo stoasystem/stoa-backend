@@ -114,6 +114,29 @@ def student_record_pages(student_id: str, *, page_size: int | None) -> Iterator[
     )
 
 
+def student_rows_between(student_id: str, low: str, high: str) -> Iterator[dict[str, Any]]:
+    """The student's records and assistant messages created between `low` and `high`.
+
+    Read on `GSI-StudentId`, oldest first, every page: the bounds are compared
+    as the stored strings, inclusive at both ends, so the caller widens them
+    and judges each row's moment itself.
+    """
+    reads = db_table.pages(
+        "query",
+        key=STUDENT_INDEX_KEY,
+        table=db_table.table(),
+        IndexName="GSI-StudentId",
+        KeyConditionExpression=(
+            Key("student_id").eq(student_id) & Key("created_at").between(low, high)
+        ),
+        FilterExpression=Attr("entity_type").eq("conversation")
+        | (Attr("entity_type").eq("conversation_message") & Attr("role").eq("assistant")),
+        ScanIndexForward=True,
+    )
+    for page in reads:
+        yield from page.items
+
+
 # ── Fenced writes of the record (moved from attachment_repo) ──────────────────
 
 

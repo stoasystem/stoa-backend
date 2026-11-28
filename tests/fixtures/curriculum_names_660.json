@@ -1705,13 +1705,13 @@
  },
  "parent_history": {
   "de": {
-   "digest": "a98790d3cfd264ac988850a1d958159e7708c2ad7bc317829449acb6c7441288",
+   "digest": "b9f8a9dd5a35b3579c84daf57a01fd50f4c01fa084cbdc0d8422a6844e8d345e",
    "names": [
     ".items[0].subject=mathematics",
     ".items[0].summary=brueche",
     ".items[0].title=Übungslektion abgeschlossen",
     ".items[1].subject=mathematics",
-    ".items[1].summary=Freies Thema",
+    ".items[1].summary=",
     ".items[1].title=Fehler notiert",
     ".items[2].subject=mathematics",
     ".items[2].summary=Gleichungen",
@@ -1767,13 +1767,13 @@
    ]
   },
   "en": {
-   "digest": "915e169593b2a42cf08648c3f42af349e1477ccbde77a6d7208e7255c76a7dea",
+   "digest": "94f2389d6ef96df8343934736616c942b35f91317e5537001cc5b72eb93cbadc",
    "names": [
     ".items[0].subject=mathematics",
     ".items[0].summary=brueche",
     ".items[0].title=Practice lesson completed",
     ".items[1].subject=mathematics",
-    ".items[1].summary=Freies Thema",
+    ".items[1].summary=",
     ".items[1].title=Practice mistake logged",
     ".items[2].subject=mathematics",
     ".items[2].summary=Equations",
@@ -1829,13 +1829,13 @@
    ]
   },
   "fr": {
-   "digest": "54c644219b752c25c74ecb568d0362cfb7b5d0086ffd619fa2c93bec6f3e7969",
+   "digest": "0ada1e0645754e7139ab76baf01f9826597c08ff2077b0297d6c298c31424316",
    "names": [
     ".items[0].subject=mathematics",
     ".items[0].summary=brueche",
     ".items[0].title=Leçon d'exercices terminée",
     ".items[1].subject=mathematics",
-    ".items[1].summary=Freies Thema",
+    ".items[1].summary=",
     ".items[1].title=Erreur notée",
     ".items[2].subject=mathematics",
     ".items[2].summary=Équations",
@@ -1891,13 +1891,13 @@
    ]
   },
   "it": {
-   "digest": "86fabe41040a63fbe3c943a5fc462fbda3226ff0e31f18900d7c0070d7644a5e",
+   "digest": "dbf6726891ec75ac8f3981369d1f668c3b2bf449e64ae3bc94b6ee7e25d7f972",
    "names": [
     ".items[0].subject=mathematics",
     ".items[0].summary=brueche",
     ".items[0].title=Lezione di esercizi completata",
     ".items[1].subject=mathematics",
-    ".items[1].summary=Freies Thema",
+    ".items[1].summary=",
     ".items[1].title=Errore annotato",
     ".items[2].subject=mathematics",
     ".items[2].summary=Equazioni",
@@ -2073,13 +2073,13 @@
  },
  "parent_summary": {
   "de": {
-   "digest": "97b2be1434fe725efefae3fbae911e1600ab58d035d30056793e99d833dc2556",
+   "digest": "0867360c82aea4a04dfcb216df894855bdab8d2e2e884bc17ef7893411d0b14b",
    "names": [
     ".recentActivity[0].subject=mathematics",
     ".recentActivity[0].summary=brueche",
     ".recentActivity[0].title=Übungslektion abgeschlossen",
     ".recentActivity[1].subject=mathematics",
-    ".recentActivity[1].summary=Freies Thema",
+    ".recentActivity[1].summary=",
     ".recentActivity[1].title=Fehler notiert",
     ".recentActivity[2].subject=mathematics",
     ".recentActivity[2].summary=Gleichungen",
@@ -2094,13 +2094,13 @@
    ]
   },
   "en": {
-   "digest": "df9d1713ef745ded8c780659b768953df056430d6f4f5da4d478f818f9090a48",
+   "digest": "507b51b78932b3b06776257115c0269d4c3528134c189f5f6f1e99118e0ce9db",
    "names": [
     ".recentActivity[0].subject=mathematics",
     ".recentActivity[0].summary=brueche",
     ".recentActivity[0].title=Practice lesson completed",
     ".recentActivity[1].subject=mathematics",
-    ".recentActivity[1].summary=Freies Thema",
+    ".recentActivity[1].summary=",
     ".recentActivity[1].title=Practice mistake logged",
     ".recentActivity[2].subject=mathematics",
     ".recentActivity[2].summary=Equations",
@@ -2115,13 +2115,13 @@
    ]
   },
   "fr": {
-   "digest": "dfaa3faf66fbc80844003889c106401f5c66c476d4c8a53c7b53e5d0aaf0e1d6",
+   "digest": "f67f4cf8f93ed65f811260638b6ccc3972adfe7e967cdb74a77e991065a95016",
    "names": [
     ".recentActivity[0].subject=mathematics",
     ".recentActivity[0].summary=brueche",
     ".recentActivity[0].title=Leçon d'exercices terminée",
     ".recentActivity[1].subject=mathematics",
-    ".recentActivity[1].summary=Freies Thema",
+    ".recentActivity[1].summary=",
     ".recentActivity[1].title=Erreur notée",
     ".recentActivity[2].subject=mathematics",
     ".recentActivity[2].summary=Équations",
@@ -2136,13 +2136,13 @@
    ]
   },
   "it": {
-   "digest": "95d0b313a131373a20ee84e7f859ddd0e5df5c5985f24e25316ad8c292be377d",
+   "digest": "f3f38ea9c01145865c2f819c018d0f76ce5dbce254cfaf65fab306a10d5bb47d",
    "names": [
     ".recentActivity[0].subject=mathematics",
     ".recentActivity[0].summary=brueche",
     ".recentActivity[0].title=Lezione di esercizi completata",
     ".recentActivity[1].subject=mathematics",
-    ".recentActivity[1].summary=Freies Thema",
+    ".recentActivity[1].summary=",
     ".recentActivity[1].title=Errore annotato",
     ".recentActivity[2].subject=mathematics",
     ".recentActivity[2].summary=Equazioni",

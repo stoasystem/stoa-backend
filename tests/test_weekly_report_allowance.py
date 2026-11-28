@@ -459,7 +459,7 @@ def test_the_latest_report_passes_over_a_skipped_week(monkeypatch: pytest.Monkey
     )
 
     latest = parents._latest_report_for_child("parent-1", STUDENT)
-    history = parents._report_history_events("parent-1", STUDENT)
+    history = parents._report_history_events("parent-1", STUDENT, "de")
 
     assert latest is not None and latest["report_id"] == "r-old"
     assert [event.id for event in history] == ["r-old"]

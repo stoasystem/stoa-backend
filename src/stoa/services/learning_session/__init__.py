@@ -16,6 +16,8 @@ made by `append`. The entry points:
 - `retitle` replaces a placeholder title.
 - `list_for_student` is one student's records, newest first, within a page
   budget, saying whether any were left unread (#431).
+- `between` is one student's records and assistant answers created in a
+  stretch of time, every one of them (#693).
 - `history` is every message, oldest first, as `Message` values, a question
   sent again read once; the student's `ChatMessage` and the teacher's
   `MessageOut` are built from them.
@@ -33,6 +35,7 @@ A record or message the session cannot be read back from raises
 
 import uuid
 from collections.abc import Mapping
+from datetime import datetime, timedelta, timezone
 from itertools import islice
 from typing import Any, NamedTuple, Protocol, cast
 
@@ -44,15 +47,18 @@ from stoa.services.learning_session._write import Role, append
 from stoa.services.learning_session._store import build_conversation_write_transaction, conv_pk
 
 __all__ = [
+    "Answer",
     "DynamoConversationTable",
     "Message",
     "STUDENT_LIST_PAGE_BUDGET",
+    "StudentPeriod",
     "StudentSessions",
     "Role",
     "active_conversation_generation",
     "anchored_history",
     "append",
     "asked_about",
+    "between",
     "build_conversation_write_transaction",
     "committed_message",
     "conv_pk",
@@ -195,6 +201,80 @@ def list_for_student(
         if len(items) >= limit:
             return StudentSessions(items[:limit], True)
     return StudentSessions(items[:limit], True)
+
+
+class Answer(NamedTuple):
+    """One assistant answer of a student's session, as `between` reads it."""
+
+    conversation_id: str
+    #: When the answer was written, as stored.
+    created_at: str
+    #: Whether it answered a new question: `structured.kind == "answer"`; a
+    #: follow-up (`followUp`) and an answer stored without a structure did not.
+    new_question: bool
+    #: The session's subject, as stored on its record; empty without a record.
+    subject: str
+
+
+class StudentPeriod(NamedTuple):
+    """What one student's sessions hold for one stretch of time."""
+
+    #: The session records created in the stretch, oldest first.
+    records: list[dict]
+    #: The assistant answers written in the stretch, oldest first.
+    answers: list[Answer]
+
+
+def between(student_id: str, start: datetime, end: datetime) -> StudentPeriod:
+    """The student's sessions and assistant answers created in `[start, end)` (#693).
+
+    One range read of `GSI-StudentId` on `created_at`, every page, no cap. A
+    session started before `start` whose answers fall inside it is read by its
+    record, strongly, for its subject. A row whose moment cannot be read falls
+    in no stretch.
+    """
+    # The index compares stored strings; a day either side covers any offset
+    # a writer used, and each row's moment is judged here.
+    low = (start - timedelta(days=1)).astimezone(timezone.utc).isoformat()
+    high = (end + timedelta(days=1)).astimezone(timezone.utc).isoformat()
+    records: list[dict] = []
+    messages: list[dict] = []
+    for row in _store.student_rows_between(student_id, low, high):
+        if row.get("student_id") != student_id or not _within(row.get("created_at"), start, end):
+            continue
+        if row.get("entity_type") == "conversation":
+            records.append(dict(row))
+        else:
+            messages.append(dict(row))
+    subjects = {str(row.get("conversation_id") or ""): row.get("subject") for row in records}
+    answers: list[Answer] = []
+    for row in messages:
+        conversation_id = str(row.get("conversation_id") or "")
+        if conversation_id not in subjects:
+            record = _store.get_record(conversation_id) if conversation_id else None
+            subjects[conversation_id] = (record or {}).get("subject")
+        structured = row.get("structured")
+        answers.append(
+            Answer(
+                conversation_id=conversation_id,
+                created_at=str(row["created_at"]),
+                new_question=isinstance(structured, Mapping) and structured.get("kind") == "answer",
+                subject=str(subjects[conversation_id] or ""),
+            )
+        )
+    return StudentPeriod(records, answers)
+
+
+def _within(raw: object, start: datetime, end: datetime) -> bool:
+    if not isinstance(raw, str) or not raw:
+        return False
+    try:
+        moment = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return start <= moment < end
 
 
 def conversation_response_items(

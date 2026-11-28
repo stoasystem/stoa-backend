@@ -13,7 +13,10 @@ both must be what main gave. The two learning profiles were recorded again when
 their weak topics began to come from `weak_topics` (#673): the same names, in
 the new order, each topic with its `score`. The parent summary was recorded again
 when its weak topics became the learning profile's first ten (#674): the same
-names, in the profile's order.
+names, in the profile's order. The two parent pages were recorded again when
+their entries came from `student_activity` (#693): a wrong answer whose
+knowledge point the curriculum does not know is named by nothing, no longer by
+what the row stored.
 
 To record it again (on main, before a change to names):
 `STOA_RECORD_CURRICULUM_NAMES=1 pytest tests/test_curriculum_names_unchanged.py`.
@@ -199,8 +202,9 @@ def test_the_fixture_names_content_in_each_language() -> None:
     for name in ("catalog", "star_map", "roadmap", "parent_history", "parent_summary", "skills"):
         by_locale = {locale: recorded[name][locale]["names"] for locale in LOCALES}
         assert len({tuple(names) for names in by_locale.values()}) == len(LOCALES), name
-    # The wrong answers were named: by the curriculum where it knows the
-    # spelling, as written where it does not.
+    # The wrong answers were named by the curriculum where it knows the
+    # spelling, and by nothing where it does not (#693).
     history = "\n".join(recorded["parent_history"]["en"]["names"])
-    assert "Freies Thema" in history
+    assert "Freies Thema" not in history
+    assert ".items[1].summary=" in history.splitlines()
     assert "Equations" in history

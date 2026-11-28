@@ -1,34 +1,47 @@
-"""Timeline labels on the student's and the parent's pages (#124).
+"""Timeline labels on the parent's pages (#124, #693).
 
-`Teacher help requested` / `Question asked` / `AI conversation` and the rest
-were English literals in the response, shown inside pages the client draws in
-the reader's language. They are labels this backend writes, not anything a
-student or a teacher wrote, so they follow the reader.
+`Teacher help requested` / `AI conversation` and the rest were English
+literals in the response, shown inside pages the client draws in the reader's
+language. They are labels this backend writes, not anything a student or a
+teacher wrote, so they follow the reader: the parent's routes pass the
+request's language to `student_activity`, which takes every title from the
+message catalog in it. The retired flow's question rows are no entries any
+more (#693), so their two labels are not among these.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
 from stoa.routers import parents
-from stoa.services import locale_service, message_catalog, student_evidence
+from stoa.services import curriculum_names, locale_service, message_catalog, student_activity, student_evidence
+
+MOMENT = "2026-10-01T09:00:00+00:00"
 
 
-def _in(locale: str, build) -> Any:
-    locale_service.set_request_locale(locale)
-    try:
-        return build()
-    finally:
-        locale_service.set_request_locale(None)
+def _session(locale: str, *, asked_teacher: bool = False) -> str:
+    requests = {"c1": {"escalation_status": "pending"}} if asked_teacher else {}
+    entry = student_activity._session(
+        {"conversation_id": "c1", "created_at": MOMENT}, requests, locale
+    )
+    assert entry is not None
+    return entry.title
 
 
-def _question(status: str) -> dict[str, Any]:
+def _cases(locale: str) -> dict[str, str]:
+    lesson = student_activity._lesson(
+        student_evidence.Completion(lesson_id="l1", unit_id="", subject_id="", completed_at=MOMENT),
+        locale,
+    )
+    mistake = student_activity._mistake(
+        {"challenge_id": "c1", "created_at": MOMENT}, curriculum_names.for_reader(locale), locale
+    )
+    report = parents._report_activity({"report_id": "r1", "created_at": MOMENT}, locale)
+    assert lesson is not None and mistake is not None and report is not None
     return {
-        "question_id": "question-1",
-        "status": status,
-        "created_at": "2026-10-01T09:00:00+00:00",
-        "summary": "Bitte hilf mir beim Dividieren.",
-        "subject": "mathematics",
+        "activity.teacher_help_requested": _session(locale, asked_teacher=True),
+        "activity.ai_conversation": _session(locale),
+        "activity.practice_lesson_completed": lesson.title,
+        "activity.practice_mistake_logged": mistake.title,
+        "activity.weekly_report_available": report.title,
     }
 
 
@@ -36,71 +49,28 @@ def test_every_timeline_label_is_written_in_the_reader_s_language() -> None:
     """Every label in the set, in every language, against the catalog.
 
     One label at a time would leave the others free to stay English, which is
-    the state this found: the escalated branch was named and its sibling
+    the state #124 found: the escalated branch was named and its sibling
     branch in the same expression was not.
     """
-    cases = {
-        "activity.question_answered": lambda: parents._question_activity(
-            _question("ai_answered")
-        ).title,
-        "activity.question_asked": lambda: parents._question_activity(
-            _question("pending")
-        ).title,
-        "activity.teacher_help_requested": lambda: parents._question_activity(
-            _question("escalated")
-        ).title,
-        "activity.ai_conversation": lambda: parents._conversation_activity(
-            {"conversation_id": "c1", "created_at": "2026-10-01T09:00:00+00:00"}
-        ).title,
-        "activity.practice_lesson_completed": lambda: parents._lesson_activity(
-            student_evidence.Completion(
-                lesson_id="l1", unit_id="", subject_id="", completed_at="2026-10-01T09:00:00+00:00"
-            )
-        ).title,
-        "activity.practice_mistake_logged": lambda: parents._mistake_activity(
-            {"challenge_id": "c1", "created_at": "2026-10-01T09:00:00+00:00"}
-        ).title,
-    }
-
-    produced = {
-        locale: {key: _in(locale, build) for key, build in cases.items()}
-        for locale in locale_service.SUPPORTED_LOCALES
-    }
+    produced = {locale: _cases(locale) for locale in locale_service.SUPPORTED_LOCALES}
 
     assert produced == {
-        locale: {key: message_catalog.TEXT[key][locale] for key in cases}
+        locale: {key: message_catalog.TEXT[key][locale] for key in produced[locale]}
         for locale in locale_service.SUPPORTED_LOCALES
     }
 
 
 def test_the_labels_are_not_all_the_same_word() -> None:
-    """Negative control: six branches, six labels, in each language."""
+    """Negative control: five branches, five labels, in each language."""
     for locale in locale_service.SUPPORTED_LOCALES:
-        titles = {
-            _in(locale, lambda: parents._question_activity(_question("ai_answered")).title),
-            _in(locale, lambda: parents._question_activity(_question("pending")).title),
-            _in(locale, lambda: parents._question_activity(_question("escalated")).title),
-            _in(
-                locale,
-                lambda: parents._conversation_activity(
-                    {"conversation_id": "c1", "created_at": "2026-10-01T09:00:00+00:00"}
-                ).title,
-            ),
-        }
-        assert len(titles) == 4, (locale, titles)
+        titles = set(_cases(locale).values())
+        assert len(titles) == 5, (locale, titles)
 
 
-def test_a_conversation_that_was_escalated_says_so() -> None:
-    """And the escalated branch is a different label from the plain one."""
+def test_a_conversation_that_asked_a_teacher_says_so() -> None:
+    """And the branch with a request holding a case is a different label from the plain one."""
     for locale in locale_service.SUPPORTED_LOCALES:
-        escalated = _in(
-            locale,
-            lambda: parents._conversation_activity(
-                {
-                    "conversation_id": "c1",
-                    "created_at": "2026-10-01T09:00:00+00:00",
-                    "escalated": True,
-                }
-            ).title,
-        )
-        assert escalated == message_catalog.TEXT["activity.teacher_help_requested"][locale]
+        assert _session(locale, asked_teacher=True) == message_catalog.TEXT[
+            "activity.teacher_help_requested"
+        ][locale]
+        assert _session(locale) != _session(locale, asked_teacher=True)

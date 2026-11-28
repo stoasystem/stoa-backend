@@ -106,16 +106,21 @@ def test_the_question_history_pages_without_empty_pages(monkeypatch):
     assert all(pages)
 
 
-def test_a_parents_activity_feed_shows_questions_not_every_message(monkeypatch):
+def test_a_parents_activity_feed_is_neither_every_message_nor_the_question_rows(monkeypatch):
     # Every conversation message on the index used to become a "Question asked"
-    # item in the parent's feed.
-    from stoa.routers import parents
+    # item in the parent's feed (#77); the retired flow's question rows are no
+    # entries at all now (#693). The student index holds 25 messages and four
+    # question rows here, and no session record: nothing to show.
+    from fakes import student_evidence as fake_evidence
+    from stoa.services import student_activity
 
     _table(monkeypatch)
 
-    activities = parents._question_history_events(STUDENT, limit=100)
+    activities = student_activity.recent(
+        STUDENT, limit=100, evidence=fake_evidence.evidence(STUDENT), locale="de"
+    )
 
-    assert sorted(activity.id for activity in activities) == ["q0", "q1", "q2"]
+    assert activities == []
 
 
 def test_questions_are_found_behind_more_than_one_page_of_other_rows(monkeypatch):
