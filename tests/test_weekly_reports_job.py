@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
+from fakes import notification_email
 
 from stoa.db import table as db_table
 from stoa.jobs import weekly_reports
@@ -20,16 +21,7 @@ def _active_report_owner(monkeypatch):
         "require_active_account_fence",
         lambda _owner: {"status": "active", "generation": 7},
     )
-    monkeypatch.setattr(
-        recovery.notify_service,
-        "send_fenced_weekly_report_email",
-        lambda parent_email, report_html, **kwargs: (
-            recovery.notify_service.send_weekly_report_email(
-                parent_email, report_html, subject=kwargs.get("subject")
-            )
-            or "accepted"
-        ),
-    )
+    notification_email.install_plain_send(monkeypatch)
 
 
 @pytest.fixture(autouse=True)
@@ -524,9 +516,8 @@ def test_report_recovery_resend_worker_processes_success(monkeypatch):
         "get_report_html",
         lambda key: "<html>Report</html>",
     )
-    monkeypatch.setattr(
-        weekly_reports.report_recovery_job_service.report_recovery_service.notify_service,
-        "send_weekly_report_email",
+    notification_email.install_send(
+        monkeypatch,
         lambda email, html, **kwargs: sent.append((email, html)),
     )
 

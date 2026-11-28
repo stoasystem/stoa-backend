@@ -2,7 +2,8 @@
 
 A happening's id is derived from what happened, never random, so a retry - a
 write retried after a timeout, a job that runs again - is refused by the store
-the second time: the bell keeps one row, and realtime and push each send once.
+the second time: the bell keeps one row, and realtime, push and the dispatch
+reminder email (#687) each send once.
 Before #686 a moderation case update or a subscription request change got a
 random `notif-…` id, so a retry stored and sent it twice.
 
@@ -46,13 +47,8 @@ def test_a_happening_told_twice_is_stored_and_sent_once(world, scenario: str) ->
     happen()
 
     twice = (len(_events(table)), len(_intents(table)), len(recorder.posts), len(recorder.pushes), len(recorder.ses))
-    # The dispatch reminder email is not yet a channel of the package (#687):
-    # it still goes out with each offer told, as before.
-    if scenario.startswith(("help_offered", "offer_closed")) and scenario != "help_offered_standing":
-        assert twice[:4] == once[:4]
-        assert twice[4] == once[4] * 2
-    else:
-        assert twice == once
+    # The dispatch reminder email too, since it is a channel of the package (#687).
+    assert twice == once
 
 
 @pytest.mark.parametrize(

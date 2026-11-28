@@ -164,39 +164,6 @@ def test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_versio
     assert result == {"version_id": "v2", "etag": "abc"}
 
 
-def test_email_intent_claim_rechecks_fence_and_provider_unknown_is_terminal() -> None:
-    register = _contract("register_report_email_intent")
-    claim = _contract("claim_report_email_intent")
-    classify = _contract("classify_report_delivery_outcome")
-    transitions: list[str] = []
-
-    class _Table:
-        def register_report_email_intent(self, item: dict[str, Any]) -> dict[str, Any]:
-            transitions.append(item["state"])
-            return item
-
-        def claim_report_email_intent(self, _key: dict[str, str], _generation: int, _lease: str) -> dict[str, Any]:
-            return {"state": "claimed", "lease_id": "lease-1"}
-
-    intent = register(
-        owner_id=STUDENT_ID,
-        generation=7,
-        operation_id="email-1",
-        report_id=REPORT_ID,
-        recipient="private-parent@example.test",
-        subject="Private subject",
-        body="Private body",
-        now_iso=NOW,
-        table=_Table(),
-    )
-    assert set(intent).isdisjoint({"recipient", "subject", "body"})
-    assert {"recipient_digest", "content_digest"} <= set(intent)
-    assert claim(intent, lease_id="lease-1", table=_Table())["state"] == "claimed"
-    assert classify(response=None, error=TimeoutError("commit then raise")) == "provider_acceptance_unknown"
-    assert classify(response={"MessageId": "accepted"}, error=None) == "accepted"
-    assert transitions == ["registered"]
-
-
 def test_report_discovery_is_strong_paginated_and_scrub_is_allowlisted() -> None:
     scan = _contract("scan_report_private_rows")
     scrub = _contract("scrub_report_private_row")

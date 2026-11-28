@@ -834,7 +834,6 @@ _ENTRIES: tuple[DataType, ...] = (
             "parent_id",
         ),
     ),
-    DataType("report_email_intent", _repo("report_repo"), _owner("owner_id")),
     DataType("report_object_intent", _repo("report_repo"), _owner("owner_id")),
     DataType("AUDIT_RETENTION_EVENT", _repo("report_repo"), ()),
     DataType("AUDIT_RETENTION_IMMUTABLE_MANIFEST", _repo("report_repo"), ()),
@@ -986,6 +985,15 @@ _ENTRIES: tuple[DataType, ...] = (
         "learning_memory_snapshot",
         _repo("adaptive_learning_repo"),
         (*_owner("student_id", "owner_id"), _owned_by_partition("LEARNING_MEMORY#")),
+        lifecycle="no_longer_written",
+    ),
+    # The weekly report's own send record: it never stopped a duplicate (each send
+    # had a random id). The email crosses the notification ledger since #687
+    # (`notification_delivery_intent`); stored rows stay and go with the account.
+    DataType(
+        "report_email_intent",
+        _repo("report_repo"),
+        _owner("owner_id"),
         lifecycle="no_longer_written",
     ),
     # -- legacy: no writer in this codebase; the deletion still reads them --------------

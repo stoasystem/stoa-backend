@@ -8,6 +8,10 @@
   notification package or its store, so the old cycle (the connection module
   lazily calling back into the notification service to deliver) cannot return.
 - Every kind of happening the package exports is one the entry knows.
+- Only the package's email channel puts the unsubscribe line and headers on an
+  email, and nothing outside the package reads the two email switches (#687):
+  the report and help-request services say what happened, never whether the
+  reader wants it.
 """
 
 from __future__ import annotations
@@ -88,3 +92,53 @@ def test_every_exported_happening_has_a_handler() -> None:
     exported = set(notifications.Happening.__args__)
     assert exported == set(_tell._HANDLERS)
     assert all(getattr(notifications, kind.__name__) is kind for kind in exported)
+
+
+_UNSUBSCRIBE_PARTS = ("footer_html", "with_footer", "headers")
+_EMAIL_SWITCHES = ("weekly_report_email_enabled", "dispatch_email_enabled")
+
+
+def _attribute_uses(tree: ast.AST, owner: str, names: tuple[str, ...]) -> set[str]:
+    """`owner.name` and `from ... owner import name` uses of the given names."""
+    used: set[str] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr in names
+            and isinstance(node.value, ast.Name)
+            and node.value.id == owner
+        ):
+            used.add(node.attr)
+        elif isinstance(node, ast.ImportFrom) and (node.module or "").endswith(owner):
+            used.update(alias.name for alias in node.names if alias.name in names)
+    return used
+
+
+def test_only_the_email_channel_adds_the_unsubscribe_line_and_headers() -> None:
+    offenders = sorted(
+        f"{path.relative_to(ROOT).as_posix()}: {name}"
+        for path in SRC.rglob("*.py")
+        if PACKAGE not in path.parents and path.name != "email_unsubscribe.py"
+        for name in _attribute_uses(
+            ast.parse(path.read_text(encoding="utf-8")), "email_unsubscribe", _UNSUBSCRIBE_PARTS
+        )
+    )
+    assert offenders == []
+
+
+def test_nothing_outside_the_package_reads_an_email_switch() -> None:
+    offenders = sorted(
+        f"{path.relative_to(ROOT).as_posix()}: {name}"
+        for path in SRC.rglob("*.py")
+        if PACKAGE not in path.parents
+        for name in _EMAIL_SWITCHES
+        if name in path.read_text(encoding="utf-8")
+    )
+    assert offenders == []
+    assert not any(hasattr(notifications, name) for name in _EMAIL_SWITCHES)
+
+
+def test_the_old_notification_email_module_is_gone() -> None:
+    assert not (SRC / "services" / "notify_service.py").exists()
+    for relative, names in _outside_the_package().items():
+        assert "stoa.services.notify_service" not in names, relative

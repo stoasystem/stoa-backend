@@ -224,6 +224,15 @@
   ],
   "intents": [
    {
+    "channel": "email",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "email-teacher-help-dispatched-dispatch-686",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
     "channel": "push",
     "event_ids": [
      "teacher-help-dispatched-dispatch-686"
@@ -1224,6 +1233,15 @@
   ],
   "intents": [
    {
+    "channel": "email",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "email-teacher-help-dispatched-dispatch-686",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
     "channel": "push",
     "event_ids": [
      "teacher-help-dispatched-dispatch-686"
@@ -1539,6 +1557,15 @@
   ],
   "intents": [
    {
+    "channel": "email",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "email-teacher-help-dispatched-dispatch-686",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
     "channel": "push",
     "event_ids": [
      "teacher-help-dispatched-dispatch-686"
@@ -1853,6 +1880,15 @@
    }
   ],
   "intents": [
+   {
+    "channel": "email",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "email-teacher-help-dispatched-dispatch-686",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
    {
     "channel": "push",
     "event_ids": [

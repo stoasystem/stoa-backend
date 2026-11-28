@@ -21,6 +21,7 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 import pytest
+from fakes import notification_email
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -30,13 +31,13 @@ from stoa.routers import notifications as notifications_router
 from stoa.services import (
     email_unsubscribe,
     notifications,
-    notify_service,
     one_off_email,
 )
 from stoa.services.notifications import _preferences
 from stoa.db.repositories import notification_repo
 from stoa.services.email_unsubscribe import EmailKind
 
+import test_notification_email_channel as email_channel
 import test_notifications
 
 PARENT = "parent-363"
@@ -196,19 +197,19 @@ def test_a_signed_link_for_the_retired_digest_is_refused_like_any_other(preferen
 
 
 def test_the_weekly_report_switch_is_on_by_default_and_the_link_turns_it_off(preferences) -> None:
-    assert notifications.weekly_report_email_enabled(PARENT) is True
+    assert _preferences.weekly_report_email_enabled(PARENT) is True
     assert notifications.preferences_response(PARENT)["weeklyReportEmail"] is True
     token = email_unsubscribe.issue_token(PARENT, EmailKind.WEEKLY_REPORT)
 
     client = _public_client()
     assert client.post("/notifications/email-unsubscribe", params={"token": token}).status_code == 200
-    assert notifications.weekly_report_email_enabled(PARENT) is False
+    assert _preferences.weekly_report_email_enabled(PARENT) is False
 
     assert client.post("/notifications/email-resubscribe", params={"token": token}).json() == {
         "kind": "weekly_report",
         "subscribed": True,
     }
-    assert notifications.weekly_report_email_enabled(PARENT) is True
+    assert _preferences.weekly_report_email_enabled(PARENT) is True
 
 
 def test_a_parent_can_switch_the_weekly_report_email_in_settings(preferences) -> None:
@@ -246,54 +247,38 @@ FOOTER_WORDS = {
 def test_the_dispatch_reminder_carries_the_link_and_headers_in_the_teachers_language(
     locale,
 ) -> None:
-    ses = RecordingSes()
-    aws.install({Kind.SES_DISPATCH_REMINDER: ses})
-
-    notify_service.send_dispatch_reminder_email(
-        "teacher@stoa.test",
-        recipient_user_id=TEACHER,
-        subject_name="Mathematik",
-        request_id="req-1",
-        minutes=10,
-        locale=locale,
-    )
+    _, ses = email_channel.install_world(locale=locale)
+    try:
+        email_channel.offer()
+    finally:
+        aws.install(None)
+    teacher = email_channel.TEACHER
 
     [mail] = ses.sent
     assert FOOTER_WORDS[locale] in _html(mail)
     assert email_unsubscribe.read_token(_footer_token(_html(mail))) == email_unsubscribe.UnsubscribeTarget(
-        TEACHER, EmailKind.DISPATCH_REMINDER
+        teacher, EmailKind.DISPATCH_REMINDER
     )
     assert _headers(mail)["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
     assert email_unsubscribe.read_token(_header_token(mail)).kind is EmailKind.DISPATCH_REMINDER
     assert "teacher@stoa.test" not in _headers(mail)["List-Unsubscribe"]
 
 
-def test_the_weekly_report_carries_the_link_and_headers_in_the_parents_language(monkeypatch) -> None:
-    from stoa.db.repositories import account_deletion_repo, report_repo
+def test_the_weekly_report_carries_the_link_and_headers_in_the_parents_language() -> None:
+    _, ses = email_channel.install_world(locale="fr")
+    try:
+        result = email_channel.report_ready(locale="fr")
+    finally:
+        aws.install(None)
+    parent = email_channel.PARENT
 
-    monkeypatch.setattr(report_repo, "register_report_email_intent", lambda **kw: kw)
-    monkeypatch.setattr(report_repo, "claim_report_email_intent", lambda *_a, **_k: None)
-    monkeypatch.setattr(account_deletion_repo, "require_active_account_fence", lambda *_a, **_k: {})
-    ses = RecordingSes()
-    aws.install({Kind.SES_NOTIFICATION: ses})
-
-    outcome = notify_service.send_fenced_weekly_report_email(
-        "parent@stoa.test",
-        "<html><body><h1>Report</h1></body></html>",
-        recipient_user_id=PARENT,
-        locale="fr",
-        owner_id=STUDENT,
-        generation=1,
-        report_id="report-1",
-    )
-
-    assert outcome == "accepted"
+    assert result.outcome is notifications.EmailOutcome.SENT
     [mail] = ses.sent
     html = _html(mail)
     assert FOOTER_WORDS["fr"] in html
     assert html.index("unsubscribe?token=") < html.index("</body>")
     target = email_unsubscribe.read_token(_footer_token(html))
-    assert (target.user_id, target.kind) == (PARENT, EmailKind.WEEKLY_REPORT)
+    assert (target.user_id, target.kind) == (parent, EmailKind.WEEKLY_REPORT)
     assert _headers(mail)["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
     assert email_unsubscribe.read_token(_header_token(mail)) == target
 
@@ -392,10 +377,21 @@ def test_an_operator_resend_respects_the_parents_unsubscribe(preferences, monkey
         report_recovery_service.report_repo, "put_report_audit_event", lambda *a, **k: audits.append(a)
     )
     sent: list = []
-    monkeypatch.setattr(
-        report_recovery_service.notify_service,
-        "send_fenced_weekly_report_email",
+    notification_email.install_send(
+        monkeypatch,
         lambda *a, **k: sent.append(a) or "accepted",
+    )
+    # The notification package, not the resend, reads the switch (#687): the
+    # report is made ready to send and the package says the parent unsubscribed.
+    monkeypatch.setattr(
+        report_recovery_service.report_artifact_service,
+        "get_report_html",
+        lambda _key: "<html><body>Report</body></html>",
+    )
+    monkeypatch.setattr(
+        report_recovery_service.account_deletion_repo,
+        "require_active_account_fence",
+        lambda *_a, **_k: {"status": "active", "generation": 1},
     )
     token = email_unsubscribe.issue_token(PARENT, EmailKind.WEEKLY_REPORT)
     assert _public_client().post("/notifications/email-unsubscribe", params={"token": token}).status_code == 200

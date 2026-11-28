@@ -17,8 +17,8 @@ from stoa.services import (
     email_layout,
     locale_service,
     message_catalog,
-    notify_service,
     one_off_email,
+    report_service,
 )
 from stoa.services.message_catalog import emails as email_catalog
 
@@ -117,10 +117,10 @@ def test_a_name_cannot_inject_markup_into_the_activation_email():
 
 @pytest.mark.parametrize("locale", LOCALES)
 def test_the_weekly_report_subject_is_in_the_parents_language(locale):
-    assert notify_service.weekly_report_subject("Mia", locale) == message_catalog.text(
+    assert report_service.weekly_report_subject("Mia", locale) == message_catalog.text(
         "email.weekly_report.subject", locale, student="Mia"
     )
-    assert notify_service.weekly_report_subject("", locale) == message_catalog.text(
+    assert report_service.weekly_report_subject("", locale) == message_catalog.text(
         "email.weekly_report.subject",
         locale,
         student=message_catalog.text("email.weekly_report.student_fallback", locale),

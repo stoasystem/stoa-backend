@@ -2,26 +2,32 @@
 
 `happened` looks up what the happening's kind tells, to whom, in which words and
 under which fixed id, and hands that to the bell (`_bell.create_event`), which
-fans out to realtime and push. It never raises to the caller: a failure is
-logged with the happening's event type and the exception type only, never its
-text, which can carry a student's content (#79).
+fans out to realtime and push, and to the email channel (`_email`) for the two
+kinds that also go out by email: an offer to a teacher and a weekly report
+(#687). It never raises to the caller: a failure is logged with the
+happening's event type and the exception type only, never its text, which can
+carry a student's content (#79).
 
-The dispatch reminder email still goes out as before, through `notify_service`
-(#687 makes it a channel of the package).
+`happened` hands back nothing, except for a weekly report: its service records
+on the report what became of the email, so it is told (`EmailResult`).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Any, overload
 
+from stoa.aws import Kind
+from stoa.db.dynamodb import stored_int
+from stoa.db.repositories import account_deletion_repo
 from stoa.services import (
     curriculum_service,
     learning_profile_service,
     message_catalog,
-    notify_service,
 )
-from stoa.services.notifications import _bell, _preferences
+from stoa.services.email_unsubscribe import EmailKind
+from stoa.services.notifications import _bell, _email, _preferences
+from stoa.services.notifications._email import EmailOutcome, EmailResult
 from stoa.services.notifications._common import (
     ROLE_MESSAGE_STORED_LOCALE,
     ROLE_MESSAGES,
@@ -40,21 +46,29 @@ from stoa.services.notifications._happenings import (
     TeacherPausedAfterLapse,
     TeacherReplied,
     TeacherTookHelpRequest,
+    WeeklyReportReady,
 )
 
 logger = _bell.logger
 
 
-def happened(happening: Happening) -> None:
+@overload
+def happened(happening: WeeklyReportReady) -> EmailResult: ...
+@overload
+def happened(happening: Happening) -> None: ...
+def happened(happening: Happening) -> EmailResult | None:
     """Tell everyone a happening concerns, on every channel it goes out on; never raises."""
     try:
-        _HANDLERS[type(happening)](happening)
+        return _HANDLERS[type(happening)](happening)
     except Exception as exc:  # noqa: BLE001 - best effort by contract
         logger.warning(
             "Best-effort notification failed: event_type=%s error=%s",
             getattr(happening, "event_type", None),
             type(exc).__name__,
         )
+        if isinstance(happening, WeeklyReportReady):
+            return EmailResult(EmailOutcome.FAILED, exc)
+        return None
 
 
 def _role_message_text(message_key: str, params: Mapping[str, Any]) -> dict[str, Any]:
@@ -220,25 +234,58 @@ def _help_offered(happening: HelpOffered) -> None:
     )
     if happening.standing or best_effort_disabled():
         return
+    # Sent whether or not the bell row was new: the email has its own record,
+    # so a retry whose bell row was already stored still sends a missing email
+    # and never a second one.
     try:
-        if not _preferences.dispatch_email_enabled(teacher_id):
-            return
-        from stoa.db.repositories import user_repo
-
-        recipient = safe_text((user_repo.get_user(teacher_id) or {}).get("email"))
-        if not recipient:
-            logger.warning("dispatch_reminder_email_skipped reason=no_address")
-            return
-        notify_service.send_dispatch_reminder_email(
-            recipient,
-            recipient_user_id=teacher_id,
-            subject_name=subject_name,
-            request_id=request_id,
-            minutes=happening.accept_minutes,
-            locale=locale,
+        status = _dispatch_reminder_email(
+            happening, subject_name=subject_name, request_id=request_id, locale=locale
         )
     except Exception as exc:  # noqa: BLE001 - best effort by contract
         logger.warning("dispatch_reminder_email_failed error=%s", type(exc).__name__)
+        return
+    if status not in {None, _email.ACCEPTED}:
+        logger.warning("dispatch_reminder_email_not_sent status=%s", status)
+
+
+def _dispatch_reminder_email(
+    happening: HelpOffered, *, subject_name: str, request_id: str, locale: str
+) -> str | None:
+    """The reminder email of one offer, unless the teacher switched it off; None when not tried."""
+    teacher_id = happening.teacher_id
+    if not _preferences.dispatch_email_enabled(teacher_id):
+        return None
+    from stoa.db.repositories import user_repo
+
+    recipient = safe_text((user_repo.get_user(teacher_id) or {}).get("email"))
+    if not recipient:
+        logger.warning("dispatch_reminder_email_skipped reason=no_address")
+        return None
+    conversation = happening.conversation
+    # The offer is about the student's request: its send record is theirs.
+    student_id = str(conversation.get("student_id") or "")
+    generation = stored_int(conversation.get("account_fence_generation"))
+    if generation is None or generation <= 0:
+        generation = account_deletion_repo.require_active_account_fence(student_id)["generation"]
+    message = _email.dispatch_reminder_message(
+        subject_name=subject_name,
+        request_id=request_id,
+        minutes=happening.accept_minutes,
+        locale=locale,
+    )
+    return _email.send_once(
+        kind=EmailKind.DISPATCH_REMINDER,
+        happening_id=happening.event_id,
+        owner_id=student_id,
+        generation=generation,
+        recipient_user_id=teacher_id,
+        recipient=recipient,
+        subject=message.subject,
+        html=message.html,
+        locale=locale,
+        # Bounded well inside the request's 29 seconds (`aws.DISPATCH_REMINDER_SES_CONFIG`).
+        ses_kind=Kind.SES_DISPATCH_REMINDER,
+    )
 
 
 def _teacher_paused(happening: TeacherPausedAfterLapse) -> None:
@@ -363,7 +410,32 @@ def _subscription_changed(happening: SubscriptionRequestChanged) -> None:
     )
 
 
-_HANDLERS: dict[type, Callable[[Any], None]] = {
+def _weekly_report_ready(happening: WeeklyReportReady) -> EmailResult:
+    """The parent gets the weekly report by email, once, unless they unsubscribed (#363).
+
+    Only by email: no bell row, no realtime, no push. A parent who switched it
+    off still has the report in STOA; the report service records that.
+    """
+    if not _preferences.weekly_report_email_enabled(happening.parent_id):
+        return EmailResult(EmailOutcome.UNSUBSCRIBED)
+    status = _email.send_once(
+        kind=EmailKind.WEEKLY_REPORT,
+        happening_id=happening.event_id,
+        owner_id=happening.student_id,
+        generation=happening.generation,
+        recipient_user_id=happening.parent_id,
+        recipient=happening.parent_email,
+        subject=happening.subject,
+        html=happening.html,
+        locale=recipient_locale(happening.parent_id),
+        ses_kind=Kind.SES_NOTIFICATION,
+    )
+    if status == _email.ACCEPTED:
+        return EmailResult(EmailOutcome.SENT)
+    return EmailResult(EmailOutcome.FAILED, RuntimeError(status))
+
+
+_HANDLERS: dict[type, Callable[[Any], Any]] = {
     TeacherTookHelpRequest: _teacher_took,
     TeacherReplied: _teacher_replied,
     HelpRequestExpired: _request_expired,
@@ -373,4 +445,5 @@ _HANDLERS: dict[type, Callable[[Any], None]] = {
     ModerationCaseOpened: _moderation_opened,
     ModerationCaseUpdated: _moderation_updated,
     SubscriptionRequestChanged: _subscription_changed,
+    WeeklyReportReady: _weekly_report_ready,
 }

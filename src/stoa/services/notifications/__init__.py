@@ -7,10 +7,16 @@
 
 It says only what happened. The package decides the rest from the happening's
 kind: what the bell row says and in whose language, its category, which
-channels it goes out on (bell, realtime, push; the dispatch reminder email),
-which of those the reader can switch off, and the one fixed id the happening
-has. The same happening told twice is stored and sent once. `happened` never
-raises; building a happening raises only for what the caller got wrong.
+channels it goes out on (bell, realtime, push, email), which of those the
+reader can switch off, and the one fixed id the happening has. The same
+happening told twice is stored and sent once, on every channel. `happened`
+never raises; building a happening raises only for what the caller got wrong.
+
+Two kinds go out by email (#687): an offer to a teacher (beside its bell row)
+and a parent's weekly report (by email only). The package reads the reader's
+switch, adds the unsubscribe line and headers, and sends once; for a weekly
+report `happened` says what became of the email (`EmailResult`), which the
+report service records.
 
 **The reader door.** The bell list and its marks, the preferences and the
 unsubscribe link, the push devices, the admin list and delivery status, the one
@@ -38,6 +44,7 @@ from stoa.services.notifications._bell import (
     mark_authorized_event,
 )
 from stoa.services.notifications._common import visible_to_user
+from stoa.services.notifications._email import EmailOutcome, EmailResult
 from stoa.services.notifications._happenings import (
     OFFER_STATES,
     Happening,
@@ -50,12 +57,12 @@ from stoa.services.notifications._happenings import (
     TeacherPausedAfterLapse,
     TeacherReplied,
     TeacherTookHelpRequest,
+    WeeklyReportReady,
 )
 from stoa.services.notifications._preferences import (
     preferences_response,
     set_email_subscription,
     update_preferences,
-    weekly_report_email_enabled,
 )
 from stoa.services.notifications._push import register_push_token, revoke_authorized_push_token
 from stoa.services.notifications._tell import happened
@@ -74,6 +81,9 @@ __all__ = [
     "TeacherPausedAfterLapse",
     "TeacherReplied",
     "TeacherTookHelpRequest",
+    "WeeklyReportReady",
+    "EmailOutcome",
+    "EmailResult",
     # the reader
     "delivery_status",
     "list_admin_events",
@@ -85,7 +95,6 @@ __all__ = [
     "set_email_subscription",
     "update_preferences",
     "visible_to_user",
-    "weekly_report_email_enabled",
     # authorization and account deletion
     "DELIVERY_INTENT_ENTITY",
     "get_event",

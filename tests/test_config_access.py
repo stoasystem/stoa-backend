@@ -234,7 +234,7 @@ def test_src_reaches_configuration_only_through_the_two_paths() -> None:
 
 def test_the_src_gate_turns_red() -> None:
     sources = _read(SRC)
-    sources["services/notify_service.py"] += "\nfrom stoa.config import settings\n"
+    sources["services/notifications/_email.py"] += "\nfrom stoa.config import settings\n"
     sources["jobs/new_job.py"] = "from stoa import config\nREGION = config.settings().aws_region\n"
     sources["jobs/default_arg.py"] = (
         "from stoa import config\n"
@@ -258,7 +258,7 @@ def test_the_src_gate_turns_red() -> None:
         "jobs/dotted.py: reads settings at import",
         "jobs/new_job.py: reads settings at import",
         f"jobs/old.py: {RETIRED_GETTER}",
-        "services/notify_service.py: imports settings",
+        "services/notifications/_email.py: imports settings",
     ]
 
 

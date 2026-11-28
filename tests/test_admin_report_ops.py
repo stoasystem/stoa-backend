@@ -16,6 +16,7 @@ from stoa.services import report_recovery_service
 from stoa.services import message_catalog
 from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable
+from fakes import notification_email
 from rule_violation_helpers import assert_violation
 from stoa.services.report_recovery_errors import ReportRecoveryErrorCode
 
@@ -103,18 +104,7 @@ def _fenced_report_recovery_compat(monkeypatch):
         "require_active_account_fence",
         lambda _owner: {"status": "active", "generation": 7},
     )
-    monkeypatch.setattr(
-        report_recovery_service.notify_service,
-        "send_fenced_weekly_report_email",
-        lambda parent_email, report_html, **kwargs: (
-            report_recovery_service.notify_service.send_weekly_report_email(
-                parent_email,
-                report_html,
-                subject=kwargs.get("subject"),
-            )
-            or "accepted"
-        ),
-    )
+    notification_email.install_plain_send(monkeypatch)
 
 
 @pytest.fixture(autouse=True)
@@ -377,9 +367,8 @@ def test_resend_failed_report_uses_existing_html_artifact_and_audits(monkeypatch
         "get_report_html",
         lambda key: "<html>Report</html>",
     )
-    monkeypatch.setattr(
-        report_recovery_service.notify_service,
-        "send_weekly_report_email",
+    notification_email.install_send(
+        monkeypatch,
         lambda email, html, **kwargs: sent.append((email, html, kwargs.get("subject"))),
     )
     monkeypatch.setattr(
@@ -421,7 +410,7 @@ def test_resend_failed_report_is_admin_only(monkeypatch):
         raise AssertionError("resend pipeline should not run")
 
     monkeypatch.setattr(report_recovery_service.report_artifact_service, "get_report_html", fail)
-    monkeypatch.setattr(report_recovery_service.notify_service, "send_weekly_report_email", fail)
+    notification_email.install_send(monkeypatch, fail)
     client = TestClient(_app_for_user({"sub": "parent-sub", "role": "parent"}))
 
     response = client.post("/admin/reports/parent-1/student-1/2026-06-01/resend")
@@ -525,7 +514,7 @@ def test_bulk_resend_returns_mixed_results_and_continues(monkeypatch):
             raise RuntimeError("SES failed weekly-reports/private/report.html")
 
     monkeypatch.setattr(report_recovery_service.report_artifact_service, "get_report_html", get_html)
-    monkeypatch.setattr(report_recovery_service.notify_service, "send_weekly_report_email", send_email)
+    notification_email.install_send(monkeypatch, send_email)
     monkeypatch.setattr(
         report_repo,
         "update_report_status",
