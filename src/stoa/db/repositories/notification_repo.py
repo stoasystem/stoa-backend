@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 import hashlib
 import json
 from collections.abc import Callable, Mapping
@@ -2006,6 +2007,20 @@ def _required_identity_coordinate(value: object, name: str) -> str:
     return value
 
 
+def _stored_number(value: object) -> object:
+    """A number as the table returns it (`Decimal`), written as the number it is.
+
+    A teacher's help notification records each realtime delivery attempt with a
+    `target_count`; read back, that is a `Decimal`, which `json.dumps` refuses
+    on its own. Taken for malformed metadata, it failed the scrub of every such
+    notification on every pass, and the teacher's deletion never finished
+    (#640: nine rows in production).
+    """
+    if isinstance(value, Decimal) and value.is_finite():
+        return int(value) if value == value.to_integral_value() else str(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 def _notification_metadata_digest(metadata: Mapping[str, object]) -> str:
     try:
         encoded = json.dumps(
@@ -2013,6 +2028,7 @@ def _notification_metadata_digest(metadata: Mapping[str, object]) -> str:
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,
+            default=_stored_number,
         ).encode("utf-8")
     except (TypeError, ValueError) as exc:
         raise account_deletion_repo.AccountDeletionConflict(

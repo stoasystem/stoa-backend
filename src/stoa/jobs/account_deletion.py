@@ -5,6 +5,12 @@ transaction that accepts it (#397), and one strong query of that partition
 finds all of them on every run. The cursor scan of the whole table that found
 the commands accepted before that registry existed is gone (#611): production
 held none on 2026-11-24, and what a run reads no longer follows the table.
+
+A command runs the catalog's three steps (`account_deletion_flow`, #641). A
+command accepted before them, or one whose catalog changed since it was
+accepted, is not carried on: the run logs it and the invocation ends in an
+error, which the account-deletion function's error alarm pages on (#634
+decision 8). Production held no pending command when #641 was merged.
 """
 
 from __future__ import annotations
@@ -17,7 +23,7 @@ from typing import Any, Callable, Mapping
 from uuid import uuid4
 
 from stoa.db.repositories import account_deletion_repo
-from stoa.services.account_deletion_service import AccountDeletionService
+from stoa.services import account_deletion_flow
 
 
 logger = logging.getLogger(__name__)
@@ -44,6 +50,13 @@ class DeletionJobSummary:
     claimed: int = 0
     continued: int = 0
     retryable: int = 0
+    # Commands not carried on: accepted before the catalog flow, or sealed
+    # with a catalog that has changed since. Each one pages (`handler`).
+    paused: int = 0
+
+
+class DeletionsPaused(RuntimeError):
+    """A run met deletions it must not carry on; raised so the function's alarm pages."""
 
 
 def _registered_commands(repository: Any) -> tuple[list[dict[str, Any]], bool]:
@@ -104,6 +117,11 @@ def run_pending_deletions(
     limit: int = 25,
     remaining_seconds: Callable[[], float] | None = None,
 ) -> DeletionJobSummary:
+    """Carry every registered deletion on, as far as the time left allows.
+
+    `service_factory` makes what continues a claimed command
+    (`account_deletion_flow.CatalogDeletion` unless a test passes its own).
+    """
     missing = [
         name
         for name in _REQUIRED_REPOSITORY_METHODS
@@ -117,22 +135,34 @@ def run_pending_deletions(
     unfinished = not complete
     worker = (
         service_factory
-        or (lambda: AccountDeletionService(remaining_seconds=remaining_seconds))
+        or (lambda: account_deletion_flow.CatalogDeletion(remaining_seconds=remaining_seconds))
     )()
-    claimed = continued = retryable = 0
+    claimed = continued = retryable = paused = 0
     # The registry is small and read whole; `limit` bounds what one run takes on.
     for command in registered[:limit]:
         if remaining_seconds is not None and remaining_seconds() < MIN_REMAINING_SECONDS:
             # Not attempted is not failed: the next run's query finds it again.
             unfinished = True
             break
+        if not account_deletion_flow.is_catalog_command(command):
+            # Accepted before the catalog flow (#641). Nothing carries those on
+            # any more; it stays registered, and pages, until someone decides.
+            paused += 1
+            logger.error(
+                "account_deletion_paused reason=legacy_command command_id=%s",
+                str(command.get("command_id") or ""),
+            )
+            continue
         try:
             claim = _claim(repository, command)
             if not claim:
                 # Another run holds it; that is progress, not failure.
                 continue
             claimed += 1
-            worker.continue_command(claim)
+            outcome = worker.continue_command(claim)
+            if getattr(outcome, "status", None) == "paused":
+                paused += 1
+                continue
             continued += 1
         except Exception:
             # Found again by the next run's query, five minutes on.
@@ -149,6 +179,7 @@ def run_pending_deletions(
         claimed,
         continued,
         retryable + (1 if unfinished else 0),
+        paused,
     )
 
 
@@ -174,15 +205,17 @@ async def continue_deletion_command(
     against the API's 29 s (#397). It now only tombstones the profile, which
     gives the address back at once, and returns the lease; a few keyed reads
     and writes whatever the size of the table. The provider revoke, the
-    identity rows and every branch are the scheduled job's, on the deletion
+    identity rows and every other row are the scheduled job's, on the deletion
     function, which alone holds the Cognito admin rights. The command is found
     through the pending registry, by key.
     """
     try:
-        worker = service or AccountDeletionService()
-        repository = worker.repository
+        worker = service or account_deletion_flow.CatalogDeletion()
+        repository = account_deletion_repo
         command = _registered_command(repository, command_id)
         if not command or command.get("status") not in {"pending", "running"}:
+            return
+        if not account_deletion_flow.is_catalog_command(command):
             return
         now = datetime.now(UTC)
         claim = repository.claim_deletion_command(
@@ -194,9 +227,7 @@ async def continue_deletion_command(
         )
         if not claim:
             return
-        run_fast_path = getattr(worker, "run_fast_path", None)
-        if callable(run_fast_path):
-            await asyncio.to_thread(run_fast_path, claim)
+        await asyncio.to_thread(worker.run_request_side, claim)
     except Exception:
         # The committed command remains discoverable by the scheduled handler.
         return
@@ -247,4 +278,7 @@ def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, Any]:
         limit=min(max(int(event.get("limit", 25)), 1), 100),
         remaining_seconds=remaining_seconds,
     )
+    if summary.paused:
+        logger.error("account_deletion_run_paused %s", asdict(summary))
+        raise DeletionsPaused(f"{summary.paused} account deletion(s) paused")
     return asdict(summary)

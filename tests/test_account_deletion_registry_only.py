@@ -41,6 +41,9 @@ def _command(command_id: str, *, user: str = "late", registered: bool = True) ->
             "generation": 1,
             "status": "pending",
             "version": 1,
+            # Accepted for the catalog's three steps (#641); a command without
+            # it is refused, not carried on.
+            "flow": "catalog.v1",
         }
     ]
     if registered:

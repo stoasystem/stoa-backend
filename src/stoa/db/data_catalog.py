@@ -32,7 +32,8 @@ entry declares:
   why); for a row that only names the account, `Scrub` or `Keep` - and what it
   does outside the row first (`Effect`: an S3 object, the sign-in provider,
   attachments, a curriculum count). Written down from what the deletion
-  branches do (#639); the branches do not read it yet.
+  branches did (#639); since #641 the deletion does exactly this, row by row
+  (`stoa.services.account_deletion_flow`), sealed with `catalog_sha256`.
 - **The owning module** - where the type's rows are written.
 
 `mentions(row)` and `names(row, account)` read one row against its entry and
@@ -64,6 +65,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, replace
+import hashlib
+import json
 from typing import Final, Literal
 
 type Role = Literal["owner", "reference"]
@@ -1344,6 +1347,68 @@ POINTER_PATHS: Final[frozenset[str]] = frozenset(
 key pointers are not here. An Update that sets one of these, or a path above
 or inside one, can change whom a row names; the registry then needs the row as
 it will stand (`owner_registry.registry_operations`, #589)."""
+
+
+def _pointer_record(pointer: Pointer) -> dict[str, object]:
+    if isinstance(pointer, KeyId):
+        return {"kind": "key", "key": pointer.key, "prefix": pointer.prefix, "role": pointer.role}
+    if isinstance(pointer, ScopeId):
+        return {"kind": "scope", "prefixes": list(pointer.prefixes), "role": pointer.role}
+    return {"kind": type(pointer).__name__.lower(), "path": pointer.path, "role": pointer.role}
+
+
+def _action_record(action: OwnerAction | ReferenceAction | None) -> dict[str, object] | None:
+    if action is None:
+        return None
+    if isinstance(action, Tombstone):
+        return {"do": "tombstone", "keeps": sorted(action.keeps), "effects": list(action.effects)}
+    if isinstance(action, Delete):
+        return {"do": "delete", "effects": list(action.effects)}
+    if isinstance(action, Keep):
+        return {"do": "keep", "because": action.because}
+    return {"do": "scrub"}
+
+
+def _entry_record(entry: DataType) -> dict[str, object]:
+    key = entry.untyped_key
+    return {
+        "name": entry.name,
+        "untyped_key": None
+        if key is None
+        else {
+            "pk_prefix": key.pk_prefix,
+            "sk": key.sk,
+            "sk_prefix": key.sk_prefix,
+            "whole_pk": key.whole_pk,
+        },
+        "accounts": [_pointer_record(pointer) for pointer in entry.accounts],
+        "owner": _action_record(entry.deletion.owner if entry.deletion else None),
+        "reference": _action_record(entry.deletion.reference if entry.deletion else None),
+    }
+
+
+def catalog_sha256() -> str:
+    """The catalog as account deletion reads it, hashed: what seals a deletion (#641).
+
+    A deletion records this when it is accepted and checks it on every run;
+    a deploy that changes how some row is matched or handled pauses the
+    deletions already accepted rather than finishing them under rules they
+    were not accepted with. Only what decides behaviour is in it - each
+    type's key shape, its pointers and their roles, and its deletion actions
+    with the fields a tombstone keeps and the effects - not the notes and
+    reasons, which change nothing a deletion does.
+    """
+    records = sorted(
+        (_entry_record(entry) for entry in (*_ENTRIES, *UNTYPED)),
+        key=lambda record: str(record["name"]),
+    )
+    canonical = json.dumps(
+        {"schema": "data-catalog-deletion.v1", "types": records},
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def data_type_of(row: Mapping[str, object]) -> DataType | None:

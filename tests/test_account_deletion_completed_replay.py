@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime
+from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any, Callable
 
@@ -16,7 +16,7 @@ from stoa import deps
 from stoa.db.repositories import account_deletion_repo
 from stoa.routers import auth
 from stoa.security.tokens import VerifiedAccessToken
-from stoa.services import account_deletion_service
+from stoa.services import account_deletion_service, owner_registry_sweep
 
 
 USER_ID = "student-deleted-1"
@@ -73,6 +73,10 @@ class _DeletionTable:
         }
 
     def get_item(self, *, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:
+        if Key == owner_registry_sweep.RUN_MARKER_KEY:
+            # A clean daily registry sweep, as a new deletion requires (#641).
+            return {"Item": {**Key, "complete": True, "missing_registrations": 0,
+                             "completed_at": datetime.now(UTC).isoformat()}}
         if Key["SK"] == "ACCOUNT_FENCE":
             return {"Item": deepcopy(self.fence)}
         if Key["SK"].startswith("DELETE_COMMAND#") and self.command:
@@ -127,7 +131,8 @@ class _DeletionTable:
                 "user_id",
                 "generation",
                 "accepted_at",
-                "inventory_sha256",
+                "flow",
+                "catalog_sha256",
                 "issuer_hash",
                 "subject_hash",
                 "fingerprint",

@@ -1,10 +1,11 @@
-"""Account deletion on the owner registry path: no full-table scan (#397, PR 3).
+"""Account deletion on the owner registry path: no full-table scan (#397, PR 3; #641).
 
-A command sealed with the v2 inventory reads only the account's derived
-partitions and the partitions registered under `USER#{id}` - strongly, by key,
-never through an index - and proves completeness the way v1 did: two clean
-passes, now over those partitions. A command sealed with v1, including any in
-flight when the switch is turned on, keeps the full-table scan to its end.
+A deletion reads only the account's derived partitions and the partitions
+registered under `USER#{id}` - strongly, by key, never through an index - and
+is done when a whole pass over them finds nothing to handle. Since #641 every
+new deletion takes this path (the catalog's three steps), and only while the
+daily sweep vouches for the registry; the v1/v2 inventories and their
+acceptance switch stay until #642 removes them.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from stoa import config
 from stoa.aws import Kind
 from stoa.db import data_catalog, owner_registry
 from stoa.db.repositories import account_deletion_repo
+from stoa.services import account_deletion_flow as flow
 from stoa.services import account_deletion_service as service
 from stoa.services import owner_registry_sweep
 
@@ -70,7 +72,7 @@ def _vouch(table: FakeTable) -> owner_registry_sweep.SweepReport:
 def _run(command_id: str, user_id: str, table: FakeTable) -> dict[str, Any]:
     command = quick._command(table, user_id, command_id)
     claim = quick._claim(command)
-    service.AccountDeletionService(remaining_seconds=lambda: 500.0).continue_command(claim)
+    flow.CatalogDeletion(remaining_seconds=lambda: 500.0).continue_command(claim)
     return quick._command(table, user_id, command_id)
 
 
@@ -127,6 +129,9 @@ def test_acceptance_seals_v2_only_with_the_switch_and_a_clean_recent_sweep(small
     ],
 )
 def test_without_a_clean_recent_sweep_the_switch_falls_back_to_v1(small_table, registry_path, marker):
+    small_table.rows.pop(
+        (owner_registry_sweep.RUN_MARKER_KEY["PK"], owner_registry_sweep.RUN_MARKER_KEY["SK"])
+    )
     if marker is not None:
         small_table.seed({**owner_registry_sweep.RUN_MARKER_KEY,
                           "completed_at": datetime.now(UTC).isoformat(), **marker})
@@ -160,8 +165,8 @@ def test_a_registry_path_deletion_completes_without_scanning_the_table(
 
     command = _run(command_id, student, table)
 
-    assert command["status"] == "complete", command.get("branch_results")
-    assert command["inventory_sha256"] == sha256(V2.read_bytes()).hexdigest()
+    assert command["status"] == "complete", command.get("deletion_progress")
+    assert command["catalog_sha256"] == data_catalog.catalog_sha256()
     assert table.calls["scan"] == scans_before
     reads = [
         request
@@ -181,8 +186,7 @@ def test_a_registry_path_deletion_completes_without_scanning_the_table(
         key for key, row in table.rows.items()
         if key[0] == f"USER#{student}" and owner_registry.is_registry_row(row)
     ]
-    # Finalized means `validate_deletion_seal` held against v2: every branch
-    # complete, quiescent after two clean passes, stamped `473-36.v2`.
+    # Finalized means a whole pass over those partitions found nothing left.
 
 
 def test_a_registry_path_deletion_of_a_parent_scrubs_the_recovery_audit_event_naming_it(
@@ -220,26 +224,25 @@ def test_a_registry_path_deletion_of_a_parent_scrubs_the_recovery_audit_event_na
 
     command = _run(command_id, parent, small_table)
 
-    assert command["status"] == "complete", command.get("branch_results")
-    assert command["inventory_sha256"] == sha256(V2.read_bytes()).hexdigest()
+    assert command["status"] == "complete", command.get("deletion_progress")
+    assert command["catalog_sha256"] == data_catalog.catalog_sha256()
     assert small_table.calls["scan"] == scans_before
     event = small_table.rows[event_key]
     assert event["privacy_deleted"] is True
     assert parent not in json.dumps(event, default=str)
 
 
-def test_without_the_backfill_the_guard_keeps_new_deletions_on_v1(
-    table: FakeTable, providers: dict[Kind, Any], registry_path
+def test_without_the_backfill_a_new_deletion_is_refused(
+    table: FakeTable, providers: dict[Kind, Any]
 ) -> None:
     student = lifecycle.STUDENT
     assert not _vouch(table).registry_complete
-    command_id = quick._accept(student)
 
-    command = _run(command_id, student, table)
+    with pytest.raises(service.DeletionNotReady):
+        quick._accept(student)
 
-    assert command["inventory_sha256"] == quick.SEALED_INVENTORY_SHA256
-    assert command["status"] == "complete"
-    assert quick._private_left(table) == []
+    assert table.rows[(f"USER#{student}", "ACCOUNT_FENCE")]["status"] == "active"
+    assert not [key for key in table.rows if key[0] == account_deletion_repo.PENDING_REGISTRY_PK]
 
 
 def test_the_registry_path_needs_the_registry(
@@ -295,23 +298,6 @@ def test_a_registry_pass_pages_and_resumes_by_partition_position():
     assert double.calls["scan"] == 0
 
 
-def test_a_v1_command_keeps_the_scan_path_after_the_switch(
-    table: FakeTable, providers: dict[Kind, Any]
-) -> None:
-    student = lifecycle.STUDENT
-    command_id = quick._accept(student)  # sealed with v1, switch off
-    config.install(config.settings().model_copy(update={"account_deletion_registry_path": True}))
-    try:
-        command = _run(command_id, student, table)
-    finally:
-        config.install(None)
-
-    assert command["status"] == "complete"
-    assert command["inventory_sha256"] == quick.SEALED_INVENTORY_SHA256
-    assert table.calls["scan"] > 0
-    assert quick._private_left(table) == []
-
-
 def test_a_command_under_neither_inventory_is_seal_drift(small_table: FakeTable) -> None:
     worker = service.AccountDeletionService()
     assert len(worker.seals) == 2
@@ -329,8 +315,8 @@ def test_a_v2_command_does_not_validate_against_v1_or_the_reverse() -> None:
         worker._require_sealed_command(command)
 
 
-def test_a_v2_rounds_results_carry_the_v2_handler_version_and_registry_cursors(
-    table: FakeTable, providers: dict[Kind, Any], registry_path
+def test_a_run_stops_at_a_position_in_the_accounts_own_partitions(
+    table: FakeTable, providers: dict[Kind, Any]
 ) -> None:
     student = lifecycle.STUDENT
     owner_registry_sweep.run(table=table, write=True)
@@ -338,15 +324,13 @@ def test_a_v2_rounds_results_carry_the_v2_handler_version_and_registry_cursors(
     command_id = quick._accept(student)
     claim = quick._claim(quick._command(table, student, command_id))
 
-    # One unbudgeted round: one page per branch, nothing finalized yet.
-    service.AccountDeletionService().continue_command(claim)
+    # One page, then it stops and says where.
+    flow.CatalogDeletion(page_rows=5, max_pages=1).continue_command(claim)
 
-    command = quick._command(table, student, command_id)
-    results = command["branch_results"]
-    assert {r["handler_version"] for r in results.values()} == {"473-36.v2"}
-    cursors = [r["cursor"] for r in results.values() if r.get("cursor")]
-    partitions = set(account_deletion_repo.owner_partitions(student))
-    assert all(set(c) == {"PK", "SK"} and c["PK"] in partitions for c in cursors)
+    progress = quick._command(table, student, command_id)["deletion_progress"]
+    assert progress["open"] is False
+    assert set(progress["cursor"]) == {"PK", "SK"}
+    assert progress["cursor"]["PK"] in set(account_deletion_repo.owner_partitions(student))
 
 
 # -- a notification that only mentions the account (#574) ------------------------------
@@ -393,8 +377,8 @@ def test_a_registry_path_deletion_scrubs_the_account_out_of_a_notification_it_is
 
     command = _run(command_id, PARENT_574, small_table)
 
-    assert command["status"] == "complete", command.get("branch_results")
-    assert command["inventory_sha256"] == sha256(V2.read_bytes()).hexdigest()
+    assert command["status"] == "complete", command.get("deletion_progress")
+    assert command["catalog_sha256"] == data_catalog.catalog_sha256()
     assert small_table.calls["scan"] == scans_before
     # Scrubbed the way the notification family scrubs a reference: the account
     # is gone from it, the student's notification stays theirs, nothing else

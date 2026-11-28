@@ -5,8 +5,14 @@ round; its attachment branch read the whole table in one call; discovery walked
 the table with a cursor and reached a command once in three runs; each run moved
 every branch by a single page; and `DELETE /auth/me` ran a whole round before it
 answered. At ~7k rows that is two days a deletion, and past 10k rows deletion
-stops altogether. These tests hold the fix, which leaves the sealed inventory -
+stops altogether. These tests hold the fix, which left the sealed inventory -
 and with it every command already in flight - exactly as it was.
+
+Since #641 a deletion runs the catalog's three steps
+(`account_deletion_flow`); the same guarantees are held for it here: its
+command read by key, the registry by one query, no table scan, a run within
+its budget that gives its lease back, and a request side that only
+tombstones the profile.
 """
 
 from __future__ import annotations
@@ -31,7 +37,8 @@ from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, account_email_claim_repo, identity_repo
 from stoa.jobs import account_deletion as job
 from stoa.services import account_deletion_service as service
-from stoa.services import account_provisioning_service, attachment_service
+from stoa.services import account_deletion_flow as flow
+from stoa.services import account_provisioning_service, attachment_service, owner_registry_sweep
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -107,6 +114,18 @@ def _account_rows(user_id: str, *, role: str = "student") -> list[dict[str, Any]
     ]
 
 
+def _sweep_vouches(table: FakeTable) -> None:
+    """A clean daily registry sweep, as a new deletion requires (#641)."""
+    table.seed(
+        {
+            **owner_registry_sweep.RUN_MARKER_KEY,
+            "complete": True,
+            "missing_registrations": 0,
+            "completed_at": datetime.now(UTC).isoformat(),
+        }
+    )
+
+
 def _accept(user_id: str) -> str:
     receipt = service.accept_account_deletion(
         user_id=user_id,
@@ -153,6 +172,7 @@ def small_table() -> FakeTable:
             "user_id": "student-small", "status": "active", "generation": 1, "version": 1,
         },
     )
+    _sweep_vouches(table)
     return table
 
 
@@ -183,10 +203,8 @@ def test_a_deletion_reads_its_command_by_key_and_never_scans_for_it(
 
     monkeypatch.setattr(account_deletion_repo, "get_command_by_id", no_scan)
     monkeypatch.setattr(account_deletion_repo, "_scan_commands", no_scan)
-    worker = service.AccountDeletionService(
-        branch_handlers={branch: _complete for branch in service.ACCOUNT_DELETION_BRANCH_IDS},
-        remaining_seconds=(lambda: 500.0) if budgeted else None,
-    )
+    aws.install({Kind.COGNITO: _Provider(), Kind.S3: _Provider()})
+    worker = flow.CatalogDeletion(remaining_seconds=(lambda: 500.0) if budgeted else None)
     before = len(small_table.requests)
 
     worker.continue_command(claim)
@@ -461,6 +479,18 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     return table
 
 
+def _backfilled(table: FakeTable) -> None:
+    """The registry as the migration left it, vouched for by the daily sweep (#397, #641).
+
+    Rows this fixture seeded by hand have no registry rows of their own; the
+    sweep's backfill writes the ones their writers would have.
+    """
+    owner_registry_sweep.run(table=table, write=True)
+    report = owner_registry_sweep.run(table=table)
+    assert report.registry_complete
+    owner_registry_sweep.record_run(report, now_iso=datetime.now(UTC).isoformat(), table=table)
+
+
 @pytest.fixture
 def providers() -> dict[Kind, _Provider]:
     installed = {Kind.S3: _Provider(), Kind.COGNITO: _Provider()}
@@ -479,14 +509,15 @@ def test_one_scheduled_run_completes_a_deletion_within_its_budget(
     table: FakeTable, providers: dict[Kind, _Provider]
 ) -> None:
     student = lifecycle.STUDENT
+    _backfilled(table)
     command_id = _accept(student)
 
     summary = job.run_pending_deletions(remaining_seconds=lambda: 500.0)
 
     assert summary.claimed == 1 and summary.continued == 1 and summary.retryable == 0
     command = _command(table, student, command_id)
-    assert command["status"] == "complete", command.get("branch_results")
-    assert command["inventory_sha256"] == SEALED_INVENTORY_SHA256
+    assert command["status"] == "complete", command.get("deletion_progress")
+    assert command["catalog_sha256"] == data_catalog.catalog_sha256()
     assert table.rows[(f"USER#{student}", "ACCOUNT_FENCE")]["status"] == "deleted"
     assert _registered(table) == set()
     assert _private_left(table) == []
@@ -496,21 +527,21 @@ def test_a_run_out_of_budget_stops_cleanly_and_gives_its_lease_back(
     table: FakeTable, providers: dict[Kind, _Provider]
 ) -> None:
     student = lifecycle.STUDENT
+    _backfilled(table)
     command_id = _accept(student)
     clock = {"calls": 0}
 
     def running_out() -> float:
         clock["calls"] += 1
-        return 500.0 if clock["calls"] <= 8 else 30.0
+        return 500.0 if clock["calls"] <= 4 else 30.0
 
     stopped = job.run_pending_deletions(remaining_seconds=running_out)
 
     command = _command(table, student, command_id)
     assert stopped.claimed == 1 and stopped.continued == 1
     assert command["status"] == "running"
-    results = command["branch_results"]
-    assert results and set(results) < set(service.ACCOUNT_DELETION_BRANCH_IDS)
-    assert command["branch_results_digest"] == account_deletion_repo.branch_results_digest(results)
+    # Where it stopped, said so: the next run carries on from there.
+    assert command["deletion_progress"]["open"] is False
     # Released, not left to run out: the next run claims it at once.
     assert int(command["lease_expires_at"]) < int(datetime.now(UTC).timestamp())
     assert table.rows[(f"USER#{student}", "ACCOUNT_FENCE")]["status"] == "deletion_pending"
@@ -525,6 +556,7 @@ def test_a_run_out_of_budget_stops_cleanly_and_gives_its_lease_back(
 def test_no_command_is_claimed_with_less_than_the_margin_left(
     table: FakeTable, providers: dict[Kind, _Provider]
 ) -> None:
+    _backfilled(table)
     command_id = _accept(lifecycle.STUDENT)
     before = dict(_command(table, lifecycle.STUDENT, command_id))
 
@@ -534,57 +566,16 @@ def test_no_command_is_claimed_with_less_than_the_margin_left(
     assert _command(table, lifecycle.STUDENT, command_id) == before
 
 
-def test_a_command_left_mid_run_with_an_old_format_result_is_picked_up_and_completes(
-    table: FakeTable, providers: dict[Kind, _Provider]
-) -> None:
-    """As the production command in flight at the #397 deploy was, but for its registry
-    row: an old-format attachment result, mid-run, an expired lease, the current seal."""
-    student = lifecycle.STUDENT
-    command_id = _accept(student)
-    seal = service.load_private_store_seal()
-    contract = seal["branch_contracts"]["attachments"]
-    results = {
-        "attachments": {
-            "status": "retryable", "cursor": None,
-            "debt_counts": dict.fromkeys(attachment_service.PURGE_CURSOR_CATEGORIES, 0),
-            "quiescent": True, "epoch": 1, "legal_retention_blocked": 0,
-            "external_receipts": [], "generation": 1,
-            "handler_version": contract["handler_version"],
-            "subfamilies": contract["subfamilies"], "updated_at": "2026-11-11T09:34:00+00:00",
-            "result_version": 3,
-        }
-    }
-    row = dict(_command(table, student, command_id))
-    row.update(
-        status="running", lease_owner="an-earlier-run", lease_expires_at=1_000,
-        version=131, command_version=131, branch_results=results,
-        branch_results_digest=account_deletion_repo.branch_results_digest(results),
-    )
-    table.seed(row)
-
-    job.run_pending_deletions(remaining_seconds=lambda: 500.0)
-
-    command = _command(table, student, command_id)
-    assert command["status"] == "complete"
-    assert command["inventory_sha256"] == SEALED_INVENTORY_SHA256
-    assert _registered(table) == set()
-
-
 def test_the_first_run_releases_the_email_and_revokes_the_provider_identity_at_once(
     table: FakeTable, providers: dict[Kind, _Provider]
 ) -> None:
     student = lifecycle.STUDENT
+    _backfilled(table)
     command_id = _accept(student)
     command = _command(table, student, command_id)
     claim = _claim(command)
-    worker = service.AccountDeletionService(
-        # No branch gets anywhere: what changes is the fast path's doing alone.
-        branch_handlers={
-            branch: (lambda **_k: service.BranchResult("retryable", debt_counts={"dependency": 1}))
-            for branch in service.ACCOUNT_DELETION_BRANCH_IDS
-        },
-        remaining_seconds=lambda: 500.0,
-    )
+    # No page is read: what changes is step 1's doing alone.
+    worker = flow.CatalogDeletion(max_pages=0)
 
     worker.continue_command(claim)
 
@@ -598,18 +589,18 @@ def test_the_first_run_releases_the_email_and_revokes_the_provider_identity_at_o
     cognito = [name for name, _ in providers[Kind.COGNITO].calls]
     assert cognito == ["admin_user_global_sign_out", "admin_delete_user"]
     assert providers[Kind.COGNITO].calls[1][1]["Username"] == SUBJECT
+    # The identity rows themselves are tombstoned row by row, in step 2; the
+    # passes still decide completion: nothing is complete yet.
     binding_pk = f"IDENTITY#{identity_repo.issuer_hash(ISSUER)}#{SUBJECT}"
-    assert table.rows[(binding_pk, "BINDING")]["entity_type"] == "identity_deletion_evidence"
-    inventory = table.rows[(f"USER#{student}", f"IDENTITY#{identity_repo.issuer_hash(ISSUER)}#{SUBJECT}")]
-    assert inventory["entity_type"] == "identity_deletion_evidence"
-    # The scans still decide completion: nothing is complete yet.
+    assert table.rows[(binding_pk, "BINDING")]["status"] == "active"
     assert _command(table, student, command_id)["status"] == "running"
 
 
-def test_the_fast_path_leaves_the_branches_a_clean_scan_and_a_valid_seal(
+def test_the_request_side_then_the_job_complete_and_ask_the_provider_once(
     table: FakeTable, providers: dict[Kind, _Provider]
 ) -> None:
     student = lifecycle.STUDENT
+    _backfilled(table)
     command_id = _accept(student)
     asyncio.run(job.continue_deletion_command(command_id))
     assert account_email_claim_repo.get_claim(email=EMAIL, role="student") is None
@@ -618,8 +609,8 @@ def test_the_fast_path_leaves_the_branches_a_clean_scan_and_a_valid_seal(
 
     command = _command(table, student, command_id)
     assert command["status"] == "complete"
-    # The identity branch replays the debt the fast path completed, and the
-    # provider is not asked twice.
+    # Step 2 finds the revoke debt step 1 completed, and the provider is not
+    # asked twice.
     assert [name for name, _ in providers[Kind.COGNITO].calls] == [
         "admin_user_global_sign_out", "admin_delete_user",
     ]
@@ -632,13 +623,13 @@ def test_the_request_side_releases_the_email_only_and_never_scans(
     table: FakeTable, providers: dict[Kind, _Provider], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     student = lifecycle.STUDENT
+    _backfilled(table)
     command_id = _accept(student)
 
-    def no_branch(**_kwargs: Any) -> service.BranchResult:
-        raise AssertionError("the request ran a deletion branch")
+    def no_rows(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("the request read the account's rows")
 
-    for branch in service.ACCOUNT_DELETION_BRANCH_IDS:
-        monkeypatch.setitem(service.BRANCH_HANDLERS, branch, no_branch)
+    monkeypatch.setattr(account_deletion_repo, "registry_pages", no_rows)
     before = len(table.requests)
 
     asyncio.run(job.continue_deletion_command(command_id))
@@ -653,7 +644,7 @@ def test_the_request_side_releases_the_email_only_and_never_scans(
     assert table.rows[(binding_pk, "BINDING")]["entity_type"] == "identity_binding"
     command = _command(table, student, command_id)
     assert command["status"] == "running"
-    assert command.get("branch_results") in ({}, None)
+    assert "deletion_progress" not in command
     # Its lease is given back, so the schedule need not wait for it.
     assert int(command["lease_expires_at"]) < int(datetime.now(UTC).timestamp())
 
@@ -662,6 +653,7 @@ def test_the_request_side_does_not_scan_for_a_command_without_a_registry_row(
     table: FakeTable, providers: dict[Kind, _Provider]
 ) -> None:
     student = lifecycle.STUDENT
+    _backfilled(table)
     command_id = _accept(student)
     registry = account_deletion_repo.pending_registry_key(student, command_id)
     del table.rows[(registry["PK"], registry["SK"])]
