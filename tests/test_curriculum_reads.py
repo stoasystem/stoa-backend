@@ -12,12 +12,20 @@ one read of each kind of row per request, not none. The responses are
 unchanged: they were recorded from origin/main `85d92d76` on the same fixture
 and are compared field for field. The two learning profiles' weak topics were
 recorded again when they began to come from `weak_topics` (#673): each carries
-its `score`, and topics of equal score come newest first.
+its `score`, and topics of equal score come newest first. The parent's two
+pages and the two learning profiles were recorded again when readers were
+named by one rule (#662): an entry's subject is the canonical id, a finished
+lesson is called by its name, and a subject's `label` is the message catalog's
+`subject.<id>` in the reader's language.
+
+To record them again: `STOA_RECORD_CURRICULUM_READS=1 pytest
+tests/test_curriculum_reads.py -k responses_are_the_ones_main_gave`.
 """
 
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +48,7 @@ from stoa.security.identity import CanonicalRole
 STUDENT = "student-1"
 PARENT = "parent-1"
 GOLDEN = Path(__file__).parent / "fixtures" / "curriculum_reads_496.json"
+RECORD = bool(os.environ.get("STOA_RECORD_CURRICULUM_READS"))
 SMALL, LARGE = 0.05, 0.25
 READ_AT = "2026-11-18T12:00:00+00:00"
 #: Lessons the student finished, the first of each of these many mathematics lessons.
@@ -173,6 +182,14 @@ def test_the_responses_are_the_ones_main_gave(monkeypatch: pytest.MonkeyPatch) -
             json.dumps({name: _get(name, lesson) for name in ROUTES}, sort_keys=True)
         )
 
+    if RECORD:
+        # One route a line, so a recording shows as the routes that changed.
+        lines = ",\n".join(
+            f'"{name}": '
+            + json.dumps(responses[name], sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+            for name in sorted(responses)
+        )
+        GOLDEN.write_text("{\n" + lines + "\n}\n", encoding="utf-8", newline="\n")
     recorded = json.loads(GOLDEN.read_text(encoding="utf-8"))
     assert set(responses) == set(recorded)
     for name in recorded:

@@ -16,7 +16,12 @@ when its weak topics became the learning profile's first ten (#674): the same
 names, in the profile's order. The two parent pages were recorded again when
 their entries came from `student_activity` (#693): a wrong answer whose
 knowledge point the curriculum does not know is named by nothing, no longer by
-what the row stored.
+what the row stored. The two parent pages and the two learning profiles were
+recorded again when readers were named by one rule (#662): an entry's subject
+is `math`, no longer the stored `mathematics`; a finished lesson is called by
+its name in the reader's language, no longer by its topic id; and a subject's
+`label` is the message catalog's `subject.<id>` in the reader's language, no
+longer the prompt's English label (so only German, French and Italian changed).
 
 To record it again (on main, before a change to names):
 `STOA_RECORD_CURRICULUM_NAMES=1 pytest tests/test_curriculum_names_unchanged.py`.

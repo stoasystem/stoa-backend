@@ -1,28 +1,16 @@
-"""The names that are not on a content row: skill points, and subjects.
+"""The names that are not on a content row: skill points.
 
 A topic, unit or lesson row carries its own name in every language (`titles`,
 #661), written by the seed, the knowledge-base import and the curriculum
 migrations. A skill point has no row, so its names are here, beside the one
-unit each hangs under. The subjects' English, French and Italian names are
-here until readers name a subject by `subject.<id>` (#662).
+unit each hangs under. A subject is named by neither: a reader is shown the
+message catalog's `subject.<id>` (#662).
 
 Only `curriculum_names` reads these tables to name content (#660).
 """
 from __future__ import annotations
 
 from stoa.services import knowledge_base_catalog
-
-#: A subject's English, French and Italian name; German is the subject row's
-#: `name`. The imported subjects' come from the knowledge base.
-SUBJECT_TRANSLATIONS: dict[str, dict[str, str]] = {
-    "mathematics": {"en": "Mathematics", "fr": "Mathématiques", "it": "Matematica"},
-    **{
-        subject["subject_id"]: {
-            locale: subject["titles"][locale] for locale in ("en", "fr", "it")
-        }
-        for subject in knowledge_base_catalog.SUBJECTS
-    },
-}
 
 # ── Skill points (stoa-backend#58) ────────────────────────────────────────
 #

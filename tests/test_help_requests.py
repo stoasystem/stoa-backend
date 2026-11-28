@@ -897,7 +897,8 @@ def test_a_teacher_reads_the_stored_status_never_the_students(stored) -> None:
 
     assert view.status == stored
     assert (view.request_id, view.conversation_id, view.student_id) == (CONV, CONV, STUDENT)
-    assert (view.subject, view.grade, view.request_message) == ("mathematics", "6", "Step 2?")
+    # The subject is the canonical id, whatever spelling the row stored (#662).
+    assert (view.subject, view.grade, view.request_message) == ("math", "6", "Step 2?")
     assert view.sla == help_requests.sla(record)
 
 
@@ -908,7 +909,9 @@ def test_a_request_is_dated_when_asked_else_when_changed_else_now() -> None:
     assert help_requests.teacher_view({**base, "updated_at": at(2)}, now=at(3)).created_at == at(2)
     view = help_requests.teacher_view(base, now=at(3))
     assert view.created_at == at(3)
-    assert (view.request_id, view.subject, view.status, view.request_message) == (CONV, "General", "pending", None)
+    assert (view.request_id, view.subject, view.status, view.request_message) == (CONV, None, "pending", None)
+    # A subject the platform does not teach is no subject either, never a made-up one (#662).
+    assert help_requests.teacher_view({**base, "subject": "chemistry"}, now=at(3)).subject is None
 
 
 # ── the teacher's moves tell the student (#233) ──────────────────────────────

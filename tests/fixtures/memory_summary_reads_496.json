@@ -1080,7 +1080,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "Mathematics",
+    "label": "Mathematik",
     "questionCount": 0,
     "rolloutState": "active",
     "subject": "math",
@@ -1089,7 +1089,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "Physics",
+    "label": "Physik",
     "questionCount": 0,
     "rolloutState": "foundation",
     "subject": "physics",
@@ -1098,7 +1098,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "German",
+    "label": "Deutsch",
     "questionCount": 0,
     "rolloutState": "foundation",
     "subject": "german",
@@ -1107,7 +1107,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "English",
+    "label": "Englisch",
     "questionCount": 0,
     "rolloutState": "foundation",
     "subject": "english",
@@ -1117,22 +1117,22 @@
   "subjects": [
    {
     "id": "math",
-    "label": "Mathematics",
+    "label": "Mathematik",
     "rolloutState": "active"
    },
    {
     "id": "physics",
-    "label": "Physics",
+    "label": "Physik",
     "rolloutState": "foundation"
    },
    {
     "id": "german",
-    "label": "German",
+    "label": "Deutsch",
     "rolloutState": "foundation"
    },
    {
     "id": "english",
-    "label": "English",
+    "label": "Englisch",
     "rolloutState": "foundation"
    }
   ],
@@ -1647,7 +1647,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "Mathematics",
+    "label": "Mathematik",
     "questionCount": 0,
     "rolloutState": "active",
     "subject": "math",
@@ -1656,7 +1656,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "Physics",
+    "label": "Physik",
     "questionCount": 0,
     "rolloutState": "foundation",
     "subject": "physics",
@@ -1665,7 +1665,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "German",
+    "label": "Deutsch",
     "questionCount": 0,
     "rolloutState": "foundation",
     "subject": "german",
@@ -1674,7 +1674,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "English",
+    "label": "Englisch",
     "questionCount": 0,
     "rolloutState": "foundation",
     "subject": "english",
@@ -1684,22 +1684,22 @@
   "subjects": [
    {
     "id": "math",
-    "label": "Mathematics",
+    "label": "Mathematik",
     "rolloutState": "active"
    },
    {
     "id": "physics",
-    "label": "Physics",
+    "label": "Physik",
     "rolloutState": "foundation"
    },
    {
     "id": "german",
-    "label": "German",
+    "label": "Deutsch",
     "rolloutState": "foundation"
    },
    {
     "id": "english",
-    "label": "English",
+    "label": "Englisch",
     "rolloutState": "foundation"
    }
   ],
@@ -1951,7 +1951,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "Mathematics",
+    "label": "Mathematik",
     "questionCount": 0,
     "rolloutState": "active",
     "subject": "math",
@@ -1960,7 +1960,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "Physics",
+    "label": "Physik",
     "questionCount": 0,
     "rolloutState": "foundation",
     "subject": "physics",
@@ -1969,7 +1969,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "German",
+    "label": "Deutsch",
     "questionCount": 0,
     "rolloutState": "foundation",
     "subject": "german",
@@ -1978,7 +1978,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "English",
+    "label": "Englisch",
     "questionCount": 0,
     "rolloutState": "foundation",
     "subject": "english",
@@ -1988,22 +1988,22 @@
   "subjects": [
    {
     "id": "math",
-    "label": "Mathematics",
+    "label": "Mathematik",
     "rolloutState": "active"
    },
    {
     "id": "physics",
-    "label": "Physics",
+    "label": "Physik",
     "rolloutState": "foundation"
    },
    {
     "id": "german",
-    "label": "German",
+    "label": "Deutsch",
     "rolloutState": "foundation"
    },
    {
     "id": "english",
-    "label": "English",
+    "label": "Englisch",
     "rolloutState": "foundation"
    }
   ],
@@ -2518,7 +2518,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "Mathematics",
+    "label": "Mathematik",
     "questionCount": 0,
     "rolloutState": "active",
     "subject": "math",
@@ -2527,7 +2527,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "Physics",
+    "label": "Physik",
     "questionCount": 0,
     "rolloutState": "foundation",
     "subject": "physics",
@@ -2536,7 +2536,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "German",
+    "label": "Deutsch",
     "questionCount": 0,
     "rolloutState": "foundation",
     "subject": "german",
@@ -2545,7 +2545,7 @@
    {
     "aiResolvedCount": 0,
     "feedbackAverage": null,
-    "label": "English",
+    "label": "Englisch",
     "questionCount": 0,
     "rolloutState": "foundation",
     "subject": "english",
@@ -2555,22 +2555,22 @@
   "subjects": [
    {
     "id": "math",
-    "label": "Mathematics",
+    "label": "Mathematik",
     "rolloutState": "active"
    },
    {
     "id": "physics",
-    "label": "Physics",
+    "label": "Physik",
     "rolloutState": "foundation"
    },
    {
     "id": "german",
-    "label": "German",
+    "label": "Deutsch",
     "rolloutState": "foundation"
    },
    {
     "id": "english",
-    "label": "English",
+    "label": "Englisch",
     "rolloutState": "foundation"
    }
   ],

@@ -77,8 +77,20 @@ def normalize_submitted_answer(value: object) -> str | list[str]:
     return normalized
 
 
-def build_mistake_projection(attempt: Mapping[str, Any]) -> PracticeMistake:
-    """Project a recorded wrong answer or an explicit legacy unknown."""
+def build_mistake_projection(
+    attempt: Mapping[str, Any], *, names: curriculum_names.Names | None = None
+) -> PracticeMistake:
+    """Project a recorded wrong answer or an explicit legacy unknown.
+
+    `subjectId` is the canonical subject id, empty for a subject the platform
+    does not teach. `topic` is the knowledge point as `names` calls it in the
+    reader's language, empty when the curriculum does not know it or no names
+    are given - never the stored id (#662).
+    """
+    # Read here, not at import: the curriculum service builds its previews
+    # through this module.
+    from stoa.services import curriculum_service
+
     challenge_id = attempt.get("challenge_id")
     if not isinstance(challenge_id, str) or not challenge_id.strip():
         raise ValueError("mistake row has no challenge identity")
@@ -107,8 +119,19 @@ def build_mistake_projection(attempt: Mapping[str, Any]) -> PracticeMistake:
     return PracticeMistake(
         id=raw_id,
         challengeId=challenge_id,
-        subjectId=str(attempt.get("subject_id") or ""),
-        topic=str(attempt.get("topic_id") or ""),
+        subjectId=curriculum_service.subject_id(attempt.get("subject_id")) or "",
+        topic=(
+            names.name(
+                names.resolve(
+                    attempt.get("topic_id"),
+                    unit_id=attempt.get("unit_id"),
+                    lesson_id=attempt.get("lesson_id"),
+                )
+            )
+            if names is not None
+            else None
+        )
+        or "",
         prompt=str(attempt.get("prompt") or ""),
         yourAnswer=answer,
         answerState=answer_state,

@@ -16,9 +16,10 @@ Where the names come from: a content row carries its own, `titles` - German,
 English, French and Italian, the shape `normalized_titles` gives (#661) - with
 the German one also in its `title` for the readers that read only that. A
 language a row does not name is shown in German. A skill point has no row:
-`curriculum_translations.SKILL_TITLES` and `SKILL_TRANSLATIONS` name it, and
-`SUBJECT_TRANSLATIONS` a subject until #662. Only this module reads them to
-name content; `tests/test_curriculum_names.py` keeps it that way.
+`curriculum_translations.SKILL_TITLES` and `SKILL_TRANSLATIONS` name it. Only
+this module reads them to name content; `tests/test_curriculum_names.py` keeps
+it that way. A subject is not content this module names: a reader is shown the
+message catalog's `subject.<id>` (#662).
 """
 
 from __future__ import annotations
@@ -116,7 +117,7 @@ class Names:
 
         The catalog's title where the catalog has it, as it is already in the
         reader's language; else the name its row carries in that language;
-        else a skill point's or a subject's translation into that language;
+        else a skill point's translation into that language;
         else the row's German name, then a skill point's own name.
         """
         if not isinstance(content_id, str) or not content_id:
@@ -268,17 +269,13 @@ def _is_name(value: object) -> bool:
 
 
 def _translations(content_id: str) -> Mapping[str, str]:
-    """A skill point's or a subject's English, French and Italian names; a
-    topic, unit or lesson has its own on its row."""
-    return (
-        curriculum_translations.SKILL_TRANSLATIONS.get(content_id)
-        or curriculum_translations.SUBJECT_TRANSLATIONS.get(content_id)
-        or {}
-    )
+    """A skill point's English, French and Italian names; a topic, unit or
+    lesson has its own on its row."""
+    return curriculum_translations.SKILL_TRANSLATIONS.get(content_id) or {}
 
 
 def _every_translation(content_id: str) -> tuple[str, ...]:
-    """A skill point's or a subject's translated names: English, French and Italian."""
+    """A skill point's translated names: English, French and Italian."""
     return tuple(_translations(content_id).values())
 
 

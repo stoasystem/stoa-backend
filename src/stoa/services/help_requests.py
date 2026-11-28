@@ -51,6 +51,7 @@ from stoa.security.authorization import AuthorizationAction
 from stoa.security.private_telemetry import emit_private_event
 from stoa.services import (
     attachment_service,
+    curriculum_service,
     learning_session,
     notifications,
     teacher_dispatch_service,
@@ -655,13 +656,15 @@ class TeacherView:
     """What a teacher is shown of a request: the list, the detail and the stats.
 
     ``status`` is the stored one (#215 decision 3): a teacher never sees the
-    student's `assigned` or `waiting_no_teacher`.
+    student's `assigned` or `waiting_no_teacher`. ``subject`` is the canonical
+    subject id, or None for a request with none or with one the platform does
+    not teach (#662); the client names it.
     """
 
     request_id: str
     conversation_id: str
     student_id: str
-    subject: str
+    subject: str | None
     grade: str
     status: str
     mode: HelpMode
@@ -683,7 +686,7 @@ def teacher_view(record: Mapping[str, Any], *, now: str | None = None) -> Teache
         request_id=_text(record.get("escalation_request_id"), default=conversation_id),
         conversation_id=conversation_id,
         student_id=_text(record.get("student_id")),
-        subject=_text(record.get("subject"), default="General"),
+        subject=curriculum_service.subject_id(record.get("subject")),
         grade=_text(record.get("grade")),
         status=stored_status(record),
         mode=mode(record),

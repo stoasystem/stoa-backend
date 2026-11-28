@@ -14911,8 +14911,15 @@
             "type": "object"
           },
           "subject": {
-            "title": "Subject",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
           },
           "uploads": {
             "items": {
@@ -15020,8 +15027,15 @@
             "type": "string"
           },
           "subject": {
-            "title": "Subject",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
           }
         },
         "required": [

@@ -84,10 +84,13 @@ def test_an_id_nobody_knows_has_no_name(unknown: object) -> None:
         assert curriculum_names.for_reader(locale, catalog=CATALOG).name(unknown) is None
 
 
-def test_german_is_never_looked_up_in_the_translations() -> None:
-    """The subject's stored id has English, French and Italian names and no German one."""
-    assert curriculum_names.for_reader("de").name("mathematics") is None
-    assert curriculum_names.for_reader("en").name("mathematics") == "Mathematics"
+@pytest.mark.parametrize("locale", ["de", "en", "fr", "it"])
+def test_a_subject_is_not_content_this_module_names(locale: str) -> None:
+    """A reader is shown the message catalog's `subject.<id>` (#662)."""
+    names = curriculum_names.for_reader(locale, catalog=CATALOG)
+
+    assert names.name("mathematics") is None
+    assert names.name("math") is None
 
 
 def test_a_blank_title_is_no_name() -> None:
@@ -160,10 +163,12 @@ def test_the_ids_a_row_recorded_count_before_its_spellings_when_the_catalog_has_
 #: The modules that define the name tables; they hold them, they do not read
 #: them to name anything.
 _TABLE_OWNERS = {"services/curriculum_translations.py", "services/knowledge_base_catalog.py"}
-_TABLES = {"SUBJECT_TRANSLATIONS", "SKILL_TRANSLATIONS", "SKILL_TITLES"}
-#: Gone: the old ways of naming content (#660), and the table that named topics,
-#: units and lessons before their rows did (#661).
+_TABLES = {"SKILL_TRANSLATIONS", "SKILL_TITLES"}
+#: Gone: the old ways of naming content (#660), the table that named topics,
+#: units and lessons before their rows did (#661), and the one that named
+#: subjects before the message catalog's `subject.<id>` did (#662).
 _RETIRED = {
+    "SUBJECT_TRANSLATIONS",
     "translated_title",
     "skill_title",
     "TopicNames",

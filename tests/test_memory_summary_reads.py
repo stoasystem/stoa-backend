@@ -19,7 +19,12 @@ with its `score`; the recommendations stayed as main gave them. The
 `memorySnapshots` were recorded again when they began to be worked out from
 the same weak topics on each read (#675): one per weak topic, in its order,
 keyed as it is (a free name no longer made a slug); the recommendations,
-again, stayed as they were.
+again, stayed as they were. A subject's `label` in `subjectActivity` was
+recorded again when it became the message catalog's `subject.<id>` in the
+reader's language (#662).
+
+To record them again: `STOA_RECORD_MEMORY_SUMMARY_READS=1 pytest
+tests/test_memory_summary_reads.py -k responses_are_the_ones_main_gave`.
 
 Since #673 the weak topics are resolved against the catalog, which a container
 keeps (`curriculum_cache`): the table here carries the catalog stamp the seed
@@ -31,6 +36,7 @@ the partition.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -53,6 +59,7 @@ from stoa.services import curriculum_cache, curriculum_service
 
 STUDENT = "student-1"
 GOLDEN = Path(__file__).parent / "fixtures" / "memory_summary_reads_496.json"
+RECORD = bool(os.environ.get("STOA_RECORD_MEMORY_SUMMARY_READS"))
 SMALL, LARGE = 0.05, 0.25
 #: When the two assignments were made, and when the responses are read.
 ASSIGNED_AT = ("2026-11-14T09:00:00+00:00", "2026-11-15T09:00:00+00:00")
@@ -173,6 +180,12 @@ def test_the_responses_are_the_ones_main_gave(monkeypatch: pytest.MonkeyPatch) -
 
     responses = _comparable(_responses())
 
+    if RECORD:
+        GOLDEN.write_text(
+            json.dumps(responses, indent=1, sort_keys=True, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
     recorded = json.loads(GOLDEN.read_text(encoding="utf-8"))
     assert set(responses) == set(recorded)
     for name in recorded:

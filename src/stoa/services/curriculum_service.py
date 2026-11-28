@@ -9,7 +9,7 @@ from typing import Any
 
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.services import curriculum_cache, curriculum_names, practice_projection_service
-from stoa.services import curriculum_translations
+from stoa.services import curriculum_translations, message_catalog
 from stoa.services.practice_errors import PracticeErrorCode, PracticeViolation
 
 # ── Subject ids ───────────────────────────────────────────────────────────
@@ -22,8 +22,7 @@ from stoa.services.practice_errors import PracticeErrorCode, PracticeViolation
 # Every subject the platform teaches, with its rollout mark and how the answer
 # model is told to treat it. The `label` is for the model's prompt
 # (`learning_profile_service.subject_prompt_context`); a reader is shown the
-# message catalog's `subject.<id>` (#637). The learning profile still hands it
-# out as a subject's `label` until #662.
+# message catalog's `subject.<id>` (#637, #662).
 SUPPORTED_SUBJECTS: dict[str, dict[str, str]] = {
     "math": {
         "label": "Mathematics",
@@ -203,7 +202,7 @@ def _catalog(
     topic_rows, unit_rows, lesson_rows = list(topic_rows), list(unit_rows), list(lesson_rows)
     names = curriculum_names.for_reader(locale, rows=[*topic_rows, *unit_rows, *lesson_rows])
     subjects = [
-        _build_subject(subject, names)
+        _build_subject(subject, locale)
         for subject in sorted(subject_rows, key=lambda item: _as_int(item.get("order", 0)))
         if _subject_matches(subject, subject_id, grade_level)
         and _matches_state(subject, rollout_state, include_preview)
@@ -434,10 +433,14 @@ def _active_exercises_for_lesson(lesson_id: str, include_preview: bool) -> list[
     ]
 
 
-def _build_subject(raw: dict[str, Any], names: curriculum_names.Names) -> dict[str, Any]:
+def _build_subject(raw: dict[str, Any], locale: str) -> dict[str, Any]:
+    """A subject the platform teaches (the caller keeps only those), named by
+    the message catalog's `subject.<id>` in the reader's language, not by the
+    `name` its row stores (#662)."""
+    canonical = subject_key(raw["subject_id"])
     return {
-        "id": subject_key(raw["subject_id"]),
-        "name": names.name(raw["subject_id"]) or raw.get("name", raw["subject_id"].title()),
+        "id": canonical,
+        "name": message_catalog.text(f"subject.{canonical}", locale),
         "description": raw.get("description", ""),
         "gradeLevels": raw.get("grade_levels", []),
         "language": raw.get("language", _subject_language(raw["subject_id"])),
