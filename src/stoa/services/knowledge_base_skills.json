@@ -15093,6 +15093,12 @@
    "fr": "Représenter et décomposer",
    "it": "Rappresentare e scomporre"
   },
+  "geometrie-achsen-und-punktsymmetrie--darstellen--zap": {
+   "de": "Darstellen und Zerlegen · ZAP",
+   "en": "Representing and decomposing · ZAP",
+   "fr": "Représenter et décomposer · ZAP",
+   "it": "Rappresentare e scomporre · ZAP"
+  },
   "geometrie-achsen-und-punktsymmetrie--kopfrechnen--1": {
    "de": "Kopfrechnen",
    "en": "Mental maths",
@@ -15879,6 +15885,12 @@
    "fr": "Représenter et décomposer · ZAP",
    "it": "Rappresentare e scomporre · ZAP"
   },
+  "geometrie-lage-richtung-und-koordinaten--darstellen--zap-2": {
+   "de": "Darstellen und Zerlegen · ZAP · Teil 2",
+   "en": "Representing and decomposing · ZAP · Part 2",
+   "fr": "Représenter et décomposer · ZAP · Partie 2",
+   "it": "Rappresentare e scomporre · ZAP · Parte 2"
+  },
   "geometrie-lage-richtung-und-koordinaten--kopfrechnen--1": {
    "de": "Kopfrechnen",
    "en": "Mental maths",
@@ -16221,6 +16233,12 @@
    "fr": "Représenter et décomposer",
    "it": "Rappresentare e scomporre"
   },
+  "geometrie-umfang-und-flaeche-ebener-figuren--darstellen--zap": {
+   "de": "Darstellen und Zerlegen · ZAP",
+   "en": "Representing and decomposing · ZAP",
+   "fr": "Représenter et décomposer · ZAP",
+   "it": "Rappresentare e scomporre · ZAP"
+  },
   "geometrie-umfang-und-flaeche-ebener-figuren--kopfrechnen--2": {
    "de": "Kopfrechnen",
    "en": "Mental maths",
@@ -16376,6 +16394,12 @@
    "en": "Representing and decomposing",
    "fr": "Représenter et décomposer",
    "it": "Rappresentare e scomporre"
+  },
+  "geometrie-verschiebung-und-drehung--darstellen--zap": {
+   "de": "Darstellen und Zerlegen · ZAP",
+   "en": "Representing and decomposing · ZAP",
+   "fr": "Représenter et décomposer · ZAP",
+   "it": "Rappresentare e scomporre · ZAP"
   },
   "geometrie-verschiebung-und-drehung--kopfrechnen--1": {
    "de": "Kopfrechnen",
