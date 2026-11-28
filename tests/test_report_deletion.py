@@ -164,6 +164,52 @@ def test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_versio
     assert result == {"version_id": "v2", "etag": "abc"}
 
 
+def test_email_intent_claim_rechecks_fence_and_provider_unknown_is_terminal() -> None:
+    """The weekly report email is sent behind the student's fence, and an unknown outcome is final.
+
+    The sealed private-store inventory names this test (it cannot be edited to
+    follow a rename, `scripts/sealed_test_renames.py`). Its report send record
+    is gone since #687: the email crosses the notification ledger, and this
+    holds the same two promises there.
+    """
+    from stoa import aws
+    from stoa.db.repositories import account_deletion_repo
+    from stoa.services import notifications
+
+    import test_notification_email_channel as email_channel
+
+    try:
+        table, ses = email_channel.install_world()
+
+        class _Down:
+            def send_email(self, **_kwargs: Any) -> dict[str, Any]:
+                raise TimeoutError("commit then raise")
+
+        aws.install({aws.Kind.SES_NOTIFICATION: _Down()})
+        unknown = email_channel.report_ready()
+        aws.install({aws.Kind.SES_NOTIFICATION: ses})
+        again = email_channel.report_ready()
+
+        assert unknown.outcome is again.outcome is notifications.EmailOutcome.FAILED
+        assert str(again.error) == "provider_acceptance_unknown"
+        assert ses.sent == []
+
+        table.seed(
+            {
+                **account_deletion_repo.account_fence_key(email_channel.STUDENT),
+                "entity_type": "account_fence",
+                "status": "deleting",
+                "generation": email_channel.GENERATION,
+            }
+        )
+        fenced = email_channel.report_ready(resend=1)
+
+        assert fenced.outcome is notifications.EmailOutcome.FAILED
+        assert ses.sent == []
+    finally:
+        aws.install(None)
+
+
 def test_report_discovery_is_strong_paginated_and_scrub_is_allowlisted() -> None:
     scan = _contract("scan_report_private_rows")
     scrub = _contract("scrub_report_private_row")

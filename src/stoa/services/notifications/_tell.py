@@ -245,7 +245,7 @@ def _help_offered(happening: HelpOffered) -> None:
         logger.warning("dispatch_reminder_email_failed error=%s", type(exc).__name__)
         return
     if status not in {None, _email.ACCEPTED}:
-        logger.warning("dispatch_reminder_email_not_sent status=%s", status)
+        logger.warning("dispatch_reminder_email_failed status=%s", status)
 
 
 def _dispatch_reminder_email(
