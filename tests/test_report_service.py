@@ -51,9 +51,8 @@ class FakeTable:
     (#327), so one double answers both.
     """
 
-    def __init__(self, children=None, conversations=None, links=None):
+    def __init__(self, children=None, links=None):
         self.children = children or []
-        self.conversations = conversations or []
         self.links = links
 
     def scan(self, **kwargs):
@@ -62,7 +61,9 @@ class FakeTable:
     def query(self, **kwargs):
         if self.links is not None and "IndexName" not in kwargs:
             return self.links.query(**kwargs)
-        return {"Items": self.conversations}
+        # No sessions, answers or help requests: what a student did in a week
+        # is tests/test_weekly_report_activity.py's.
+        return {"Items": []}
 
     def get_item(self, **kwargs):
         return self.links.get_item(**kwargs)
@@ -107,12 +108,12 @@ def _production_settings(**overrides) -> Settings:
     return Settings(**values)
 
 
-def patch_sources(monkeypatch, *, children=None, questions=None, progress=None, mistakes=None, conversations=None):
+def patch_sources(monkeypatch, *, children=None, progress=None, mistakes=None):
     # `children` seeds the link rows the judge reads, not a profile scan: a
     # child listed with a non-active `parent_binding_status` stays unlinked,
     # which is the point of the defect these cover.
     links = LinkRows()
-    db_table.install(FakeTable(children=children, conversations=conversations, links=links.table))
+    db_table.install(FakeTable(children=children, links=links.table))
     students = {}
     for child in children or []:
         student_id = child.get("user_id") or child.get("id")
@@ -133,11 +134,6 @@ def patch_sources(monkeypatch, *, children=None, questions=None, progress=None, 
         }
 
     monkeypatch.setattr(report_service.user_repo, "get_user", _get_user)
-    monkeypatch.setattr(
-        report_service.question_repo,
-        "list_by_student",
-        lambda student_id, limit=500, last_key=None: {"Items": questions or []},
-    )
     # Every student reads as these lessons and these wrong answers.
     monkeypatch.setattr(
         report_service.student_evidence,
@@ -234,37 +230,6 @@ def test_mixed_weekly_activity_aggregates_metrics_and_topics(monkeypatch):
                 "grade": "6",
             }
         ],
-        questions=[
-            {
-                "PK": "QUESTION#q1",
-                "SK": "META",
-                "question_id": "q1",
-                "student_id": "student-1",
-                "status": "ai_answered",
-                "subject": "math",
-                "knowledge_points": ["fractions"],
-                "created_at": "2026-06-02T10:00:00Z",
-                "summary": "Fractions question",
-            },
-            {
-                "PK": "QUESTION#q2",
-                "SK": "META",
-                "question_id": "q2",
-                "student_id": "student-1",
-                "status": "teacher_requested",
-                "subject": "math",
-                "knowledge_points": ["fractions", "ratios"],
-                "created_at": "2026-06-03T10:00:00Z",
-            },
-            {
-                "PK": "QUESTION#old",
-                "SK": "META",
-                "question_id": "old",
-                "student_id": "student-1",
-                "status": "ai_answered",
-                "created_at": "2026-05-20T10:00:00Z",
-            },
-        ],
         progress=[
             {
                 "lesson_id": "lesson-1",
@@ -282,15 +247,15 @@ def test_mixed_weekly_activity_aggregates_metrics_and_topics(monkeypatch):
                 "created_at": "2026-06-05T08:00:00Z",
             }
         ],
-        conversations=[
+    )
+    monkeypatch.setattr(
+        report_service.asked_knowledge_repo,
+        "list_for_student",
+        lambda student_id, **_kwargs: [
             {
-                "conversation_id": "conv-1",
-                "student_id": "student-1",
-                "entity_type": "conversation",
-                "escalated": True,
                 "subject": "math",
-                "updated_at": "2026-06-06T08:00:00Z",
-                "last_message_preview": "Need help",
+                "knowledge_points": ["fractions", "ratios"],
+                "created_at": "2026-06-03T10:00:00Z",
             }
         ],
     )
@@ -298,22 +263,24 @@ def test_mixed_weekly_activity_aggregates_metrics_and_topics(monkeypatch):
     payload = report_service.build_weekly_learning_payload("parent-1", "student-1", "2026-06-01")
 
     assert payload["student"]["grade"] == "6"
+    # The Ask numbers are `student_activity`'s (tests/test_weekly_report_activity.py);
+    # no session is stored here.
     assert payload["metrics"] == {
-        "questionsAsked": 2,
-        "aiResolved": 1,
-        "teacherHelpRequests": 2,
+        "questionsAsked": 0,
+        "aiResolved": 0,
+        "teacherHelpRequests": 0,
         "practiceLessonsCompleted": 1,
         "mistakesLogged": 1,
     }
     # The subject is not a weak topic (#631).
     assert payload["weakTopics"] == [
-        {"topic": "fractions", "count": 3},
+        {"topic": "fractions", "count": 2},
         {"topic": "ratios", "count": 1},
     ]
-    assert [activity["id"] for activity in payload["activities"]][:2] == ["conv-1", "challenge-1"]
+    assert [activity["id"] for activity in payload["activities"]] == ["challenge-1", "lesson-1"]
 
 
-def _week_evidence(monkeypatch, *, questions, mistakes, asked):
+def _week_evidence(monkeypatch, *, mistakes, asked):
     patch_sources(
         monkeypatch,
         children=[
@@ -325,10 +292,9 @@ def _week_evidence(monkeypatch, *, questions, mistakes, asked):
                 "name": "Student",
             }
         ],
-        questions=questions,
         mistakes=mistakes,
     )
-    # The repository is asked from the week's first day on; the projection
+    # The repository is asked from the week's first moment on; the projection
     # keeps the week alone, so these records are handed over unfiltered.
     monkeypatch.setattr(
         report_service.asked_knowledge_repo, "list_for_student", lambda student_id, **_kwargs: asked
@@ -347,43 +313,25 @@ def _wrong(challenge, topic, created_at, **fields):
 
 
 def test_the_week_s_weak_topics_are_the_projection_over_that_week_only(monkeypatch):
-    """Only the report's own week counts (#674): its first moment in, the next
-    week's first moment out. A mistake put right later, even after the week,
-    no longer counts; a mistake weighs two, a named point one."""
+    """Only the report's own week counts (#674), and the week is Zurich's
+    (#694): Monday 00:00 there, 22:00 UTC the Sunday before in summer, is in;
+    the next week's first moment is out. A mistake put right later, even after
+    the week, no longer counts; a mistake weighs two, a named point one."""
     _week_evidence(
         monkeypatch,
-        questions=[
-            {
-                "PK": "QUESTION#q1",
-                "SK": "META",
-                "question_id": "q1",
-                "status": "ai_answered",
-                "subject": "math",
-                "knowledge_points": ["algebra"],
-                "created_at": "2026-06-03T10:00:00Z",
-            },
-            {
-                "PK": "QUESTION#q0",
-                "SK": "META",
-                "question_id": "q0",
-                "status": "ai_answered",
-                "subject": "math",
-                "knowledge_points": ["ratios"],
-                "created_at": "2026-05-25T10:00:00Z",
-            },
-        ],
         mistakes=[
             _wrong("c-geo", "geometry", "2026-06-02T08:00:00Z"),
             _wrong("c-frac", "fractions", "2026-06-02T09:00:00Z"),
             {**_wrong("c-frac", "fractions", "2026-06-10T09:00:00Z"), "correct": True},
-            _wrong("c-pct", "percentages", "2026-05-31T23:59:59Z"),
-            _wrong("c-ratio", "ratios", "2026-06-08T00:00:00Z"),
+            _wrong("c-pct", "percentages", "2026-05-31T21:59:59Z"),
+            _wrong("c-ratio", "ratios", "2026-06-07T22:00:00Z"),
             # A subject is not a topic (#631).
             {**_wrong("c-subject", None, "2026-06-04T08:00:00Z"), "topic_id": ""},
         ],
         asked=[
-            {"subject": "math", "knowledge_points": ["geometry", "algebra"], "created_at": "2026-06-01T00:00:00Z"},
-            {"subject": "math", "knowledge_points": ["percentages"], "created_at": "2026-06-08T00:00:00Z"},
+            {"subject": "math", "knowledge_points": ["geometry", "algebra"], "created_at": "2026-05-31T22:00:00Z"},
+            {"subject": "math", "knowledge_points": ["algebra"], "created_at": "2026-06-07T21:59:59Z"},
+            {"subject": "math", "knowledge_points": ["percentages"], "created_at": "2026-06-07T22:00:00Z"},
         ],
     )
 
@@ -404,7 +352,7 @@ def test_the_week_s_weak_topics_are_the_projection_over_that_week_only(monkeypat
 
 def test_the_week_s_weak_topics_are_named_in_the_parent_s_language(monkeypatch):
     """The parent's stored language names them, as it does the report (#637)."""
-    _week_evidence(monkeypatch, questions=[], mistakes=[], asked=[])
+    _week_evidence(monkeypatch, mistakes=[], asked=[])
     monkeypatch.setattr(report_service.locale_service, "stored_locale", lambda _user_id: "fr")
     seen = {}
 
@@ -416,28 +364,19 @@ def test_the_week_s_weak_topics_are_named_in_the_parent_s_language(monkeypatch):
 
     report_service.build_weekly_learning_payload("parent-1", "student-1", "2026-06-01")
 
+    # The Zurich week of Monday 1 June: summer time, two hours ahead of UTC.
     assert seen == {
         "locale": "fr",
-        "since": datetime(2026, 6, 1, tzinfo=timezone.utc),
-        "until": datetime(2026, 6, 8, tzinfo=timezone.utc),
+        "since": datetime(2026, 5, 31, 22, tzinfo=timezone.utc),
+        "until": datetime(2026, 6, 7, 22, tzinfo=timezone.utc),
     }
 
 
 def test_weak_topics_of_a_week_with_only_subjects_are_empty(monkeypatch):
     _week_evidence(
         monkeypatch,
-        questions=[
-            {
-                "PK": "QUESTION#q1",
-                "SK": "META",
-                "question_id": "q1",
-                "subject": "math",
-                "knowledge_points": [],
-                "created_at": "2026-06-03T10:00:00Z",
-            }
-        ],
         mistakes=[{"challenge_id": "c-1", "subject_id": "mathematics", "created_at": "2026-06-03T10:00:00Z"}],
-        asked=[],
+        asked=[{"subject": "math", "knowledge_points": [], "created_at": "2026-06-03T10:00:00Z"}],
     )
 
     payload = report_service.build_weekly_learning_payload("parent-1", "student-1", "2026-06-01")

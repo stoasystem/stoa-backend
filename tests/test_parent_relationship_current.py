@@ -268,11 +268,6 @@ def quiet_report_sources(monkeypatch: pytest.MonkeyPatch) -> None:
     # that, and the shared one is empty just as well.
     empty = FakeTable()
     db_table.install(empty)
-    monkeypatch.setattr(
-        report_service.question_repo,
-        "list_by_student",
-        lambda student_id, limit=500, last_key=None: {"Items": []},
-    )
     fake_evidence.install(monkeypatch)
 
 

@@ -5,6 +5,8 @@ import pytest
 
 from fakes import student_evidence as fake_evidence
 from fakes import notification_email
+from fakes.help_requests import seed_request
+from fakes.learning_session import seed_conversation, seed_message
 
 from stoa import aws
 from stoa import config
@@ -45,15 +47,15 @@ def _week_holds_the_report(monkeypatch):
 
 
 class FakeDataTable:
-    """The conversation queries, answered here; the job's discovery never scans.
+    """The job's discovery never scans.
 
-    Every other read and write goes to `rest`, the table the link rows live in:
-    the relationship judge reads them from the same gateway table.
+    Every other read and write goes to `rest`, the table the link rows and the
+    student's sessions live in: the relationship judge and `student_activity`
+    read them from the same gateway table.
     """
 
     def __init__(self, candidates, rest):
         self.scans = []
-        self.queries = []
         self.candidates = candidates
         self.rest = rest
 
@@ -71,47 +73,54 @@ class FakeDataTable:
         raise AssertionError("weekly report discovery scanned the table")
 
     def query(self, **kwargs):
-        wanted = str(kwargs.get("FilterExpression").get_expression()) if "FilterExpression" in kwargs else ""
-        if kwargs.get("IndexName") != "GSI-StudentId" or not (
-            "help_request" in wanted or "conversation" in wanted
-        ):
-            # The report rows (GSI-ParentId) and what the student asked about
-            # live with everything else.
-            return self.rest.query(**kwargs)
-        self.queries.append(kwargs)
-        if "Limit" not in kwargs:
-            # Whether a teacher was asked is the help request's own record (#189),
-            # read from the same index.
-            assert "help_request" in str(kwargs["FilterExpression"].get_expression())
-            return {
-                "Items": [
-                    {
-                        "PK": "CONV#conv-1",
-                        "SK": "HELP",
-                        "entity_type": "help_request",
-                        "conversation_id": "conv-1",
-                        "escalation_request_id": "conv-1",
-                        "student_id": "student-1",
-                        "escalation_status": "resolved",
-                        "escalated_at": "2026-06-06T07:55:00Z",
-                        "created_at": "2026-06-06T07:55:00Z",
-                    }
-                ]
-            }
-        assert kwargs["Limit"] == 100
-        assert kwargs["ScanIndexForward"] is False
-        return {
-            "Items": [
-                {
-                    "conversation_id": "conv-1",
-                    "student_id": "student-1",
-                    "entity_type": "conversation",
-                    "subject": "math",
-                    "updated_at": "2026-06-06T08:00:00Z",
-                    "last_message_preview": "Need help with fractions",
-                }
-            ]
+        return self.rest.query(**kwargs)
+
+
+def _seed_week(table) -> None:
+    """Two sessions of the report's week, each with a new question; the later asked a teacher."""
+    for conversation_id, started_at, answered_at in (
+        ("conv-0", "2026-06-02T10:00:00+00:00", "2026-06-02T10:01:00+00:00"),
+        ("conv-1", "2026-06-06T07:50:00+00:00", "2026-06-06T07:51:00+00:00"),
+    ):
+        seed_conversation(
+            table,
+            conversation_id=conversation_id,
+            student_id="student-1",
+            subject="math",
+            now=started_at,
+        )
+        seed_message(
+            table,
+            conversation_id=conversation_id,
+            role="assistant",
+            message_id=f"{conversation_id}-a",
+            student_id="student-1",
+            content="So geht es.",
+            created_at=answered_at,
+            structured={"kind": "answer", "answer": "So geht es."},
+        )
+    seed_request(
+        table,
+        conversation_id="conv-1",
+        student_id="student-1",
+        status="resolved",
+        asked_at="2026-06-06T07:55:00+00:00",
+    )
+    # What the first question named (#143).
+    table.seed(
+        {
+            "PK": "CONV#conv-0",
+            "SK": "KNOWLEDGE#conv-0-a",
+            "entity_type": "asked_knowledge_points",
+            "student_id": "student-1",
+            "owner_id": "student-1",
+            "conversation_id": "conv-0",
+            "subject": "math",
+            "knowledge_points": ["fractions", "ratios"],
+            "unit_ids": [],
+            "created_at": "2026-06-02T10:01:00+00:00",
         }
+    )
 
 
 class FailingModel(FakeAdapter):
@@ -160,7 +169,6 @@ class RecordingSESClient:
 def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monkeypatch, link_rows):
     events = []
     reports_by_id = {}
-    question_last_keys = []
     # The relationship the flow rides on: the job finds the parent in the
     # account listing and the pair on the parent's side, and the job and the
     # generator both judge it.
@@ -186,45 +194,7 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
             "account_status": "active",
         },
     )
-    question_pages = [
-        {
-            "Items": [
-                {
-                    "PK": "QUESTION#q1",
-                    "SK": "META",
-                    "question_id": "q1",
-                    "student_id": "student-1",
-                    "status": "ai_answered",
-                    "subject": "math",
-                    "knowledge_points": ["fractions"],
-                    "created_at": "2026-06-02T10:00:00Z",
-                    "summary": "Fractions question",
-                }
-            ],
-            "LastEvaluatedKey": {"PK": "QUESTION#q1"},
-        },
-        {
-            "Items": [
-                {
-                    "PK": "QUESTION#q2",
-                    "SK": "META",
-                    "question_id": "q2",
-                    "student_id": "student-1",
-                    "status": "teacher_requested",
-                    "subject": "math",
-                    "knowledge_points": ["ratios"],
-                    "created_at": "2026-06-03T10:00:00Z",
-                    "summary": "Ratios question",
-                }
-            ]
-        },
-    ]
-
-    def list_questions(student_id, limit=500, last_key=None):
-        question_last_keys.append(last_key)
-        return question_pages.pop(0)
-
-    monkeypatch.setattr(report_service.question_repo, "list_by_student", list_questions)
+    _seed_week(link_rows.table)
     monkeypatch.setattr(
         report_service.student_evidence,
         "for_student",
@@ -299,13 +269,10 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
         "failed": 0,
         "skipped_allowance": 0,
     }
-    assert question_last_keys == [None, {"PK": "QUESTION#q1"}]
     # One discovery scan, of the link rows. Report generation no longer
     # re-scans every student carrying this parent's identifier; it judges the
     # relationship instead.
     assert data_table.scans == []
-    # One page of conversations, one read of their help requests.
-    assert len(data_table.queries) == 2
     assert [event[0] for event in events] == [
         "claim",
         "model",
@@ -319,10 +286,13 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
     report = reports_by_id["weekly-report-parent-1-student-1-2026-06-01"]
     assert report["status"] == "email_sent"
     assert report["email_status"] == "sent"
+    # Two new questions; the session that asked a teacher is not AI resolved (#694).
+    assert report["usage_count"] == 2
+    assert report["ai_resolved"] == 1
     assert report["stats"] == {
         "questionsAsked": 2,
         "aiResolved": 1,
-        "teacherHelpRequests": 2,
+        "teacherHelpRequests": 1,
         "practiceLessonsCompleted": 1,
         "mistakesLogged": 1,
     }

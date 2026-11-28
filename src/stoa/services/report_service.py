@@ -8,31 +8,30 @@ import re
 import uuid
 from collections.abc import Callable, Mapping
 from time import monotonic
-from typing import Any, Protocol, runtime_checkable
+from typing import Any
 
 
 from stoa import config
-from stoa.db import table as db_table
 from stoa.db.repositories import (
     account_deletion_repo,
     allowance_repo,
     asked_knowledge_repo,
-    question_repo,
     report_repo,
     user_repo,
 )
+from stoa.models.allowance import ZURICH
 from stoa.services import (
     allowance_service,
     current_relationship,
     email_layout,
     entitlement_service,
     knowledge_mastery_service,
-    learning_session,
     locale_service,
     message_catalog,
     model_call,
     notifications,
     report_artifact_service,
+    student_activity,
     student_evidence,
     weak_topics,
 )
@@ -80,23 +79,6 @@ def tell_report_ready(
         )
     )
 
-
-@runtime_checkable
-class _QueryTable(Protocol):
-    def query(self, **kwargs: object) -> object: ...
-
-
-def _repository_response(value: object, *, label: str) -> dict[str, object]:
-    if not isinstance(value, Mapping) or any(not isinstance(key, str) for key in value):
-        raise RuntimeError(f"{label} repository response is malformed")
-    return dict(value)
-
-
-def _repository_items(response: Mapping[str, object], *, label: str) -> list[dict[str, object]]:
-    raw_items = response.get("Items")
-    if not isinstance(raw_items, list) or any(not isinstance(item, Mapping) for item in raw_items):
-        raise RuntimeError(f"{label} repository response is malformed")
-    return [dict(item) for item in raw_items]
 
 _MAX_REPORT_WEAK_TOPICS = 5
 _MAX_REPORT_ACTIVITIES = 6
@@ -214,61 +196,53 @@ def report_week_window(week_start: str | date) -> tuple[date, date]:
     return start, start + timedelta(days=7)
 
 
+def report_period(week_start: str | date) -> student_activity.Period:
+    """The stretch a report is about: the Zurich week its `week_start` falls in (#694).
+
+    Monday 00:00 Europe/Zurich to the next, the week the allowance turns over
+    in; `week_start` is that Monday, as the job names it.
+    """
+    start, _ = report_week_window(week_start)
+    # Noon is a moment of that day in Zurich, whatever the clocks did at night.
+    return student_activity.zurich_week(datetime.combine(start, time(12), tzinfo=ZURICH))
+
+
 def build_weekly_learning_payload(
     parent_id: str,
     student_id: str,
     week_start: str | date,
 ) -> dict[str, Any]:
-    """Build a compact weekly learning payload from real student activity."""
+    """Build a compact weekly learning payload from real student activity.
+
+    What the student did is `student_activity`'s, over the report's Zurich
+    week, every row of it read (#694); the right answers, the stars lit and
+    the weak topics are of the same stretch.
+    """
     start, end = report_week_window(week_start)
+    period = report_period(start)
     parent = user_repo.get_user(parent_id) or {"user_id": parent_id}
     student = _get_linked_student_profile(parent_id, student_id)
 
     # Written for the parent, so in the language the parent stored (#450), as
-    # the email frame around it is (#278); star titles too.
+    # the email frame around it is (#278); star and activity titles too.
     locale = locale_service.stored_locale(parent_id)
-    questions = _list_all_questions(student_id)
     evidence = student_evidence.for_student(student_id, locale=locale)
-    conversations = _list_conversations_for_student(student_id)
-    # What Ask questions named (#143), read from the week's first day on; the
-    # weak topics keep only that week's.
-    asked = asked_knowledge_repo.list_for_student(student_id, since=start.isoformat())
-
-    weekly_questions = [
-        item for item in questions if _is_in_window(item.get("created_at") or item.get("createdAt"), start, end)
+    counts = student_activity.counts(student_id, period, evidence=evidence)
+    activities = [
+        _report_activity(entry)
+        for entry in student_activity.activities(
+            student_id, period, evidence=evidence, locale=locale
+        )
     ]
-    window = (
-        datetime.combine(start, time.min, tzinfo=timezone.utc),
-        datetime.combine(end, time.min, tzinfo=timezone.utc),
+    # What Ask questions named (#143), read from the week's first moment on;
+    # the weak topics keep only that week's.
+    asked = asked_knowledge_repo.list_for_student(
+        student_id, since=period.start.astimezone(timezone.utc).isoformat()
     )
-    weekly_progress = evidence.completions_between(*window)
-    weekly_mistakes = list(evidence.mistakes_between(*window))
-    answered_right = evidence.right_answers_between(*window)
-    weekly_conversations = [
-        item
-        for item in conversations
-        if _is_in_window(item.get("updated_at") or item.get("created_at"), start, end)
-    ]
-
-    ai_resolved = sum(1 for item in weekly_questions if item.get("status") == "ai_answered")
-    teacher_help = sum(1 for item in weekly_questions if _question_requested_teacher_help(item))
-    teacher_help += sum(
-        1
-        for item in conversations
-        if item.get("escalated") and _is_in_window(item.get("escalated_at") or item.get("updated_at"), start, end)
-    )
-
+    answered_right = evidence.right_answers_between(period.start, period.end)
     # The week's weak topics, by the one rule every reader uses (#674).
     weak = weak_topics.for_student(
-        evidence, [*questions, *asked], locale=locale, since=window[0], until=window[1]
-    )
-    activities = _sort_activities(
-        [
-            *[_question_activity(item) for item in weekly_questions],
-            *[_practice_activity(item) for item in weekly_progress],
-            *[_mistake_activity(item) for item in weekly_mistakes],
-            *[_conversation_activity(item) for item in weekly_conversations],
-        ]
+        evidence, asked, locale=locale, since=period.start, until=period.end
     )
 
     return {
@@ -289,11 +263,11 @@ def build_weekly_learning_payload(
             "end": (end - timedelta(days=1)).isoformat(),
         },
         "metrics": {
-            "questionsAsked": len(weekly_questions),
-            "aiResolved": ai_resolved,
-            "teacherHelpRequests": teacher_help,
-            "practiceLessonsCompleted": len(weekly_progress),
-            "mistakesLogged": len(weekly_mistakes),
+            "questionsAsked": counts.new_questions,
+            "aiResolved": counts.ai_resolved,
+            "teacherHelpRequests": counts.teacher_help,
+            "practiceLessonsCompleted": counts.lessons_completed,
+            "mistakesLogged": counts.mistakes,
         },
         # This week's newly solved exercises and lit stars, on the student's own
         # and with help from Ask (#450).
@@ -301,15 +275,30 @@ def build_weekly_learning_payload(
             "onOwn": answered_right.independent,
             "afterAskingAi": answered_right.asked_ai,
         },
-        "starsLit": _stars_lit(evidence, *window),
+        "starsLit": _stars_lit(evidence, period.start, period.end),
         "weakTopics": [{"topic": topic.name, "count": topic.count} for topic in weak],
         "activities": activities,
         "sourceCounts": {
-            "questions": len(weekly_questions),
-            "practiceProgress": len(weekly_progress),
-            "mistakes": len(weekly_mistakes),
-            "conversations": len(weekly_conversations),
+            "questions": counts.new_questions,
+            "practiceProgress": counts.lessons_completed,
+            "mistakes": counts.mistakes,
+            # The sessions started in the week, one entry each.
+            "conversations": sum(
+                1 for entry in activities if entry["type"] in {"conversation", "teacher_help"}
+            ),
         },
+    }
+
+
+def _report_activity(entry: student_activity.Activity) -> dict[str, Any]:
+    """One entry of the week, as the report carries it."""
+    return {
+        "id": entry.id,
+        "type": entry.type,
+        "title": entry.title,
+        "summary": entry.summary,
+        "subject": entry.subject,
+        "createdAt": entry.created_at,
     }
 
 
@@ -1172,27 +1161,6 @@ def _week_range_text(week: dict[str, Any], locale: str) -> str:
     return email_layout.format_date(start or end or "", locale)
 
 
-def _parse_iso_datetime(value: Any) -> datetime | None:
-    if not value or not isinstance(value, str):
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
-
-
-def _is_in_window(value: Any, start: date, end: date) -> bool:
-    parsed = _parse_iso_datetime(value)
-    if parsed is None:
-        return False
-    start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
-    end_dt = datetime.combine(end, time.min, tzinfo=timezone.utc)
-    return start_dt <= parsed < end_dt
-
-
 def _get_linked_student_profile(parent_id: str, student_id: str) -> dict[str, Any]:
     """A report is private data, so the relationship is judged, not matched.
 
@@ -1207,120 +1175,9 @@ def _get_linked_student_profile(parent_id: str, student_id: str) -> dict[str, An
     return dict(student)
 
 
-def _list_all_questions(student_id: str) -> list[dict[str, Any]]:
-    questions: list[dict[str, Any]] = []
-    last_key: dict[str, object] | None = None
-    while True:
-        result = question_repo.list_by_student(student_id, limit=500, last_key=last_key)
-        questions.extend(
-            row
-            for row in _repository_items(result, label="student questions")
-            if question_repo.is_question_record(row)
-        )
-        raw_last_key = result.get("LastEvaluatedKey")
-        if raw_last_key is None:
-            return questions
-        if not isinstance(raw_last_key, Mapping):
-            raise RuntimeError("student question pagination is malformed")
-        last_key = dict(raw_last_key)
-
-
-# One conversation list keeps at most this many conversations, and reads this
-# many index rows a page.
-_CONVERSATION_LIMIT = 100
-
-
-def _list_conversations_for_student(student_id: str) -> list[dict[str, Any]]:
-    """The student's conversations, newest first, with their help requests.
-
-    The listing is `learning_session.list_for_student`. A list cut short is
-    not shown in the report as such.
-    """
-    table = db_table.table()
-    if not isinstance(table, _QueryTable):
-        raise RuntimeError("report table query dependency is unavailable")
-
-    listed = learning_session.list_for_student(
-        student_id, limit=_CONVERSATION_LIMIT, page_size=_CONVERSATION_LIMIT
-    )
-    from stoa.services import help_requests
-
-    # Whether a teacher was asked is the request's, not the conversation's (#189).
-    return help_requests.with_requests(listed.items, student_id, table=table)
-
-
-def _question_requested_teacher_help(question: dict[str, Any]) -> bool:
-    return bool(question.get("teacher_help_requested")) or question.get("status") in {
-        "escalated",
-        "teacher_requested",
-        "teacher_help",
-    }
-
-
 def _display_name(profile: dict[str, Any]) -> str:
     email = profile.get("email", "")
     return profile.get("name") or (email.split("@")[0] if email else "")
-
-
-def _question_activity(question: dict[str, Any]) -> dict[str, Any]:
-    created_at = question.get("created_at") or question.get("createdAt")
-    return {
-        "id": question.get("question_id") or question.get("id") or f"question-{created_at}",
-        "type": "teacher_help" if _question_requested_teacher_help(question) else "question",
-        "title": "Teacher help requested" if _question_requested_teacher_help(question) else "Question answered",
-        "summary": question.get("summary") or question.get("prompt") or question.get("question") or "",
-        "subject": question.get("subject"),
-        "createdAt": created_at,
-    }
-
-
-def _practice_activity(lesson: student_evidence.Completion) -> dict[str, Any]:
-    return {
-        "id": lesson.lesson_id,
-        "type": "practice",
-        "title": "Practice lesson completed",
-        "summary": lesson.title or lesson.topic_id or lesson.subject_id,
-        "subject": lesson.subject_id or None,
-        "createdAt": lesson.completed_at,
-    }
-
-
-def _mistake_activity(mistake: dict[str, Any]) -> dict[str, Any]:
-    created_at = mistake.get("created_at") or mistake.get("createdAt")
-    return {
-        "id": mistake.get("attempt_id") or mistake.get("challenge_id") or f"mistake-{created_at}",
-        "type": "practice_mistake",
-        "title": "Practice mistake logged",
-        "summary": mistake.get("topic_id") or mistake.get("subject_id") or "",
-        "subject": mistake.get("subject_id"),
-        "createdAt": created_at,
-    }
-
-
-def _conversation_activity(conversation: dict[str, Any]) -> dict[str, Any]:
-    created_at = conversation.get("updated_at") or conversation.get("created_at")
-    escalated = bool(conversation.get("escalated"))
-    return {
-        "id": conversation.get("conversation_id") or f"conversation-{created_at}",
-        "type": "teacher_help" if escalated else "conversation",
-        "title": "Teacher help requested" if escalated else "AI conversation",
-        # A conversation's title and preview are the student's own words; the
-        # report names what was asked about, never the question (#143).
-        "summary": "",
-        "subject": conversation.get("subject"),
-        "createdAt": created_at,
-    }
-
-
-def _sort_activities(activities: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sorted(
-        activities,
-        key=lambda item: (
-            _parse_iso_datetime(item.get("createdAt")) or datetime.min.replace(tzinfo=timezone.utc),
-            item.get("id", ""),
-        ),
-        reverse=True,
-    )
 
 
 def _truncate_activity_summary(value: Any) -> str:
