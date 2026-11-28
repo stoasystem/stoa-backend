@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
@@ -11,7 +12,12 @@ from stoa import main
 from stoa.db.repositories import account_email_claim_repo, security_audit_repo
 from stoa.operator_calls import caller_identity, catalog, entry
 from stoa.security.identity import AccountStatus, CanonicalRole
-from stoa.services import account_provisioning_service, one_off_email, usage_period
+from stoa.services import (
+    account_provisioning_service,
+    one_off_email,
+    owner_registry_sweep,
+    usage_period,
+)
 
 
 ACCOUNT_ID = "562923011260"
@@ -972,12 +978,25 @@ def _number_claim(user_id: str, number: str) -> dict[str, Any]:
     }
 
 
+def _registry_vouched(table) -> None:
+    """The daily registry sweep's clean result, which a new deletion needs (#641)."""
+    table.seed(
+        {
+            **owner_registry_sweep.RUN_MARKER_KEY,
+            "complete": True,
+            "missing_registrations": 0,
+            "completed_at": datetime.now(UTC).isoformat(),
+        }
+    )
+
+
 def _seed_account(table, user_id: str, role: str, number: str, **fields: Any) -> None:
     table.seed(
         _profile(user_id, role, number, **fields),
         _fence(user_id),
         _number_claim(user_id, number),
     )
+    _registry_vouched(table)
 
 
 def _delete(number: str, *, dry: bool, confirm: str | None = None, **extra: Any) -> dict:
@@ -1217,7 +1236,7 @@ def test_a_real_deletion_enters_the_one_pipeline_and_records_who_and_why(
         initiated_by="operator:agent_mcp", user_id="student-1", generation=1
     )
     assert "issuer_hash" not in command and "subject_hash" not in command
-    assert command["branch_ids"] == list(account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS)
+    assert command["flow"] == "catalog.v1"
     (row,) = _audit_rows(fake_table)
     assert row["dry_run"] is False
     assert row["actor_id"] == "operator:agent_mcp"
@@ -1238,11 +1257,36 @@ def test_a_real_deletion_enters_the_one_pipeline_and_records_who_and_why(
     assert len(_deletion_commands(fake_table)) == 1
 
 
+def test_a_deletion_is_refused_before_anything_changes_while_the_registry_is_not_vouched(
+    fake_table, mailbox
+) -> None:
+    """A new deletion reads only the registry (#641): without a clean recent sweep it waits.
+
+    Refused before the invitation is revoked, so the refusal changes nothing.
+    """
+    invited = _invite(role="parent", email="unvouched.parent@stoa.test")
+    number = invited["accountNumber"]
+
+    dry = _delete(number, dry=True)
+    assert dry["result"]["canDelete"] is False
+    assert dry["result"]["refusal"]["code"] == "account_deletion_conflict"
+    answer = _delete(number, dry=False, confirm=number)
+
+    assert answer["ok"] is False
+    assert "registry" in answer["error"]["message"]
+    assert "revoked" not in answer["error"]["message"]
+    assert _deletion_commands(fake_table) == []
+    invitations = [row for row in fake_table.rows.values()
+                   if row.get("entity_type") == "account_invitation"]
+    assert invitations and all(row.get("status") != "revoked" for row in invitations)
+
+
 def test_an_invited_parents_invitation_is_revoked_and_its_dry_run_says_so(
     fake_table, mailbox
 ) -> None:
     invited = _invite(role="parent", email="invited.parent@stoa.test")
     number = invited["accountNumber"]
+    _registry_vouched(fake_table)
 
     dry = _delete(number, dry=True)
     assert dry["ok"] is True, dry

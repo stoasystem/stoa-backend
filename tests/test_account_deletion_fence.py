@@ -6,10 +6,12 @@ import asyncio
 import importlib
 import inspect
 from dataclasses import asdict
+from datetime import UTC, datetime
 from typing import Any, Mapping
 
 import pytest
 
+from stoa.db import data_catalog
 from stoa.db import table as db_table
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -19,7 +21,7 @@ from stoa.db.repositories import (
 from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import AccountStatus, resolve_actor
 from stoa.security.tokens import VerifiedAccessToken
-from stoa.services import help_requests, learning_session
+from stoa.services import help_requests, learning_session, owner_registry_sweep
 from fakes.dynamodb import from_wire
 
 
@@ -88,6 +90,10 @@ class _AccountTable:
         self.branch_results: dict[str, Any] = {}
 
     def get_item(self, *, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:
+        if Key == owner_registry_sweep.RUN_MARKER_KEY:
+            # A clean daily registry sweep, as a new deletion requires (#641).
+            return {"Item": {**Key, "complete": True, "missing_registrations": 0,
+                             "completed_at": datetime.now(UTC).isoformat()}}
         if Key["SK"] == "PROFILE":
             return {"Item": dict(self.profile)} if self.profile else {}
         if Key["SK"] == "ACCOUNT_FENCE":
@@ -241,11 +247,10 @@ def test_exact_verified_subject_command_replays_without_actor_authority() -> Non
     assert replay.is_terminal is False
     assert "actor" not in asdict(replay)
     assert table.command is not None
-    assert table.command["inventory_sha256"]
-    assert table.command["branch_ids"] == list(service.ACCOUNT_DELETION_BRANCH_IDS)
-    assert set(table.command["branch_contracts"]) == set(
-        service.ACCOUNT_DELETION_BRANCH_IDS
-    )
+    # Sealed with the catalog's hash for its three steps (#641), not an inventory.
+    assert table.command["flow"] == "catalog.v1"
+    assert table.command["catalog_sha256"] == data_catalog.catalog_sha256()
+    assert "inventory_sha256" not in table.command and "branch_ids" not in table.command
 
     for values in (
         {"verified": _token(subject="other")},
@@ -478,6 +483,7 @@ def test_scheduled_discovery_recovers_lost_route_trigger_and_reconstructs_servic
             "generation": 1,
             "status": "pending",
             "version": 1,
+            "flow": "catalog.v1",
         },
         {
             **account_deletion_repo.pending_registry_key(STUDENT_ID, "delete-command-1"),

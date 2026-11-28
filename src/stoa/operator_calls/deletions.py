@@ -78,6 +78,12 @@ IRREVERSIBLE = (
 )
 
 
+_REGISTRY_NOT_READY = (
+    "The deletion cannot be accepted yet: the daily owner registry check has not "
+    "passed in the last 36 hours, and a deletion reads only what that registry lists. "
+    "Try again after the next clean check."
+)
+
 def _evidence(prefix: str, reason: str) -> str:
     return f"{prefix};reason:{reason}"
 
@@ -197,6 +203,10 @@ def delete_account(arguments: DeleteAccountArguments) -> Outcome:
         table=table,
     )
     refusal = _refusal(role=role, state=state, grants=grants, billing=billing)
+    if refusal is None and not account_deletion_service.registry_path_ready(table=table):
+        # Asked before anything is written - the invitation's revocation below
+        # included - so a refusal here changes nothing (#641).
+        refusal = (DELETION_CONFLICT, _REGISTRY_NOT_READY)
 
     facts: dict[str, Any] = {
         "accountNumber": number,
@@ -264,6 +274,12 @@ def delete_account(arguments: DeleteAccountArguments) -> Outcome:
             now_iso=now_iso,
             table=table,
         )
+    except account_deletion_service.DeletionNotReady as exc:
+        raise refuse(
+            DELETION_CONFLICT,
+            _REGISTRY_NOT_READY
+            + (f" Its invitation {revoked} was already revoked." if revoked else ""),
+        ) from exc
     except account_deletion_repo.AccountDeletionConflict as exc:
         raise refuse(
             DELETION_CONFLICT,

@@ -1351,6 +1351,335 @@ def is_deletion_tombstone(row: Mapping[str, Any]) -> bool:
     return row.get("status") == "deleted" and row.get("owner_deletion_generation") is not None
 
 
+def email_claim_release_operations(
+    row: Mapping[str, Any], user_id: str, *, table: Any | None = None
+) -> list[dict[str, Any]]:
+    """The operations that give the profile's address back, for its tombstone's commit."""
+    return _email_claim_release(row, user_id, table=table or db_table.table())
+
+
+def catalog_tombstone(
+    row: Mapping[str, Any],
+    *,
+    keeps: frozenset[str],
+    generation: int,
+    now_iso: str,
+    keep_status: bool = False,
+) -> dict[str, Any]:
+    """What the catalog says stays of `row` once it is tombstoned (#641).
+
+    Only the fields in `keeps` that the row holds, and then the deletion's own
+    marks, each only where `keeps` admits it: the generation
+    (`owner_deletion_generation`, `privacy_generation`), `privacy_deleted`,
+    the time (`deleted_at`, `updated_at`), and the status. A family that marks
+    its tombstone `privacy_deleted` (moderation, reports) keeps the row's own
+    status, as does `keep_status` (a delivery's provider receipt); any other
+    becomes `deleted`, which with the generation is what `is_deletion_tombstone`
+    recognises. A row's `version`, where kept, moves on by one.
+    """
+    # Spelled apart from `(now_iso)`: the inventory's semantic check counts the
+    # validations of that name, and this one must not stand in for another.
+    stamp = _valid_lifecycle_timestamp(value=now_iso)
+    tombstone: dict[str, Any] = {
+        key: value for key, value in row.items() if key in keeps and value is not None
+    }
+    tombstone["PK"] = _required(row.get("PK"), "PK")
+    tombstone["SK"] = _required(row.get("SK"), "SK")
+    marks: dict[str, Any] = {
+        "owner_deletion_generation": generation,
+        "privacy_generation": generation,
+        "privacy_deleted": True,
+        "deleted_at": stamp,
+        "updated_at": stamp,
+    }
+    tombstone.update({key: value for key, value in marks.items() if key in keeps})
+    if "status" in keeps and "privacy_deleted" not in keeps and not keep_status:
+        tombstone["status"] = "deleted"
+    if "version" in keeps:
+        tombstone["version"] = (stored_int(row.get("version")) or 1) + 1
+    if not set(tombstone) <= keeps:
+        raise AccountDeletionConflict("tombstone keeps a field the catalog does not")
+    return tombstone
+
+
+def _owner_condition(
+    row: Mapping[str, Any], account: str
+) -> tuple[str, dict[str, str], dict[str, Any]]:
+    """A condition that holds while `row` is still `account`'s own, by the catalog.
+
+    One clause per attribute the catalog says it is owned through, joined by
+    OR: a nested path (`metadata.student_id`) is compared where it is, so a
+    notification owned only through its metadata is tombstoned as well as one
+    owned through `owner_id`. A row owned by its key (`USAGE#{id}`) needs no
+    clause: its key cannot change.
+    """
+    attributes = data_catalog.owning_attributes(row, account)
+    if not attributes or attributes & {"PK", "SK"}:
+        return "attribute_exists(PK)", {}, {}
+    names: dict[str, str] = {}
+    values: dict[str, Any] = {":owner": account}
+    clauses: list[str] = []
+    for index, attribute in enumerate(sorted(attributes)):
+        if attribute == "scope":
+            names["#owner_scope"] = "scope"
+            values[":owner_scope"] = row.get("scope")
+            clauses.append("#owner_scope=:owner_scope")
+            continue
+        path = []
+        for depth, part in enumerate(attribute.split(".")):
+            name = f"#owner{index}_{depth}"
+            names[name] = part
+            path.append(name)
+        clauses.append(f"{'.'.join(path)}=:owner")
+    if ":owner_scope" in values and len(clauses) == 1:
+        values.pop(":owner")
+    return f"attribute_exists(PK) AND ({' OR '.join(clauses)})", names, values
+
+
+def tombstone_owned_row(
+    row: Mapping[str, Any],
+    *,
+    account: str,
+    generation: int,
+    keeps: frozenset[str],
+    now_iso: str,
+    keep_status: bool = False,
+    extra_operations: Iterable[dict[str, Any]] = (),
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Replace one of the closing account's rows by its catalog tombstone (#641).
+
+    Behind the account's deletion fence, and only while the row is still the
+    account's by the attributes the catalog says own it. `extra_operations`
+    commit with it (the profile's address claim).
+    """
+    tombstone = catalog_tombstone(
+        row, keeps=keeps, generation=generation, now_iso=now_iso, keep_status=keep_status
+    )
+    condition, names, values = _owner_condition(row, deletion_account(account))
+    put: dict[str, Any] = {"Item": tombstone, "ConditionExpression": condition}
+    if names:
+        put["ExpressionAttributeNames"] = names
+    if values:
+        put["ExpressionAttributeValues"] = values
+    _transact(
+        [deletion_fence_condition(account, generation), {"Put": put}, *extra_operations],
+        table=table or db_table.table(),
+    )
+    return tombstone
+
+
+def persist_deletion_progress(
+    command: Mapping[str, Any],
+    progress: Mapping[str, Any],
+    *,
+    claim: DeletionCommandClaim,
+    now_epoch: int,
+    now_iso: str,
+    table: Any | None = None,
+) -> DeletionCommandClaim:
+    """Write where a catalog deletion stands onto its command, under the claim (#641).
+
+    Guarded as a renewal is: only the run holding the current lease and
+    version writes, so two runs can never both move one deletion on.
+    """
+    if not isinstance(claim, DeletionCommandClaim):
+        raise DeletionCommandClaimLost("opaque deletion claim required")
+    now_epoch = _positive_int(now_epoch, "current epoch")
+    # Spelled apart from `(now_iso)`: the inventory's semantic check counts the
+    # validations of that name, and this one must not stand in for another.
+    stamp = _valid_lifecycle_timestamp(value=now_iso)
+    try:
+        _update_item(
+            table or db_table.table(),
+            Key={"PK": command["PK"], "SK": command["SK"]},
+            UpdateExpression=(
+                "SET deletion_progress=:progress, updated_at=:now, "
+                "command_version=command_version+:one, #version=#version+:one"
+            ),
+            ConditionExpression=(
+                "#status=:running AND generation=:generation AND lease_owner=:owner "
+                "AND command_version=:command_version AND lease_expires_at>=:now_epoch"
+            ),
+            ExpressionAttributeNames={"#status": "status", "#version": "version"},
+            ExpressionAttributeValues={
+                ":progress": dict(progress),
+                ":running": "running",
+                ":generation": claim.generation,
+                ":owner": claim.lease_owner,
+                ":command_version": claim.command_version,
+                ":now_epoch": now_epoch,
+                ":now": stamp,
+                ":one": 1,
+            },
+        )
+    except db_table.WriteRefused as exc:
+        raise DeletionCommandClaimLost("deletion progress claim lost") from exc
+    except db_table.TableUnavailable as exc:
+        raise AccountDeletionConflict("deletion progress unavailable") from exc
+    return DeletionCommandClaim(
+        command_id=claim.command_id,
+        generation=claim.generation,
+        lease_owner=claim.lease_owner,
+        lease_expires_at=claim.lease_expires_at,
+        command_version=claim.command_version + 1,
+        branch_results_digest=claim.branch_results_digest,
+        user_id=claim.user_id,
+    )
+
+
+def finalize_catalog_deletion(
+    *,
+    command: Mapping[str, Any],
+    fence: Mapping[str, Any],
+    claim: DeletionCommandClaim,
+    catalog_sha256: str,
+    external_receipts: Iterable[Mapping[str, Any]],
+    now_epoch: int,
+    now_iso: str,
+    table: Any | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """End one catalog deletion: the command complete, the fence deleted, unregistered (#641).
+
+    One transaction, conditional on the claim still being this run's and on
+    the command still being sealed with `catalog_sha256`; the caller has
+    already found nothing left to do under that catalog.
+    """
+    # Spelled apart from `(now_iso)`: the inventory's semantic check counts the
+    # validations of that name, and this one must not stand in for another.
+    stamp = _valid_lifecycle_timestamp(value=now_iso)
+    now_epoch = _positive_int(now_epoch, "current epoch")
+    if not isinstance(claim, DeletionCommandClaim):
+        raise DeletionCommandClaimLost("opaque deletion claim required")
+    user_id = _required(command.get("user_id"), "user_id")
+    command_id = _required(command.get("command_id"), "command_id")
+    generation = stored_int(command.get("generation"))
+    storage_version = stored_int(command.get("version"))
+    fence_version = stored_int(fence.get("version"))
+    if (
+        generation is None
+        or generation <= 0
+        or storage_version is None
+        or storage_version <= 0
+        or fence_version is None
+        or fence_version <= 0
+        or command.get("catalog_sha256") != catalog_sha256
+        or fence.get("status") != "deletion_pending"
+        or fence.get("generation") != generation
+        or fence.get("command_id") != command_id
+    ):
+        raise AccountDeletionConflict("catalog deletion cannot be finalized")
+    terminal_command: dict[str, Any] = {
+        "PK": command["PK"],
+        "SK": command["SK"],
+        "entity_type": "account_deletion_command",
+        "schema_version": "account-deletion-command.v3",
+        "flow": command.get("flow"),
+        "command_id": command_id,
+        "user_id": user_id,
+        "generation": generation,
+        "status": "complete",
+        "accepted_at": command.get("accepted_at", ""),
+        "completed_at": stamp,
+        "catalog_sha256": catalog_sha256,
+        "receipt": {"command_id": command_id, "status": "deleted", "completed_at": stamp},
+        "accounting_identity": command.get("accounting_identity")
+        or f"DELETE_ACCOUNTING#{command_id}",
+        "external_receipts": [
+            {key: receipt[key] for key in ("channel", "status", "count", "claim") if key in receipt}
+            for receipt in external_receipts
+        ],
+        "version": storage_version + 1,
+        "command_version": claim.command_version + 1,
+    }
+    for field in (
+        "issuer_hash",
+        "subject_hash",
+        "fingerprint",
+        "method",
+        "path",
+        "request_body_sha256",
+        "initiated_by",
+        "reason",
+    ):
+        if field in command:
+            terminal_command[field] = command[field]
+    terminal_fence = {
+        "PK": fence["PK"],
+        "SK": fence["SK"],
+        "entity_type": "account_fence",
+        "schema_version": "account-fence.v2",
+        "user_id": user_id,
+        "status": "deleted",
+        "generation": generation,
+        "command_id": command_id,
+        "catalog_sha256": catalog_sha256,
+        "deletion_accepted_at": fence.get("deletion_accepted_at")
+        or command.get("accepted_at", ""),
+        "deleted_at": stamp,
+        "updated_at": stamp,
+        "version": fence_version + 1,
+    }
+    target = table or db_table.table()
+    try:
+        _transact(
+            [
+                {
+                    "Put": {
+                        "Item": terminal_command,
+                        "ConditionExpression": (
+                            "#status=:running AND generation=:generation "
+                            "AND command_version=:command_version "
+                            "AND lease_owner=:lease_owner AND lease_expires_at>=:now_epoch "
+                            "AND catalog_sha256=:catalog"
+                        ),
+                        "ExpressionAttributeNames": {"#status": "status"},
+                        "ExpressionAttributeValues": {
+                            ":running": "running",
+                            ":generation": generation,
+                            ":command_version": claim.command_version,
+                            ":lease_owner": claim.lease_owner,
+                            ":now_epoch": now_epoch,
+                            ":catalog": catalog_sha256,
+                        },
+                    }
+                },
+                {
+                    "Put": {
+                        "Item": terminal_fence,
+                        "ConditionExpression": (
+                            "#status=:pending AND generation=:generation AND "
+                            "#version=:fence_version AND command_id=:command"
+                        ),
+                        "ExpressionAttributeNames": {"#status": "status", "#version": "version"},
+                        "ExpressionAttributeValues": {
+                            ":pending": "deletion_pending",
+                            ":generation": generation,
+                            ":fence_version": fence_version,
+                            ":command": command_id,
+                        },
+                    }
+                },
+                {"Delete": {"Key": pending_registry_key(user_id, command_id)}},
+            ],
+            table=target,
+        )
+    except AccountDeletionConflict:
+        replay_command = get_deletion_command(user_id, command_id, table=target)
+        replay_fence = get_account_fence(user_id, table=target)
+        if (
+            replay_command
+            and replay_fence
+            and replay_command.get("status") == "complete"
+            and replay_fence.get("status") == "deleted"
+            and replay_command.get("catalog_sha256") == catalog_sha256
+            and replay_fence.get("command_id") == command_id
+        ):
+            return replay_command, replay_fence
+        raise
+    return terminal_command, terminal_fence
+
+
 def _teacher_reference_version(value: object, field: str) -> int:
     parsed = stored_int(value)
     if parsed is None or parsed <= 0:

@@ -236,6 +236,49 @@ def cleanup(
     )
 
 
+def leave_for_account_deletion(
+    upload: Mapping[str, Any],
+    *,
+    account_fence_generation: int,
+    s3: Any,
+    settings: Settings,
+    now: datetime,
+) -> bool:
+    """Clean one of a closing account's uploads and delete its row; whether it is gone (#641).
+
+    `cleanup` with the account's fence generation, then, once cleaned, the
+    row itself, under the account's deletion fence. An upload whose attachment
+    is still there, or a step that did not finish, is left for the next pass.
+    """
+    owner_id = upload.get("owner_id")
+    upload_id = upload.get("upload_id")
+    if not isinstance(owner_id, str) or not owner_id:
+        return False
+    if not isinstance(upload_id, str) or not upload_id:
+        return False
+    outcome = cleanup(
+        upload,
+        s3=s3,
+        settings=settings,
+        now=now,
+        account_fence_generation=account_fence_generation,
+    )
+    if outcome != "deleted":
+        current = _store.get_upload_intent(upload_id)
+        if current is None:
+            return True
+        if current.get("status") != UploadStatus.CLEANUP_COMPLETE:
+            return False
+    try:
+        if _store.delete_account_upload_tombstone(
+            upload_id, owner_id=owner_id, account_fence_generation=account_fence_generation
+        ):
+            return True
+    except Exception:
+        pass
+    return _store.get_upload_intent(upload_id) is None
+
+
 def purge_for_account(
     student_id: str,
     owner_items: Iterable[Mapping[str, Any]],

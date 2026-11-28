@@ -1,4 +1,10 @@
-"""Deny-first account deletion command and primary branch orchestration."""
+"""Accepting an account deletion, and the 17-branch flow commands accepted before #641 ran.
+
+Every deletion accepted now runs the catalog's three steps
+(`stoa.services.account_deletion_flow`); the scheduled job refuses any
+command without that flow (#634 decision 8). The branches, their seals and
+`AccountDeletionService` below are no longer reached and go with #642.
+"""
 
 from __future__ import annotations
 
@@ -38,6 +44,7 @@ from stoa.db.repositories import (
 )
 from stoa.security.tokens import VerifiedAccessToken
 from stoa.services import (
+    account_deletion_flow,
     ask_question,
     attachment_service,
     help_requests,
@@ -77,6 +84,10 @@ PRIMARY_BRANCH_IDS = {
 
 DeletionCommandClaim = account_deletion_repo.DeletionCommandClaim
 DeletionCommandClaimLost = account_deletion_repo.DeletionCommandClaimLost
+
+
+class DeletionNotReady(account_deletion_repo.AccountDeletionConflict):
+    """A new deletion refused for now: the owner registry is not vouched for (#641)."""
 
 logger = logging.getLogger(__name__)
 
@@ -565,19 +576,28 @@ def accept_account_deletion(
     Constructs no Actor. Deciding whether this account may be closed by this
     initiator is the caller's: the route lets an account close itself, the
     operator call checks its own rules first.
+
+    A command accepted now runs the catalog's three steps
+    (`account_deletion_flow`, #641): it carries that flow and the catalog's
+    hash, and is refused while the owner registry is not vouched for
+    (`registry_path_ready`), since that flow reads only the account's
+    registered partitions. Replaying a command already accepted asks neither.
     """
-    seal = acceptance_seal(table=table)
     fence = account_deletion_repo.get_account_fence(user_id, table=table)
     if not fence or stored_int(fence.get("generation")) is None:
         raise account_deletion_repo.AccountDeletionConflict("missing account fence")
     generation = int(fence["generation"])
     identity = _initiator_fields(initiator, user_id=user_id, generation=generation)
+    if fence.get("status") not in {"deletion_pending", "deleted"} and not registry_path_ready(
+        table=table
+    ):
+        logger.warning("account_deletion_refused reason=registry_not_ready")
+        raise DeletionNotReady("owner registry is not vouched for")
     command: dict[str, Any] = {
         "command_id": command_id or str(uuid4()),
         **identity,
-        "inventory_sha256": seal["inventory_sha256"],
-        "branch_ids": list(ACCOUNT_DELETION_BRANCH_IDS),
-        "branch_contracts": seal["branch_contracts"],
+        "flow": account_deletion_flow.CATALOG_FLOW,
+        "catalog_sha256": account_deletion_flow.current_catalog_sha256(),
     }
     if isinstance(initiator, OperatorInitiated):
         command["reason"] = initiator.reason.strip()
@@ -589,12 +609,10 @@ def accept_account_deletion(
         now_iso=now_iso,
         table=table,
     )
-    immutable = {
-        **identity,
-        "user_id": user_id,
-        "generation": generation,
-        "inventory_sha256": seal["inventory_sha256"],
-    }
+    # Who asked and for what: a replay must match. How it is carried out (the
+    # flow, the catalog it was sealed with) is the command's own and is not
+    # compared - a replay after a deploy still answers with the same receipt.
+    immutable = {**identity, "user_id": user_id, "generation": generation}
     if any(persisted.get(key) != value for key, value in immutable.items()):
         raise account_deletion_repo.AccountDeletionConflict("deletion replay conflict")
     # A self-deletion accepted before #396 carries no initiator; it is the account's own.
@@ -602,12 +620,6 @@ def accept_account_deletion(
         raise account_deletion_repo.AccountDeletionConflict("deletion replay conflict")
     if persisted.get("status") == "complete":
         return terminal_deletion_receipt(persisted)
-    active_immutables = {
-        "branch_ids": list(ACCOUNT_DELETION_BRANCH_IDS),
-        "branch_contracts": seal["branch_contracts"],
-    }
-    if any(persisted.get(key) != value for key, value in active_immutables.items()):
-        raise account_deletion_repo.AccountDeletionConflict("deletion replay conflict")
     return DeletionReceipt(
         command_id=str(persisted["command_id"]),
         status="deletion_pending",

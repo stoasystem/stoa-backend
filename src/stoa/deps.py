@@ -33,6 +33,7 @@ from stoa.security.identity import (
 from stoa.security.jwks import HttpxJwksTransport, JwksKeyProvider
 from stoa.security.tokens import VerifiedAccessToken, verify_access_token
 from stoa.services.account_deletion_service import (
+    DeletionNotReady,
     DeletionReceipt,
     SelfInitiated,
     accept_account_deletion,
@@ -245,6 +246,13 @@ async def get_deletion_command(
         )
     except SecurityDecisionError:
         raise
+    except DeletionNotReady as exc:
+        # The owner registry is not vouched for right now (#641): asking again
+        # later works, so this is not the account's conflict.
+        raise SecurityDecisionError(
+            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+            internal_detail="deletion_registry_not_ready",
+        ) from exc
     except account_deletion_repo.AccountDeletionConflict as exc:
         raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT) from exc
     except Exception as exc:
