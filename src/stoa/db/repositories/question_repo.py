@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import struct
 from collections.abc import Iterator, Mapping
-from itertools import islice
 from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Key
@@ -89,28 +88,13 @@ def _response(value: object) -> QuestionItem:
     return {key: item for key, item in value.items() if isinstance(key, str)}
 
 
-# What the platform dashboard measures a question by; nothing it would have to redact.
-QUESTION_CENSUS_FIELDS = (
-    "teacher_requested_at",
-    "queue_visible_at",
-    "teacher_taken_over_at",
-    "teacher_first_replied_at",
-    "resolved_at",
-    "sla_request_to_takeover_seconds",
-    "sla_request_to_first_reply_seconds",
-    "sla_takeover_to_first_reply_seconds",
-    "sla_request_to_resolved_seconds",
-    "teacher_first_reply_sla_bucket",
-)
-
-
-# The legacy question rows are found through GSI-Listing (card 133): `listing`
-# names the list and `listed_at` is when the question was created. Nothing
+# The legacy question rows were found through GSI-Listing (card 133): `listing`
+# names the list and `listed_at` is when the question was created. Nothing reads
+# the list since the admin statistics stopped counting these rows (#697). Nothing
 # writes a question any more, so the keys come from the one-off backfill
 # (`scripts/backfill_listing_index_admin.py`); a tombstone keeps neither.
 LISTING_INDEX = "GSI-Listing"
 LISTING_NAME = "question_meta"
-_LISTING_INDEX_KEY = ("PK", "SK", "listing", "listed_at")
 _LISTED_AT_UNKNOWN = "1970-01-01T00:00:00Z"
 
 
@@ -121,36 +105,6 @@ def listing_fields(row: Mapping[str, object]) -> dict[str, str]:
     created_at = row.get("created_at")
     listed_at = created_at if isinstance(created_at, str) and created_at else _LISTED_AT_UNKNOWN
     return {"listing": LISTING_NAME, "listed_at": listed_at}
-
-
-def question_meta_census(
-    *, page_budget: int, table: object | None = None
-) -> tuple[list[QuestionItem], bool]:
-    """Status and response times of every legacy question, and whether the read finished.
-
-    One query of the question list in GSI-Listing, so what it reads follows how
-    many questions there are, not the size of the table. A caller keeps the
-    rows whose status is a question status. A read that ran out of pages
-    answers False: counting from it would be a sample presented as a total.
-    """
-    target = _table(table)
-    rows: list[QuestionItem] = []
-    for page in islice(
-        _pages(
-            "query",
-            target,
-            key=_LISTING_INDEX_KEY,
-            IndexName=LISTING_INDEX,
-            KeyConditionExpression=Key("listing").eq(LISTING_NAME),
-            ProjectionExpression=", ".join(["#s", *QUESTION_CENSUS_FIELDS]),
-            ExpressionAttributeNames={"#s": "status"},
-        ),
-        page_budget,
-    ):
-        rows.extend(_response(item) for item in page.items)
-        if page.last_key is None:
-            return rows, True
-    return rows, False
 
 
 def _frame(value: str) -> bytes:

@@ -1,25 +1,22 @@
-"""`/admin/stats` and the curriculum worklist read GSI-Listing, not the table (card 133).
+"""The admin lists read GSI-Listing, not the table (card 133).
 
 In production the stats took 4.6 s and the worklist 15.4 s: each read every page
 of `stoa-main` to find a few thousand rows. The legacy questions, the help
 requests and the lesson versions and pointers now carry `listing` and
-`listed_at`, and both pages query those lists.
+`listed_at`. The worklist queries its lists; what the stats read since #697 is
+pinned in `tests/test_admin_stats.py`.
 
-Each test answers the same fixture twice - through the scan the page used to
-read and through the index - and requires the same body, with no scan on the
-second. The backfill puts the rows written before in place.
+The worklist tests answer the same fixture twice - through the scan the page
+used to read and through the index - and require the same body, with no scan on
+the second. The backfill puts the rows written before in place.
 """
 
 from __future__ import annotations
 
-from itertools import islice
 from typing import Any
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
-from actor_helpers import install_actor_overrides
 from fakes.dynamodb import DEFAULT_INDEXES, FakeTable, IndexSchema
 from scripts import backfill_listing_index_admin as backfill
 from stoa.db import listing_index
@@ -31,34 +28,13 @@ from stoa.db.repositories import (
     report_repo,
     question_repo,
     security_audit_repo,
-    user_repo,
 )
-from stoa.routers import admin
 from stoa.services import curriculum_ops_service, help_requests
 
 ASKED = "2026-10-01T08:00:00Z"
-PROFILES = [{"role": "student"}, {"role": "teacher"}]
 
 
 # ── The reads as they were before card 133 ───────────────────────────────────
-
-
-def _scanned_question_census(*, page_budget: int, table: object | None = None):
-    target = table or db_table.table()
-    rows: list[dict[str, Any]] = []
-    for page in islice(
-        db_table.pages(
-            "scan",
-            table=target,
-            FilterExpression="SK = :meta",
-            ExpressionAttributeValues={":meta": "META"},
-        ),
-        page_budget,
-    ):
-        rows.extend(page.items)
-        if page.last_key is None:
-            return rows, True
-    return rows, False
 
 
 def _scanned_worklist(**_ignored: Any) -> curriculum_ops_repo.WorklistRows:
@@ -83,7 +59,7 @@ def _filler(table: FakeTable, rows: int = 30) -> None:
 
 
 def _stats_table() -> FakeTable:
-    """Rows as the releases before card 133 left them: no `listing` on any."""
+    """Legacy questions and help requests as the releases before card 133 left them."""
     table = FakeTable(page_item_cap=4)
     _filler(table)
     questions = [
@@ -120,76 +96,6 @@ def _stats_table() -> FakeTable:
         }
         table.seed({**record, **help_requests.index_fields(record)})
     return table
-
-
-def _admin() -> TestClient:
-    app = FastAPI()
-    app.include_router(admin.router, prefix="/admin")
-    install_actor_overrides(app, {"sub": "admin-1", "role": "admin"})
-    return TestClient(app)
-
-
-@pytest.fixture
-def profiles(monkeypatch: pytest.MonkeyPatch) -> None:
-    # The profile census is card 133-B1's; held still so only these reads are compared.
-    monkeypatch.setattr(user_repo, "profile_role_census", lambda **_kwargs: (PROFILES, True))
-
-
-def _stats_through_the_scan(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    with monkeypatch.context() as patch:
-        patch.setattr(question_repo, "question_meta_census", _scanned_question_census)
-        patch.setattr(help_requests, "list_listed", help_requests.list_all)
-        response = _admin().get("/admin/stats")
-    assert response.status_code == 200, response.text
-    return response.json()
-
-
-def _backfill(table: FakeTable) -> None:
-    assert backfill.run(table, apply_writes=True, verify_index=False) == 0
-
-
-# ── /admin/stats ─────────────────────────────────────────────────────────────
-
-
-def test_stats_answer_what_the_scan_answered_without_scanning(monkeypatch, profiles) -> None:
-    table = _stats_table()
-    db_table.install(table)
-    before = _stats_through_the_scan(monkeypatch)
-    _backfill(table)
-    table.calls.clear()
-
-    response = _admin().get("/admin/stats")
-
-    assert response.status_code == 200, response.text
-    assert table.calls["scan"] == 0
-    assert table.calls["query"] > 0
-    assert response.json() == before
-    assert before["total_questions"] == 4
-    assert before["teacher_resolved"] == 2
-    assert response.json()["counts_complete"] is True
-
-
-def test_stats_miss_what_is_not_yet_in_the_index(monkeypatch, profiles) -> None:
-    """Negative control: before the backfill the index is empty, and the counts show it."""
-    table = _stats_table()
-    db_table.install(table)
-
-    body = _admin().get("/admin/stats").json()
-
-    assert body["total_questions"] == 0
-    assert body["teacher_resolved"] == 0
-    assert table.calls["scan"] == 0
-
-
-def test_a_census_cut_short_says_so(profiles) -> None:
-    table = _stats_table()
-    _backfill(table)
-    table.page_item_cap = 2
-
-    rows, complete = question_repo.question_meta_census(page_budget=1, table=table)
-
-    assert complete is False
-    assert len(rows) < 4
 
 
 def test_a_request_is_listed_by_when_it_was_asked() -> None:

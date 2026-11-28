@@ -13127,59 +13127,19 @@
       },
       "StatsResponse": {
         "properties": {
-          "ai_resolved": {
-            "title": "Ai Resolved",
-            "type": "integer"
-          },
-          "counts_complete": {
-            "default": true,
-            "title": "Counts Complete",
-            "type": "boolean"
-          },
-          "escalated": {
-            "title": "Escalated",
-            "type": "integer"
-          },
-          "teacher_resolved": {
-            "title": "Teacher Resolved",
+          "period_days": {
+            "title": "Period Days",
             "type": "integer"
           },
           "teacher_sla": {
             "additionalProperties": true,
             "title": "Teacher Sla",
             "type": "object"
-          },
-          "total_parents": {
-            "title": "Total Parents",
-            "type": "integer"
-          },
-          "total_questions": {
-            "title": "Total Questions",
-            "type": "integer"
-          },
-          "total_students": {
-            "title": "Total Students",
-            "type": "integer"
-          },
-          "total_teachers": {
-            "title": "Total Teachers",
-            "type": "integer"
-          },
-          "total_users": {
-            "title": "Total Users",
-            "type": "integer"
           }
         },
         "required": [
-          "total_users",
-          "total_students",
-          "total_parents",
-          "total_teachers",
-          "total_questions",
-          "ai_resolved",
-          "teacher_resolved",
-          "escalated",
-          "teacher_sla"
+          "teacher_sla",
+          "period_days"
         ],
         "title": "StatsResponse",
         "type": "object"
@@ -23834,7 +23794,7 @@
     },
     "/admin/stats": {
       "get": {
-        "description": "Return aggregate platform metrics.",
+        "description": "How fast teachers answered the help requests asked in the period.\n\nOnly help requests count: the legacy question rows have no writer and come\nfrom early test accounts. The account and question totals this answered\nbefore had no reader and were retired (#697).",
         "operationId": "get_stats_admin_stats_get",
         "responses": {
           "200": {
