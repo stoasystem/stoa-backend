@@ -1,0 +1,474 @@
+{
+  "dispatch_reminder": {
+    "de": {
+      "Content": {
+        "Simple": {
+          "Body": {
+            "Html": {
+              "Charset": "UTF-8",
+              "Data": "<!doctype html>\n<html lang=\"de\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"color-scheme\" content=\"light\">\n<title>STOA – Neue Hilfeanfrage: bitte innerhalb von 10 Minuten annehmen</title>\n</head>\n<body style=\"margin:0;padding:0;background:#f4f2ef;\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f2ef;padding:24px 12px;\">\n<tr><td align=\"center\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e6e1da;\">\n<tr><td style=\"padding:28px 36px 8px;\">\n<img src=\"https://app.stoaedu.ch/email/stoa-logo.png\" width=\"132\" alt=\"STOA\" style=\"display:block;border:0;height:auto;\">\n</td></tr>\n<tr><td style=\"padding:16px 36px 0;font-family:Helvetica,Arial,sans-serif;color:#2b2523;\">\n<h1 style=\"margin:0 0 18px;font-size:22px;line-height:1.3;font-weight:700;color:#5c1620;\">Neue Hilfeanfrage für Sie</h1>\n<p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Guten Tag</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Ihnen wurde eine neue Hilfeanfrage zugewiesen.</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Fach: Mathematik</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Bitte nehmen Sie sie innerhalb von 10 Minuten an, sonst wird sie einer anderen Lehrperson angeboten.</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:6px 0 22px;\"><tr><td style=\"border-radius:8px;background:#7a1f2b;\"><a href=\"https://app.stoaedu.ch/teacher/requests/req-687\" style=\"display:inline-block;padding:13px 26px;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;\">Anfrage in STOA öffnen</a></td></tr></table><p data-text-part=\"skip\" style=\"margin:0 0 22px;font-size:13px;line-height:1.6;color:#8a817c;\">Falls der Knopf nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:<br><a href=\"https://app.stoaedu.ch/teacher/requests/req-687\" style=\"color:#7a1f2b;word-break:break-all;\">https://app.stoaedu.ch/teacher/requests/req-687</a></p><p style=\"margin:0 0 14px;font-size:14px;line-height:1.6;color:#6b625e;\">Diese Erinnerung können Sie in STOA in den Benachrichtigungseinstellungen abschalten.</p><p style=\"margin:0 0 28px;font-size:16px;line-height:1.6;color:#2b2523;\">Herzliche Grüsse<br>Ihr STOA-Team</p>\n</td></tr>\n<tr><td style=\"padding:18px 36px 24px;background:#faf8f5;border-top:1px solid #eee8e1;border-radius:0 0 12px 12px;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#8a817c;\">\n<strong style=\"color:#5c1620;\">STOA</strong> · Lernbegleitung für Schülerinnen und Schüler<br>\nZürich · <a href=\"mailto:info@stoaedu.ch\" style=\"color:#8a817c;\">info@stoaedu.ch</a> · <a href=\"https://stoaedu.ch\" style=\"color:#8a817c;\">stoaedu.ch</a>\n<p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Sie erhalten diese E-Mail, weil STOA Ihnen Hilfeanfragen zuweist. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODcifQ._FX3ju7a48VOd0qL-0W4v-_ILQv4NVTEkl6MpnjL07Q\" style=\"color:#8a817c;\">Diese E-Mails abbestellen</a></p><!--stoa:footer-end-->\n</td></tr>\n</table>\n</td></tr>\n</table>\n</body>\n</html>"
+            },
+            "Text": {
+              "Charset": "UTF-8",
+              "Data": "Neue Hilfeanfrage für Sie\n\nGuten Tag\n\nIhnen wurde eine neue Hilfeanfrage zugewiesen.\n\nFach: Mathematik\n\nBitte nehmen Sie sie innerhalb von 10 Minuten an, sonst wird sie einer anderen Lehrperson angeboten.\n\nAnfrage in STOA öffnen: https://app.stoaedu.ch/teacher/requests/req-687\n\nDiese Erinnerung können Sie in STOA in den Benachrichtigungseinstellungen abschalten.\n\nHerzliche Grüsse\nIhr STOA-Team\n\nSTOA · Lernbegleitung für Schülerinnen und Schüler\n\nZürich · info@stoaedu.ch · https://stoaedu.ch\n\nSie erhalten diese E-Mail, weil STOA Ihnen Hilfeanfragen zuweist. Diese E-Mails abbestellen: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODcifQ._FX3ju7a48VOd0qL-0W4v-_ILQv4NVTEkl6MpnjL07Q\n"
+            }
+          },
+          "Headers": [
+            {
+              "Name": "List-Unsubscribe",
+              "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODcifQ._FX3ju7a48VOd0qL-0W4v-_ILQv4NVTEkl6MpnjL07Q>"
+            },
+            {
+              "Name": "List-Unsubscribe-Post",
+              "Value": "List-Unsubscribe=One-Click"
+            }
+          ],
+          "Subject": {
+            "Charset": "UTF-8",
+            "Data": "STOA – Neue Hilfeanfrage: bitte innerhalb von 10 Minuten annehmen"
+          }
+        }
+      },
+      "Destination": {
+        "ToAddresses": [
+          "teacher@stoa.test"
+        ]
+      },
+      "FromEmailAddress": "noreply@stoaedu.ch",
+      "ReplyToAddresses": [
+        "info@stoaedu.ch"
+      ]
+    },
+    "en": {
+      "Content": {
+        "Simple": {
+          "Body": {
+            "Html": {
+              "Charset": "UTF-8",
+              "Data": "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"color-scheme\" content=\"light\">\n<title>STOA – New help request: please accept within 10 minutes</title>\n</head>\n<body style=\"margin:0;padding:0;background:#f4f2ef;\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f2ef;padding:24px 12px;\">\n<tr><td align=\"center\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e6e1da;\">\n<tr><td style=\"padding:28px 36px 8px;\">\n<img src=\"https://app.stoaedu.ch/email/stoa-logo.png\" width=\"132\" alt=\"STOA\" style=\"display:block;border:0;height:auto;\">\n</td></tr>\n<tr><td style=\"padding:16px 36px 0;font-family:Helvetica,Arial,sans-serif;color:#2b2523;\">\n<h1 style=\"margin:0 0 18px;font-size:22px;line-height:1.3;font-weight:700;color:#5c1620;\">A new help request for you</h1>\n<p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Hello,</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">A new help request has been offered to you.</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Subject: Mathematics</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Please accept it within 10 minutes; after that it is offered to another teacher.</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:6px 0 22px;\"><tr><td style=\"border-radius:8px;background:#7a1f2b;\"><a href=\"https://app.stoaedu.ch/teacher/requests/req-687\" style=\"display:inline-block;padding:13px 26px;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;\">Open the request in STOA</a></td></tr></table><p data-text-part=\"skip\" style=\"margin:0 0 22px;font-size:13px;line-height:1.6;color:#8a817c;\">If the button does not work, copy this link into your browser:<br><a href=\"https://app.stoaedu.ch/teacher/requests/req-687\" style=\"color:#7a1f2b;word-break:break-all;\">https://app.stoaedu.ch/teacher/requests/req-687</a></p><p style=\"margin:0 0 14px;font-size:14px;line-height:1.6;color:#6b625e;\">You can turn this reminder off in STOA&#x27;s notification settings.</p><p style=\"margin:0 0 28px;font-size:16px;line-height:1.6;color:#2b2523;\">Kind regards<br>Your STOA team</p>\n</td></tr>\n<tr><td style=\"padding:18px 36px 24px;background:#faf8f5;border-top:1px solid #eee8e1;border-radius:0 0 12px 12px;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#8a817c;\">\n<strong style=\"color:#5c1620;\">STOA</strong> · Learning support for school students<br>\nZürich · <a href=\"mailto:info@stoaedu.ch\" style=\"color:#8a817c;\">info@stoaedu.ch</a> · <a href=\"https://stoaedu.ch\" style=\"color:#8a817c;\">stoaedu.ch</a>\n<p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">You are receiving this email because STOA offers you help requests. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODcifQ._FX3ju7a48VOd0qL-0W4v-_ILQv4NVTEkl6MpnjL07Q\" style=\"color:#8a817c;\">Unsubscribe from these emails</a></p><!--stoa:footer-end-->\n</td></tr>\n</table>\n</td></tr>\n</table>\n</body>\n</html>"
+            },
+            "Text": {
+              "Charset": "UTF-8",
+              "Data": "A new help request for you\n\nHello,\n\nA new help request has been offered to you.\n\nSubject: Mathematics\n\nPlease accept it within 10 minutes; after that it is offered to another teacher.\n\nOpen the request in STOA: https://app.stoaedu.ch/teacher/requests/req-687\n\nYou can turn this reminder off in STOA's notification settings.\n\nKind regards\nYour STOA team\n\nSTOA · Learning support for school students\n\nZürich · info@stoaedu.ch · https://stoaedu.ch\n\nYou are receiving this email because STOA offers you help requests. Unsubscribe from these emails: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODcifQ._FX3ju7a48VOd0qL-0W4v-_ILQv4NVTEkl6MpnjL07Q\n"
+            }
+          },
+          "Headers": [
+            {
+              "Name": "List-Unsubscribe",
+              "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODcifQ._FX3ju7a48VOd0qL-0W4v-_ILQv4NVTEkl6MpnjL07Q>"
+            },
+            {
+              "Name": "List-Unsubscribe-Post",
+              "Value": "List-Unsubscribe=One-Click"
+            }
+          ],
+          "Subject": {
+            "Charset": "UTF-8",
+            "Data": "STOA – New help request: please accept within 10 minutes"
+          }
+        }
+      },
+      "Destination": {
+        "ToAddresses": [
+          "teacher@stoa.test"
+        ]
+      },
+      "FromEmailAddress": "noreply@stoaedu.ch",
+      "ReplyToAddresses": [
+        "info@stoaedu.ch"
+      ]
+    },
+    "fr": {
+      "Content": {
+        "Simple": {
+          "Body": {
+            "Html": {
+              "Charset": "UTF-8",
+              "Data": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"color-scheme\" content=\"light\">\n<title>STOA – Nouvelle demande d&#x27;aide : à accepter dans les 10 minutes</title>\n</head>\n<body style=\"margin:0;padding:0;background:#f4f2ef;\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f2ef;padding:24px 12px;\">\n<tr><td align=\"center\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e6e1da;\">\n<tr><td style=\"padding:28px 36px 8px;\">\n<img src=\"https://app.stoaedu.ch/email/stoa-logo.png\" width=\"132\" alt=\"STOA\" style=\"display:block;border:0;height:auto;\">\n</td></tr>\n<tr><td style=\"padding:16px 36px 0;font-family:Helvetica,Arial,sans-serif;color:#2b2523;\">\n<h1 style=\"margin:0 0 18px;font-size:22px;line-height:1.3;font-weight:700;color:#5c1620;\">Une nouvelle demande d&#x27;aide pour vous</h1>\n<p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Bonjour,</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Une nouvelle demande d&#x27;aide vous a été attribuée.</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Matière : Mathématiques</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Merci de l&#x27;accepter dans les 10 minutes ; passé ce délai, elle sera proposée à un autre enseignant.</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:6px 0 22px;\"><tr><td style=\"border-radius:8px;background:#7a1f2b;\"><a href=\"https://app.stoaedu.ch/teacher/requests/req-687\" style=\"display:inline-block;padding:13px 26px;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;\">Ouvrir la demande dans STOA</a></td></tr></table><p data-text-part=\"skip\" style=\"margin:0 0 22px;font-size:13px;line-height:1.6;color:#8a817c;\">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br><a href=\"https://app.stoaedu.ch/teacher/requests/req-687\" style=\"color:#7a1f2b;word-break:break-all;\">https://app.stoaedu.ch/teacher/requests/req-687</a></p><p style=\"margin:0 0 14px;font-size:14px;line-height:1.6;color:#6b625e;\">Vous pouvez désactiver ce rappel dans les paramètres de notification de STOA.</p><p style=\"margin:0 0 28px;font-size:16px;line-height:1.6;color:#2b2523;\">Cordialement<br>L&#x27;équipe STOA</p>\n</td></tr>\n<tr><td style=\"padding:18px 36px 24px;background:#faf8f5;border-top:1px solid #eee8e1;border-radius:0 0 12px 12px;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#8a817c;\">\n<strong style=\"color:#5c1620;\">STOA</strong> · Accompagnement scolaire pour les élèves<br>\nZürich · <a href=\"mailto:info@stoaedu.ch\" style=\"color:#8a817c;\">info@stoaedu.ch</a> · <a href=\"https://stoaedu.ch\" style=\"color:#8a817c;\">stoaedu.ch</a>\n<p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Vous recevez cet e-mail parce que STOA vous attribue des demandes d&#x27;aide. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODcifQ._FX3ju7a48VOd0qL-0W4v-_ILQv4NVTEkl6MpnjL07Q\" style=\"color:#8a817c;\">Se désabonner de ces e-mails</a></p><!--stoa:footer-end-->\n</td></tr>\n</table>\n</td></tr>\n</table>\n</body>\n</html>"
+            },
+            "Text": {
+              "Charset": "UTF-8",
+              "Data": "Une nouvelle demande d'aide pour vous\n\nBonjour,\n\nUne nouvelle demande d'aide vous a été attribuée.\n\nMatière : Mathématiques\n\nMerci de l'accepter dans les 10 minutes ; passé ce délai, elle sera proposée à un autre enseignant.\n\nOuvrir la demande dans STOA: https://app.stoaedu.ch/teacher/requests/req-687\n\nVous pouvez désactiver ce rappel dans les paramètres de notification de STOA.\n\nCordialement\nL'équipe STOA\n\nSTOA · Accompagnement scolaire pour les élèves\n\nZürich · info@stoaedu.ch · https://stoaedu.ch\n\nVous recevez cet e-mail parce que STOA vous attribue des demandes d'aide. Se désabonner de ces e-mails: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODcifQ._FX3ju7a48VOd0qL-0W4v-_ILQv4NVTEkl6MpnjL07Q\n"
+            }
+          },
+          "Headers": [
+            {
+              "Name": "List-Unsubscribe",
+              "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODcifQ._FX3ju7a48VOd0qL-0W4v-_ILQv4NVTEkl6MpnjL07Q>"
+            },
+            {
+              "Name": "List-Unsubscribe-Post",
+              "Value": "List-Unsubscribe=One-Click"
+            }
+          ],
+          "Subject": {
+            "Charset": "UTF-8",
+            "Data": "STOA – Nouvelle demande d'aide : à accepter dans les 10 minutes"
+          }
+        }
+      },
+      "Destination": {
+        "ToAddresses": [
+          "teacher@stoa.test"
+        ]
+      },
+      "FromEmailAddress": "noreply@stoaedu.ch",
+      "ReplyToAddresses": [
+        "info@stoaedu.ch"
+      ]
+    },
+    "it": {
+      "Content": {
+        "Simple": {
+          "Body": {
+            "Html": {
+              "Charset": "UTF-8",
+              "Data": "<!doctype html>\n<html lang=\"it\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"color-scheme\" content=\"light\">\n<title>STOA – Nuova richiesta di aiuto: da accettare entro 10 minuti</title>\n</head>\n<body style=\"margin:0;padding:0;background:#f4f2ef;\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f2ef;padding:24px 12px;\">\n<tr><td align=\"center\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e6e1da;\">\n<tr><td style=\"padding:28px 36px 8px;\">\n<img src=\"https://app.stoaedu.ch/email/stoa-logo.png\" width=\"132\" alt=\"STOA\" style=\"display:block;border:0;height:auto;\">\n</td></tr>\n<tr><td style=\"padding:16px 36px 0;font-family:Helvetica,Arial,sans-serif;color:#2b2523;\">\n<h1 style=\"margin:0 0 18px;font-size:22px;line-height:1.3;font-weight:700;color:#5c1620;\">Una nuova richiesta di aiuto per Lei</h1>\n<p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Buongiorno,</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Le è stata assegnata una nuova richiesta di aiuto.</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Materia: Matematica</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">La accetti entro 10 minuti, altrimenti verrà proposta a un altro insegnante.</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:6px 0 22px;\"><tr><td style=\"border-radius:8px;background:#7a1f2b;\"><a href=\"https://app.stoaedu.ch/teacher/requests/req-687\" style=\"display:inline-block;padding:13px 26px;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;\">Apri la richiesta in STOA</a></td></tr></table><p data-text-part=\"skip\" style=\"margin:0 0 22px;font-size:13px;line-height:1.6;color:#8a817c;\">Se il pulsante non funziona, copi questo link nel browser:<br><a href=\"https://app.stoaedu.ch/teacher/requests/req-687\" style=\"color:#7a1f2b;word-break:break-all;\">https://app.stoaedu.ch/teacher/requests/req-687</a></p><p style=\"margin:0 0 14px;font-size:14px;line-height:1.6;color:#6b625e;\">Può disattivare questo promemoria nelle impostazioni delle notifiche di STOA.</p><p style=\"margin:0 0 28px;font-size:16px;line-height:1.6;color:#2b2523;\">Cordiali saluti<br>Il team STOA</p>\n</td></tr>\n<tr><td style=\"padding:18px 36px 24px;background:#faf8f5;border-top:1px solid #eee8e1;border-radius:0 0 12px 12px;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#8a817c;\">\n<strong style=\"color:#5c1620;\">STOA</strong> · Accompagnamento allo studio per allievi<br>\nZürich · <a href=\"mailto:info@stoaedu.ch\" style=\"color:#8a817c;\">info@stoaedu.ch</a> · <a href=\"https://stoaedu.ch\" style=\"color:#8a817c;\">stoaedu.ch</a>\n<p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Riceve questa e-mail perché STOA Le assegna richieste di aiuto. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODcifQ._FX3ju7a48VOd0qL-0W4v-_ILQv4NVTEkl6MpnjL07Q\" style=\"color:#8a817c;\">Non ricevere più queste e-mail</a></p><!--stoa:footer-end-->\n</td></tr>\n</table>\n</td></tr>\n</table>\n</body>\n</html>"
+            },
+            "Text": {
+              "Charset": "UTF-8",
+              "Data": "Una nuova richiesta di aiuto per Lei\n\nBuongiorno,\n\nLe è stata assegnata una nuova richiesta di aiuto.\n\nMateria: Matematica\n\nLa accetti entro 10 minuti, altrimenti verrà proposta a un altro insegnante.\n\nApri la richiesta in STOA: https://app.stoaedu.ch/teacher/requests/req-687\n\nPuò disattivare questo promemoria nelle impostazioni delle notifiche di STOA.\n\nCordiali saluti\nIl team STOA\n\nSTOA · Accompagnamento allo studio per allievi\n\nZürich · info@stoaedu.ch · https://stoaedu.ch\n\nRiceve questa e-mail perché STOA Le assegna richieste di aiuto. Non ricevere più queste e-mail: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODcifQ._FX3ju7a48VOd0qL-0W4v-_ILQv4NVTEkl6MpnjL07Q\n"
+            }
+          },
+          "Headers": [
+            {
+              "Name": "List-Unsubscribe",
+              "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODcifQ._FX3ju7a48VOd0qL-0W4v-_ILQv4NVTEkl6MpnjL07Q>"
+            },
+            {
+              "Name": "List-Unsubscribe-Post",
+              "Value": "List-Unsubscribe=One-Click"
+            }
+          ],
+          "Subject": {
+            "Charset": "UTF-8",
+            "Data": "STOA – Nuova richiesta di aiuto: da accettare entro 10 minuti"
+          }
+        }
+      },
+      "Destination": {
+        "ToAddresses": [
+          "teacher@stoa.test"
+        ]
+      },
+      "FromEmailAddress": "noreply@stoaedu.ch",
+      "ReplyToAddresses": [
+        "info@stoaedu.ch"
+      ]
+    }
+  },
+  "weekly_report": {
+    "de:-": {
+      "Content": {
+        "Simple": {
+          "Body": {
+            "Html": {
+              "Charset": "UTF-8",
+              "Data": "<html><body><h1>Wochenbericht für Mia</h1><p>Brüche &amp; Dezimalzahlen – très bien.</p><p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Sie erhalten diese E-Mail, weil STOA Ihnen Wochenberichte über Ihr Kind sendet. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\" style=\"color:#8a817c;\">Diese E-Mails abbestellen</a></p></body></html>"
+            },
+            "Text": {
+              "Charset": "UTF-8",
+              "Data": "Wochenbericht für Mia\n\nBrüche & Dezimalzahlen – très bien.\n\nSie erhalten diese E-Mail, weil STOA Ihnen Wochenberichte über Ihr Kind sendet. Diese E-Mails abbestellen: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\n"
+            }
+          },
+          "Headers": [
+            {
+              "Name": "List-Unsubscribe",
+              "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM>"
+            },
+            {
+              "Name": "List-Unsubscribe-Post",
+              "Value": "List-Unsubscribe=One-Click"
+            }
+          ],
+          "Subject": {
+            "Charset": "UTF-8",
+            "Data": "STOA – Wochenbericht für Ihr Kind"
+          }
+        }
+      },
+      "Destination": {
+        "ToAddresses": [
+          "parent@stoa.test"
+        ]
+      },
+      "FromEmailAddress": "noreply@stoaedu.ch",
+      "ReplyToAddresses": [
+        "info@stoaedu.ch"
+      ]
+    },
+    "de:Mia": {
+      "Content": {
+        "Simple": {
+          "Body": {
+            "Html": {
+              "Charset": "UTF-8",
+              "Data": "<html><body><h1>Wochenbericht für Mia</h1><p>Brüche &amp; Dezimalzahlen – très bien.</p><p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Sie erhalten diese E-Mail, weil STOA Ihnen Wochenberichte über Ihr Kind sendet. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\" style=\"color:#8a817c;\">Diese E-Mails abbestellen</a></p></body></html>"
+            },
+            "Text": {
+              "Charset": "UTF-8",
+              "Data": "Wochenbericht für Mia\n\nBrüche & Dezimalzahlen – très bien.\n\nSie erhalten diese E-Mail, weil STOA Ihnen Wochenberichte über Ihr Kind sendet. Diese E-Mails abbestellen: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\n"
+            }
+          },
+          "Headers": [
+            {
+              "Name": "List-Unsubscribe",
+              "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM>"
+            },
+            {
+              "Name": "List-Unsubscribe-Post",
+              "Value": "List-Unsubscribe=One-Click"
+            }
+          ],
+          "Subject": {
+            "Charset": "UTF-8",
+            "Data": "STOA – Wochenbericht für Mia"
+          }
+        }
+      },
+      "Destination": {
+        "ToAddresses": [
+          "parent@stoa.test"
+        ]
+      },
+      "FromEmailAddress": "noreply@stoaedu.ch",
+      "ReplyToAddresses": [
+        "info@stoaedu.ch"
+      ]
+    },
+    "en:-": {
+      "Content": {
+        "Simple": {
+          "Body": {
+            "Html": {
+              "Charset": "UTF-8",
+              "Data": "<html><body><h1>Wochenbericht für Mia</h1><p>Brüche &amp; Dezimalzahlen – très bien.</p><p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">You are receiving this email because STOA sends you weekly reports about your child. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\" style=\"color:#8a817c;\">Unsubscribe from these emails</a></p></body></html>"
+            },
+            "Text": {
+              "Charset": "UTF-8",
+              "Data": "Wochenbericht für Mia\n\nBrüche & Dezimalzahlen – très bien.\n\nYou are receiving this email because STOA sends you weekly reports about your child. Unsubscribe from these emails: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\n"
+            }
+          },
+          "Headers": [
+            {
+              "Name": "List-Unsubscribe",
+              "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM>"
+            },
+            {
+              "Name": "List-Unsubscribe-Post",
+              "Value": "List-Unsubscribe=One-Click"
+            }
+          ],
+          "Subject": {
+            "Charset": "UTF-8",
+            "Data": "STOA – Weekly report for your child"
+          }
+        }
+      },
+      "Destination": {
+        "ToAddresses": [
+          "parent@stoa.test"
+        ]
+      },
+      "FromEmailAddress": "noreply@stoaedu.ch",
+      "ReplyToAddresses": [
+        "info@stoaedu.ch"
+      ]
+    },
+    "en:Mia": {
+      "Content": {
+        "Simple": {
+          "Body": {
+            "Html": {
+              "Charset": "UTF-8",
+              "Data": "<html><body><h1>Wochenbericht für Mia</h1><p>Brüche &amp; Dezimalzahlen – très bien.</p><p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">You are receiving this email because STOA sends you weekly reports about your child. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\" style=\"color:#8a817c;\">Unsubscribe from these emails</a></p></body></html>"
+            },
+            "Text": {
+              "Charset": "UTF-8",
+              "Data": "Wochenbericht für Mia\n\nBrüche & Dezimalzahlen – très bien.\n\nYou are receiving this email because STOA sends you weekly reports about your child. Unsubscribe from these emails: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\n"
+            }
+          },
+          "Headers": [
+            {
+              "Name": "List-Unsubscribe",
+              "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM>"
+            },
+            {
+              "Name": "List-Unsubscribe-Post",
+              "Value": "List-Unsubscribe=One-Click"
+            }
+          ],
+          "Subject": {
+            "Charset": "UTF-8",
+            "Data": "STOA – Weekly report for Mia"
+          }
+        }
+      },
+      "Destination": {
+        "ToAddresses": [
+          "parent@stoa.test"
+        ]
+      },
+      "FromEmailAddress": "noreply@stoaedu.ch",
+      "ReplyToAddresses": [
+        "info@stoaedu.ch"
+      ]
+    },
+    "fr:-": {
+      "Content": {
+        "Simple": {
+          "Body": {
+            "Html": {
+              "Charset": "UTF-8",
+              "Data": "<html><body><h1>Wochenbericht für Mia</h1><p>Brüche &amp; Dezimalzahlen – très bien.</p><p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Vous recevez cet e-mail parce que STOA vous envoie des rapports hebdomadaires sur votre enfant. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\" style=\"color:#8a817c;\">Se désabonner de ces e-mails</a></p></body></html>"
+            },
+            "Text": {
+              "Charset": "UTF-8",
+              "Data": "Wochenbericht für Mia\n\nBrüche & Dezimalzahlen – très bien.\n\nVous recevez cet e-mail parce que STOA vous envoie des rapports hebdomadaires sur votre enfant. Se désabonner de ces e-mails: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\n"
+            }
+          },
+          "Headers": [
+            {
+              "Name": "List-Unsubscribe",
+              "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM>"
+            },
+            {
+              "Name": "List-Unsubscribe-Post",
+              "Value": "List-Unsubscribe=One-Click"
+            }
+          ],
+          "Subject": {
+            "Charset": "UTF-8",
+            "Data": "STOA – Rapport hebdomadaire de votre enfant"
+          }
+        }
+      },
+      "Destination": {
+        "ToAddresses": [
+          "parent@stoa.test"
+        ]
+      },
+      "FromEmailAddress": "noreply@stoaedu.ch",
+      "ReplyToAddresses": [
+        "info@stoaedu.ch"
+      ]
+    },
+    "fr:Mia": {
+      "Content": {
+        "Simple": {
+          "Body": {
+            "Html": {
+              "Charset": "UTF-8",
+              "Data": "<html><body><h1>Wochenbericht für Mia</h1><p>Brüche &amp; Dezimalzahlen – très bien.</p><p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Vous recevez cet e-mail parce que STOA vous envoie des rapports hebdomadaires sur votre enfant. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\" style=\"color:#8a817c;\">Se désabonner de ces e-mails</a></p></body></html>"
+            },
+            "Text": {
+              "Charset": "UTF-8",
+              "Data": "Wochenbericht für Mia\n\nBrüche & Dezimalzahlen – très bien.\n\nVous recevez cet e-mail parce que STOA vous envoie des rapports hebdomadaires sur votre enfant. Se désabonner de ces e-mails: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\n"
+            }
+          },
+          "Headers": [
+            {
+              "Name": "List-Unsubscribe",
+              "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM>"
+            },
+            {
+              "Name": "List-Unsubscribe-Post",
+              "Value": "List-Unsubscribe=One-Click"
+            }
+          ],
+          "Subject": {
+            "Charset": "UTF-8",
+            "Data": "STOA – Rapport hebdomadaire de Mia"
+          }
+        }
+      },
+      "Destination": {
+        "ToAddresses": [
+          "parent@stoa.test"
+        ]
+      },
+      "FromEmailAddress": "noreply@stoaedu.ch",
+      "ReplyToAddresses": [
+        "info@stoaedu.ch"
+      ]
+    },
+    "it:-": {
+      "Content": {
+        "Simple": {
+          "Body": {
+            "Html": {
+              "Charset": "UTF-8",
+              "Data": "<html><body><h1>Wochenbericht für Mia</h1><p>Brüche &amp; Dezimalzahlen – très bien.</p><p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Riceve questa e-mail perché STOA Le invia rapporti settimanali su Suo/a figlio/a. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\" style=\"color:#8a817c;\">Non ricevere più queste e-mail</a></p></body></html>"
+            },
+            "Text": {
+              "Charset": "UTF-8",
+              "Data": "Wochenbericht für Mia\n\nBrüche & Dezimalzahlen – très bien.\n\nRiceve questa e-mail perché STOA Le invia rapporti settimanali su Suo/a figlio/a. Non ricevere più queste e-mail: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\n"
+            }
+          },
+          "Headers": [
+            {
+              "Name": "List-Unsubscribe",
+              "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM>"
+            },
+            {
+              "Name": "List-Unsubscribe-Post",
+              "Value": "List-Unsubscribe=One-Click"
+            }
+          ],
+          "Subject": {
+            "Charset": "UTF-8",
+            "Data": "STOA – Rapporto settimanale di Suo/a figlio/a"
+          }
+        }
+      },
+      "Destination": {
+        "ToAddresses": [
+          "parent@stoa.test"
+        ]
+      },
+      "FromEmailAddress": "noreply@stoaedu.ch",
+      "ReplyToAddresses": [
+        "info@stoaedu.ch"
+      ]
+    },
+    "it:Mia": {
+      "Content": {
+        "Simple": {
+          "Body": {
+            "Html": {
+              "Charset": "UTF-8",
+              "Data": "<html><body><h1>Wochenbericht für Mia</h1><p>Brüche &amp; Dezimalzahlen – très bien.</p><p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Riceve questa e-mail perché STOA Le invia rapporti settimanali su Suo/a figlio/a. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\" style=\"color:#8a817c;\">Non ricevere più queste e-mail</a></p></body></html>"
+            },
+            "Text": {
+              "Charset": "UTF-8",
+              "Data": "Wochenbericht für Mia\n\nBrüche & Dezimalzahlen – très bien.\n\nRiceve questa e-mail perché STOA Le invia rapporti settimanali su Suo/a figlio/a. Non ricevere più queste e-mail: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM\n"
+            }
+          },
+          "Headers": [
+            {
+              "Name": "List-Unsubscribe",
+              "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoid2Vla2x5X3JlcG9ydCIsImsiOiJkZXZlbG9wbWVudC12MSIsInUiOiJwYXJlbnQtNjg3In0.UVcZ2pAcWUmtNcEtpJf8TArBp0JD6AmisIv9hbfhJJM>"
+            },
+            {
+              "Name": "List-Unsubscribe-Post",
+              "Value": "List-Unsubscribe=One-Click"
+            }
+          ],
+          "Subject": {
+            "Charset": "UTF-8",
+            "Data": "STOA – Rapporto settimanale di Mia"
+          }
+        }
+      },
+      "Destination": {
+        "ToAddresses": [
+          "parent@stoa.test"
+        ]
+      },
+      "FromEmailAddress": "noreply@stoaedu.ch",
+      "ReplyToAddresses": [
+        "info@stoaedu.ch"
+      ]
+    }
+  }
+}

@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fakes.dynamodb import FakeTable
+from fakes import notification_email
 
 from stoa.db import table as db_table
 from stoa.config import Settings
@@ -448,9 +449,8 @@ def resend_doubles(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
         "require_active_account_fence",
         _report_fence,
     )
-    monkeypatch.setattr(
-        report_recovery_service.notify_service,
-        "send_fenced_weekly_report_email",
+    notification_email.install_send(
+        monkeypatch,
         lambda email, html, **_kwargs: (sent.append((email, html)), "accepted")[1],
     )
     monkeypatch.setattr(
@@ -692,9 +692,8 @@ class _GenerationDelivery:
             "update_report_status",
             lambda _report_id, status, **fields: self.status_updates.append((status, fields)),
         )
-        monkeypatch.setattr(
-            report_service.notify_service,
-            "send_fenced_weekly_report_email",
+        notification_email.install_send(
+            monkeypatch,
             lambda email, _html, **_kwargs: (self.sent.append(email), "accepted")[1],
         )
 

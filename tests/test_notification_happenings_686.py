@@ -15,6 +15,10 @@ subscription notifications had a random id before #686, so in their scenarios
 the id and everything derived from it (delivery ids) is blanked too; their new
 fixed ids are held by `test_notification_retries_686.py`.
 
+When the dispatch reminder email became a channel of the package (#687), the
+snapshot gained that email's row in the only-once ledger and nothing else: the
+email SES gets is unchanged.
+
 A change that is meant shows up here too. Regenerate the snapshot then, and
 read its diff before committing it:
 

@@ -165,36 +165,49 @@ def test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_versio
 
 
 def test_email_intent_claim_rechecks_fence_and_provider_unknown_is_terminal() -> None:
-    register = _contract("register_report_email_intent")
-    claim = _contract("claim_report_email_intent")
-    classify = _contract("classify_report_delivery_outcome")
-    transitions: list[str] = []
+    """The weekly report email is sent behind the student's fence, and an unknown outcome is final.
 
-    class _Table:
-        def register_report_email_intent(self, item: dict[str, Any]) -> dict[str, Any]:
-            transitions.append(item["state"])
-            return item
+    The sealed private-store inventory names this test (it cannot be edited to
+    follow a rename, `scripts/sealed_test_renames.py`). Its report send record
+    is gone since #687: the email crosses the notification ledger, and this
+    holds the same two promises there.
+    """
+    from stoa import aws
+    from stoa.db.repositories import account_deletion_repo
+    from stoa.services import notifications
 
-        def claim_report_email_intent(self, _key: dict[str, str], _generation: int, _lease: str) -> dict[str, Any]:
-            return {"state": "claimed", "lease_id": "lease-1"}
+    import test_notification_email_channel as email_channel
 
-    intent = register(
-        owner_id=STUDENT_ID,
-        generation=7,
-        operation_id="email-1",
-        report_id=REPORT_ID,
-        recipient="private-parent@example.test",
-        subject="Private subject",
-        body="Private body",
-        now_iso=NOW,
-        table=_Table(),
-    )
-    assert set(intent).isdisjoint({"recipient", "subject", "body"})
-    assert {"recipient_digest", "content_digest"} <= set(intent)
-    assert claim(intent, lease_id="lease-1", table=_Table())["state"] == "claimed"
-    assert classify(response=None, error=TimeoutError("commit then raise")) == "provider_acceptance_unknown"
-    assert classify(response={"MessageId": "accepted"}, error=None) == "accepted"
-    assert transitions == ["registered"]
+    try:
+        table, ses = email_channel.install_world()
+
+        class _Down:
+            def send_email(self, **_kwargs: Any) -> dict[str, Any]:
+                raise TimeoutError("commit then raise")
+
+        aws.install({aws.Kind.SES_NOTIFICATION: _Down()})
+        unknown = email_channel.report_ready()
+        aws.install({aws.Kind.SES_NOTIFICATION: ses})
+        again = email_channel.report_ready()
+
+        assert unknown.outcome is again.outcome is notifications.EmailOutcome.FAILED
+        assert str(again.error) == "provider_acceptance_unknown"
+        assert ses.sent == []
+
+        table.seed(
+            {
+                **account_deletion_repo.account_fence_key(email_channel.STUDENT),
+                "entity_type": "account_fence",
+                "status": "deleting",
+                "generation": email_channel.GENERATION,
+            }
+        )
+        fenced = email_channel.report_ready(resend=1)
+
+        assert fenced.outcome is notifications.EmailOutcome.FAILED
+        assert ses.sent == []
+    finally:
+        aws.install(None)
 
 
 def test_report_discovery_is_strong_paginated_and_scrub_is_allowlisted() -> None:

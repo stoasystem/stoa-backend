@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import pytest
 
 from fakes import student_evidence as fake_evidence
+from fakes import notification_email
 
 from stoa import aws
 from stoa import config
@@ -29,18 +30,7 @@ def _fenced_report_provider_compat(monkeypatch):
             keys, json_artifact, html_artifact
         ),
     )
-    monkeypatch.setattr(
-        report_service.notify_service,
-        "send_fenced_weekly_report_email",
-        lambda parent_email, report_html, **kwargs: (
-            report_service.notify_service.send_weekly_report_email(
-                parent_email,
-                report_html,
-                subject=kwargs.get("subject"),
-            )
-            or "accepted"
-        ),
-    )
+    notification_email.install_plain_send(monkeypatch)
 
 
 @pytest.fixture(autouse=True)

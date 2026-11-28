@@ -14,14 +14,15 @@ from html import escape
 from pathlib import Path
 
 from stoa.services import (
-    email_unsubscribe,
     locale_service,
-    notify_service,
     one_off_email,
     password_change_code_service,
     report_service,
 )
 from stoa.services.email_layout import to_text
+# The two notification emails are rendered inside the notification package
+# (#687); this script shows them as the channel sends them.
+from stoa.services.notifications import _email
 from stoa.services.email_unsubscribe import EmailKind
 
 SAMPLE_USER = "user_preview"
@@ -56,24 +57,31 @@ def emails(locale: str) -> dict[str, tuple[str, str]]:
         activation_token="preview-token", expires_at=EXPIRES, full_name="Marco Rossi", locale=locale
     )
     code = password_change_code_service.code_email("482913", locale=locale)
-    dispatch = notify_service.dispatch_reminder_message(
-        recipient_user_id=SAMPLE_USER,
+    dispatch = _email.dispatch_reminder_message(
         subject_name="Mathematik",
         request_id="request_preview",
         minutes=10,
         locale=locale,
     )
-    # The unsubscribe line is added at send time, as `send_fenced_weekly_report_email` does.
-    weekly_html = email_unsubscribe.with_footer(
+    # The unsubscribe line is added at send time, by the email channel.
+    dispatch_html = _email.with_unsubscribe_footer(
+        dispatch.html,
+        recipient_user_id=SAMPLE_USER,
+        kind=EmailKind.DISPATCH_REMINDER,
+        locale=locale,
+    )
+    weekly_html = _email.with_unsubscribe_footer(
         _weekly_report(locale),
-        email_unsubscribe.footer_html(SAMPLE_USER, EmailKind.WEEKLY_REPORT, locale),
+        recipient_user_id=SAMPLE_USER,
+        kind=EmailKind.WEEKLY_REPORT,
+        locale=locale,
     )
     return {
         "account_invitation": (invitation.subject, invitation.html),
         "teacher_activation": (teacher.subject, teacher.html),
         "password_code": (code.subject, code.html),
-        "dispatch_reminder": dispatch,
-        "weekly_report": (notify_service.weekly_report_subject("Lea", locale), weekly_html),
+        "dispatch_reminder": (dispatch.subject, dispatch_html),
+        "weekly_report": (report_service.weekly_report_subject("Lea", locale), weekly_html),
     }
 
 

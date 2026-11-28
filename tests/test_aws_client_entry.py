@@ -65,7 +65,7 @@ def test_no_file_outside_the_allow_list_builds_a_boto3_client() -> None:
 
 def test_the_gate_turns_red_when_a_file_builds_its_own_client() -> None:
     sources = _sources()
-    sources["services/notify_service.py"] += '\nses = boto3.client("ses")\n'
+    sources["services/notifications/_email.py"] += '\nses = boto3.client("ses")\n'
     sources["jobs/new_job.py"] = "s = boto3.Session()\n"
     sources["deps.py"] += '\nddb = boto3.resource("dynamodb")\n'
     sources["jobs/aliased.py"] = "from boto3 import client as make\n"
@@ -73,7 +73,7 @@ def test_the_gate_turns_red_when_a_file_builds_its_own_client() -> None:
 
     assert direct_boto3_callers(sources) == [
         "deps.py", "jobs/aliased.py", "jobs/botocore_direct.py", "jobs/new_job.py",
-        "services/notify_service.py",
+        "services/notifications/_email.py",
     ]
 
 

@@ -31,6 +31,8 @@ REPORT_PRIVATE_ROW_REGISTRY = {
     "support_delivery_feed": ("SUPPORT_HANDOFF_DELIVERY_FEED", "SUMMARY#"),
     "support_crm_feed": ("SUPPORT_CRM_MESSAGE_FEED", "MESSAGE#"),
     "report_object_intent": ("USER#", "REPORT_OBJECT#"),
+    # No longer written: the weekly report email crosses the notification
+    # ledger (#687). Stored rows stay until their account is deleted.
     "report_email_intent": ("USER#", "REPORT_EMAIL#"),
 }
 
@@ -205,21 +207,6 @@ class _RecordObjectCoordinateHook(Protocol):
         intent: ReportItem,
         coordinate: dict[str, str],
         now_iso: str,
-    ) -> object: ...
-
-
-@runtime_checkable
-class _RegisterEmailIntentHook(Protocol):
-    def register_report_email_intent(self, item: ReportItem) -> object: ...
-
-
-@runtime_checkable
-class _ClaimEmailIntentHook(Protocol):
-    def claim_report_email_intent(
-        self,
-        key: dict[str, str],
-        generation: int,
-        lease_id: str,
     ) -> object: ...
 
 
@@ -1932,107 +1919,6 @@ def reconcile_report_object_version(
         request["KeyMarker"] = key_marker
         request["VersionIdMarker"] = version_marker
     raise account_deletion_repo.AccountDeletionConflict("report object response unresolved")
-
-
-def register_report_email_intent(
-    *,
-    owner_id: str,
-    generation: int,
-    operation_id: str,
-    report_id: str,
-    recipient: str,
-    subject: str,
-    body: str,
-    now_iso: str,
-    table: object | None = None,
-) -> ReportItem:
-    owner = _required_private_string(owner_id, "owner_id")
-    operation = _required_private_string(operation_id, "operation_id")
-    recipient_value = _required_private_string(recipient, "recipient")
-    subject_value = _required_private_string(subject, "subject")
-    body_value = _required_private_string(body, "body")
-    item = {
-        "PK": f"USER#{owner}",
-        "SK": f"REPORT_EMAIL#{operation}",
-        "entity_type": "report_email_intent",
-        "schema_version": "report-email-intent.v1",
-        "owner_id": owner,
-        "account_fence_generation": generation,
-        "operation_id": operation,
-        "report_id": _required_private_string(report_id, "report_id"),
-        "recipient_digest": sha256(recipient_value.encode()).hexdigest(),
-        "content_digest": sha256(
-            (subject_value + "\0" + body_value).encode()
-        ).hexdigest(),
-        "state": "registered",
-        "created_at": now_iso,
-        "updated_at": now_iso,
-    }
-    target = table or db_table.table()
-    if isinstance(target, _RegisterEmailIntentHook):
-        persisted = target.register_report_email_intent(dict(item))
-        return _dependency_mapping(persisted) if persisted is not None else item
-    db_table.fenced(
-        owner,
-        [
-            {
-                "Put": {
-                    "Item": item,
-                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
-                }
-            },
-        ],
-        generation=generation,
-        table=target,
-    )
-    return item
-
-
-def claim_report_email_intent(
-    intent: Mapping[str, object], *, lease_id: str, table: object | None = None
-) -> ReportItem:
-    owner = _required_private_string(intent.get("owner_id"), "owner_id")
-    generation = intent.get("account_fence_generation")
-    if isinstance(generation, bool) or not isinstance(generation, int):
-        raise account_deletion_repo.AccountDeletionConflict("invalid email generation")
-    target = table or db_table.table()
-    key = {"PK": str(intent["PK"]), "SK": str(intent["SK"])}
-    if isinstance(target, _ClaimEmailIntentHook):
-        claimed = target.claim_report_email_intent(key, generation, lease_id)
-        if claimed is None:
-            raise account_deletion_repo.AccountDeletionConflict("email claim unavailable")
-        return _dependency_mapping(claimed)
-    account_deletion_repo.require_active_account_fence(owner, generation, table=target)
-    response = _update_item(
-        target,
-        Key=key,
-        UpdateExpression="SET #state=:claimed, lease_id=:lease",
-        ConditionExpression="#state=:registered AND account_fence_generation=:generation",
-        ExpressionAttributeNames={"#state": "state"},
-        ExpressionAttributeValues={
-            ":claimed": "claimed",
-            ":registered": "registered",
-            ":generation": generation,
-            ":lease": lease_id,
-        },
-        ReturnValues="ALL_NEW",
-    )
-    account_deletion_repo.require_active_account_fence(owner, generation, table=target)
-    attributes = response.get("Attributes") if isinstance(response, Mapping) else None
-    return dict(attributes) if isinstance(attributes, Mapping) else {**intent, "state": "claimed"}
-
-
-def classify_report_delivery_outcome(
-    *, response: Mapping[str, object] | None, error: Exception | None
-) -> str:
-    if error is not None:
-        return "provider_acceptance_unknown"
-    if not isinstance(response, Mapping):
-        raise account_deletion_repo.AccountDeletionConflict("malformed provider acceptance")
-    message_id = response.get("MessageId")
-    if not isinstance(message_id, str) or not message_id.strip():
-        raise account_deletion_repo.AccountDeletionConflict("malformed provider acceptance")
-    return "accepted"
 
 
 def scan_report_private_rows(

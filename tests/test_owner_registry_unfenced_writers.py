@@ -151,7 +151,6 @@ REVIEWED: dict[str, str] = {
     "src/stoa/db/repositories/notification_repo.py::_finish_delivery_intent": "derived_partition",
     "src/stoa/db/repositories/notification_repo.py::claim_delivery_intent": "derived_partition",
     "src/stoa/db/repositories/notification_repo.py::recover_delivery_intent": "derived_partition",
-    "src/stoa/db/repositories/report_repo.py::claim_report_email_intent": "derived_partition",
     "src/stoa/db/repositories/usage_ledger_repo.py::set_daily_question_counter": "derived_partition",
     "src/stoa/db/repositories/user_repo.py::put_user": "derived_partition",
     "src/stoa/routers/parents.py::admit_parent_link_request": "derived_partition",

@@ -14,8 +14,8 @@ from stoa.services import (
     message_catalog,
     websocket_service,
 )
-from stoa.services import notifications, notify_service
-from stoa.services.notifications import _bell, _ledger, _preferences, _push, _realtime
+from stoa.services import notifications
+from stoa.services.notifications import _bell, _email, _ledger, _preferences, _push, _realtime
 from stoa.db.repositories import account_deletion_repo, notification_repo
 from actor_helpers import install_actor_overrides
 
@@ -1001,9 +1001,9 @@ def _offer(monkeypatch, *, standing: bool, locale: str = "de") -> tuple[dict, li
     emails: list = []
     monkeypatch.setattr(_preferences, "dispatch_email_enabled", lambda _teacher: True)
     monkeypatch.setattr(
-        notify_service,
-        "send_dispatch_reminder_email",
-        lambda *args, **kwargs: emails.append((args, kwargs)),
+        _email,
+        "send_once",
+        lambda **kwargs: emails.append(kwargs) or _email.ACCEPTED,
     )
     notifications.happened(notifications.HelpOffered(
         conversation={

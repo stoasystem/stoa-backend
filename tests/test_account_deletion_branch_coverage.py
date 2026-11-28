@@ -105,6 +105,9 @@ NO_LONGER_WRITTEN: dict[str, str] = {
     # #684 removed the payment expiry reminder's writers, which nothing called. The
     # read moved to `billing_fact_repo`; the notification sweep still takes any row.
     "payment_expiry_reminder": "#684",
+    # #687 sends the weekly report email through the notification ledger; its own
+    # send record, which never stopped a duplicate, is no longer written.
+    "report_email_intent": "#687",
 }
 
 

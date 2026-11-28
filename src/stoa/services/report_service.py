@@ -32,7 +32,6 @@ from stoa.services import (
     message_catalog,
     model_call,
     notifications,
-    notify_service,
     report_artifact_service,
     student_evidence,
     weak_topics,
@@ -42,6 +41,44 @@ logger = logging.getLogger(__name__)
 
 # A report's `email_status` when the parent switched the weekly email off (#363).
 EMAIL_SKIPPED_PREFERENCE = "skipped_preference"
+
+
+def weekly_report_subject(student_name: str | None, locale: str | None) -> str:
+    """The subject of one weekly report email, in the parent's language."""
+    lang = locale or locale_service.DEFAULT_LOCALE
+    student = str(student_name or "").strip() or message_catalog.text(
+        "email.weekly_report.student_fallback", lang
+    )
+    return message_catalog.text("email.weekly_report.subject", lang, student=student)
+
+
+def tell_report_ready(
+    report: Mapping[str, Any],
+    *,
+    parent_email: str,
+    generation: int,
+    html: str,
+    locale: str,
+    resend: int = 0,
+) -> notifications.EmailResult:
+    """Tell the notifications that this report is ready for its parent (#687).
+
+    The package decides the rest: whether the parent still wants it by email,
+    the unsubscribe line, and that the same report - or the same resend - is
+    sent once however often this is said.
+    """
+    return notifications.happened(
+        notifications.WeeklyReportReady(
+            report_id=str(report["report_id"]),
+            parent_id=str(report["parent_id"]),
+            parent_email=parent_email,
+            student_id=str(report["student_id"]),
+            generation=generation,
+            subject=weekly_report_subject(report.get("student_name"), locale),
+            html=html,
+            resend=resend,
+        )
+    )
 
 
 @runtime_checkable
@@ -827,28 +864,23 @@ def store_and_send_weekly_report(
             error_class=str(recipient.refusal),
             error_message=_WITHHELD_MESSAGES.get(str(recipient.refusal), "withheld"),
         )
+    email = tell_report_ready(
+        report_item,
+        parent_email=recipient.email,
+        generation=generation,
+        html=html_report,
+        locale=locale,
+    )
     # A parent who unsubscribed still has the report in STOA; only the email
     # stops, and the report says so (#363).
-    if not notifications.weekly_report_email_enabled(str(report_item["parent_id"])):
+    if email.outcome is notifications.EmailOutcome.UNSUBSCRIBED:
         return _mark_report_email_skipped(report_item)
-    try:
-        delivery_outcome = notify_service.send_fenced_weekly_report_email(
-            recipient.email,
-            html_report,
-            recipient_user_id=str(report_item["parent_id"]),
-            locale=locale,
-            owner_id=str(report_item["student_id"]),
-            generation=generation,
-            report_id=str(report_item["report_id"]),
-            subject=notify_service.weekly_report_subject(report_item["student_name"], locale),
-        )
-        if delivery_outcome != "accepted":
-            raise RuntimeError(delivery_outcome)
-    except Exception as exc:
+    if email.outcome is not notifications.EmailOutcome.SENT:
+        error = email.error or RuntimeError("email not sent")
         return _mark_report_email_failed(
             report_item,
-            error_class=type(exc).__name__,
-            error_message=str(exc)[:240],
+            error_class=type(error).__name__,
+            error_message=str(error)[:240],
         )
 
     sent_at = _now_iso()

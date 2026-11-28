@@ -20,9 +20,11 @@ from stoa.services import (
     email_unsubscribe,
     locale_service,
     message_catalog,
-    notify_service,
     one_off_email,
 )
+from stoa.services.notifications import _email
+
+import test_notification_email_channel as email_channel
 
 LOCALES = sorted(locale_service.SUPPORTED_LOCALES)
 ROOT = Path(__file__).resolve().parents[1]
@@ -174,22 +176,16 @@ def test_a_one_off_email_goes_out_as_html_and_text_with_reply_to():
 
 
 def test_a_notification_email_goes_out_as_html_and_text_with_reply_to_and_headers():
-    ses = _RecordingSes()
-    aws.install({Kind.SES_DISPATCH_REMINDER: ses})
-
-    notify_service.send_dispatch_reminder_email(
-        "teacher@stoa.test",
-        recipient_user_id="teacher-1",
-        subject_name="Mathematik",
-        request_id="req-1",
-        minutes=10,
-        locale="de",
-    )
+    _, ses = email_channel.install_world(locale="de")
+    try:
+        email_channel.offer()
+    finally:
+        aws.install(None)
 
     [mail] = ses.sent
     assert mail["ReplyToAddresses"] == [config.settings().notification_email_reply_to]
     simple = mail["Content"]["Simple"]
-    assert "/teacher/requests/req-1" in simple["Body"]["Text"]["Data"]
+    assert "/teacher/requests/req-687" in simple["Body"]["Text"]["Data"]
     assert email_unsubscribe.PAGE_PATH in simple["Body"]["Text"]["Data"]
     assert {header["Name"] for header in simple["Headers"]} == {
         "List-Unsubscribe",
@@ -230,9 +226,9 @@ def test_the_preview_script_writes_every_email_in_every_language(tmp_path, monke
 
 
 def test_every_dispatch_reminder_names_its_subject_once():
-    _, html = notify_service.dispatch_reminder_message(
-        recipient_user_id="t-1", subject_name="Mathematik", request_id="r", minutes=10, locale="de"
-    )
+    html = _email.dispatch_reminder_message(
+        subject_name="Mathematik", request_id="r", minutes=10, locale="de"
+    ).html
     assert escape(
         message_catalog.text("email.dispatch_reminder.subject_line", "de", subject="Mathematik")
     ) in html

@@ -20,7 +20,6 @@ from stoa.services import (
     current_relationship,
     locale_service,
     notifications,
-    notify_service,
     report_artifact_service,
     report_service,
 )
@@ -40,6 +39,19 @@ __all__ = [
 ]
 
 _C = ReportRecoveryErrorCode
+
+# How many resends of a report's email an operator made and this module
+# recorded (#687); the next one is that number plus one.
+EMAIL_RESENDS = "email_resends"
+
+
+def _recorded_resends(report: dict) -> int:
+    value = report.get(EMAIL_RESENDS)
+    try:
+        count = int(value) if value is not None and not isinstance(value, bool) else 0
+    except (TypeError, ValueError):
+        count = 0
+    return max(count, 0)
 
 
 @dataclass(frozen=True)
@@ -113,7 +125,28 @@ def resend_report_email(
         )
 
     parent_id = str(report.get("parent_id") or "")
-    if not notifications.weekly_report_email_enabled(parent_id):
+    # An operator's resend is a happening of its own, numbered (#687): the n-th
+    # resend sends again, a retry of the same one does not. It counts the
+    # resends this report has recorded, so a resend whose email went out but
+    # whose outcome was never written here is the same resend when tried again.
+    resend = _recorded_resends(report) + 1
+    before = _audit_snapshot(report)
+    attempted_at = _now_iso()
+    try:
+        html = report_artifact_service.get_report_html(str(html_key))
+        owner_id = str(report.get("student_id") or "")
+        fence = account_deletion_repo.require_active_account_fence(owner_id)
+        email = report_service.tell_report_ready(
+            report,
+            parent_email=recipient.email,
+            generation=int(fence["generation"]),
+            html=html,
+            locale=locale_service.stored_locale(parent_id),
+            resend=resend,
+        )
+    except Exception as exc:
+        email = notifications.EmailResult(notifications.EmailOutcome.FAILED, exc)
+    if email.outcome is notifications.EmailOutcome.UNSUBSCRIBED:
         raise _refused(
             report,
             "resend_email",
@@ -122,29 +155,11 @@ def resend_report_email(
             source,
             _C.REPORT_RECIPIENT_UNSUBSCRIBED,
         )
-
-    before = _audit_snapshot(report)
-    attempted_at = _now_iso()
-    try:
-        html = report_artifact_service.get_report_html(str(html_key))
-        owner_id = str(report.get("student_id") or "")
-        fence = account_deletion_repo.require_active_account_fence(owner_id)
-        locale = locale_service.stored_locale(parent_id)
-        delivery_outcome = notify_service.send_fenced_weekly_report_email(
-            recipient.email,
-            html,
-            recipient_user_id=parent_id,
-            locale=locale,
-            owner_id=owner_id,
-            generation=int(fence["generation"]),
-            report_id=str(report["report_id"]),
-            subject=notify_service.weekly_report_subject(report.get("student_name"), locale),
-        )
-        if delivery_outcome != "accepted":
-            raise RuntimeError(delivery_outcome)
-    except Exception as exc:
+    if email.outcome is not notifications.EmailOutcome.SENT:
+        exc = email.error or RuntimeError("email not sent")
         failed_at = _now_iso()
         fields = {
+            EMAIL_RESENDS: resend,
             "email_status": "failed",
             "email_failed_at": failed_at,
             "email_error_class": type(exc).__name__,
@@ -180,6 +195,7 @@ def resend_report_email(
 
     sent_at = _now_iso()
     fields = {
+        EMAIL_RESENDS: resend,
         "email_status": "sent",
         "email_sent_at": sent_at,
         "resend_attempted_at": attempted_at,

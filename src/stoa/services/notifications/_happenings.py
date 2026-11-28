@@ -15,7 +15,11 @@ refused by the store the second time and reaches nobody twice:
 - a moderation case opened: the case; updated: the case and the change (the
   case history entry the update or note wrote), so each update still reaches
   the reporter once, and a retry of the same one does not;
-- a subscription request: the request and the status it reached.
+- a subscription request: the request and the status it reached;
+- a weekly report ready for its parent: the report (digested: its id names
+  both accounts), and for an operator's manual resend also which resend it is
+  (#687). A job or a retry that tells the same report again sends nothing;
+  the operator's third resend is a happening of its own and sends again.
 """
 
 from __future__ import annotations
@@ -221,6 +225,47 @@ class SubscriptionRequestChanged:
         )
 
 
+@dataclass(frozen=True)
+class WeeklyReportReady:
+    """A parent's weekly report about one student is ready (#363, #687); it goes out by email only.
+
+    The report service writes it: `subject` and `html` are the email as the
+    parent reads it, without the unsubscribe line, which the email channel
+    adds. `parent_email` is the address the parent has now, judged by the
+    report service from the current relationship. The report is the
+    student's (`student_id`, under their account fence `generation`): their
+    account's deletion takes the send record with it.
+
+    `resend` is 0 for the report itself and n for an operator's n-th manual
+    resend of it, each a happening of its own.
+    """
+
+    report_id: str
+    parent_id: str
+    parent_email: str
+    student_id: str
+    generation: int
+    subject: str
+    html: str
+    resend: int = 0
+
+    event_type = "weekly_report"
+
+    def __post_init__(self) -> None:
+        for name in ("report_id", "parent_id", "parent_email", "student_id", "subject", "html"):
+            if not str(getattr(self, name) or "").strip():
+                raise ValueError(f"a weekly report needs its {name}")
+        if type(self.generation) is not int or self.generation <= 0:
+            raise ValueError("a weekly report needs its owner's fence generation")
+        if type(self.resend) is not int or self.resend < 0:
+            raise ValueError("a resend is counted from 1")
+
+    @property
+    def event_id(self) -> str:
+        report = f"weekly-report-{_short_digest(self.report_id)}"
+        return f"{report}-resend-{self.resend}" if self.resend else report
+
+
 Happening = (
     TeacherTookHelpRequest
     | TeacherReplied
@@ -231,4 +276,5 @@ Happening = (
     | ModerationCaseOpened
     | ModerationCaseUpdated
     | SubscriptionRequestChanged
+    | WeeklyReportReady
 )
