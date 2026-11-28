@@ -190,6 +190,34 @@ def get_memory_summary(
     user: dict[str, Any],
     subject: str | None = None,
 ) -> dict[str, Any]:
+    return _memory_summary(
+        student_id=student_id,
+        user=user,
+        subject=subject,
+        assignments=_every_assignment(student_id),
+    )
+
+
+def _every_assignment(student_id: str) -> list[dict[str, Any]]:
+    """The student's assignments, archived ones too, newest first: one walk of their index.
+
+    The learning memory, its recommendations and the automation preview all
+    judge from this list. Each read it for itself, and every read walks the
+    student's whole `GSI-StudentId` partition, messages included (#691).
+    """
+    return adaptive_learning_repo.list_assignments(
+        student_id=student_id, include_archived=True, limit=None
+    )
+
+
+def _memory_summary(
+    *,
+    student_id: str,
+    user: dict[str, Any],
+    subject: str | None,
+    assignments: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """The learning memory, judged from `assignments` (`_every_assignment`)."""
     normalized_subject = _safe_subject(subject) if subject else None
     questions = _question_rows(student_id)
     # One evidence value for the whole summary: every snapshot's lessons come
@@ -219,12 +247,11 @@ def get_memory_summary(
         topic_of=_curriculum_topic_of(
             evidence.content.catalog, locale, rows=evidence.content.named_rows
         ),
+        assignments=assignments,
     )
-    assignments = adaptive_learning_repo.list_assignments(
-        student_id=student_id,
-        include_archived=_can_manage_assignments(user),
-        limit=None,
-    )
+    # Archived assignments are counted for those who manage them only.
+    if not _can_manage_assignments(user):
+        assignments = [item for item in assignments if item.get("status") != "archived"]
     return _memory_response(
         student_id=student_id,
         user=user,
@@ -426,8 +453,11 @@ def preview_assignment_automation_batch(
     subject: str | None = None,
 ) -> dict[str, Any]:
     normalized_policy = _automation_policy(policy, student_id=student_id, user=user)
-    summary = get_memory_summary(student_id=student_id, user=user, subject=subject)
-    assignments = adaptive_learning_repo.list_assignments(student_id=student_id, include_archived=True, limit=None)
+    # Read once for the memory, its recommendations and the policy's refusals (#691).
+    assignments = _every_assignment(student_id)
+    summary = _memory_summary(
+        student_id=student_id, user=user, subject=subject, assignments=assignments
+    )
     assignment_state = _assignment_signal_state(assignments)
     selected: list[dict[str, Any]] = []
     refused: list[dict[str, Any]] = []
@@ -1626,8 +1656,8 @@ def _next_practice_recommendations(
     user: dict[str, Any],
     *,
     topic_of: Callable[[str], str],
+    assignments: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    assignments = adaptive_learning_repo.list_assignments(student_id=student_id, include_archived=True, limit=None)
     assignment_state = _assignment_signal_state(assignments)
     signal_index = _sequencing_signal_index(profile, snapshots, subject, topic_of=topic_of)
     drafts = _safe_reviewed_ai_drafts(student_id, user) if _can_manage_assignments(user) else []
