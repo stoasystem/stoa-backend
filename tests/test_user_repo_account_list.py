@@ -308,8 +308,7 @@ def test_the_deletion_tombstone_keeps_no_index_key() -> None:
     """A profile is replaced by a tombstone built from an allowlist; the listing keys
     are not on it, so a closed account leaves GSI-Listing with its profile."""
     assert not set(account_deletion_repo.ACCOUNT_LISTING_FIELDS) & (
-        account_deletion_repo.QUESTION_TOMBSTONE_ALLOWLIST
-        | account_deletion_repo.SESSION_TOMBSTONE_ALLOWLIST
+        account_deletion_repo._profile_tombstone_keeps()
     )
 
 

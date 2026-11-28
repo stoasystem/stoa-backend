@@ -33,9 +33,7 @@ from stoa.services.notifications._account_data import (
     DELIVERY_INTENT_ENTITY,
     get_event,
     get_push_token,
-    scan_notification_private_rows,
     scrub_notification_identity_references,
-    scrub_notification_private_row,
 )
 from stoa.services.notifications._bell import (
     delivery_status,
@@ -99,7 +97,5 @@ __all__ = [
     "DELIVERY_INTENT_ENTITY",
     "get_event",
     "get_push_token",
-    "scan_notification_private_rows",
     "scrub_notification_identity_references",
-    "scrub_notification_private_row",
 ]

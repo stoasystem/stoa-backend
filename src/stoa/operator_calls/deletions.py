@@ -27,8 +27,8 @@ of every operator call. The real run also needs `confirmAccountNumber` equal to
 must not open an account that is being erased) and then accepts the deletion.
 
 Continuation is left to the scheduled deletion job (`stoa.jobs.account_deletion`,
-every five minutes), which finds every pending command by its sweep and runs
-the branches until the deletion completes. Nothing here runs a branch: the audit
+every five minutes), which finds every pending command by its registry row and
+runs the catalog's flow until the deletion completes. Nothing here runs it: the audit
 row is written after the runner returns, and a pass of the pipeline inside this
 invocation could run the function out of time with the deletion accepted and
 neither the audit row nor the answer written.

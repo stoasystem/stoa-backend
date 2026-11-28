@@ -1,17 +1,14 @@
-"""Plan 475-27 teacher identity deletion proof."""
+"""Plan 475-27 teacher identity deletion proof, run through the catalog flow since #642."""
 
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict
-from typing import Any
 
 import pytest
 
+import deletion_helpers
+from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
-from stoa.db.repositories import account_deletion_repo
-from stoa.services import account_deletion_service
-from fakes.dynamodb import from_wire
 
 
 TEACHER_ID = "teacher-deleting"
@@ -82,155 +79,6 @@ def _session(question_id: str, *, question_version: int) -> dict[str, object]:
     }
 
 
-class _TeacherDeletionTable:
-    def __init__(self) -> None:
-        direct = _question("direct", version=7)
-        session = _session("direct", question_version=7)
-        history = _question("history", version=3, status="ai_answered", direct=False)
-        self.rows: dict[tuple[str, str], dict[str, object]] = {
-            (str(direct["PK"]), str(direct["SK"])): direct,
-            (str(session["PK"]), str(session["SK"])): session,
-            (str(history["PK"]), str(history["SK"])): history,
-            (f"USER#{TEACHER_ID}", "ACCOUNT_FENCE"): {
-                "PK": f"USER#{TEACHER_ID}",
-                "SK": "ACCOUNT_FENCE",
-                "status": "deletion_pending",
-                "generation": GENERATION,
-            },
-        }
-        self.scan_count = 0
-        self.cas_raced = False
-        self.transactions: list[list[dict[str, Any]]] = []
-
-    def scan(self, **kwargs: object) -> dict[str, object]:
-        assert kwargs.get("ConsistentRead") is True
-        assert "IndexName" not in kwargs
-        self.scan_count += 1
-        if self.scan_count == 3:
-            late = _question("late", version=2)
-            self.rows[(str(late["PK"]), str(late["SK"]))] = late
-        return {"Items": [deepcopy(row) for row in self.rows.values()]}
-
-    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
-        operations = from_wire(TransactItems)
-        self.transactions.append(deepcopy(operations))
-        assert len(operations) == 2
-        fence = operations[0]["ConditionCheck"]
-        assert fence["Key"] == {
-            "PK": f"USER#{TEACHER_ID}",
-            "SK": "ACCOUNT_FENCE",
-        }
-        assert fence["ExpressionAttributeValues"] == {
-            ":pending": "deletion_pending",
-            ":generation": GENERATION,
-        }
-        if "Update" in operations[1]:
-            self._apply_question_scrub(operations[1]["Update"])
-        else:
-            self._apply_session_tombstone(operations[1]["Put"])
-
-    def _apply_question_scrub(self, update: dict[str, Any]) -> None:
-        key = update["Key"]
-        current = self.rows[(key["PK"], key["SK"])]
-        values = update["ExpressionAttributeValues"]
-        condition = update["ConditionExpression"]
-        assert all(
-            fragment in condition
-            for fragment in (
-                "PK=:pk",
-                "SK=:sk",
-                "entity_type=:entity",
-                "schema_version=:schema",
-                "student_id=:student",
-                "#status=:status",
-                "#version=:version",
-                "teacher_id=:teacher",
-                "dispatched_teacher_id=:teacher",
-                "contains(previous_dispatch_teacher_ids,:teacher)",
-            )
-        )
-        if key == {"PK": "QUESTION#direct", "SK": "META"} and not self.cas_raced:
-            self.cas_raced = True
-            current["status"] = "resolved"
-            current["version"] = 8
-            current["concurrent_student_note"] = "must survive"
-            raise account_deletion_repo.AccountDeletionConflict(
-                "conditional teacher-question cleanup conflict"
-            )
-        assert current["PK"] == values[":pk"]
-        assert current["SK"] == values[":sk"]
-        assert current["entity_type"] == values[":entity"]
-        assert current["schema_version"] == values[":schema"]
-        assert current["student_id"] == values[":student"]
-        assert current["status"] == values[":status"]
-        assert current["version"] == values[":version"]
-        previous_dispatch_teacher_ids = current.get("previous_dispatch_teacher_ids", [])
-        assert isinstance(previous_dispatch_teacher_ids, list)
-        assert (
-            current.get("teacher_id") == values[":teacher"]
-            or current.get("dispatched_teacher_id") == values[":teacher"]
-            or values[":teacher"]
-            in previous_dispatch_teacher_ids
-        )
-        expression = update["UpdateExpression"]
-        current["version"] = values[":next_version"]
-        if ":next_status" in values:
-            current["status"] = values[":next_status"]
-        if ":next_history" in values:
-            current["previous_dispatch_teacher_ids"] = deepcopy(
-                values[":next_history"]
-            )
-        for field in (
-            "teacher_id",
-            "teacher_takeover_claim_id",
-            "session_id",
-            "teacher_started_at",
-            "teacher_taken_over_at",
-            "teacher_first_replied_at",
-            "teacher_first_reply_seconds",
-            "teacher_first_reply_sla_bucket",
-            "dispatched_teacher_id",
-            "dispatch_accepted_at",
-            "dispatch_deadline_at",
-        ):
-            if f"#{field}" in expression:
-                current.pop(field, None)
-        if ":closed_dispatch" in values:
-            current["dispatch_status"] = values[":closed_dispatch"]
-
-    def _apply_session_tombstone(self, put: dict[str, Any]) -> None:
-        tombstone = put["Item"]
-        key = (str(tombstone["PK"]), str(tombstone["SK"]))
-        current = self.rows[key]
-        values = put["ExpressionAttributeValues"]
-        condition = put["ConditionExpression"]
-        assert all(
-            fragment in condition
-            for fragment in (
-                "PK=:pk",
-                "SK=:sk",
-                "entity_type=:entity",
-                "session_id=:session_id",
-                "question_id=:question_id",
-                "student_id=:student",
-                "teacher_id=:teacher",
-                "teacher_takeover_claim_id=:claim",
-                "question_version=:question_version",
-            )
-        )
-        assert current["PK"] == values[":pk"]
-        assert current["SK"] == values[":sk"]
-        assert current["entity_type"] == values[":entity"]
-        assert current["session_id"] == values[":session_id"]
-        assert current["question_id"] == values[":question_id"]
-        assert current["student_id"] == values[":student"]
-        assert current["teacher_id"] == values[":teacher"]
-        assert current["teacher_takeover_claim_id"] == values[":claim"]
-        assert current["question_version"] == values[":question_version"]
-        assert set(tombstone) <= account_deletion_repo.SESSION_TOMBSTONE_ALLOWLIST
-        self.rows[key] = deepcopy(tombstone)
-
-
 def _retained_question_snapshot(item: dict[str, object]) -> dict[str, object]:
     return {
         field: deepcopy(item[field])
@@ -248,67 +96,72 @@ def _retained_question_snapshot(item: dict[str, object]) -> dict[str, object]:
     }
 
 
-def test_teacher_identity_scrub_preserves_student_question_and_requires_two_clean_epochs(
-    monkeypatch: pytest.MonkeyPatch,
+def test_teacher_identity_scrub_preserves_student_question_and_retries_a_moved_question(
+    fake_table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    table = _TeacherDeletionTable()
+    """The teacher's whole deletion, as production runs it (#642).
+
+    The student's questions keep everything that is the student's; only the
+    teacher's name goes. A question that moves between the read and the write
+    is refused by its version and scrubbed again by a later pass, keeping what
+    changed. The teacher's session becomes the catalog's tombstone.
+    """
+    direct = _question("direct", version=7)
+    session = _session("direct", question_version=7)
+    history = _question("history", version=3, status="ai_answered", direct=False)
+    fake_table.seed(direct, session, history)
+    deletion_helpers.register(fake_table, direct, session, history)
+    deletion_helpers.active_fence(fake_table, TEACHER_ID, generation=GENERATION)
     retained = {
         key: _retained_question_snapshot(row)
-        for key, row in table.rows.items()
+        for key, row in fake_table.rows.items()
         if row.get("entity_type") == "question"
     }
-    db_table.install(table)
 
-    branch = account_deletion_service.BRANCH_HANDLERS["question_ocr_session"]
-    command = {"user_id": TEACHER_ID, "generation": GENERATION}
-    results = []
-    previous: dict[str, object] = {}
-    for _ in range(5):
-        result = branch(command=command, previous=previous)
-        results.append(result)
-        previous = asdict(result)
+    real_transact = db_table.transact
+    raced: list[bool] = []
 
-    assert table.cas_raced is True
-    assert [(result.status, result.epoch) for result in results] == [
-        ("retryable", 0),
-        ("retryable", 0),
-        ("retryable", 0),
-        ("retryable", 1),
-        ("complete", 2),
-    ]
-    assert results[-1].quiescent is True
+    def transact(operations, *, table=None):
+        touches_direct = any(
+            (op.get("Update") or {}).get("Key") == {"PK": "QUESTION#direct", "SK": "META"}
+            for op in operations
+        )
+        if touches_direct and not raced:
+            raced.append(True)
+            row = fake_table.rows[("QUESTION#direct", "META")]
+            row.update(status="resolved", version=8, concurrent_student_note="must survive")
+        return real_transact(operations, table=table)
 
-    direct = table.rows[("QUESTION#direct", "META")]
+    monkeypatch.setattr(db_table, "transact", transact)
+
+    command = deletion_helpers.delete_account(TEACHER_ID)
+
+    assert raced
+    assert command["status"] == "complete"
+
+    direct = fake_table.rows[("QUESTION#direct", "META")]
     assert direct["status"] == "resolved"
     assert direct["version"] == 9
     assert direct["concurrent_student_note"] == "must survive"
     assert _retained_question_snapshot(direct) == retained[("QUESTION#direct", "META")]
 
-    history = table.rows[("QUESTION#history", "META")]
+    history = fake_table.rows[("QUESTION#history", "META")]
     assert history["status"] == "ai_answered"
     assert history["version"] == 4
     assert history["previous_dispatch_teacher_ids"] == [OTHER_TEACHER_ID]
     assert _retained_question_snapshot(history) == retained[("QUESTION#history", "META")]
 
-    late = table.rows[("QUESTION#late", "META")]
-    assert late["status"] == "resolved"
-    assert late["version"] == 3
-
-    for item in table.rows.values():
+    for item in fake_table.rows.values():
+        if owner_registry.is_registry_row(item):
+            continue
         assert item.get("teacher_id") != TEACHER_ID
         assert item.get("dispatched_teacher_id") != TEACHER_ID
-        previous_dispatch_teacher_ids = item.get("previous_dispatch_teacher_ids", [])
-        assert isinstance(previous_dispatch_teacher_ids, list)
-        assert TEACHER_ID not in previous_dispatch_teacher_ids
-        assert item.get("teacher_takeover_claim_id") not in {
-            "claim-direct",
-            "claim-late",
-        }
+        assert TEACHER_ID not in item.get("previous_dispatch_teacher_ids", [])
+        assert item.get("teacher_takeover_claim_id") != "claim-direct"
         if item.get("entity_type") == "question":
-            assert item.get("session_id") not in {"session-direct", "session-late"}
+            assert item.get("session_id") != "session-direct"
 
-    session = table.rows[("SESSION#session-direct", "META")]
-    assert set(session) <= account_deletion_repo.SESSION_TOMBSTONE_ALLOWLIST
-    assert session["entity_type"] == "teacher_session_deletion_tombstone"
+    session = fake_table.rows[("SESSION#session-direct", "META")]
+    assert set(session) <= data_catalog.DELETIONS["teacher_session"].owner.keeps
     assert session["status"] == "deleted"
     assert TEACHER_ID not in repr(session)

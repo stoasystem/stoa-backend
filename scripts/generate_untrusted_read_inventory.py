@@ -9,34 +9,11 @@ from dataclasses import dataclass
 from hashlib import sha256
 import json
 from pathlib import Path
-import subprocess
 import sys
 from typing import Any, Iterable
 
-from sealed_test_renames import current_selector
-
 
 SCHEMA_VERSION = "phase-473-boundary-inventory.v1"
-PRIVATE_SCHEMA_VERSION = "phase-473-private-store-inventory.v1"
-EXPECTED_BRANCHES = (
-    "account_profile",
-    "identity_cross_account",
-    "capability_scope",
-    "question_ocr_session",
-    "attachments",
-    "moderation",
-    "report_records",
-    "report_artifacts",
-    "support_recovery_feed",
-    "conversation_messages",
-    "practice_progress",
-    "adaptive_assignment",
-    "learning_memory",
-    "ai_teacher_draft",
-    "curriculum_signal",
-    "notification_device_realtime",
-    "external_delivery_debt",
-)
 REQUIREMENTS = ("V9PRIV-01", "V9PRIV-02", "V9PRIV-03")
 
 
@@ -224,19 +201,6 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         decisions=("D-10", "D-13", "D-17"),
     )
     + _flows(
-        file="src/stoa/services/account_deletion_service.py",
-        symbol="load_private_store_seal",
-        call="json.loads",
-        fields=(
-            ("schema_version", "literal", "load_private_store_seal", "exact_schema_version"),
-            ("branch_ids", "exact_list[str]", "load_private_store_seal", "exact_17_branch_order"),
-            ("branch_registry", "list[object]", "load_private_store_seal", "closed_branch_contract"),
-        ),
-        fake="src/stoa/services/account_deletion_service.py:Path.read_bytes",
-        selector="tests/test_account_deletion_seal.py::test_finalizer_rejects_every_incomplete_or_dishonest_seal",
-        decisions=("D-10", "D-13", "D-17"),
-    )
-    + _flows(
         file="src/stoa/services/practice_projection_service.py",
         symbol="build_attempt_result",
         call="practice_repo.get_attempt_receipt",
@@ -316,7 +280,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
             ("branch_results_digest", "sha256_hex", "_claim_from_command", "exact_64_hex_digest"),
         ),
         fake="src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-        selector="tests/test_account_deletion_claim_race.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+        selector="tests/test_account_deletion_claim_race.py::test_claim_compares_stored_expiry_with_distinct_current_epoch",
         decisions=("D-10", "D-16", "D-17"),
     )
     + _flows(
@@ -326,18 +290,6 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         fields=(("now_epoch", "positive_int", "_positive_int", "type_is_int_not_bool_positive"),),
         fake="src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
         selector="tests/test_account_deletion_claim_race.py::test_claim_compares_stored_expiry_with_distinct_current_epoch",
-        decisions=("D-10", "D-16", "D-17"),
-    )
-    + _flows(
-        file="src/stoa/db/repositories/account_deletion_repo.py",
-        symbol="persist_branch_result",
-        call="deletion command strong row",
-        fields=(
-            ("branch_results", "mapping", "branch_results_digest", "canonical_mapping_only"),
-            ("updated_at", "utc_iso8601", "_valid_lifecycle_timestamp", "nonblank_timezone_aware_utc"),
-        ),
-        fake="src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-        selector="tests/test_account_deletion_claim_race.py::test_repository_rejects_invalid_lifecycle_timestamps",
         decisions=("D-10", "D-16", "D-17"),
     )
     + _flows(
@@ -405,7 +357,7 @@ FINDING_REGISTRY = (
     {
         "finding_id": "CR-01",
         "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.update_item",
-        "runtime_selector": "tests/test_account_deletion_claim_race.py::test_branch_result_cas_requires_owner_version_digest_and_returns_next_claim",
+        "runtime_selector": "tests/test_account_deletion_claim_race.py::test_lease_renewal_requires_owner_version_digest_and_returns_next_claim",
         "observed_assertion": "owner/version/digest/current-lease conditions and advancing claim",
     },
     {
@@ -566,7 +518,9 @@ def validate_taint_semantics(root: Path | str) -> None:
 
 def discover_dataflows(root: Path | str) -> list[dict[str, Any]]:
     root = Path(root).resolve()
-    complete = (root / "docs/security/phase-473-private-store-inventory.json").is_file()
+    # A whole checkout carries the checked inventory; a partial tree a test builds
+    # does not, and is read for what it holds.
+    complete = (root / "docs/security/untrusted-read-inventory.json").is_file()
     parsed: dict[str, tuple[ast.Module, dict[str, ast.FunctionDef | ast.AsyncFunctionDef]]] = {}
     rows: list[dict[str, Any]] = []
     def symbol_at(file: str, name: str) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
@@ -634,91 +588,6 @@ def discover_dataflows(root: Path | str) -> list[dict[str, Any]]:
     return rows
 
 
-def _selector_exists(root: Path, selector: str) -> bool:
-    file_name, separator, node = selector.partition("::")
-    if not separator or not node or "[" in node:
-        return False
-    path = root / file_name
-    if not path.is_file():
-        return False
-    try:
-        functions = _symbol_nodes(ast.parse(path.read_text(), filename=file_name))
-    except (OSError, SyntaxError):
-        return False
-    return node in functions
-
-
-def compose_private_store_inventory(root: Path | str, payload: dict[str, Any]) -> dict[str, Any]:
-    root = Path(root).resolve()
-    checked_path = root / "docs/security/phase-473-private-store-inventory.json"
-    if not checked_path.is_file():
-        raise ValueError("checked private-store inventory is missing")
-    checked = json.loads(checked_path.read_text())
-    if payload != checked:
-        raise ValueError("private-store checked projection drift")
-    if payload.get("schema_version") != PRIVATE_SCHEMA_VERSION:
-        raise ValueError("private-store schema mismatch")
-    if tuple(payload.get("branch_ids", ())) != EXPECTED_BRANCHES:
-        raise ValueError("private-store branch set mismatch")
-    expected_ids = sorted(row["row_id"] for row in checked.get("rows", ()))
-    actual_rows = payload.get("rows")
-    if not isinstance(actual_rows, list):
-        raise ValueError("private-store rows missing")
-    actual_ids = sorted(row.get("row_id") for row in actual_rows)
-    if actual_ids != expected_ids or len(actual_ids) != len(set(actual_ids)):
-        raise ValueError("private-store read/write join mismatch")
-    for row in actual_rows:
-        for key in ("source", "store", "owner_resolver", "fence_checkpoint", "purge_selector", "no_resurrection_selector"):
-            if not row.get(key):
-                raise ValueError(f"private-store join missing {key}")
-        if row["fence_checkpoint"] != "USER#{owner_id}/ACCOUNT_FENCE:active:generation":
-            raise ValueError("private-store parallel fence mapping")
-        if row.get("classification") == "private_store" and not row.get("branch_id"):
-            raise ValueError("private-store join missing branch_id")
-        for selector_key in ("purge_selector", "no_resurrection_selector"):
-            # The seal keeps its 2026-07 test file names; resolve today's.
-            if not _selector_exists(root, current_selector(row[selector_key])):
-                raise ValueError(f"private-store selector missing: {row[selector_key]}")
-    registry = payload.get("branch_registry")
-    if not isinstance(registry, list) or [row.get("branch_id") for row in registry] != list(EXPECTED_BRANCHES):
-        raise ValueError("private-store branch registry drift")
-    finding_ids = [row.get("finding_id") for row in payload.get("finding_registry", ())]
-    if finding_ids != ["CR-01", "CR-02", "WR-01", "WR-02", "WR-03"]:
-        raise ValueError("private-store finding registry drift")
-    return {
-        "schema_version": PRIVATE_SCHEMA_VERSION,
-        "inventory_sha256": sha256(checked_path.read_bytes()).hexdigest(),
-        "row_count": len(actual_rows),
-        "write_ids": actual_ids,
-        "branch_ids": list(EXPECTED_BRANCHES),
-        "finding_ids": finding_ids,
-        "source_digests": sorted(
-            {
-                row["source"]["normalized_ast_sha256"]
-                for row in actual_rows
-                if isinstance(row.get("source"), dict)
-            }
-        ),
-    }
-
-
-def _run_private_checker(root: Path) -> None:
-    checker = root / "scripts/generate_private_store_inventory.py"
-    inventory = root / "docs/security/phase-473-private-store-inventory.json"
-    if not checker.is_file() or not inventory.is_file():
-        return
-    result = subprocess.run(
-        [sys.executable, str(checker), "--root", str(root), "--check"],
-        cwd=root,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode:
-        detail = (result.stderr or result.stdout).strip()
-        raise BoundaryViolation(f"private-store checker failed: {detail}")
-
-
 def require_lower_fake_observed(counters: dict[str, int], target: str) -> None:
     value = counters.get(target)
     if type(value) is not int or value <= 0:
@@ -729,11 +598,6 @@ def build_inventory(root: Path | str) -> dict[str, Any]:
     root = Path(root).resolve()
     validate_taint_semantics(root)
     rows = discover_dataflows(root)
-    private_path = root / "docs/security/phase-473-private-store-inventory.json"
-    composition: dict[str, Any] | None = None
-    if private_path.is_file():
-        _run_private_checker(root)
-        composition = compose_private_store_inventory(root, json.loads(private_path.read_text()))
     source_files = [
         {
             "file": file,
@@ -753,7 +617,6 @@ def build_inventory(root: Path | str) -> dict[str, Any]:
         "rows": rows,
         "source_files": source_files,
         "finding_registry": [dict(finding) for finding in FINDING_REGISTRY],
-        "private_store_composition": composition,
     }
 
 

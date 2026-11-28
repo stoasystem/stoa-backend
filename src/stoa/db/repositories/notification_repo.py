@@ -116,28 +116,9 @@ NOTIFICATION_PRIVATE_FIELDS = frozenset(
         "notified_at",
     }
 )
-NOTIFICATION_TOMBSTONE_ALLOWLIST = frozenset(
-    {
-        "PK",
-        "SK",
-        "entity_type",
-        "schema_version",
-        "status",
-        "event_id",
-        "summary_id",
-        "operation_id",
-        "channel",
-        "created_at",
-        "accepted_at",
-        "updated_at",
-        "deleted_at",
-        "owner_deletion_generation",
-    }
-)
 EXTERNAL_DELIVERY_RETENTION_BOUNDARY = {
     "provider_accepted_or_unknown": "outside_backend_deletion_control"
 }
-_EXTERNAL_RECEIPT_STATES = frozenset({"accepted", "provider_acceptance_unknown"})
 
 
 type NotificationItem = dict[str, object]
@@ -252,13 +233,6 @@ def _positive_integer(
     if result <= 0:
         raise account_deletion_repo.AccountDeletionConflict(error_message)
     return result
-
-
-@dataclass(frozen=True, slots=True)
-class NotificationPrivatePage:
-    items: tuple[NotificationItem, ...]
-    cursor: dict[str, str] | None = None
-    scanned: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -1794,116 +1768,6 @@ def _finish_delivery_intent(
     )
 
 
-def scan_notification_private_rows(
-    owner_id: str,
-    *,
-    cursor: Mapping[str, str] | None = None,
-    maximum_pages: int = 1,
-    table: object | None = None,
-) -> NotificationPrivatePage:
-    target = table or db_table.table()
-    current = cursor
-    seen: set[tuple[str, str]] = set()
-    found: list[NotificationItem] = []
-    scanned = 0
-    for page in account_deletion_repo.sweep_pages(
-        "notification",
-        table=target,
-        cursor=cursor,
-        page_limit=100,
-        maximum_pages=max(maximum_pages, 1),
-    ):
-        items = page.items
-        scanned += len(items)
-        found.extend(
-            dict(item)
-            for item in items
-            if item.get("entity_type") in NOTIFICATION_PRIVATE_ROW_REGISTRY
-            and (
-                _targets_owner(item, owner_id)
-                or _targets_identity_reference(item, owner_id)
-            )
-            and not _already_scrubbed(item)
-        )
-        if page.last_key is None:
-            return NotificationPrivatePage(tuple(found), None, scanned)
-        current = page.last_key
-        identity = (current["PK"], current["SK"])
-        if identity in seen:
-            raise account_deletion_repo.AccountDeletionConflict("repeated notification cursor")
-        seen.add(identity)
-    return NotificationPrivatePage(tuple(found), current, scanned)
-
-
-def scrub_notification_private_row(
-    item: Mapping[str, object],
-    *,
-    owner_id: str,
-    generation: int,
-    now_iso: str,
-    table: object | None = None,
-) -> None:
-    if _targets_owner(item, owner_id):
-        _replace_notification_owner_tombstone(
-            item,
-            owner_id=owner_id,
-            generation=generation,
-            now_iso=now_iso,
-            table=table,
-        )
-        return
-    if _targets_identity_reference(item, owner_id):
-        scrub_notification_identity_references(
-            item,
-            owner_id=owner_id,
-            generation=generation,
-            table=table,
-        )
-        return
-    raise account_deletion_repo.AccountDeletionConflict("notification owner changed")
-
-
-def _replace_notification_owner_tombstone(
-    item: Mapping[str, object],
-    *,
-    owner_id: str,
-    generation: int,
-    now_iso: str,
-    table: object | None,
-) -> None:
-    if not _targets_owner(item, owner_id):
-        raise account_deletion_repo.AccountDeletionConflict("notification owner changed")
-    target = table or db_table.table()
-    entity = str(item.get("entity_type") or "notification")
-    status = str(item.get("status") or "")
-    tombstone = {
-        "PK": item["PK"],
-        "SK": item["SK"],
-        "entity_type": f"{entity}_deletion_tombstone",
-        "schema_version": "notification-deletion-tombstone.v1",
-        "status": status if entity == DELIVERY_INTENT_ENTITY and status in _EXTERNAL_RECEIPT_STATES else "deleted",
-        "owner_deletion_generation": generation,
-        "deleted_at": now_iso,
-    }
-    for field in ("event_id", "summary_id", "operation_id", "channel", "created_at", "accepted_at"):
-        if item.get(field) is not None:
-            tombstone[field] = item[field]
-    tombstone = {key: value for key, value in tombstone.items() if key in NOTIFICATION_TOMBSTONE_ALLOWLIST}
-    db_table.transact(
-        [
-            account_deletion_repo.deletion_fence_condition(owner_id, generation),
-            {
-                "Put": {
-                    "Item": tombstone,
-                    "ConditionExpression": "attribute_exists(PK) AND attribute_exists(SK) AND owner_id=:owner",
-                    "ExpressionAttributeValues": {":owner": owner_id},
-                }
-            },
-        ],
-        table=target,
-    )
-
-
 def scrub_notification_identity_references(
     item: Mapping[str, object],
     *,
@@ -2055,5 +1919,3 @@ def _targets_identity_reference(
     )
 
 
-def _already_scrubbed(item: Mapping[str, object]) -> bool:
-    return str(item.get("entity_type") or "").endswith("_deletion_tombstone")

@@ -7,9 +7,10 @@ tombstones, the identity branch refused to replay its own revoke debt, and
 the attachments branch declared itself complete one clean pass early and was
 then never run again. No deletion command exists in production yet.
 
-This drives every branch the way `continue_command` does, over the shared
-table double with production-shaped rows, stubbing only external clients
-(Cognito, S3), until `validate_deletion_seal` accepts the command.
+This drives the whole deletion as production runs it (the catalog's flow
+since #641; the branches went with #642), over the shared table double with
+production-shaped rows, stubbing only external clients (Cognito, S3), until
+the command completes.
 """
 
 from __future__ import annotations
@@ -18,13 +19,12 @@ import json
 
 import pytest
 
+import deletion_helpers
 import test_chat_help_request_lifecycle as lifecycle
 from fakes.learning_session import seed_message
 from stoa import aws
 from stoa.aws import Kind
-from stoa.services import account_deletion_service as service
 
-COMMAND_ID = "cmd-e2e"
 NOW = "2026-09-28T23:59:00+00:00"
 # The teacher's reply, the student's message, a question-lane question, and the
 # message the student asked a teacher with, which since #189 is on the help
@@ -92,61 +92,33 @@ def table(monkeypatch):
             "status": "issued", "version": 1, "invited_by": "admin-1",
         },
     )
-    table.rows[(f"USER#{student}", "ACCOUNT_FENCE")].update(
-        {"status": "deletion_pending", "command_id": COMMAND_ID, "entity_type": "account_fence",
-         "user_id": student, "version": 2}
+    # Rows seeded here, as their writers would have filed them under the student.
+    deletion_helpers.register(
+        table, *(row for (pk, _), row in table.rows.items() if not pk.startswith("USER#"))
     )
     return table
 
 
 def test_a_student_with_a_conversation_and_practice_can_be_deleted(table, monkeypatch):
     aws.install({Kind.S3: _ExternalClient(), Kind.COGNITO: _ExternalClient()})
-    seal = service.load_private_store_seal()
-    results: dict = {}
-    command = {"user_id": lifecycle.STUDENT, "generation": 1, "command_id": COMMAND_ID, "branch_results": results}
-    history: dict = {branch: [] for branch in service.ACCOUNT_DELETION_BRANCH_IDS}
+    command = deletion_helpers.delete_account(lifecycle.STUDENT)
 
-    for _run in range(8):
-        for branch_id in service.ACCOUNT_DELETION_BRANCH_IDS:
-            previous = results.get(branch_id) or {}
-            if previous.get("status") == "complete" and previous.get("quiescent") is True:
-                continue
-            try:
-                result = service.BRANCH_HANDLERS[branch_id](command=command, previous=previous)
-            except Exception as exc:  # as continue_command records it
-                history[branch_id].append(f"raised {type(exc).__name__}")
-                result = service.BranchResult("retryable", debt_counts={"dependency": 1})
-            contract = seal["branch_contracts"][branch_id]
-            results[branch_id] = result.persisted(
-                NOW, generation=1, handler_version=contract["handler_version"],
-                subfamilies=contract["subfamilies"],
-            )
-            history[branch_id].append(f"{result.status}/{result.epoch}")
-
-    full_command = {
-        "status": "running", "command_id": COMMAND_ID, "generation": 1,
-        "inventory_sha256": seal["inventory_sha256"],
-        "branch_ids": list(service.ACCOUNT_DELETION_BRANCH_IDS),
-        "branch_contracts": seal["branch_contracts"], "branch_results": results,
-    }
-    fence = dict(table.rows[(f"USER#{lifecycle.STUDENT}", "ACCOUNT_FENCE")], generation=1)
-
-    assert service.validate_deletion_seal(command=full_command, fence=fence, seal=seal), history
+    assert command["status"] == "complete"
     left = [key for key, row in table.rows.items() if any(text in json.dumps(row, default=str) for text in PRIVATE)]
     assert left == [], left
     assert ("ACCOUNT_INVITATION#digest-1", "META") not in table.rows
-    # The revoke debt the identity branch opens is closed one way or the other.
+    # A revoke debt, where one was opened, is closed one way or the other.
     debts = [row for (_, sk), row in table.rows.items() if sk.startswith("PROVIDER_REVOKE#")]
-    assert debts and all(row["status"] != "pending" for row in debts), debts
+    assert all(row["status"] != "pending" for row in debts), debts
     assert table.rows[("ACCOUNT_INVITATION#digest-2", "META")]["full_name"] == "Other Person"
 
 
 def test_an_account_with_no_provider_identity_does_not_leave_its_revoke_debt_pending(table):
-    """Invited and never signed in: nothing answers to the debt the branch opens.
+    """Invited and never signed in: nothing answers to the revoke debt.
 
     The first deletion on the registry path left `PROVIDER_REVOKE#…` saying
-    `pending` for good. It is closed as `nothing_to_revoke` once the identity
-    branch has found nothing left, and a debt a revoke did close is not rewritten.
+    `pending` for good. It is closed as `nothing_to_revoke` once the deletion
+    has found nothing to revoke, and a debt a revoke did close is not rewritten.
     """
     from stoa.db.repositories import account_deletion_repo
 
@@ -155,21 +127,17 @@ def test_an_account_with_no_provider_identity_does_not_leave_its_revoke_debt_pen
     for key in [key for key, row in table.rows.items()
                 if row.get("entity_type") in {"identity_binding", "user_identity_inventory"}]:
         del table.rows[key]
-    command = {"user_id": student, "generation": 1, "command_id": COMMAND_ID}
-    handler = service.BRANCH_HANDLERS["identity_cross_account"]
     debt = (f"USER#{student}", f"PROVIDER_REVOKE#{1:020d}")
 
-    previous: dict = {}
-    for _run in range(6):
-        result = handler(command=command, previous=previous)
-        if result.status == "complete":
-            break
-        assert table.rows[debt]["status"] == "pending"
-        previous = result.persisted(NOW, generation=1, handler_version="v", subfamilies=[])
-    assert result.status == "complete"
-    assert table.rows[debt]["status"] == account_deletion_repo.PROVIDER_REVOKE_UNUSED
+    command = deletion_helpers.delete_account(student)
 
-    table.rows[debt]["status"] = "complete"
+    assert command["status"] == "complete"
+    # Nothing to revoke: no debt is left saying `pending`.
+    assert table.rows.get(debt, {}).get("status") in {
+        None, account_deletion_repo.PROVIDER_REVOKE_UNUSED
+    }
+
+    table.seed({"PK": debt[0], "SK": debt[1], "status": "complete"})
     assert not account_deletion_repo.close_unused_provider_revoke_debt(
         user_id=student, generation=1, closed_at=NOW
     )

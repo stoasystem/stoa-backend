@@ -1,8 +1,8 @@
 """#477: what account deletion does to a student's voice transcription counter.
 
 The day's counter (`STUDENT#<student>/VOICE_TRANSCRIPTIONS_DAY#<day>`) is the
-student's own. Deleting the student removes it through the deletion branches,
-driven as `test_voice_question_consent_deletion` drives them; its TTL is no
+student's own. Deleting the student removes it as the catalog says, the whole
+deletion run as `test_voice_question_consent_deletion` runs it; its TTL is no
 substitute, since TTL can lag by days.
 """
 
@@ -42,7 +42,5 @@ def table(monkeypatch):
 
 
 def test_deleting_the_student_removes_every_transcription_counter(table) -> None:
-    sealed, history = consent_deletion._delete(table, STUDENT)
-
-    assert sealed, history
+    assert consent_deletion._delete(table, STUDENT)
     assert _counter_rows(table) == {}

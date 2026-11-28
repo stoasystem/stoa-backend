@@ -1,10 +1,10 @@
 """#476: what account deletion does to a child's voice questions consent rows.
 
 The switch and its change records live in the student's own partition
-(`STUDENT#<student>`). Each test drives every deletion branch the way
-`continue_command` does, over the shared table double, until
-`validate_deletion_seal` accepts the command, as `test_student_deletion_seals`
-does; only external clients (Cognito, S3) are stubbed.
+(`STUDENT#<student>`). Each test runs the whole deletion as production does
+(the catalog's flow, #641/#642), over the shared table double, until the command
+completes, as `test_student_deletion_seals` does; only external clients
+(Cognito, S3) are stubbed.
 
 - Deleting the student removes the switch and every change record.
 - Deleting a parent leaves the child's switch and record as they were,
@@ -16,18 +16,13 @@ from __future__ import annotations
 
 import pytest
 
+import deletion_helpers
 import test_chat_help_request_lifecycle as lifecycle
 from stoa import aws
 from stoa.aws import Kind
 from stoa.db.repositories import voice_question_consent_repo
-from stoa.services import (
-    account_deletion_service as service,
-    current_relationship,
-    parent_link_service,
-    voice_questions,
-)
+from stoa.services import current_relationship, parent_link_service, voice_questions
 
-COMMAND_ID = "cmd-voice"
 NOW = "2026-11-17T23:59:00+00:00"
 STUDENT = lifecycle.STUDENT
 PARENT = "parent-66"
@@ -94,47 +89,14 @@ def table(monkeypatch):
     return table
 
 
-def _delete(table, user_id: str) -> tuple[bool, dict]:
-    """Run every branch for `user_id` until the seal holds; return the verdict and history."""
-    table.rows[(f"USER#{user_id}", "ACCOUNT_FENCE")].update(
-        {"status": "deletion_pending", "command_id": COMMAND_ID, "entity_type": "account_fence",
-         "user_id": user_id, "version": 2}
-    )
+def _delete(table, user_id: str) -> bool:
+    """Run `user_id`'s whole deletion; whether it completed."""
     aws.install({Kind.S3: _ExternalClient(), Kind.COGNITO: _ExternalClient()})
-    seal = service.load_private_store_seal()
-    results: dict = {}
-    command = {"user_id": user_id, "generation": 1, "command_id": COMMAND_ID, "branch_results": results}
-    history: dict = {branch: [] for branch in service.ACCOUNT_DELETION_BRANCH_IDS}
-    for _run in range(8):
-        for branch_id in service.ACCOUNT_DELETION_BRANCH_IDS:
-            previous = results.get(branch_id) or {}
-            if previous.get("status") == "complete" and previous.get("quiescent") is True:
-                continue
-            try:
-                result = service.BRANCH_HANDLERS[branch_id](command=command, previous=previous)
-            except Exception as exc:  # as continue_command records it
-                history[branch_id].append(f"raised {type(exc).__name__}")
-                result = service.BranchResult("retryable", debt_counts={"dependency": 1})
-            contract = seal["branch_contracts"][branch_id]
-            results[branch_id] = result.persisted(
-                NOW, generation=1, handler_version=contract["handler_version"],
-                subfamilies=contract["subfamilies"],
-            )
-            history[branch_id].append(f"{result.status}/{result.epoch}")
-    full_command = {
-        "status": "running", "command_id": COMMAND_ID, "generation": 1,
-        "inventory_sha256": seal["inventory_sha256"],
-        "branch_ids": list(service.ACCOUNT_DELETION_BRANCH_IDS),
-        "branch_contracts": seal["branch_contracts"], "branch_results": results,
-    }
-    fence = dict(table.rows[(f"USER#{user_id}", "ACCOUNT_FENCE")], generation=1)
-    return service.validate_deletion_seal(command=full_command, fence=fence, seal=seal), history
+    return deletion_helpers.delete_account(user_id)["status"] == "complete"
 
 
 def test_deleting_the_student_removes_the_switch_and_every_change_record(table) -> None:
-    sealed, history = _delete(table, STUDENT)
-
-    assert sealed, history
+    assert _delete(table, STUDENT)
     assert _consent_rows(table) == {}
     left = [
         key for key, row in table.rows.items()
@@ -146,9 +108,7 @@ def test_deleting_the_student_removes_the_switch_and_every_change_record(table) 
 def test_deleting_a_parent_leaves_the_childs_switch_and_record_naming_that_parent(table) -> None:
     before = {key: dict(row) for key, row in _consent_rows(table).items()}
 
-    sealed, history = _delete(table, PARENT)
-
-    assert sealed, history
+    assert _delete(table, PARENT)
     after = _consent_rows(table)
     assert after == before
     state = after[(f"STUDENT#{STUDENT}", voice_question_consent_repo.STATE_SK)]

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 
-from stoa.db import data_catalog, listing_index, owner_registry
+from stoa.db import listing_index, owner_registry
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -43,24 +42,6 @@ MODERATION_PRIVATE_FIELDS = frozenset(
         "image_sha256",
     }
 )
-MODERATION_TOMBSTONE_ALLOWLIST = frozenset(
-    {
-        "PK",
-        "SK",
-        "entity_type",
-        "schema_version",
-        "case_id",
-        "event_id",
-        "question_id",
-        "event_type",
-        "status",
-        "privacy_deleted",
-        "privacy_generation",
-        "created_at",
-        "updated_at",
-        "deleted_at",
-    }
-)
 
 
 # The admin queue, the image retention and the operator's review count read
@@ -79,13 +60,6 @@ def listing_fields(item: Mapping[str, Any]) -> dict[str, str]:
     if not isinstance(created_at, str) or not created_at:
         return {}
     return {"listing": CASE_LISTING, "listed_at": created_at}
-
-
-@dataclass(frozen=True, slots=True)
-class ModerationPrivatePage:
-    items: tuple[dict[str, Any], ...]
-    cursor: dict[str, str] | None = None
-    unresolved: int = 0
 
 
 @runtime_checkable
@@ -215,147 +189,6 @@ def _resolve_private_owner(
         if declared_generation not in {None, generation}:
             return None
     return owner, generation
-
-
-def scan_moderation_private_rows(
-    user_id: str,
-    *,
-    table: Any | None = None,
-    cursor: dict[str, str] | None = None,
-    maximum_pages: int = 1,
-    page_limit: int = 100,
-) -> ModerationPrivatePage:
-    """Strongly discover the account's moderation summaries and events from base pages."""
-    if maximum_pages <= 0 or page_limit <= 0:
-        raise account_deletion_repo.AccountDeletionConflict(
-            "invalid moderation scan bound"
-        )
-    user_id = account_deletion_repo.deletion_account(user_id)
-    target: object = table if table is not None else db_table.table()
-    current = (
-        account_deletion_repo.continuation_key(cursor, "moderation continuation")
-        if cursor is not None
-        else None
-    )
-    seen_cursors = (
-        {(current["PK"], current["SK"])} if current is not None else set()
-    )
-    items: list[dict[str, Any]] = []
-    unresolved = 0
-    for page in account_deletion_repo.sweep_pages(
-        "moderation continuation",
-        table=target,
-        cursor=current,
-        page_limit=page_limit,
-        maximum_pages=maximum_pages,
-    ):
-        for raw in page.items:
-            pk = str(raw.get("PK") or "")
-            sk = str(raw.get("SK") or "")
-            if not pk.startswith("MODERATION#") or not (
-                sk == "SUMMARY" or sk.startswith("EVENT#")
-            ):
-                continue
-            if raw.get("privacy_deleted") is True:
-                continue
-            # Whose it is: the row's own `student_id`, read by the data type
-            # catalog like every other row (#586 decision 3, #588).
-            if not data_catalog.owns(raw, user_id):
-                continue
-            # Before taking it, confirm that against the question (or the
-            # refused image's case) it was written for. A row whose owner the
-            # check cannot confirm is left in place and counted as unresolved,
-            # which keeps the branch from sealing.
-            owner = _resolve_private_owner(target, raw)
-            if owner is None or owner[0] != user_id:
-                unresolved += 1
-                continue
-            student_id, generation = owner
-            normalized = dict(raw)
-            normalized["student_id"] = student_id
-            normalized["privacy_generation"] = generation
-            items.append(normalized)
-        if page.last_key is None:
-            return ModerationPrivatePage(tuple(items), None, unresolved)
-        next_cursor = page.last_key
-        cursor_identity = (next_cursor["PK"], next_cursor["SK"])
-        if cursor_identity in seen_cursors:
-            raise account_deletion_repo.AccountDeletionConflict(
-                "repeating moderation continuation cursor"
-            )
-        seen_cursors.add(cursor_identity)
-        current = next_cursor
-    return ModerationPrivatePage(tuple(items), current, unresolved)
-
-
-def scrub_moderation_row(
-    item: Mapping[str, Any],
-    *,
-    user_id: str,
-    generation: int,
-    now_iso: str,
-    table: Any | None = None,
-) -> dict[str, Any]:
-    """Replace one resolved moderation row with a strict noncontent tombstone."""
-    target: object = table if table is not None else db_table.table()
-    key = account_deletion_repo.continuation_key(
-        {"PK": item.get("PK"), "SK": item.get("SK")}, "moderation continuation"
-    )
-    if not key["PK"].startswith("MODERATION#") or not (
-        key["SK"] == "SUMMARY" or key["SK"].startswith("EVENT#")
-    ):
-        raise account_deletion_repo.AccountDeletionConflict(
-            "row is not registered moderation content"
-        )
-    tombstone = {
-        key_name: value
-        for key_name, value in dict(item).items()
-        if key_name in MODERATION_TOMBSTONE_ALLOWLIST and value is not None
-    }
-    tombstone.update(
-        {
-            "PK": key["PK"],
-            "SK": key["SK"],
-            "entity_type": (
-                "moderation_case"
-                if key["SK"] == "SUMMARY"
-                else "moderation_event"
-            ),
-            "privacy_deleted": True,
-            "privacy_generation": generation,
-            "updated_at": now_iso,
-            "deleted_at": now_iso,
-        }
-    )
-    hook = getattr(target, "scrub_moderation_row", None)
-    if callable(hook):
-        hook(dict(item), tombstone, user_id, generation)
-        return tombstone
-    account_deletion_repo.require_deletion_account_fence(
-        user_id, generation, table=target
-    )
-    db_table.transact(
-        [
-            account_deletion_repo.deletion_fence_condition(user_id, generation),
-            {
-                "Put": {
-                    "Item": tombstone,
-                    "ConditionExpression": (
-                        "attribute_exists(PK) AND attribute_exists(SK) "
-                        "AND (attribute_not_exists(student_id) OR student_id=:owner) "
-                        "AND (attribute_not_exists(privacy_generation) OR "
-                        "privacy_generation=:generation)"
-                    ),
-                    "ExpressionAttributeValues": {
-                        ":owner": user_id,
-                        ":generation": generation,
-                    },
-                }
-            },
-        ],
-        table=target,
-    )
-    return tombstone
 
 
 def put_case(

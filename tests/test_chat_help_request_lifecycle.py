@@ -585,12 +585,10 @@ def test_an_offer_that_expires_between_the_check_and_the_write_is_refused(table,
 # User decision 2026-09-28: when a teacher account is deleted, a chat help
 # request they took or were offered goes back to waiting, so the sweep offers
 # it to someone else. A closed one keeps its outcome and loses only the
-# teacher references. These drive the real deletion branch until it reports
-# complete.
+# teacher references. These drive the whole deletion, as production runs it,
+# until it reports complete.
 
-from dataclasses import asdict  # noqa: E402
-
-from stoa.services import account_deletion_service  # noqa: E402
+import deletion_helpers  # noqa: E402
 
 _TEACHER_FIELDS = (
     "teacher_id",
@@ -601,19 +599,9 @@ _TEACHER_FIELDS = (
 )
 
 
-def _delete_teacher(table: FakeTable, teacher_id: str = TEACHER) -> list:
-    table.rows[(f"USER#{teacher_id}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
-    branch = account_deletion_service.BRANCH_HANDLERS["question_ocr_session"]
-    command = {"user_id": teacher_id, "generation": 1}
-    previous: dict = {}
-    results = []
-    for _ in range(6):
-        result = branch(command=command, previous=previous)
-        results.append(result)
-        previous = asdict(result)
-        if result.status == "complete":
-            break
-    return results
+def _delete_teacher(table: FakeTable, teacher_id: str = TEACHER) -> dict:
+    """The teacher's whole deletion, as production runs it (#642); the finished command."""
+    return deletion_helpers.delete_account(teacher_id)
 
 
 def _assert_waiting_without(table: FakeTable, teacher_id: str, *, dispatch: str = "unassigned") -> None:
@@ -633,9 +621,9 @@ def test_deleting_the_teacher_returns_an_open_request_to_waiting(table, accepted
     if accepted:
         _accept_and_reply(_client())
 
-    results = _delete_teacher(table)
+    command = _delete_teacher(table)
 
-    assert results[-1].status == "complete", [asdict(r) for r in results]
+    assert command["status"] == "complete"
     _assert_waiting_without(table, TEACHER)
 
     # Nothing is stuck: the sweep offers it to another teacher, who ends it.
@@ -659,9 +647,9 @@ def test_deleting_the_teacher_after_a_timeout_clears_the_lapsed_offer(table):
     # so the scrub has only the history of who was tried left to clear.
     assert _help(table)["dispatch_status"] == "no_candidate"
 
-    results = _delete_teacher(table)
+    command = _delete_teacher(table)
 
-    assert results[-1].status == "complete", [asdict(r) for r in results]
+    assert command["status"] == "complete"
     _assert_waiting_without(table, TEACHER, dispatch="no_candidate")
 
 
@@ -669,9 +657,9 @@ def test_deleting_the_teacher_keeps_a_resolved_request_resolved(table):
     _dispatch_to(table, TEACHER)
     assert _set_status(_client(), "resolved", resolutionNote="Done together.").status_code == 200
 
-    results = _delete_teacher(table)
+    command = _delete_teacher(table)
 
-    assert results[-1].status == "complete", [asdict(r) for r in results]
+    assert command["status"] == "complete"
     record = _help(table)
     assert record["escalation_status"] == "resolved"
     assert record["resolution_note"] == "Done together."
@@ -703,12 +691,10 @@ def test_a_request_that_moves_during_the_scrub_is_retried_not_overwritten(table,
     monkeypatch.setattr(
         db_table, "transact", transact_after_the_request_moves)
 
-    results = _delete_teacher(table)
+    command = _delete_teacher(table)
 
     assert moved
-    assert results[0].status == "retryable"
-    assert results[0].debt_counts.get("row_conflict") == 1
-    assert results[-1].status == "complete", [asdict(r) for r in results]
+    assert command["status"] == "complete"
     # The later pass saw the request as resolved and kept that outcome.
     assert _help(table)["escalation_status"] == "resolved"
     assert "teacher_id" not in _help(table)
@@ -721,8 +707,7 @@ def _race_once(monkeypatch, mutate) -> list:
 
     def transact(operations, *, table=None):
         scrubbing = any(
-            (op.get("ConditionCheck") or {}).get("ExpressionAttributeValues", {}).get(":pending")
-            == "deletion_pending"
+            (op.get("Update") or op.get("Put") or {}).get("Key", {}) == {"PK": f"CONV#{CONV}", "SK": "HELP"}
             for op in operations
         )
         if scrubbing and not fired:
@@ -743,12 +728,10 @@ def test_a_request_whose_version_moves_during_the_scrub_is_retried(table, monkey
         t.rows[HELP_KEY]["version"] = t.rows[HELP_KEY]["version"] + 1
 
     fired = _race_once(monkeypatch, bump)
-    results = _delete_teacher(table)
+    command = _delete_teacher(table)
 
     assert fired
-    assert results[0].status == "retryable"
-    assert results[0].debt_counts.get("row_conflict") == 1
-    assert results[-1].status == "complete", [asdict(r) for r in results]
+    assert command["status"] == "complete"
     _assert_waiting_without(table, TEACHER)
 
 
@@ -769,12 +752,10 @@ def test_a_request_re_offered_to_another_teacher_during_the_scrub_keeps_that_off
         )
 
     fired = _race_once(monkeypatch, reoffer)
-    results = _delete_teacher(table)
+    command = _delete_teacher(table)
 
     assert fired
-    assert results[0].status == "retryable"
-    assert results[0].debt_counts.get("row_conflict") == 1
-    assert results[-1].status == "complete", [asdict(r) for r in results]
+    assert command["status"] == "complete"
     record = _help(table)
     assert record["dispatched_teacher_id"] == OTHER_TEACHER
     assert record["dispatch_id"] == "an-offer-to-someone-else"
@@ -796,9 +777,9 @@ def test_a_conversation_the_students_deletion_tombstoned_counts_as_gone(table):
     }
     tombstone = dict(table.rows[CONV_KEY])
 
-    results = _delete_teacher(table)
+    command = _delete_teacher(table)
 
-    assert results[-1].status == "complete", [asdict(r) for r in results]
+    assert command["status"] == "complete"
     assert table.rows[CONV_KEY] == tombstone
     assert "dispatched_teacher_id" not in _help(table)
 
@@ -925,23 +906,14 @@ def test_a_holders_reply_is_refused_once_the_students_deletion_has_begun(table):
 def test_deleting_the_student_removes_the_teachers_replies_from_their_conversation(table):
     _dispatch_to(table, TEACHER)
     _accept_and_reply(_client(), "Probier jetzt 15 : 5.")
-    table.rows[(f"USER#{STUDENT}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
-    branch = account_deletion_service.BRANCH_HANDLERS["conversation_messages"]
 
-    # The real branch, over the real scan, runs until it seals (#78: it used to
-    # re-scan its own tombstones and never finish).
-    # The branch takes an S3 client up front; these messages carry no attachments.
+    # The whole deletion, as production runs it, until it seals (#78: the old
+    # branch re-scanned its own tombstones and never finished). These messages
+    # carry no attachments.
     aws.install({Kind.S3: object()})
-    results, previous = [], {}
-    for _ in range(8):
-        result = branch(command={"user_id": STUDENT, "generation": 1}, previous=previous)
-        results.append((result.status, result.epoch))
-        previous = asdict(result)
-        if result.status == "complete":
-            break
+    command = deletion_helpers.delete_account(STUDENT)
 
-    assert results[-1] == ("complete", 2), results
-    assert result.quiescent is True
+    assert command["status"] == "complete"
     (note,) = _notes(table)
     assert "content" not in note
     assert "teacher_name" not in note

@@ -1,18 +1,16 @@
-"""Plan 475-28 notification actor and metadata identity deletion proof."""
+"""Plan 475-28 notification actor and metadata identity deletion proof, through the catalog flow (#642)."""
 
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict
-from decimal import Decimal
-from typing import Any
 
 import pytest
-from fakes.dynamodb import as_stored as _as_stored, from_wire
 
+import deletion_helpers
+from fakes.dynamodb import as_stored as _as_stored
 from stoa.db import table as db_table
-from stoa.db.repositories import account_deletion_repo, notification_repo, websocket_repo
-from stoa.services import account_deletion_service
+from stoa.db.repositories import account_deletion_repo, notification_repo
+from stoa.services import notifications
 
 
 IDENTITY = "teacher-deleting"
@@ -57,80 +55,6 @@ def _event(
     })
 
 
-class _NotificationTable:
-    def __init__(self) -> None:
-        self.rows = {
-            ("NOTIFICATION#direct", "META"): _event("direct", actor_id=IDENTITY),
-            ("NOTIFICATION#metadata", "META"): _event(
-                "metadata",
-                metadata={
-                    "teacher_id": IDENTITY,
-                    "actor_id": IDENTITY,
-                    "subject": "Geometry",
-                    "delivery_decision": {"in_app": "accepted"},
-                },
-                status="accepted",
-            ),
-        }
-        self.scan_count = 0
-        self.cas_raced = False
-        self.transactions: list[list[dict[str, Any]]] = []
-
-    def scan(self, **kwargs: object) -> dict[str, object]:
-        assert kwargs.get("ConsistentRead") is True
-        assert "IndexName" not in kwargs
-        self.scan_count += 1
-        if self.scan_count == 3:
-            late = _event(
-                "late",
-                metadata={
-                    "parent_id": IDENTITY,
-                    "subject": "Late retained subject",
-                    "delivery_decision": {"in_app": "accepted"},
-                },
-                version=4,
-            )
-            self.rows[(str(late["PK"]), str(late["SK"]))] = late
-        return {"Items": [deepcopy(row) for row in self.rows.values()]}
-
-    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
-        operations = from_wire(TransactItems)
-        self.transactions.append(deepcopy(operations))
-        assert operations[0].get("ConditionCheck") is not None
-        update = operations[1]["Update"]
-        key = update["Key"]
-        row_key = (key["PK"], key["SK"])
-        current = self.rows[row_key]
-        values = update["ExpressionAttributeValues"]
-
-        if row_key == ("NOTIFICATION#direct", "META") and not self.cas_raced:
-            self.cas_raced = True
-            event_version = current["event_version"]
-            metadata_value = current["metadata"]
-            assert isinstance(event_version, Decimal)
-            assert isinstance(metadata_value, dict)
-            current["event_version"] = _as_stored(int(event_version) + 1)
-            metadata = dict(metadata_value)
-            metadata["concurrent_note"] = "preserve this write"
-            current["metadata"] = metadata
-            raise account_deletion_repo.AccountDeletionConflict(
-                "conditional notification identity conflict"
-            )
-
-        assert current["entity_type"] == values[":entity"]
-        assert current["schema_version"] == values[":schema"]
-        assert current["event_version"] == values[":version"]
-        assert current["status"] == values[":status"]
-        assert current["metadata"] == values[":metadata"]
-        if ":identity" in values:
-            assert current.get("actor_id") == values[":identity"]
-
-        current["metadata"] = _as_stored(deepcopy(values[":clean_metadata"]))
-        current["event_version"] = _as_stored(values[":next_version"])
-        if "REMOVE actor_id" in update["UpdateExpression"]:
-            current.pop("actor_id", None)
-
-
 def _retained_snapshot(item: dict[str, object]) -> dict[str, object]:
     return {
         field: deepcopy(item[field])
@@ -150,51 +74,81 @@ def _retained_snapshot(item: dict[str, object]) -> dict[str, object]:
     }
 
 
-def test_notification_identity_scrub_retries_cas_then_requires_two_clean_epochs(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    table = _NotificationTable()
-    retained = {key: _retained_snapshot(row) for key, row in table.rows.items()}
-
-    db_table.install(table)
-    empty_connections = websocket_repo.ConnectionPrivatePage(items=())
-    monkeypatch.setattr(
-        websocket_repo,
-        "scan_account_connections",
-        lambda *_args, **_kwargs: empty_connections,
-    )
-
+def test_a_malformed_mention_is_refused_before_anything_is_written(fake_table) -> None:
     malformed = _event("malformed", actor_id=IDENTITY, metadata=[IDENTITY])
+    fake_table.seed(
+        malformed,
+        {**account_deletion_repo.account_fence_key(IDENTITY), "status": "deletion_pending",
+         "generation": GENERATION},
+    )
+    before = deepcopy(fake_table.rows)
+
     with pytest.raises(account_deletion_repo.AccountDeletionConflict):
-        notification_repo.scrub_notification_private_row(
-            malformed,
-            owner_id=IDENTITY,
-            generation=GENERATION,
-            now_iso=NOW,
-            table=table,
+        notifications.scrub_notification_identity_references(
+            malformed, owner_id=IDENTITY, generation=GENERATION
         )
-    assert table.transactions == []
 
-    branch = account_deletion_service.BRANCH_HANDLERS["notification_device_realtime"]
-    command = {"user_id": IDENTITY, "generation": GENERATION}
-    results = []
-    previous: dict[str, object] = {}
-    for _ in range(5):
-        result = branch(command=command, previous=previous)
-        results.append(result)
-        previous = asdict(result)
+    assert fake_table.rows == before
 
-    assert table.cas_raced is True
-    assert [(result.status, result.epoch) for result in results] == [
-        ("retryable", 0),
-        ("retryable", 0),
-        ("retryable", 0),
-        ("retryable", 1),
-        ("complete", 2),
+
+def test_notification_identity_scrub_retries_a_moved_event_and_keeps_its_write(
+    fake_table, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The teacher's whole deletion, as production runs it (#642)."""
+    rows = [
+        _event("direct", actor_id=IDENTITY),
+        _event(
+            "metadata",
+            metadata={
+                "teacher_id": IDENTITY,
+                "actor_id": IDENTITY,
+                "subject": "Geometry",
+                "delivery_decision": {"in_app": "accepted"},
+            },
+            status="accepted",
+        ),
+        _event(
+            "parent",
+            metadata={
+                "parent_id": IDENTITY,
+                "subject": "Retained subject",
+                "delivery_decision": {"in_app": "accepted"},
+            },
+            version=4,
+        ),
     ]
-    assert results[-1].quiescent is True
+    fake_table.seed(*rows)
+    deletion_helpers.register(fake_table, *rows)
+    deletion_helpers.active_fence(fake_table, IDENTITY, generation=GENERATION)
+    retained = {(row["PK"], row["SK"]): _retained_snapshot(row) for row in rows}
 
-    for key, row in table.rows.items():
+    real_transact = db_table.transact
+    raced: list[bool] = []
+    conditions: list[str] = []
+
+    def transact(operations, *, table=None):
+        for op in operations:
+            update = op.get("Update") or {}
+            if str((update.get("Key") or {}).get("PK", "")).startswith("NOTIFICATION#"):
+                conditions.append(update["ConditionExpression"])
+                if update["Key"]["PK"] == "NOTIFICATION#direct" and not raced:
+                    raced.append(True)
+                    current = fake_table.rows[("NOTIFICATION#direct", "META")]
+                    current["event_version"] = _as_stored(int(current["event_version"]) + 1)
+                    current["metadata"] = {
+                        **current["metadata"], "concurrent_note": "preserve this write"
+                    }
+        return real_transact(operations, table=table)
+
+    monkeypatch.setattr(db_table, "transact", transact)
+
+    command = deletion_helpers.delete_account(IDENTITY)
+
+    assert raced
+    assert command["status"] == "complete"
+    for key, row in fake_table.rows.items():
+        if key not in retained:
+            continue
         assert row.get("actor_id") != IDENTITY
         metadata = row["metadata"]
         assert isinstance(metadata, dict)
@@ -203,27 +157,21 @@ def test_notification_identity_scrub_retries_cas_then_requires_two_clean_epochs(
             metadata.get("teacher_id"),
             metadata.get("parent_id"),
         }
-        if key in retained:
-            assert _retained_snapshot(row) == retained[key]
-    assert table.rows[("NOTIFICATION#direct", "META")]["metadata"] == {
+        assert _retained_snapshot(row) == retained[key]
+    assert fake_table.rows[("NOTIFICATION#direct", "META")]["metadata"] == {
         "subject": "Algebra",
         "delivery_decision": {"in_app": "accepted"},
         "concurrent_note": "preserve this write",
     }
-    assert table.rows[("NOTIFICATION#metadata", "META")]["metadata"] == {
+    assert fake_table.rows[("NOTIFICATION#metadata", "META")]["metadata"] == {
         "subject": "Geometry",
         "delivery_decision": {"in_app": "accepted"},
     }
-    assert table.rows[("NOTIFICATION#late", "META")]["metadata"] == {
-        "subject": "Late retained subject",
+    assert fake_table.rows[("NOTIFICATION#parent", "META")]["metadata"] == {
+        "subject": "Retained subject",
         "delivery_decision": {"in_app": "accepted"},
     }
-
-    conditions = [
-        transaction[1]["Update"]["ConditionExpression"]
-        for transaction in table.transactions
-    ]
-    assert all(
+    assert conditions and all(
         "entity_type=:entity" in condition
         and "schema_version=:schema" in condition
         and "event_version=:version" in condition

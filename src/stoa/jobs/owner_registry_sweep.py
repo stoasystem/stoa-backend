@@ -9,7 +9,7 @@ their own line (`owner_registry_sweep_unknown`, INFO): they point to no
 account, so they are not a finding and close nothing, but no deletion takes
 them either.
 It writes its own result row (`owner_registry_sweep.RUN_MARKER_KEY`, counts
-only), which acceptance reads before sealing a deletion for the registry path,
+only), which acceptance reads before it takes a new deletion,
 and it removes registry rows other accounts still hold for a deleted account's
 partitions once nothing there names them (`remove_stale_references`). It never
 touches an account's data, never writes a missing registration and never

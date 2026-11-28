@@ -5,14 +5,13 @@ round; its attachment branch read the whole table in one call; discovery walked
 the table with a cursor and reached a command once in three runs; each run moved
 every branch by a single page; and `DELETE /auth/me` ran a whole round before it
 answered. At ~7k rows that is two days a deletion, and past 10k rows deletion
-stops altogether. These tests hold the fix, which left the sealed inventory -
-and with it every command already in flight - exactly as it was.
+stops altogether.
 
 Since #641 a deletion runs the catalog's three steps
-(`account_deletion_flow`); the same guarantees are held for it here: its
-command read by key, the registry by one query, no table scan, a run within
-its budget that gives its lease back, and a request side that only
-tombstones the profile.
+(`account_deletion_flow`), and since #642 nothing else; the same guarantees are
+held for it here: its command read by key, the registry by one query, no table
+scan, a run within its budget that gives its lease back, and a request side
+that only tombstones the profile.
 """
 
 from __future__ import annotations
@@ -20,9 +19,7 @@ from __future__ import annotations
 import asyncio
 from bisect import bisect_right
 from datetime import UTC, datetime
-from hashlib import sha256
 import json
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -41,12 +38,6 @@ from stoa.services import account_deletion_flow as flow
 from stoa.services import account_provisioning_service, attachment_service, owner_registry_sweep
 
 
-ROOT = Path(__file__).resolve().parents[1]
-INVENTORY_PATH = ROOT / "docs" / "security" / "phase-473-private-store-inventory.json"
-# Sealed into every deletion command and checked on every run: a command in
-# flight stops with "seal drift" the moment these bytes change.
-SEALED_INVENTORY_SHA256 = "8b4087165afbd6bff9a5e9efe59369ae6ed446a20765cca473227c87cc1480e4"
-
 ISSUER = "https://cognito-idp.eu-central-2.amazonaws.com/pool-test"
 SUBJECT = "subject-66"
 EMAIL = "leaving.student@stoa.test"
@@ -57,11 +48,6 @@ PRIVATE = (
     "private question",
     "Step 2 makes no sense to me.",
 )
-
-
-def test_the_sealed_inventory_bytes_are_unchanged() -> None:
-    assert sha256(INVENTORY_PATH.read_bytes()).hexdigest() == SEALED_INVENTORY_SHA256
-    assert service.load_private_store_seal()["inventory_sha256"] == SEALED_INVENTORY_SHA256
 
 
 # ── doubles ────────────────────────────────────────────────────────────────
@@ -83,10 +69,6 @@ class _Provider:
             return {}
 
         return call
-
-
-def _complete(**_kwargs: Any) -> service.BranchResult:
-    return service.BranchResult("complete", debt_counts={}, quiescent=True, epoch=2)
 
 
 def _account_rows(user_id: str, *, role: str = "student") -> list[dict[str, Any]]:
@@ -201,7 +183,6 @@ def test_a_deletion_reads_its_command_by_key_and_never_scans_for_it(
     def no_scan(*_args: Any, **_kwargs: Any) -> Any:
         raise AssertionError("the deletion command was looked up by a table scan")
 
-    monkeypatch.setattr(account_deletion_repo, "get_command_by_id", no_scan)
     monkeypatch.setattr(account_deletion_repo, "_scan_commands", no_scan)
     aws.install({Kind.COGNITO: _Provider(), Kind.S3: _Provider()})
     worker = flow.CatalogDeletion(remaining_seconds=(lambda: 500.0) if budgeted else None)
@@ -222,7 +203,7 @@ def test_a_deletion_reads_its_command_by_key_and_never_scans_for_it(
     ) in requests
 
 
-# ── 2. the attachment branch pages ─────────────────────────────────────────
+# ── 2. the owner listing pages ─────────────────────────────────────────────
 
 
 class _BigTable:
@@ -270,81 +251,7 @@ def test_the_owner_listing_reads_past_ten_thousand_rows() -> None:
     assert "Limit" not in table.scans[0]  # whole 1 MB pages, not hundred-row ones
 
 
-def _persist(result: service.BranchResult) -> dict[str, Any]:
-    return result.persisted("2026-11-11T10:00:00+00:00", generation=1)
-
-
-@pytest.mark.parametrize(
-    "previous",
-    [
-        {},
-        # A result written before the fix: one empty cursor per purge category.
-        {
-            "status": "retryable",
-            "cursor": None,
-            "debt_counts": dict.fromkeys(attachment_service.PURGE_CURSOR_CATEGORIES, 0),
-            "epoch": 0,
-        },
-    ],
-)
-def test_the_attachment_branch_pages_past_ten_thousand_rows_and_purges_once(
-    monkeypatch: pytest.MonkeyPatch, previous: dict[str, Any]
-) -> None:
-    table = _BigTable([*_unrelated(12_000), LATE_ATTACHMENT])
-    db_table.install(table)
-    purges: list[str] = []
-
-    def purge(owner_id: str, **kwargs: Any) -> Any:
-        purges.append(owner_id)
-        assert kwargs["account_fence_generation"] == 1
-        table.remove(("ROW#11000", "ATTACHMENT"))
-        return attachment_service.AttachmentPurgeBranchResult(
-            attachment_service.AttachmentPurgeBranchStatus.COMPLETE, quiescent=True, deleted=1
-        )
-
-    monkeypatch.setattr(attachment_service, "purge_student_attachments", purge)
-    aws.install({Kind.S3: _Provider()})
-    command = {"user_id": OWNER, "generation": 1}
-    statuses: list[tuple[str, int]] = []
-    state: dict[str, Any] = previous
-    for _call in range(400):
-        result = service._attachments_branch(command=command, previous=state)
-        state = _persist(result)
-        if result.cursor is None:
-            statuses.append((result.status, result.epoch))
-        if result.status == "complete":
-            break
-
-    assert purges == [OWNER]
-    # A dirty pass, then two clean ones: the rule every other branch keeps.
-    assert statuses == [("retryable", 0), ("retryable", 1), ("complete", 2)]
-    assert state["quiescent"] is True and state["cursor"] is None and state["debt_counts"] == {}
-    assert len(table.scans) > 300  # three passes of 121 strong pages each
-    assert all(call["ConsistentRead"] is True and call["Limit"] == 100 for call in table.scans)
-
-
-def test_a_purge_that_cannot_finish_keeps_the_branch_from_completing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    table = _BigTable([*_unrelated(250), LATE_ATTACHMENT])
-    db_table.install(table)
-    monkeypatch.setattr(
-        attachment_service,
-        "purge_student_attachments",
-        lambda *_a, **_k: attachment_service.AttachmentPurgeBranchResult(
-            attachment_service.AttachmentPurgeBranchStatus.RETRYABLE
-        ),
-    )
-    aws.install({Kind.S3: _Provider()})
-    state: dict[str, Any] = {}
-    for _call in range(30):
-        result = service._attachments_branch(command={"user_id": OWNER, "generation": 1}, previous=state)
-        state = _persist(result)
-        assert result.status == "retryable"
-    assert state["epoch"] == 0
-
-
-# ── 3. discovery by the registry, with the scan kept for older commands ────
+# ── 3. discovery by the registry ───────────────────────────────────────────
 
 
 class _Worker:

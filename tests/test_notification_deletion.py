@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, replace
+from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 
@@ -10,10 +10,9 @@ import pytest
 
 from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
-from stoa.db.repositories import account_deletion_repo, notification_repo, websocket_repo
-from stoa.services import account_deletion_service
+from stoa.db.repositories import notification_repo, websocket_repo
 from stoa.services.notifications import _ledger
-from fakes.dynamodb import FakeTable, from_wire
+from fakes.dynamodb import from_wire
 
 
 STUDENT_ID = "student-notification-delete"
@@ -276,144 +275,6 @@ def test_commit_then_raise_is_unknown_and_same_operation_is_not_blindly_retried(
     assert "private diagnostics" not in repr(result)
 
 
-def test_strong_paginated_scans_and_scrubs_leave_only_strict_tombstones() -> None:
-    # The real write path (#684): the table's own transaction under the deletion
-    # fence, one row to a page so the sweep has to follow its cursor.
-    notifications = FakeTable(page_item_cap=1)
-    notifications.seed(
-        {
-            "PK": f"USER#{STUDENT_ID}",
-            "SK": "ACCOUNT_FENCE",
-            "status": "deletion_pending",
-            "generation": GENERATION,
-        },
-        _event(),
-        {
-            "PK": "ASSISTANCE_SUMMARY#late",
-            "SK": "META",
-            "entity_type": "teacher_assistance_summary_seed",
-            "summary_id": "late",
-            "student_id": STUDENT_ID,
-            "owner_id": STUDENT_ID,
-            "question_summary": "late private canary",
-        },
-    )
-    connection_pages = [
-        {
-            "Items": [
-                {
-                    "PK": "WS_CONN#private",
-                    "SK": "META",
-                    "entity_type": "websocket_connection",
-                    "connection_id": "private",
-                    "user_id": STUDENT_ID,
-                    "owner_id": STUDENT_ID,
-                    "endpoint_url": "https://private-endpoint.example",
-                    "subscribed_channels": [f"user:{STUDENT_ID}"],
-                }
-            ]
-        }
-    ]
-    calls: list[dict[str, Any]] = []
-    deleted_connections: list[dict[str, Any]] = []
-
-    class _Table:
-        def __init__(self, pages: list[dict[str, Any]]) -> None:
-            self.pages = pages
-
-        def scan(self, **kwargs: Any) -> dict[str, Any]:
-            calls.append(kwargs)
-            return self.pages.pop(0)
-
-        def delete_connection_for_account(self, *_args: Any, **_kwargs: Any) -> None:
-            deleted_connections.append({"deleted_connection": True})
-
-    scan = _contract(notification_repo, "scan_notification_private_rows")
-    found: list[dict[str, Any]] = []
-    cursor = None
-    for _ in range(10):
-        page = scan(STUDENT_ID, table=notifications, cursor=cursor, maximum_pages=1)
-        found.extend(page.items)
-        cursor = page.cursor
-        if cursor is None:
-            break
-    assert {item["PK"] for item in found} == {
-        "NOTIFICATION#event-private",
-        "ASSISTANCE_SUMMARY#late",
-    }
-    for item in found:
-        _contract(notification_repo, "scrub_notification_private_row")(
-            item,
-            owner_id=STUDENT_ID,
-            generation=GENERATION,
-            now_iso=NOW,
-            table=notifications,
-        )
-
-    connections = _Table(connection_pages)
-    connection_page = _contract(websocket_repo, "scan_account_connections")(
-        STUDENT_ID, table=connections, maximum_pages=1
-    )
-    for item in connection_page.items:
-        _contract(websocket_repo, "revoke_account_connection")(
-            item,
-            owner_id=STUDENT_ID,
-            generation=GENERATION,
-            table=connections,
-        )
-
-    scans = [request for operation, request in notifications.requests if operation == "scan"]
-    assert scans and all(
-        call.get("ConsistentRead") is True and "IndexName" not in call
-        for call in (*scans, *calls)
-    )
-    tombstones = [
-        row
-        for row in notifications.rows.values()
-        if str(row.get("entity_type")).endswith("_deletion_tombstone")
-    ]
-    assert len(tombstones) == 2
-    allowlist = _contract(notification_repo, "NOTIFICATION_TOMBSTONE_ALLOWLIST")
-    assert all(set(item) <= allowlist for item in tombstones)
-    assert deleted_connections == [{"deleted_connection": True}]
-    assert "private canary" not in repr(notifications.rows)
-    assert "private-endpoint" not in repr(tombstones)
-
-
-def test_notification_branch_is_registered_and_requires_two_later_clean_scans(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    assert "notification_device_realtime" in account_deletion_service.BRANCH_HANDLERS
-    page_type = _contract(notification_repo, "NotificationPrivatePage")
-    connection_page_type = _contract(websocket_repo, "ConnectionPrivatePage")
-    notification_pages = [
-        page_type(items=(_event(),)),
-        page_type(items=()),
-        page_type(items=()),
-    ]
-    connection_pages = [connection_page_type(items=()) for _ in range(3)]
-    monkeypatch.setattr(
-        notification_repo,
-        "scan_notification_private_rows",
-        lambda *_a, **_kw: notification_pages.pop(0),
-    )
-    monkeypatch.setattr(
-        websocket_repo,
-        "scan_account_connections",
-        lambda *_a, **_kw: connection_pages.pop(0),
-    )
-    monkeypatch.setattr(notification_repo, "scrub_notification_private_row", lambda *_a, **_kw: None)
-    monkeypatch.setattr(websocket_repo, "revoke_account_connection", lambda *_a, **_kw: None)
-    branch = account_deletion_service.BRANCH_HANDLERS["notification_device_realtime"]
-    command = {"user_id": STUDENT_ID, "generation": GENERATION}
-    first = branch(command=command, previous={})
-    second = branch(command=command, previous=asdict(first))
-    third = branch(command=command, previous=asdict(second))
-    assert first.status == "retryable" and first.epoch == 0
-    assert second.status == "retryable" and second.epoch == 1
-    assert third.status == "complete" and third.quiescent is True and third.epoch == 2
-
-
 def test_connection_update_keeps_the_generation_the_row_carries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -482,29 +343,14 @@ def test_connection_update_keeps_the_generation_the_row_carries(
 # -- one answer to "whom does this notification name" (#574) ------------------------
 
 
-def _notification_scan_takes(item: dict[str, Any], account: str) -> bool:
-    table = FakeTable()
-    table.seed(item)
-    page = notification_repo.scan_notification_private_rows(
-        account, table=table, maximum_pages=1
-    )
-    return bool(page.items)
-
-
-def _seeded(item: dict[str, Any]) -> FakeTable:
-    table = FakeTable()
-    table.seed(item)
-    return table
-
-
 def test_the_catalog_says_whose_a_notification_is_and_the_registry_agrees() -> None:
     """Whose a notification is comes from the data type catalog (#574, #588).
 
     For each field a notification could name an account in, asked of each
-    side: the notification scan takes the row exactly when the catalog names
-    the account, the generic deletion scan likewise, the owner registry files
-    it for the same accounts in the same role (#589), and the family
-    tombstones it for an owner and scrubs a mention out of it.
+    side: the owner registry files it for the same accounts in the same role
+    the catalog gives (#589), and the notification module tombstones it for an
+    owner and scrubs a mention out of it. (The family scans that were asked too
+    went with the old deletion branches, #642.)
     """
     owners = {"owner_id", "student_id"}
     references = {"actor_id", "teacher_id", "parent_id"}
@@ -523,13 +369,6 @@ def test_the_catalog_says_whose_a_notification_is_and_the_registry_agrees() -> N
             else data_catalog.REFERENCE if field in references
             else None
         ), field
-        taken = _notification_scan_takes(row, other)
-        assert taken == (role is not None), field
-        assert taken == bool(
-            account_deletion_repo.scan_owned_private_rows(
-                other, table=_seeded(row), maximum_pages=1
-            ).items
-        ), field
         assert _registered(row).get(other) == role, field
         assert notification_repo._targets_owner(row, other) == (role == data_catalog.OWNER)
         assert notification_repo._targets_identity_reference(row, other) == (
@@ -541,7 +380,6 @@ def test_the_catalog_says_whose_a_notification_is_and_the_registry_agrees() -> N
         "owner_id": STUDENT_ID, "actor_id": other, "metadata": {},
     }
     assert data_catalog.role_of(row, other) == data_catalog.REFERENCE
-    assert _notification_scan_takes(row, other)
     assert notification_repo._targets_identity_reference(row, other)
     assert _registered(row)[other] == "reference"
 

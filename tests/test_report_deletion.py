@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from typing import Any
 
 import pytest
 
+from stoa.db import data_catalog
 from stoa.db.repositories import report_repo
-from stoa.services import account_deletion_service
 from fakes.dynamodb import from_wire
 
 
@@ -46,39 +45,12 @@ def _report_row(sk: str = "SUMMARY", **overrides: Any) -> dict[str, Any]:
     return item
 
 
-def test_report_source_registry_closes_rows_writers_providers_and_branches() -> None:
-    rows = _contract("REPORT_PRIVATE_ROW_REGISTRY")
+def test_report_source_registry_closes_writers_and_providers() -> None:
     writers = _contract("REPORT_WRITER_REGISTRY")
     providers = _contract("REPORT_PROVIDER_REGISTRY")
-    private_fields = _contract("REPORT_PRIVATE_FIELDS")
 
-    assert {
-        "report_summary",
-        "edit_draft",
-        "artifact_edit_draft",
-        "artifact_rollback_preview",
-        "report_audit",
-        "recovery_summary",
-        "recovery_target",
-        "recovery_audit",
-        "retention_manifest",
-        "retention_audit",
-        "support_audit",
-        "support_delivery",
-        "support_delivery_audit",
-        "support_crm_message",
-        "support_delivery_feed",
-        "support_crm_feed",
-        "report_object_intent",
-        "report_email_intent",
-    } <= set(rows)
     assert {"put_report", "update_report_status", "put_recovery_job", "put_support_crm_message_event"} <= writers
     assert providers == {"s3_put_object", "s3_delete_object", "ses_send_email", "crm_send"}
-    assert {"summary", "student_name", "parent_email", "teacher_note", "reason", "before", "after"} <= private_fields
-    assert {"report_records", "report_artifacts", "support_recovery_feed"} <= set(
-        account_deletion_service.BRANCH_HANDLERS
-    )
-    assert len(account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS) == 17
 
 
 def test_object_intent_is_owner_partitioned_and_fenced_before_provider() -> None:
@@ -167,10 +139,9 @@ def test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_versio
 def test_email_intent_claim_rechecks_fence_and_provider_unknown_is_terminal() -> None:
     """The weekly report email is sent behind the student's fence, and an unknown outcome is final.
 
-    The sealed private-store inventory names this test (it cannot be edited to
-    follow a rename, `scripts/sealed_test_renames.py`). Its report send record
-    is gone since #687: the email crosses the notification ledger, and this
-    holds the same two promises there.
+    Its name is the one the sealed private-store inventory gave it (gone with
+    #642). Its report send record is gone since #687: the email crosses the
+    notification ledger, and this holds the same two promises there.
     """
     from stoa import aws
     from stoa.db.repositories import account_deletion_repo
@@ -210,38 +181,6 @@ def test_email_intent_claim_rechecks_fence_and_provider_unknown_is_terminal() ->
         aws.install(None)
 
 
-def test_report_discovery_is_strong_paginated_and_scrub_is_allowlisted() -> None:
-    scan = _contract("scan_report_private_rows")
-    scrub = _contract("scrub_report_private_row")
-    pages: list[dict[str, Any]] = [
-        {"Items": [_report_row()], "LastEvaluatedKey": {"PK": f"REPORT#{REPORT_ID}", "SK": "SUMMARY"}},
-        {"Items": [_report_row("AUDIT#1#event", before={"canary": "private"}, after={"canary": "private"})]},
-    ]
-    calls: list[dict[str, Any]] = []
-    tombstones: list[dict[str, Any]] = []
-
-    class _Table:
-        def scan(self, **kwargs: Any) -> dict[str, Any]:
-            calls.append(kwargs)
-            return pages.pop(0)
-
-        def scrub_report_private_row(self, _original: dict[str, Any], tombstone: dict[str, Any], *_args: Any) -> None:
-            tombstones.append(tombstone)
-
-    table = _Table()
-    first = scan(STUDENT_ID, table=table, maximum_pages=1)
-    second = scan(STUDENT_ID, table=table, cursor=first.cursor, maximum_pages=1)
-    for row in (*first.items, *second.items):
-        scrub(row, owner_id=STUDENT_ID, generation=7, now_iso=NOW, table=table)
-
-    allowlist = _contract("REPORT_TOMBSTONE_ALLOWLIST")
-    assert all(call.get("ConsistentRead") is True and "IndexName" not in call for call in calls)
-    assert all(set(row) <= allowlist for row in tombstones)
-    serialized = repr(tombstones)
-    assert "private report summary canary" not in serialized
-    assert "private-parent@example.test" not in serialized
-
-
 def test_exact_version_absence_requires_all_pages_and_held_artifact_blocks() -> None:
     prove_absent = _contract("prove_report_object_version_absent")
     classify = _contract("classify_report_retention")
@@ -278,7 +217,6 @@ def test_exact_version_absence_requires_all_pages_and_held_artifact_blocks() -> 
 def test_exact_object_purge_never_removes_coordinates_before_absence() -> None:
     purge = _contract("purge_report_object_intent")
     deletes: list[dict[str, Any]] = []
-    tombstones: list[dict[str, Any]] = []
 
     class _S3:
         def delete_object(self, **kwargs: Any) -> dict[str, Any]:
@@ -291,9 +229,6 @@ def test_exact_object_purge_never_removes_coordinates_before_absence() -> None:
     class _Table:
         def get_item(self, **_kwargs: Any) -> dict[str, Any]:
             return {"Item": {"status": "deletion_pending", "generation": 7}}
-
-        def scrub_report_private_row(self, _original: dict[str, Any], tombstone: dict[str, Any], *_args: Any) -> None:
-            tombstones.append(tombstone)
 
     intent = {
         "PK": f"USER#{STUDENT_ID}",
@@ -319,7 +254,6 @@ def test_exact_object_purge_never_removes_coordinates_before_absence() -> None:
         bucket="private",
         s3_client=_S3(),
         table=_Table(),
-        now_iso=NOW,
     )
     assert result == {"status": "purged", "quiescent": True, "purged_count": 1}
     assert deletes == [
@@ -329,7 +263,10 @@ def test_exact_object_purge_never_removes_coordinates_before_absence() -> None:
             "VersionId": "v1",
         }
     ]
-    assert tombstones and "object_key" not in tombstones[0]
+    # The row is the deletion's to replace, with the catalog's tombstone (#642),
+    # which keeps no object coordinate.
+    keeps = data_catalog.DELETIONS["report_object_intent"].owner.keeps
+    assert not {"object_key", "version_id", "etag", "body_sha256"} & keeps
 
 
 def test_legal_hold_minimizes_row_and_blocks_provider_delete() -> None:
@@ -362,140 +299,9 @@ def test_legal_hold_minimizes_row_and_blocks_provider_delete() -> None:
         bucket="private",
         s3_client=_S3(),
         table=object(),
-        now_iso=NOW,
     )
     assert result["status"] == "legal_retention_blocked"
     assert result["quiescent"] is False
     assert result["purged_count"] == 0
 
 
-def test_report_branches_restart_and_require_two_later_clean_epochs(monkeypatch: pytest.MonkeyPatch) -> None:
-    branch = getattr(account_deletion_service, "_report_records_branch", None)
-    if branch is None:
-        pytest.fail("report_records branch is not implemented")
-    page_type = _contract("ReportPrivatePage")
-    pages = [
-        page_type((_report_row(),), {"PK": f"REPORT#{REPORT_ID}", "SK": "SUMMARY"}, 0),
-        page_type((), None, 0),
-        page_type((), None, 0),
-        page_type((), None, 0),
-    ]
-    monkeypatch.setattr(report_repo, "scan_report_private_rows", lambda *_args, **_kwargs: pages.pop(0))
-    monkeypatch.setattr(report_repo, "scrub_report_private_row", lambda *_args, **_kwargs: None)
-    previous: dict[str, Any] = {}
-    results = []
-    for _ in range(4):
-        result = branch(command={"user_id": STUDENT_ID, "generation": 7}, previous=previous)
-        results.append(result)
-        previous = result.persisted(NOW)
-    assert [item.epoch for item in results] == [0, 0, 1, 2]
-    assert results[-1].quiescent is True
-    assert asdict(results[-1])["debt_counts"] == {}
-
-
-def test_rows_that_are_not_this_accounts_never_count_as_unresolved_lineage() -> None:
-    """#397: one audit-retention row kept every deletion in production from completing.
-
-    The report sweep counted as "unresolved lineage" any row of the support,
-    recovery or audit-retention families that was not the deleting account's -
-    including rows that name another student, and audit-retention bookkeeping,
-    which names no student at all. Nothing ever resolves such a row, so the
-    report and support branches stayed dirty forever. Only a support or
-    recovery row that names nobody can still be this account's.
-    """
-    scan = _contract("scan_report_private_rows")
-    rows = [
-        # Audit-retention bookkeeping: digests and counts, no student.
-        {"PK": "AUDIT_RETENTION#manifest-1", "SK": "IMMUTABLE_MANIFEST", "created_by": "admin-1"},
-        {"PK": "AUDIT_RETENTION#manifest-1", "SK": "AUDIT#1#event", "actor": "admin-1"},
-        # Another student's rows.
-        {"PK": "SUPPORT_HANDOFF_DELIVERY#d-1", "SK": "SUMMARY", "student_id": "student-other"},
-        {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "TARGET#00000#t", "student_id": "student-other"},
-        {"PK": "SUPPORT_HANDOFF#p-1", "SK": "AUDIT#1#event", "owner_id": "student-other"},
-        # This student's: whose a row is, the data type catalog says by its
-        # kind (#588).
-        {
-            "PK": "REPORT_RECOVERY_JOB#job-2",
-            "SK": "TARGET#00000#t",
-            "entity_type": "REPORT_RECOVERY_JOB_TARGET",
-            "student_id": STUDENT_ID,
-        },
-    ]
-
-    class _Table:
-        def scan(self, **_kwargs: Any) -> dict[str, Any]:
-            return {"Items": rows}
-
-    page = scan(STUDENT_ID, table=_Table(), maximum_pages=1)
-    assert [row["PK"] for row in page.items] == ["REPORT_RECOVERY_JOB#job-2"]
-    assert page.unresolved == 0
-
-
-def test_a_support_or_recovery_row_that_names_nobody_is_still_unresolved() -> None:
-    scan = _contract("scan_report_private_rows")
-    rows = [
-        {"PK": "SUPPORT_HANDOFF_DELIVERY#d-3", "SK": "CRM_MESSAGE#1"},
-        {"PK": "REPORT_RECOVERY_JOB#job-2", "SK": "TARGET#00000#t", "student_id": ""},
-    ]
-
-    class _Table:
-        def scan(self, **_kwargs: Any) -> dict[str, Any]:
-            return {"Items": rows}
-
-    page = scan(STUDENT_ID, table=_Table(), maximum_pages=1)
-    assert page.items == ()
-    assert page.unresolved == 2
-
-
-def test_a_recovery_jobs_own_records_are_never_unresolved_lineage() -> None:
-    scan = _contract("scan_report_private_rows")
-    other = "student-someone-else"
-    job, event = "REPORT_RECOVERY_JOB", "REPORT_RECOVERY_JOB_AUDIT_EVENT"
-    mine = [
-        {
-            "PK": "REPORT_RECOVERY_JOB#job-3",
-            "SK": "SUMMARY",
-            "entity_type": job,
-            "filters": {"student_id": STUDENT_ID},
-        },
-        {
-            "PK": "REPORT_RECOVERY_JOB#job-4",
-            "SK": "AUDIT#t#1",
-            "entity_type": event,
-            "metadata": {"student_id": STUDENT_ID},
-        },
-        {
-            "PK": "REPORT_RECOVERY_JOB#job-3",
-            "SK": "AUDIT#t#2",
-            "entity_type": event,
-            "metadata": {"filters": {"student_id": STUDENT_ID}},
-        },
-    ]
-    not_mine = [
-        {
-            "PK": "REPORT_RECOVERY_JOB#job-4",
-            "SK": "SUMMARY",
-            "entity_type": job,
-            "filters": {"student_id": None},
-        },
-        {
-            "PK": "REPORT_RECOVERY_JOB#job-4",
-            "SK": "AUDIT#t#3",
-            "entity_type": event,
-            "metadata": {"student_id": other},
-        },
-        {
-            "PK": "REPORT_RECOVERY_JOB#job-4",
-            "SK": "AUDIT#t#4",
-            "entity_type": event,
-            "metadata": {"job_type": "resend"},
-        },
-    ]
-
-    class _Table:
-        def scan(self, **_kwargs: Any) -> dict[str, Any]:
-            return {"Items": [*mine, *not_mine]}
-
-    page = scan(STUDENT_ID, table=_Table(), maximum_pages=1)
-    assert list(page.items) == mine
-    assert page.unresolved == 0

@@ -3,8 +3,9 @@
 A row holds the SHA-256 of the code's secret and, once a phone has redeemed it, of
 the upload token it was exchanged for; never either secret. `expires_at` is the
 table's TTL attribute, so a row nobody redeemed disappears on its own. The row
-carries `owner_id`, which is what account deletion's sweep of the attachment branch
-finds it by, and no `student_id`, which would put it in GSI-StudentId.
+carries `owner_id`, which is how the data type catalog says it is its owner's (and
+so how account deletion finds it), and no `student_id`, which would put it in
+GSI-StudentId.
 """
 
 from __future__ import annotations

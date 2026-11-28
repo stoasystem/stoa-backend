@@ -75,39 +75,18 @@ HAND_WRITTEN_DOUBLES: dict[str, str] = {
         "else, so it says nothing about what the real table would accept."
     ),
     "test_parent_link_paid_downstream.py::ConditionalTable": "repo",
-    "test_parent_relationship_current.py::_DeletionTable": (
-        "repo: stands in for the deletion branch's own `delete_owned_row`, not for a "
-        "table -- and its hook skips the fenced transaction the real one runs, so the "
-        "deletion tests on it show the branch calls delete, not that the delete holds. "
-        "Card 021 B-3: move it onto the shared double with a seeded fence before the "
-        "deletion branch is touched again."
-    ),
     "test_parent_student_links.py::FakeLinkTable": "repo",
     "test_account_deletion_fence.py::_PagedPrivateTable": "script",
-    "test_account_deletion_fence.py::_Malformed": "script",
-    "test_account_deletion_fence.py::_Repeating": "script",
     "test_account_deletion_fence.py::_Commands": "script",
-    "test_account_deletion_fence.py::_ParentProfile": "script",
-    "test_conversation_deletion_fence.py::_Table": "script",
     "test_moderation_content_purge.py::_Table": "script",
-    "test_moderation_content_purge.py::_Malformed": "script",
-    "test_moderation_content_purge.py::_Repeating": "script",
-    "test_moderation_content_purge.py::_Unavailable": "script",
-    "test_notification_deletion.py::_Table": "script",
-    "test_learning_store_deletion.py::_Table": "script",
     "test_practice_receipt_snapshot.py::_LookupTable": "script",
     "test_practice_receipt_snapshot.py::_PagedTable": "script",
     "test_upload_provider_cleanup.py::_EligibilityRecordingTable": (
         "script: records the scan request and answers nothing; the assertion is "
         "about what was asked for, not about what comes back"
     ),
-    "test_report_deletion.py::_Table": "script",
     "test_attachment_retention_reconciliation.py::_StrongPagedTable": "script",
     "test_account_deletion_completed_replay.py::_DeletionTable": "repo",
-    "test_account_deletion_discovery.py::_PagedTable": "script",
-    "test_account_deletion_discovery.py::_RepeatingCursorTable": "script",
-    "test_account_deletion_notification_scrub.py::_NotificationTable": "repo",
-    "test_account_deletion_teacher_scrub.py::_TeacherDeletionTable": "repo",
     "test_privileged_identity_reconciliation.py::CapabilityTable": "repo",
     "test_subscription_operations.py::FakeTable": "repo",
     "test_token_allowances.py::AtomicAllowanceTable": "repo",

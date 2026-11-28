@@ -1033,37 +1033,53 @@ def test_command_claim_and_text_only_message_commit_share_account_fence() -> Non
     assert sent[0]["ConditionCheck"]["ExpressionAttributeValues"][":generation"] == 7
 
 
-def test_stale_command_cancel_removes_result_fingerprint_and_lease() -> None:
-    cancel = ask_question_store.cancel_stale_message_command
-    updates: list[dict[str, Any]] = []
-
-    class _Table:
-        def cancel_stale_message_command(self, **kwargs: Any) -> None:
-            updates.append(kwargs)
-
-    command = _message(
-        "MESSAGE_COMMAND#idem",
-        entity_type="message_command",
-        status="ai_running",
-        result_json='{"private":"assistant"}',
-        fingerprint="f" * 64,
-        leaseOwner="worker-private",
+def test_stale_command_cancel_only_cancels_and_lets_the_lease_go(fake_table) -> None:
+    """Account deletion cancels a live command; the catalog's tombstone comes after (#642)."""
+    fake_table.seed(
+        {"PK": f"USER#{STUDENT_ID}", "SK": "ACCOUNT_FENCE", "status": "deletion_pending",
+         "generation": 7},
+        _message(
+            "MESSAGE_COMMAND#idem",
+            entity_type="message_command",
+            status="ai_running",
+            result_json='{"private":"assistant"}',
+            fingerprint="f" * 64,
+            leaseOwner="worker-private",
+            claimedAt=NOW,
+        ),
     )
-    result = cancel(
-        command,
-        owner_id=STUDENT_ID,
-        deletion_generation=7,
-        now_iso=NOW,
-        table=_Table(),
+    key = (f"CONV#{CONVERSATION_ID}", "MESSAGE_COMMAND#idem")
+
+    result = ask_question_store.cancel_stale_message_command(
+        dict(fake_table.rows[key]), owner_id=STUDENT_ID, deletion_generation=7, now_iso=NOW
     )
+
     assert result["status"] == "canceled"
-    assert updates and set(updates[0]["remove_fields"]) >= {
-        "result_json",
-        "fingerprint",
-        "leaseOwner",
-        "claimedAt",
-        "expiresAt",
-    }
+    row = fake_table.rows[key]
+    assert row["status"] == "canceled"
+    assert not {"leaseOwner", "claimedAt"} & set(row)
+    # What the row keeps is the tombstone's to decide, not the cancel's.
+    assert row["result_json"] == '{"private":"assistant"}'
+
+
+def test_stale_command_cancel_leaves_a_settled_command_and_needs_the_deletion_fence(
+    fake_table,
+) -> None:
+    fake_table.seed(
+        {"PK": f"USER#{STUDENT_ID}", "SK": "ACCOUNT_FENCE", "status": "active", "generation": 7},
+        _message("MESSAGE_COMMAND#live", entity_type="message_command", status="ai_running"),
+        _message("MESSAGE_COMMAND#done", entity_type="message_command", status="complete"),
+    )
+    for sk in ("MESSAGE_COMMAND#live", "MESSAGE_COMMAND#done"):
+        key = (f"CONV#{CONVERSATION_ID}", sk)
+        before = dict(fake_table.rows[key])
+
+        result = ask_question_store.cancel_stale_message_command(
+            before, owner_id=STUDENT_ID, deletion_generation=7, now_iso=NOW
+        )
+
+        assert result["status"] == "unchanged"
+        assert fake_table.rows[key] == before
 
 
 # ── from tests/test_conversations.py: who may read the progress ───────────────

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
@@ -51,25 +50,6 @@ ADAPTIVE_PRIVATE_FIELDS = frozenset(
         "metadata",
     }
 )
-ADAPTIVE_TOMBSTONE_ALLOWLIST = frozenset(
-    {
-        "PK",
-        "SK",
-        "entity_type",
-        "schema_version",
-        "assignment_id",
-        "status",
-        "owner_deletion_generation",
-        "created_at",
-        "deleted_at",
-    }
-)
-
-
-@dataclass(frozen=True, slots=True)
-class AdaptivePrivatePage:
-    items: tuple[dict[str, Any], ...]
-    cursor: dict[str, str] | None = None
 
 
 @runtime_checkable
@@ -398,85 +378,6 @@ def list_assignments(
         ScanIndexForward=False,
     )
     return sorted(items, key=lambda item: item.get("created_at", ""), reverse=True)
-
-
-def scan_adaptive_private_rows(
-    owner_id: str,
-    *,
-    family: str | None = None,
-    cursor: Mapping[str, Any] | None = None,
-    maximum_pages: int = 1,
-    table: Any | None = None,
-) -> AdaptivePrivatePage:
-    target: object = table if table is not None else db_table.table()
-    marker = dict(cursor) if cursor is not None else None
-    found: list[dict[str, Any]] = []
-    for page in account_deletion_repo.sweep_pages(
-        "adaptive deletion", table=target, cursor=cursor, maximum_pages=maximum_pages
-    ):
-        for item in page.items:
-            if not _owned(item, owner_id):
-                continue
-            entity = str(item.get("entity_type") or "")
-            if family == "assignment" and entity != ASSIGNMENT_ENTITY:
-                continue
-            if family == "learning_memory" and entity != MEMORY_ENTITY:
-                continue
-            found.append(item)
-        if page.last_key is None:
-            return AdaptivePrivatePage(tuple(found))
-        if page.last_key == marker:
-            raise account_deletion_repo.AccountDeletionConflict("adaptive deletion cursor did not advance")
-        marker = page.last_key
-    return AdaptivePrivatePage(tuple(found), marker)
-
-
-def scrub_adaptive_private_row(
-    item: Mapping[str, Any],
-    *,
-    owner_id: str,
-    generation: int,
-    now_iso: str,
-    table: Any | None = None,
-) -> dict[str, Any]:
-    if not _owned(item, owner_id):
-        raise account_deletion_repo.AccountDeletionConflict("adaptive row owner changed")
-    candidate = {
-        "PK": item["PK"],
-        "SK": item["SK"],
-        "entity_type": f"{item.get('entity_type') or 'adaptive'}_deletion_tombstone",
-        "schema_version": "adaptive-deletion-tombstone.v1",
-        "assignment_id": item.get("assignment_id"),
-        "status": "deleted",
-        "owner_deletion_generation": generation,
-        "created_at": item.get("created_at"),
-        "deleted_at": now_iso,
-    }
-    tombstone = {
-        key: value
-        for key, value in candidate.items()
-        if key in ADAPTIVE_TOMBSTONE_ALLOWLIST and value is not None
-    }
-    target = table or db_table.table()
-    hook = getattr(target, "replace_learning_tombstone", None)
-    if callable(hook):
-        hook(dict(item), tombstone, owner_id, generation)
-    else:
-        db_table.transact(
-            [
-                account_deletion_repo.deletion_fence_condition(owner_id, generation),
-                {
-                    "Put": {
-                        "Item": tombstone,
-                        "ConditionExpression": (
-                            "attribute_exists(PK) AND attribute_exists(SK)"
-                        ),
-                    }
-                },
-            ],
-            table=target,
-        )
-    return tombstone
 
 
 def _owned(item: Mapping[str, Any], owner_id: str) -> bool:

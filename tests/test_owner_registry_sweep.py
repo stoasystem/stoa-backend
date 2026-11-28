@@ -233,63 +233,6 @@ def test_a_recovery_job_and_its_audit_events_are_complete_without_a_backfill():
     assert not report.unregistered
 
 
-def test_a_scan_that_cannot_judge_the_row_counts_as_taking_it(monkeypatch):
-    def refuses(account, *, table, maximum_pages):
-        raise RuntimeError("cannot read this row")
-
-    monkeypatch.setattr(sweep, "DELETION_SCANS", (refuses,))
-
-    assert sweep.deletion_takes({"PK": "X#1", "SK": "META"}, STUDENT, table=FakeTable())
-
-
-def test_every_deletion_scan_is_asked():
-    """Each function that pages through `sweep_pages` to find an account's rows.
-
-    A new deletion branch with its own scan has to be added to `DELETION_SCANS`,
-    so that the test below holds it to the catalog.
-    """
-    import ast
-
-    # Not an account's rows: the helper that looks for an account's deletion
-    # commands. And the attachments branch, which pages inline and takes rows
-    # by `owner_id` / `student_id` as `scan_owned_private_rows` does.
-    not_a_row_scan = {
-        "_scan_commands",
-        "_attachments_branch",
-    }
-    callers: set[str] = set()
-    for path in (ROOT / "src" / "stoa").rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.FunctionDef):
-                continue
-            for call in ast.walk(node):
-                target = getattr(call, "func", None)
-                name = getattr(target, "attr", None) or getattr(target, "id", None)
-                if isinstance(call, ast.Call) and name == "sweep_pages":
-                    callers.add(node.name)
-    assert callers - not_a_row_scan == {scan.__name__ for scan in sweep.DELETION_SCANS}
-
-
-def test_a_row_a_deletion_scan_takes_is_one_the_catalog_names():
-    """The walk asks the catalog, not the scans (#590): so no scan may take more.
-
-    A row some branch's scan takes for an account the catalog does not say
-    the row points to would be one the registry never lists, and the registry
-    path would miss it.
-    """
-    from test_account_deletion_branch_coverage import ACCOUNT, deleted_by_branch
-
-    taken_beyond = []
-    for entity_type, (_, row) in sorted(deleted_by_branch().items()):
-        for account in (ACCOUNT, STUDENT):
-            if sweep.deletion_takes(row, account, table=FakeTable()) and not (
-                data_catalog.names(row, account)
-            ):
-                taken_beyond.append((entity_type, account))
-    assert not taken_beyond
-
-
 def test_the_sweep_finds_a_deleted_accounts_leftovers_and_registry(table):
     report = sweep.run(table=table)
 

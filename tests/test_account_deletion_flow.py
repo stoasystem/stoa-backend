@@ -343,7 +343,7 @@ def test_a_tombstone_is_never_found_again(entry):
 
 
 def test_the_profile_tombstone_its_module_writes_is_the_catalogs():
-    assert account_deletion_repo.QUESTION_TOMBSTONE_ALLOWLIST == _keeps("user_profile")
+    assert account_deletion_repo._profile_tombstone_keeps() == _keeps("user_profile")
 
 
 # -- the whole deletion ------------------------------------------------------------------------

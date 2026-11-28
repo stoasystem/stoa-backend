@@ -2,21 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from fakes.ask_question import DELETED_STUDENT as STUDENT_ID
-from fakes.ask_question import DELETION_NOW as NOW
-from fakes.ask_question import PRIVATE_CONVERSATION as CONVERSATION_ID
 from fakes.ask_question import _private_message as _message
 from fakes.dynamodb import from_wire
-from stoa import aws
-from stoa.aws import Kind
 from stoa.db.repositories import attachment_repo
-from stoa.services import account_deletion_service, attachment_service, learning_session
+from stoa.services import learning_session
 
 
 def _contract(name: str) -> Any:
@@ -24,26 +19,6 @@ def _contract(name: str) -> Any:
     if value is None:
         pytest.fail(f"conversation deletion contract {name} is not implemented")
     return value
-
-
-def test_conversation_private_fields_are_declared() -> None:
-    # Which rows are a conversation's is the data type catalog's to say (#586),
-    # and what their deletion does too (#639).
-    private = _contract("CONVERSATION_PRIVATE_FIELDS")
-    assert {
-        "content",
-        "result_json",
-        "fingerprint",
-        "title",
-        "last_message_preview",
-        "subject",
-        "grade",
-        "note",
-        "escalation_message",
-        "attachment_ids",
-        "request_correlation_id",
-    } <= set(private)
-    assert "conversation_messages" in account_deletion_service.BRANCH_HANDLERS
 
 
 def test_every_conversation_write_transaction_starts_with_exact_account_fence() -> None:
@@ -140,94 +115,3 @@ def test_direct_router_writes_are_forbidden_by_static_writer_gate() -> None:
         assert "MSG#" not in path.read_text(encoding="utf-8"), path.name
 
 
-def test_private_row_discovery_is_strong_paginated_and_scrub_is_allowlisted() -> None:
-    scan = _contract("scan_conversation_private_rows")
-    scrub = _contract("scrub_conversation_private_row")
-    pages: list[dict[str, Any]] = [
-        {
-            "Items": [_message()],
-            "LastEvaluatedKey": {"PK": f"CONV#{CONVERSATION_ID}", "SK": "MSG#student"},
-        },
-        {"Items": [_message("NOTE#late", entity_type="teacher_note", note="late private note")]},
-    ]
-    calls: list[dict[str, Any]] = []
-    tombstones: list[dict[str, Any]] = []
-
-    class _Table:
-        def scan(self, **kwargs: Any) -> dict[str, Any]:
-            calls.append(kwargs)
-            return pages.pop(0)
-
-        def scrub_conversation_private_row(
-            self, _original: dict[str, Any], tombstone: dict[str, Any], *_args: Any
-        ) -> None:
-            tombstones.append(tombstone)
-
-    table = _Table()
-    first = scan(STUDENT_ID, table=table, maximum_pages=1)
-    second = scan(STUDENT_ID, table=table, cursor=first.cursor, maximum_pages=1)
-    for item in (*first.items, *second.items):
-        scrub(item, owner_id=STUDENT_ID, generation=7, now_iso=NOW, table=table)
-
-    allowlist = _contract("CONVERSATION_TOMBSTONE_ALLOWLIST")
-    assert all(call.get("ConsistentRead") is True and "IndexName" not in call for call in calls)
-    assert all(set(item) <= allowlist for item in tombstones)
-    assert "private message canary" not in repr(tombstones)
-    assert "late private note" not in repr(tombstones)
-
-
-def test_conversation_branch_releases_associations_before_scrub_and_requires_later_zero_scan(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    branch = getattr(account_deletion_service, "_conversation_messages_branch", None)
-    if branch is None:
-        pytest.fail("conversation_messages branch is not implemented")
-    page_type = _contract("ConversationPrivatePage")
-    pages = [
-        page_type(
-            (_message(),),
-            {"PK": f"CONV#{CONVERSATION_ID}", "SK": "MSG#student"},
-            1,
-        ),
-        page_type((), None, 0),
-        page_type((), None, 0),
-        page_type((), None, 0),
-    ]
-    order: list[str] = []
-    monkeypatch.setattr(
-        attachment_repo,
-        "scan_conversation_private_rows",
-        lambda *_args, **_kwargs: pages.pop(0),
-    )
-    def release_conversation_attachments(**_kwargs: Any) -> dict[str, int]:
-        order.append("release")
-        return {"released": 1, "deleted": 0}
-
-    monkeypatch.setattr(
-        attachment_service,
-        "release_conversation_attachments",
-        release_conversation_attachments,
-    )
-    monkeypatch.setattr(
-        attachment_repo,
-        "scrub_conversation_private_row",
-        lambda *_args, **_kwargs: order.append("scrub"),
-    )
-    aws.install({Kind.S3: object()})  # the release itself is replaced above
-    previous: dict[str, Any] = {}
-    results = []
-    for _ in range(4):
-        result = branch(command={"user_id": STUDENT_ID, "generation": 7}, previous=previous)
-        results.append(result)
-        previous = result.persisted(NOW)
-    assert order[:2] == ["release", "scrub"]
-    assert [item.epoch for item in results] == [0, 0, 1, 2]
-    assert results[-1].quiescent is True
-    assert asdict(results[-1])["debt_counts"] == {}
-
-
-def test_provider_retained_bedrock_payload_is_explicitly_outside_backend_purge() -> None:
-    boundary = _contract("CONVERSATION_PROVIDER_RETENTION_BOUNDARY")
-    assert boundary == {
-        "bedrock_request_response": "outside_backend_deletion_control"
-    }

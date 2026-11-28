@@ -41,10 +41,11 @@ from stoa.deps import get_actor
 from stoa.jobs import moderation_image_retention
 from stoa.routers import admin, files, notifications
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services import account_deletion_service, locale_service, message_catalog
+from stoa.services import locale_service, message_catalog
 from stoa.services.uploads import _store as upload_store
+import deletion_helpers
 from actor_helpers import install_actor_overrides
-from fakes.dynamodb import FakeTable, as_stored
+from fakes.dynamodb import FakeTable
 from fakes.learning_session import patch_session_table, seed_conversation
 from fakes.rekognition import FakeRekognition
 from fakes.s3 import MultipartS3
@@ -432,29 +433,13 @@ def test_the_retention_job_is_reached_from_its_schedule(world, monkeypatch) -> N
 
 def test_account_deletion_removes_the_image_and_the_case(world, monkeypatch) -> None:
     _upload_id, case = _blocked(world)
-    world.table.seed(
-        as_stored(
-            {
-                "PK": f"USER#{STUDENT}",
-                "SK": "ACCOUNT_FENCE",
-                "status": "deletion_pending",
-                "generation": 3,
-            }
-        )
-    )
     aws.install({Kind.S3: world.s3})
     config.install(world.settings)
 
-    previous: dict[str, Any] = {}
-    for _ in range(6):
-        result = account_deletion_service._moderation_support_branch(
-            command={"user_id": STUDENT, "generation": 3}, previous=previous
-        )
-        previous = result.persisted(datetime.now(UTC).isoformat())
-        if result.status == "complete":
-            break
+    # The whole deletion, as production runs it (#642).
+    command = deletion_helpers.delete_account(STUDENT)
 
-    assert result.status == "complete"
+    assert command["status"] == "complete"
     assert world.evidence() == []
     assert world.cases() == []
     assert world.admin.get(f"/admin/moderation/cases/{case['case_id']}").status_code == 404
@@ -463,11 +448,6 @@ def test_account_deletion_removes_the_image_and_the_case(world, monkeypatch) -> 
 def test_a_lost_image_keeps_account_deletion_waiting(world, monkeypatch) -> None:
     """If the image cannot be deleted, the case is not scrubbed and its coordinates kept."""
     _blocked(world)
-    world.table.seed(
-        as_stored(
-            {"PK": f"USER#{STUDENT}", "SK": "ACCOUNT_FENCE", "status": "deletion_pending", "generation": 3}
-        )
-    )
 
     def refuse(**_kwargs: Any) -> dict[str, Any]:
         raise ClientError({"Error": {"Code": "InternalError", "Message": "x"}}, "DeleteObject")
@@ -476,11 +456,11 @@ def test_a_lost_image_keeps_account_deletion_waiting(world, monkeypatch) -> None
     aws.install({Kind.S3: world.s3})
     config.install(world.settings)
 
-    result = account_deletion_service._moderation_support_branch(
-        command={"user_id": STUDENT, "generation": 3}, previous={}
-    )
+    command_id = deletion_helpers.accept(STUDENT)
+    for _ in range(3):
+        command = deletion_helpers.run_once(STUDENT, command_id)
 
-    assert result.status == "retryable"
+    assert command["status"] != "complete"
     assert len(world.evidence()) == 1
     [summary] = [
         row for (pk, sk), row in world.table.rows.items() if pk.startswith("MODERATION#") and sk == "SUMMARY"

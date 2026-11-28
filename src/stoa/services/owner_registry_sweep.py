@@ -8,9 +8,9 @@ checks two things for every account at once:
 1. **Missing registrations.** For every row, the accounts the data type
    catalog says it points to (`data_catalog.mentions`, owner or reference:
    deletion removes the one and scrubs the other, #588), less the account's
-   own derived partitions and the partitions registered under it (#590). The
-   registry path reads only those, so it would never see the row. These are
-   what close the registry path (`record_run`, `registry_path_ready`) and
+   own derived partitions and the partitions registered under it (#590). A
+   deletion reads only those, so it would never see the row. These are what
+   stop new deletions being accepted (`record_run`, `registry_path_ready`) and
    raise the alarm. A field the catalog lists as no pointer (`created_by`,
    `invited_by`, `actor_id`) is a mention: no deletion acts on it, nothing
    registers it, and it is not counted (#586 decision 1).
@@ -55,30 +55,20 @@ from stoa.db import data_catalog, owner_registry
 from stoa.db import table as db_table
 from stoa.db.repositories import (
     account_deletion_repo,
-    adaptive_learning_repo,
-    ai_teacher_tools_repo,
-    attachment_repo,
-    curriculum_analytics_repo,
-    moderation_repo,
-    practice_repo,
-    report_repo,
-    websocket_repo,
 )
-from stoa.services import notifications
 
 logger = logging.getLogger(__name__)
 
 SAMPLE_LIMIT = 20
 
 # Partitions no deletion acts on, whatever the catalog says their rows point
-# to: evidence kept on purpose, the deletion's own bookkeeping, and the
-# classes the deletion inventory excludes. A row here is neither a missing
-# registration nor a leftover. (Not a rule of whose a row is: that is the
-# catalog's. Which kinds a deletion keeps is candidate I's `deletion` slot.)
+# to: evidence kept on purpose and the deletion's own bookkeeping. A row here
+# is neither a missing registration nor a leftover. (Not a rule of whose a row
+# is: that is the catalog's, and so is what a deletion does with it.)
 # The shared practice content lives under the exact key `PRACTICE` and names
 # no account; the old untyped `PRACTICE#` / `PRACTICE_ATTEMPT#` /
-# `PRACTICE_PROGRESS#` rows do, and the practice branch deletes them, so they
-# are checked like any other since #590.
+# `PRACTICE_PROGRESS#` rows do, and the deletion takes them as the catalog
+# says, so they are checked like any other since #590.
 NOT_OWNED_PREFIXES: tuple[str, ...] = (
     "SECURITY_AUDIT#",
     "AUDIT_RETENTION#",
@@ -91,16 +81,16 @@ NOT_OWNED_PREFIXES: tuple[str, ...] = (
     "CURRICULUM_AUDIT#",
     "CURRICULUM_POINTER#",
     "CURRICULUM_MIGRATION#",
-    # The reviewed `teacher_application` exclusion: no deletion branch acts
-    # on applications, invitations or activation commands (the activation
+    # The reviewed `teacher_application` exclusion: no deletion acts on
+    # applications, invitations or activation commands (the activation
     # command carries the new teacher's `user_id`, and stays on purpose).
     "TEACHER_APPLICATION#",
     "TEACHER_INVITATION#",
     "TEACHER_ACTIVATION#",
 )
 
-# Where the daily run leaves its result: what acceptance reads before it seals
-# a deletion for the registry path (#397).
+# Where the daily run leaves its result: what acceptance reads before it takes
+# a new deletion (`account_deletion_service.registry_path_ready`, #397).
 RUN_MARKER_KEY = {"PK": "JOB#owner_registry_sweep", "SK": "LAST_RUN"}
 
 # Rows deletion keeps under the deleted account's own partition: its own
@@ -112,63 +102,6 @@ _RETAINED_ACCOUNT_SK_PREFIXES = (
     "DELETE_ACCOUNTING#",
     "PROVIDER_REVOKE#",
 )
-
-# Every scan a deletion branch finds an account's rows with. Each pages the
-# table through `account_deletion_repo.sweep_pages`, which is also where the
-# registry path narrows the read to derived and registered partitions.
-# `tests/test_owner_registry_sweep.py` holds this list to every caller of
-# `sweep_pages` in the tree. The walk no longer asks them (#590): the catalog
-# says whom a row points to, and every scan asks the catalog too (#588). The
-# test holds them to the catalog instead - a row one of them takes is a row the
-# catalog names - and whether they stay is candidate I's call.
-DELETION_SCANS: tuple[Callable[..., Any], ...] = (
-    account_deletion_repo.scan_owned_private_rows,
-    adaptive_learning_repo.scan_adaptive_private_rows,
-    ai_teacher_tools_repo.scan_ai_draft_private_rows,
-    attachment_repo.scan_conversation_private_rows,
-    curriculum_analytics_repo.scan_curriculum_signal_manifests,
-    moderation_repo.scan_moderation_private_rows,
-    notifications.scan_notification_private_rows,
-    practice_repo.scan_practice_private_rows,
-    report_repo.scan_report_private_rows,
-    websocket_repo.scan_account_connections,
-)
-
-
-class _OneRow:
-    """The table as a deletion scan would see it if it held this one row.
-
-    A scan answers with the row and ends; every other read (a moderation
-    event looking up its case) goes to the real table.
-    """
-
-    def __init__(self, row: Mapping[str, Any], table: object) -> None:
-        self._row = dict(row)
-        self._table = table
-
-    def scan(self, **_request: object) -> dict[str, Any]:
-        return {"Items": [dict(self._row)]}
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._table, name)
-
-
-def deletion_takes(item: Mapping[str, Any], account: str, *, table: object) -> bool:
-    """Whether any branch of `account`'s deletion would take this row.
-
-    Asked of the scans themselves. A scan that counts the row as unresolved,
-    or cannot make it out at all, counts as taking it. Not used by the walk
-    since #590; the tests compare it with the catalog.
-    """
-    view = _OneRow(item, table)
-    for scan in DELETION_SCANS:
-        try:
-            page = scan(account, table=view, maximum_pages=1)
-        except Exception:  # noqa: BLE001 - any refusal is a reason not to vouch
-            return True
-        if page.items or getattr(page, "unresolved", 0):
-            return True
-    return False
 
 
 @dataclass

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 
-from stoa.db import data_catalog, owner_registry
+from stoa.db import owner_registry
 from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
@@ -35,19 +34,6 @@ AI_DRAFT_PRIVATE_FIELDS = frozenset(
         "review_note",
     }
 )
-AI_DRAFT_TOMBSTONE_ALLOWLIST = frozenset(
-    {
-        "PK",
-        "SK",
-        "entity_type",
-        "schema_version",
-        "draft_id",
-        "status",
-        "owner_deletion_generation",
-        "created_at",
-        "deleted_at",
-    }
-)
 
 
 type AIDraftItem = dict[str, object]
@@ -71,23 +57,6 @@ class _QueryTable(Protocol):
 @runtime_checkable
 class _UpdateTable(Protocol):
     def update_item(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _TombstoneTable(Protocol):
-    def replace_learning_tombstone(
-        self,
-        item: AIDraftItem,
-        tombstone: AIDraftItem,
-        owner_id: str,
-        generation: int,
-    ) -> object: ...
-
-
-@dataclass(frozen=True, slots=True)
-class AIDraftPrivatePage:
-    items: tuple[AIDraftItem, ...]
-    cursor: dict[str, str] | None = None
 
 
 def _mapping(value: object) -> AIDraftItem:
@@ -352,78 +321,3 @@ def list_drafts(
     return sorted(items, key=_created_at, reverse=True)
 
 
-def _owned_draft(item: Mapping[str, object], owner_id: str) -> bool:
-    """One of the student's AI drafts, by the data type catalog."""
-    return item.get("entity_type") == DRAFT_ENTITY and data_catalog.owns(
-        item, account_deletion_repo.deletion_account(owner_id)
-    )
-
-
-def scan_ai_draft_private_rows(
-    owner_id: str,
-    *,
-    cursor: Mapping[str, object] | None = None,
-    maximum_pages: int = 1,
-    table: object | None = None,
-) -> AIDraftPrivatePage:
-    target = table or db_table.table()
-    marker = dict(cursor) if cursor is not None else None
-    found: list[AIDraftItem] = []
-    for page in account_deletion_repo.sweep_pages(
-        "AI draft deletion", table=target, cursor=cursor, maximum_pages=maximum_pages
-    ):
-        for raw in page.items:
-            item = _mapping(raw)
-            if _owned_draft(item, owner_id):
-                found.append(item)
-        if page.last_key is None:
-            return AIDraftPrivatePage(tuple(found))
-        if page.last_key == marker:
-            raise account_deletion_repo.AccountDeletionConflict("AI draft deletion cursor did not advance")
-        marker = page.last_key
-    return AIDraftPrivatePage(tuple(found), marker)
-
-
-def scrub_ai_draft_private_row(
-    item: Mapping[str, object],
-    *,
-    owner_id: str,
-    generation: int,
-    now_iso: str,
-    table: object | None = None,
-) -> AIDraftItem:
-    if not _owned_draft(item, owner_id):
-        raise account_deletion_repo.AccountDeletionConflict("AI draft owner changed")
-    candidate = {
-        "PK": item["PK"],
-        "SK": item["SK"],
-        "entity_type": "ai_teacher_draft_deletion_tombstone",
-        "schema_version": "ai-draft-deletion-tombstone.v1",
-        "draft_id": item.get("draft_id"),
-        "status": "deleted",
-        "owner_deletion_generation": generation,
-        "created_at": item.get("created_at"),
-        "deleted_at": now_iso,
-    }
-    tombstone = {
-        key: value
-        for key, value in candidate.items()
-        if key in AI_DRAFT_TOMBSTONE_ALLOWLIST and value is not None
-    }
-    target = table or db_table.table()
-    if isinstance(target, _TombstoneTable):
-        target.replace_learning_tombstone(_mapping(item), tombstone, owner_id, generation)
-    else:
-        db_table.transact(
-            [
-                account_deletion_repo.deletion_fence_condition(owner_id, generation),
-                {
-                    "Put": {
-                        "Item": tombstone,
-                        "ConditionExpression": ("attribute_exists(PK) AND attribute_exists(SK)"),
-                    }
-                },
-            ],
-            table=target,
-        )
-    return tombstone
