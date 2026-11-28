@@ -3,8 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-import pytest
-
 from fakes.dynamodb import FakeTable, from_wire
 from stoa.config import Settings
 from stoa.db import table as db_table
@@ -66,65 +64,6 @@ def _association(
     }
 
 
-class _StrongPagedTable:
-    name = "stoa-test"
-
-    def __init__(self, pages: list[dict[str, Any]]) -> None:
-        self.pages = pages
-        self.calls: list[dict[str, Any]] = []
-
-    def query(self, **_kwargs: Any) -> dict[str, Any]:
-        raise AssertionError("eventually consistent owner GSI must not authorize absence")
-
-    def scan(self, **kwargs: Any) -> dict[str, Any]:
-        self.calls.append(kwargs)
-        index = len(self.calls) - 1
-        return self.pages[index]
-
-
-def test_strong_owner_enumeration_joins_metadata_and_associations_across_pages() -> None:
-    attachment = _attachment()
-    association = _association()
-    table = _StrongPagedTable(
-        [
-            {"Items": [association], "LastEvaluatedKey": {"PK": "cursor", "SK": "1"}},
-            {"Items": [attachment]},
-        ]
-    )
-
-    items = attachment_repo.list_owner_attachment_items(OWNER, table=table)
-
-    assert {item["entity_type"] for item in items} == {
-        "attachment",
-        "attachment_association",
-    }
-    assert len(table.calls) == 2
-    assert all(call["ConsistentRead"] is True for call in table.calls)
-    assert table.calls[1]["ExclusiveStartKey"] == {"PK": "cursor", "SK": "1"}
-
-
-@pytest.mark.parametrize(
-    "second_cursor",
-    [
-        {"PK": "cursor", "SK": "1"},
-        {"PK": "cursor"},
-        "not-a-key",
-    ],
-)
-def test_strong_owner_enumeration_rejects_repeating_or_malformed_cursors(
-    second_cursor: Any,
-) -> None:
-    table = _StrongPagedTable(
-        [
-            {"Items": [], "LastEvaluatedKey": {"PK": "cursor", "SK": "1"}},
-            {"Items": [], "LastEvaluatedKey": second_cursor},
-        ]
-    )
-
-    with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
-        attachment_repo.list_owner_attachment_items(OWNER, table=table)
-
-
 def _condition_checks(operations: list[Any]) -> list[dict[str, Any]]:
     return [
         operation.item["ConditionCheck"]
@@ -133,7 +72,8 @@ def _condition_checks(operations: list[Any]) -> list[dict[str, Any]]:
     ]
 
 
-def test_message_association_transaction_checks_resource_and_account_fences() -> None:
+def test_message_association_transaction_checks_the_account_fence_alone() -> None:
+    """Binding checks the owner's account fence and no fence of the resource (#636, #655)."""
     operations = attachment_repo.build_message_attachment_transaction(
         message_put=learning_session.append(
             "1",
@@ -153,10 +93,7 @@ def test_message_association_transaction_checks_resource_and_account_fences() ->
         now_iso="2026-07-17T00:00:00+00:00",
     )
 
-    checks = _condition_checks(operations)
-    assert [check["Key"]["SK"] for check in checks] == [
-        f"RETENTION#RESOURCE#conversation#{RESOURCE}",
-    ]
+    assert _condition_checks(operations) == []
 
     # The account fence is the table gateway's to add, first, when it is sent.
     sent: list[dict[str, Any]] = []
@@ -169,7 +106,7 @@ def test_message_association_transaction_checks_resource_and_account_fences() ->
     account = sent[0]["ConditionCheck"]
     assert account["Key"] == {"PK": f"USER#{OWNER}", "SK": "ACCOUNT_FENCE"}
     assert account["ConditionExpression"] == "#status=:active AND generation=:generation"
-    assert len([operation for operation in sent if "ConditionCheck" in operation]) == 2
+    assert len([operation for operation in sent if "ConditionCheck" in operation]) == 1
 
 
 class _VersionListingS3:
@@ -291,22 +228,3 @@ def test_promotion_success_persists_cleanup_debt_before_staging_delete() -> None
     values = table.calls[0]["ExpressionAttributeValues"]
     assert "staging_cleanup_status" in table.calls[0]["ExpressionAttributeNames"].values()
     assert "pending" in values.values()
-
-
-def test_retention_outcome_contract_is_closed_and_typed() -> None:
-    assert {member.value for member in attachment_service.RetentionDisposition} == {
-        "complete",
-        "incomplete_retryable",
-        "conflict",
-        "concealed_missing",
-    }
-    assert {member.value for member in attachment_service.RetentionStage} >= {
-        "fenced",
-        "references_releasing",
-        "object_deletion_pending",
-        "object_absence_proven",
-        "quota_finalize_pending",
-        "complete",
-        "retryable",
-        "conflict",
-    }

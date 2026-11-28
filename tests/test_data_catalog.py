@@ -109,6 +109,10 @@ NO_LONGER_WRITTEN: dict[str, str] = {
     "practice_accounting_tombstone": "#642",
     "ai_teacher_draft_deletion_tombstone": "#642",
     "teacher_session_deletion_tombstone": "#642",
+    # #655 removed the per-resource retention fence with the old per-resource
+    # release, its only writer. The entry leaves the catalog once the one-off
+    # script has cleared the stored rows.
+    "attachment_retention_fence": "#655",
 }
 
 

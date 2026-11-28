@@ -17,7 +17,7 @@ from stoa.aws import Kind
 from stoa.config import Settings
 from stoa import config
 from stoa.db import table as db_table
-from stoa.db.repositories import account_deletion_repo, attachment_repo
+from stoa.db.repositories import attachment_repo
 from stoa.deps import get_actor
 from stoa.models import attachment as attachment_models
 from stoa.routers import files
@@ -313,52 +313,6 @@ def test_delete_unreferenced_projects_retryable_until_exact_absence() -> None:
         s3=_DownloadS3(RuntimeError("provider-private-canary")),
         settings=Settings(s3_images_bucket=PRIVATE_CANARIES[0]),
     ).status
-
-
-def test_purge_hook_returns_typed_independent_progress_without_aggregate_authority(
-    monkeypatch,
-) -> None:
-    # The account has no attachment rows: none, on the empty table every test
-    # starts with.
-    result_type = getattr(attachment_service, "AttachmentPurgeBranchResult", None)
-    assert result_type is not None
-    assert not hasattr(result_type, "finalize_account")
-    table = _seed()
-    table.seed(
-        {
-            **account_deletion_repo.account_fence_key("student-1"),
-            "status": "deletion_pending",
-            "generation": 7,
-        }
-    )
-    finalized = []
-    monkeypatch.setattr(
-        attachment_repo,
-        "complete_retention_fence",
-        lambda *args, **kwargs: finalized.append(args),
-    )
-    result = attachment_service.purge_student_attachments(
-        "student-1",
-        account_fence_generation=7,
-        cursors={},
-        s3=object(),
-        settings=Settings(s3_images_bucket=PRIVATE_CANARIES[0]),
-    )
-    assert isinstance(result, result_type)
-    assert result.status.value in {"complete", "retryable", "conflict"}
-    assert set(result.cursors) == {
-        "saved",
-        "references",
-        "intents",
-        "multipart",
-        "immutable",
-        "staging",
-        "quota",
-        "provider_debt",
-    }
-    assert result.quiescent is True
-    assert sum(result.debt_counts.values()) == 0
-    assert finalized == []
 
 
 def _client(

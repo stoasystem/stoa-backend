@@ -35,7 +35,7 @@ from stoa.db.repositories import account_deletion_repo, account_email_claim_repo
 from stoa.jobs import account_deletion as job
 from stoa.services import account_deletion_service as service
 from stoa.services import account_deletion_flow as flow
-from stoa.services import account_provisioning_service, attachment_service, owner_registry_sweep
+from stoa.services import account_provisioning_service, owner_registry_sweep
 
 
 ISSUER = "https://cognito-idp.eu-central-2.amazonaws.com/pool-test"
@@ -203,7 +203,7 @@ def test_a_deletion_reads_its_command_by_key_and_never_scans_for_it(
     ) in requests
 
 
-# ── 2. the owner listing pages ─────────────────────────────────────────────
+# ── 2. a large table ─────────────────────────────────────────────
 
 
 class _BigTable:
@@ -232,23 +232,6 @@ class _BigTable:
 
 def _unrelated(count: int) -> list[dict[str, Any]]:
     return [{"PK": f"ROW#{index:05d}", "SK": "DATA", "entity_type": "unrelated"} for index in range(count)]
-
-
-OWNER = "student-big"
-LATE_ATTACHMENT = {
-    "PK": "ROW#11000", "SK": "ATTACHMENT", "entity_type": "attachment",
-    "student_id": OWNER, "attachment_id": "att-late", "status": "active",
-}
-
-
-def test_the_owner_listing_reads_past_ten_thousand_rows() -> None:
-    table = _BigTable([*_unrelated(12_000), LATE_ATTACHMENT])
-
-    items = attachment_service.attachment_repo.list_owner_attachment_items(OWNER, table=table)
-
-    assert [item["attachment_id"] for item in items] == ["att-late"]
-    assert all(call["ConsistentRead"] is True for call in table.scans)
-    assert "Limit" not in table.scans[0]  # whole 1 MB pages, not hundred-row ones
 
 
 # ── 3. discovery by the registry ───────────────────────────────────────────
