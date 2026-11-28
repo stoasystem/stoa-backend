@@ -393,16 +393,6 @@ def main() -> int:
             lambda: review_loop_closes(base, student),
         )
 
-    if student:
-        report.check(
-            "reads own learning history",
-            lambda: (
-                lambda seen: seen
-                if isinstance(seen.get("items"), list)
-                else (_ for _ in ()).throw(SmokeFailure("history did not return items"))
-            )(request(base, "GET", "/students/me/learning-history", token=student)),
-        )
-
     print("\nupload")
     if student:
         report.check("photographs an exercise end to end", lambda: upload_probe_image(base, student))

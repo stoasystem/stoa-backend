@@ -5655,67 +5655,6 @@
         "title": "Kpis",
         "type": "object"
       },
-      "LearningHistoryItem": {
-        "properties": {
-          "createdAt": {
-            "title": "Createdat",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "kind": {
-            "title": "Kind",
-            "type": "string"
-          },
-          "source": {
-            "title": "Source",
-            "type": "string"
-          },
-          "sourceLabel": {
-            "title": "Sourcelabel",
-            "type": "string"
-          },
-          "subject": {
-            "title": "Subject",
-            "type": "string"
-          },
-          "summary": {
-            "title": "Summary",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "subject",
-          "title",
-          "summary",
-          "createdAt",
-          "sourceLabel",
-          "kind",
-          "source"
-        ],
-        "title": "LearningHistoryItem",
-        "type": "object"
-      },
-      "LearningHistoryResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/LearningHistoryItem"
-            },
-            "title": "Items",
-            "type": "array"
-          }
-        },
-        "title": "LearningHistoryResponse",
-        "type": "object"
-      },
       "LearningProfileResponse": {
         "properties": {
           "strengthTopics": {
@@ -14414,34 +14353,6 @@
         ],
         "title": "SubscriptionTier",
         "type": "string"
-      },
-      "SummaryResponse": {
-        "properties": {
-          "ai_resolved": {
-            "title": "Ai Resolved",
-            "type": "integer"
-          },
-          "student_id": {
-            "title": "Student Id",
-            "type": "string"
-          },
-          "teacher_resolved": {
-            "title": "Teacher Resolved",
-            "type": "integer"
-          },
-          "total_questions": {
-            "title": "Total Questions",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "student_id",
-          "total_questions",
-          "ai_resolved",
-          "teacher_resolved"
-        ],
-        "title": "SummaryResponse",
-        "type": "object"
       },
       "SystemHealthResponse": {
         "properties": {
@@ -34616,65 +34527,6 @@
         }
       }
     },
-    "/students/me/learning-history": {
-      "get": {
-        "description": "Return the student's own questions and practice lessons, newest first.",
-        "operationId": "get_my_learning_history_students_me_learning_history_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LearningHistoryResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthenticatedResponse"
-                }
-              }
-            },
-            "description": "No usable bearer token"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RuleViolationResponse"
-                }
-              }
-            },
-            "description": "A rule violation (`stoa.rule_violation`)"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get My Learning History",
-        "tags": [
-          "students"
-        ],
-        "x-stoa-authorization": {
-          "authorization": [
-            {
-              "action": "read",
-              "capability": null,
-              "purpose": "self_service",
-              "resource_type": "student"
-            }
-          ],
-          "classification": "authorized",
-          "identifiers": []
-        }
-      }
-    },
     "/students/me/parent-requests": {
       "get": {
         "description": "Link requests awaiting this student's answer; pending grants no visibility.",
@@ -35449,106 +35301,6 @@
           }
         ],
         "summary": "List Questions",
-        "tags": [
-          "students"
-        ],
-        "x-stoa-authorization": {
-          "authorization": [
-            {
-              "action": "read",
-              "capability": null,
-              "purpose": "learning_assignment",
-              "resource_type": "student"
-            },
-            {
-              "action": "read",
-              "capability": null,
-              "purpose": "parent_oversight",
-              "resource_type": "student"
-            },
-            {
-              "action": "read",
-              "capability": null,
-              "purpose": "self_service",
-              "resource_type": "student"
-            },
-            {
-              "action": "read",
-              "capability": null,
-              "purpose": "support",
-              "resource_type": "student"
-            }
-          ],
-          "classification": "authorized",
-          "identifiers": [
-            "student_id"
-          ]
-        }
-      }
-    },
-    "/students/{student_id}/summary": {
-      "get": {
-        "description": "Return aggregated learning stats for a student (student, parent, admin).",
-        "operationId": "get_summary_students__student_id__summary_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "student_id",
-            "required": true,
-            "schema": {
-              "title": "Student Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SummaryResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthenticatedResponse"
-                }
-              }
-            },
-            "description": "No usable bearer token"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RuleViolationResponse"
-                }
-              }
-            },
-            "description": "A rule violation (`stoa.rule_violation`)"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Summary",
         "tags": [
           "students"
         ],

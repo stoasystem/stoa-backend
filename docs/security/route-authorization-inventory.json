@@ -1763,22 +1763,6 @@
         "action": "read",
         "capability": null,
         "purpose": "self_service",
-        "resource_type": "student"
-      }
-    ],
-    "classification": "authorized",
-    "family": "students",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/students/me/learning-history",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": null,
-        "purpose": "self_service",
         "resource_type": "parent_binding"
       }
     ],
@@ -1891,42 +1875,6 @@
     ],
     "method": "GET",
     "path": "/students/{student_id}/questions",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": null,
-        "purpose": "learning_assignment",
-        "resource_type": "student"
-      },
-      {
-        "action": "read",
-        "capability": null,
-        "purpose": "parent_oversight",
-        "resource_type": "student"
-      },
-      {
-        "action": "read",
-        "capability": null,
-        "purpose": "self_service",
-        "resource_type": "student"
-      },
-      {
-        "action": "read",
-        "capability": null,
-        "purpose": "support",
-        "resource_type": "student"
-      }
-    ],
-    "classification": "authorized",
-    "family": "students",
-    "identifiers": [
-      "student_id"
-    ],
-    "method": "GET",
-    "path": "/students/{student_id}/summary",
     "sensitive": true
   },
   {
