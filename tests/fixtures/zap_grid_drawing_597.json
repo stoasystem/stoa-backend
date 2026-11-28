@@ -1908,7 +1908,7 @@
               ]
             }
           ],
-          "explanation": "Spiegle die Linie zuerst an der Diagonale $AC$: Rechts-Abstand und Hoch-Abstand von $A$ aus werden vertauscht.\nSpiegle dann die Linie und ihr erstes Spiegelbild an der Diagonale $BD$.\nAm Schluss liegt die Linie viermal in der Figur: rechts, oben, links und unten.",
+          "explanation": "Spiegle die Linie zuerst an der Diagonale $AC$: Der Abstand nach rechts und der Abstand nach oben, von $A$ aus gemessen, werden vertauscht.\nSpiegle dann die Linie und ihr erstes Spiegelbild an der Diagonale $BD$.\nAm Schluss liegt die Linie viermal in der Figur: rechts, oben, links und unten.",
           "skills": [
             "geometrie-achsen-und-punktsymmetrie--darstellen"
           ],
@@ -1919,7 +1919,7 @@
             },
             "fr": {
               "prompt": "Une ligne formée de deux segments est tracée dans le carré $ABCD$. Complète la figure de sorte que les deux diagonales du carré soient des axes de symétrie de la figure.",
-              "explanation": "Reflète d'abord la ligne par rapport à la diagonale $AC$: la distance vers la droite et la distance vers le haut, mesurées depuis $A$, sont échangées.\nReflète ensuite la ligne et sa première image par rapport à la diagonale $BD$.\nÀ la fin, la ligne apparaît quatre fois dans la figure: à droite, en haut, à gauche et en bas."
+              "explanation": "Construis d'abord le symétrique de la ligne par rapport à la diagonale $AC$: la distance vers la droite et la distance vers le haut, mesurées depuis $A$, sont échangées.\nConstruis ensuite le symétrique de la ligne et de sa première image par rapport à la diagonale $BD$.\nÀ la fin, la ligne apparaît quatre fois dans la figure: à droite, en haut, à gauche et en bas."
             },
             "it": {
               "prompt": "Nel quadrato $ABCD$ è disegnata una linea formata da due segmenti. Completa la figura in modo che entrambe le diagonali del quadrato siano assi di simmetria della figura.",
