@@ -43,6 +43,19 @@ def scrub_notification_private_row(
     )
 
 
+def scrub_notification_identity_references(
+    item: Mapping[str, object],
+    *,
+    owner_id: str,
+    generation: int,
+    table: object | None = None,
+) -> None:
+    """Take the account's name out of a notification another person owns."""
+    notification_repo.scrub_notification_identity_references(
+        item, owner_id=owner_id, generation=generation, table=table
+    )
+
+
 def get_event(event_id: str) -> dict[str, object] | None:
     """One stored notification, for authorizing a route on it."""
     return notification_repo.get_event(event_id)
