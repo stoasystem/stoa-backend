@@ -381,7 +381,11 @@ def test_a_subject_the_catalog_cannot_name_still_dispatches(table, ses, monkeypa
 
     assert help_request["status"] == "assigned"
     assert table.rows[HELP_KEY]["dispatched_teacher_id"] == TEACHER
-    assert any("dispatch_teacher_alert_failed" in record.getMessage() for record in caplog.records)
+    # Logged by the notification entry, which never fails the offer (#686).
+    assert any(
+        "Best-effort notification failed: event_type=teacher_help_dispatched" in record.getMessage()
+        for record in caplog.records
+    )
 
     _on_duty(table, TEACHER, OTHER_TEACHER)
     _lapse_the_offer(table)

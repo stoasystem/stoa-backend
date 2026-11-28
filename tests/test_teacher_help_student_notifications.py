@@ -12,8 +12,9 @@ from typing import Any
 
 import pytest
 
-from stoa.services import notification_service
 from stoa import config
+from stoa.services import notifications
+from stoa.services.notifications import _bell
 from test_chat_help_request_lifecycle import (
     CONV,
     STUDENT,
@@ -32,7 +33,7 @@ def sent(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     # test_teacher_dispatch_alerts.py covers.
     events: list[dict[str, Any]] = []
     monkeypatch.setattr(
-        notification_service,
+        _bell,
         "create_event_safe",
         lambda **kwargs: (
             events.append(kwargs) if kwargs.get("recipient_role") == "student" else None
@@ -141,6 +142,8 @@ def test_the_notifications_reach_the_store_once_each(table, monkeypatch) -> None
         "escalation_request_id": takeover["metadata"]["request_id"],
         "account_fence_generation": takeover.get("account_fence_generation"),
     }
-    notification_service.emit_teacher_help_takeover(conversation=conversation, teacher_id=TEACHER)
+    notifications.happened(
+        notifications.TeacherTookHelpRequest(conversation=conversation, teacher_id=TEACHER)
+    )
     again = [row for row in table.rows.values() if row.get("event_type") == "teacher_takeover"]
     assert len(again) == 1

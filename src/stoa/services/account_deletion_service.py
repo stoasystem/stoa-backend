@@ -28,7 +28,6 @@ from stoa.db.repositories import (
     attachment_repo,
     curriculum_analytics_repo,
     moderation_repo,
-    notification_repo,
     parent_link_repo,
     practice_repo,
     report_repo,
@@ -43,6 +42,7 @@ from stoa.services import (
     attachment_service,
     help_requests,
     moderation_service,
+    notifications,
     owner_registry_sweep,
     usage_period,
 )
@@ -1694,7 +1694,7 @@ def _notification_device_realtime_branch(
             )
         return {"PK": pk, "SK": sk}
 
-    notification_page = notification_repo.scan_notification_private_rows(
+    notification_page = notifications.scan_notification_private_rows(
         owner_id,
         cursor=family_cursor("notification"),
         maximum_pages=1,
@@ -1712,13 +1712,13 @@ def _notification_device_realtime_branch(
     for item in notification_page.items:
         identity = f"{item.get('PK')}|{item.get('SK')}"
         try:
-            if item.get("entity_type") == notification_repo.DELIVERY_INTENT_ENTITY:
+            if item.get("entity_type") == notifications.DELIVERY_INTENT_ENTITY:
                 status = str(item.get("status") or "")
                 if status == "accepted":
                     external_accepted += 1
                 elif status == "provider_acceptance_unknown":
                     external_unknown += 1
-            notification_repo.scrub_notification_private_row(
+            notifications.scrub_notification_private_row(
                 item,
                 owner_id=owner_id,
                 generation=generation,

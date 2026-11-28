@@ -1,0 +1,3997 @@
+{
+ "help_offered": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [],
+   "teacher-686": [
+    {
+     "actorId": null,
+     "actorRole": "system",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "teacher_responses",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "teacher-help-dispatched-dispatch-686",
+     "eventType": "teacher_help_dispatched",
+     "metadata": {
+      "deadline_at": "<time>",
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "dispatch_id": "dispatch-686",
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-5e59eb77b8d8"
+        ]
+       }
+      ],
+      "request_id": "req-686",
+      "subject": "math",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "websocket-a8181ba10e218c05387d2c1a7ae8f2e499094c65",
+        "results": [
+         {
+          "connection_id": "connection-b753825bb5aa0fc0",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "user:teacher-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": null,
+     "recipientId": "teacher-686",
+     "recipientRole": "teacher",
+     "status": "created",
+     "summary": "Matière : Mathématiques. Merci d'accepter la demande dans les 10 minutes.",
+     "targetId": "req-686",
+     "targetType": "question",
+     "title": "Une nouvelle demande d'aide pour vous"
+    }
+   ]
+  },
+  "email": [
+   {
+    "Content": {
+     "Simple": {
+      "Body": {
+       "Html": {
+        "Charset": "UTF-8",
+        "Data": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"color-scheme\" content=\"light\">\n<title>STOA – Nouvelle demande d&#x27;aide : à accepter dans les 10 minutes</title>\n</head>\n<body style=\"margin:0;padding:0;background:#f4f2ef;\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f2ef;padding:24px 12px;\">\n<tr><td align=\"center\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e6e1da;\">\n<tr><td style=\"padding:28px 36px 8px;\">\n<img src=\"https://app.stoaedu.ch/email/stoa-logo.png\" width=\"132\" alt=\"STOA\" style=\"display:block;border:0;height:auto;\">\n</td></tr>\n<tr><td style=\"padding:16px 36px 0;font-family:Helvetica,Arial,sans-serif;color:#2b2523;\">\n<h1 style=\"margin:0 0 18px;font-size:22px;line-height:1.3;font-weight:700;color:#5c1620;\">Une nouvelle demande d&#x27;aide pour vous</h1>\n<p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Bonjour,</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Une nouvelle demande d&#x27;aide vous a été attribuée.</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Matière : Mathématiques</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Merci de l&#x27;accepter dans les 10 minutes ; passé ce délai, elle sera proposée à un autre enseignant.</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:6px 0 22px;\"><tr><td style=\"border-radius:8px;background:#7a1f2b;\"><a href=\"https://app.stoaedu.ch/teacher/requests/req-686\" style=\"display:inline-block;padding:13px 26px;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;\">Ouvrir la demande dans STOA</a></td></tr></table><p data-text-part=\"skip\" style=\"margin:0 0 22px;font-size:13px;line-height:1.6;color:#8a817c;\">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br><a href=\"https://app.stoaedu.ch/teacher/requests/req-686\" style=\"color:#7a1f2b;word-break:break-all;\">https://app.stoaedu.ch/teacher/requests/req-686</a></p><p style=\"margin:0 0 14px;font-size:14px;line-height:1.6;color:#6b625e;\">Vous pouvez désactiver ce rappel dans les paramètres de notification de STOA.</p><p style=\"margin:0 0 28px;font-size:16px;line-height:1.6;color:#2b2523;\">Cordialement<br>L&#x27;équipe STOA</p>\n</td></tr>\n<tr><td style=\"padding:18px 36px 24px;background:#faf8f5;border-top:1px solid #eee8e1;border-radius:0 0 12px 12px;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#8a817c;\">\n<strong style=\"color:#5c1620;\">STOA</strong> · Accompagnement scolaire pour les élèves<br>\nZürich · <a href=\"mailto:info@stoaedu.ch\" style=\"color:#8a817c;\">info@stoaedu.ch</a> · <a href=\"https://stoaedu.ch\" style=\"color:#8a817c;\">stoaedu.ch</a>\n<p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Vous recevez cet e-mail parce que STOA vous attribue des demandes d&#x27;aide. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODYifQ.Qil3eJBIuj3jICNVM5ubvIZUgGz1Nxjfhp2Btmfbvfw\" style=\"color:#8a817c;\">Se désabonner de ces e-mails</a></p><!--stoa:footer-end-->\n</td></tr>\n</table>\n</td></tr>\n</table>\n</body>\n</html>"
+       },
+       "Text": {
+        "Charset": "UTF-8",
+        "Data": "Une nouvelle demande d'aide pour vous\n\nBonjour,\n\nUne nouvelle demande d'aide vous a été attribuée.\n\nMatière : Mathématiques\n\nMerci de l'accepter dans les 10 minutes ; passé ce délai, elle sera proposée à un autre enseignant.\n\nOuvrir la demande dans STOA: https://app.stoaedu.ch/teacher/requests/req-686\n\nVous pouvez désactiver ce rappel dans les paramètres de notification de STOA.\n\nCordialement\nL'équipe STOA\n\nSTOA · Accompagnement scolaire pour les élèves\n\nZürich · info@stoaedu.ch · https://stoaedu.ch\n\nVous recevez cet e-mail parce que STOA vous attribue des demandes d'aide. Se désabonner de ces e-mails: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODYifQ.Qil3eJBIuj3jICNVM5ubvIZUgGz1Nxjfhp2Btmfbvfw\n"
+       }
+      },
+      "Headers": [
+       {
+        "Name": "List-Unsubscribe",
+        "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODYifQ.Qil3eJBIuj3jICNVM5ubvIZUgGz1Nxjfhp2Btmfbvfw>"
+       },
+       {
+        "Name": "List-Unsubscribe-Post",
+        "Value": "List-Unsubscribe=One-Click"
+       }
+      ],
+      "Subject": {
+       "Charset": "UTF-8",
+       "Data": "STOA – Nouvelle demande d'aide : à accepter dans les 10 minutes"
+      }
+     }
+    },
+    "Destination": {
+     "ToAddresses": [
+      "teacher-686@stoa.test"
+     ]
+    },
+    "FromEmailAddress": "STOA <noreply@stoa.test>",
+    "ReplyToAddresses": [
+     "info@stoaedu.ch"
+    ]
+   }
+  ],
+  "events": [
+   {
+    "PK": "NOTIFICATION#teacher-help-dispatched-dispatch-686",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_role": "system",
+    "category": "teacher_responses",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "teacher-help-dispatched-dispatch-686",
+    "event_type": "teacher_help_dispatched",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "deadline_at": "<time>",
+     "delivery_decision": {
+      "category": "teacher_responses",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "dispatch_id": "dispatch-686",
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-5e59eb77b8d8"
+       ]
+      }
+     ],
+     "request_id": "req-686",
+     "subject": "math",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "websocket-a8181ba10e218c05387d2c1a7ae8f2e499094c65",
+       "results": [
+        {
+         "connection_id": "connection-b753825bb5aa0fc0",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "user:teacher-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "student-686",
+    "owner_target_id": "req-686",
+    "owner_target_type": "question",
+    "recipient_id": "teacher-686",
+    "recipient_role": "teacher",
+    "schema_version": "notification-event.v3",
+    "status": "created",
+    "summary": "Matière : Mathématiques. Merci d'accepter la demande dans les 10 minutes.",
+    "sweep_bucket": "notification_inbox#user#teacher-686",
+    "sweep_due_at": "<time>",
+    "target_id": "req-686",
+    "target_type": "question",
+    "title": "Une nouvelle demande d'aide pour vous"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "websocket-46ec49ab7c85af7267a92a323b2fed9f6cb12b99",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Matière : Mathématiques. Merci d'accepter la demande dans les 10 minutes.",
+     "data": {
+      "eventId": "teacher-help-dispatched-dispatch-686",
+      "eventType": "teacher_help_dispatched",
+      "targetId": "req-686",
+      "targetType": "question"
+     },
+     "deliveryId": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+     "template": "stoa-default",
+     "title": "Une nouvelle demande d'aide pour vous",
+     "tokenReferences": [
+      "push-10866c9185d91ede"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": [
+   {
+    "connection_id": "conn-teacher-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "websocket-46ec49ab7c85af7267a92a323b2fed9f6cb12b99",
+     "eventId": "teacher-help-dispatched-dispatch-686",
+     "eventType": "teacher_help_dispatched",
+     "metadata": {
+      "deadline_at": "<time>",
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "dispatch_id": "dispatch-686",
+      "request_id": "req-686",
+      "subject": "math"
+     },
+     "recipientId": "teacher-686",
+     "recipientRole": "teacher",
+     "summary": "Matière : Mathématiques. Merci d'accepter la demande dans les 10 minutes.",
+     "targetId": "req-686",
+     "targetType": "question",
+     "title": "Une nouvelle demande d'aide pour vous"
+    }
+   }
+  ]
+ },
+ "help_offered_standing": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [],
+   "teacher-686": [
+    {
+     "actorId": null,
+     "actorRole": "system",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "teacher_responses",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "teacher-help-dispatched-dispatch-686",
+     "eventType": "teacher_help_dispatched",
+     "metadata": {
+      "deadline_at": "<time>",
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "dispatch_id": "dispatch-686",
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-5e59eb77b8d8"
+        ]
+       }
+      ],
+      "request_id": "req-686",
+      "standing": true,
+      "subject": "math",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "websocket-a8181ba10e218c05387d2c1a7ae8f2e499094c65",
+        "results": [
+         {
+          "connection_id": "connection-b753825bb5aa0fc0",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "user:teacher-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": null,
+     "recipientId": "teacher-686",
+     "recipientRole": "teacher",
+     "status": "created",
+     "summary": "Matière : Mathématiques. La demande vous attend toujours. Merci de l'accepter dès que possible.",
+     "targetId": "req-686",
+     "targetType": "question",
+     "title": "Une nouvelle demande d'aide pour vous"
+    }
+   ]
+  },
+  "email": [],
+  "events": [
+   {
+    "PK": "NOTIFICATION#teacher-help-dispatched-dispatch-686",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_role": "system",
+    "category": "teacher_responses",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "teacher-help-dispatched-dispatch-686",
+    "event_type": "teacher_help_dispatched",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "deadline_at": "<time>",
+     "delivery_decision": {
+      "category": "teacher_responses",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "dispatch_id": "dispatch-686",
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-5e59eb77b8d8"
+       ]
+      }
+     ],
+     "request_id": "req-686",
+     "standing": true,
+     "subject": "math",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "websocket-a8181ba10e218c05387d2c1a7ae8f2e499094c65",
+       "results": [
+        {
+         "connection_id": "connection-b753825bb5aa0fc0",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "user:teacher-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "student-686",
+    "owner_target_id": "req-686",
+    "owner_target_type": "question",
+    "recipient_id": "teacher-686",
+    "recipient_role": "teacher",
+    "schema_version": "notification-event.v3",
+    "status": "created",
+    "summary": "Matière : Mathématiques. La demande vous attend toujours. Merci de l'accepter dès que possible.",
+    "sweep_bucket": "notification_inbox#user#teacher-686",
+    "sweep_due_at": "<time>",
+    "target_id": "req-686",
+    "target_type": "question",
+    "title": "Une nouvelle demande d'aide pour vous"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "websocket-46ec49ab7c85af7267a92a323b2fed9f6cb12b99",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Matière : Mathématiques. La demande vous attend toujours. Merci de l'accepter dès que possible.",
+     "data": {
+      "eventId": "teacher-help-dispatched-dispatch-686",
+      "eventType": "teacher_help_dispatched",
+      "targetId": "req-686",
+      "targetType": "question"
+     },
+     "deliveryId": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+     "template": "stoa-default",
+     "title": "Une nouvelle demande d'aide pour vous",
+     "tokenReferences": [
+      "push-10866c9185d91ede"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": [
+   {
+    "connection_id": "conn-teacher-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "websocket-46ec49ab7c85af7267a92a323b2fed9f6cb12b99",
+     "eventId": "teacher-help-dispatched-dispatch-686",
+     "eventType": "teacher_help_dispatched",
+     "metadata": {
+      "deadline_at": "<time>",
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "dispatch_id": "dispatch-686",
+      "request_id": "req-686",
+      "standing": true,
+      "subject": "math"
+     },
+     "recipientId": "teacher-686",
+     "recipientRole": "teacher",
+     "summary": "Matière : Mathématiques. La demande vous attend toujours. Merci de l'accepter dès que possible.",
+     "targetId": "req-686",
+     "targetType": "question",
+     "title": "Une nouvelle demande d'aide pour vous"
+    }
+   }
+  ]
+ },
+ "moderation_case_opened": {
+  "bells": {
+   "admin-686": [
+    {
+     "actorId": "student-686",
+     "actorRole": "student",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "admin_operations",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "skipped_preference",
+       "enabled": false
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "<event-id>",
+     "eventType": "moderation_case_update",
+     "metadata": {
+      "delivery_decision": {
+       "category": "admin_operations",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "skipped_preference",
+         "enabled": false
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "owner_id": "student-686",
+      "privacy_generation": "4",
+      "question_id": "question-686",
+      "reason": "offensive",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "<event-id>",
+        "results": [
+         {
+          "connection_id": "connection-bd733f7558bb4586",
+          "status": "provider_acceptance_unknown"
+         }
+        ],
+        "target_channels": [
+         "role:admin"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": null,
+     "recipientId": null,
+     "recipientRole": "admin",
+     "status": "created",
+     "summary": "A high-severity moderation case was reported.",
+     "targetId": "case-686",
+     "targetType": "moderation_case",
+     "title": "New moderation case"
+    }
+   ],
+   "parent-686": [],
+   "student-686": [],
+   "teacher-686": []
+  },
+  "email": [],
+  "events": [
+   {
+    "PK": "NOTIFICATION#<event-id>",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_id": "student-686",
+    "actor_role": "student",
+    "category": "admin_operations",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "<event-id>",
+    "event_type": "moderation_case_update",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "message_key": "moderation.created",
+    "message_params": {
+     "severity": "high"
+    },
+    "metadata": {
+     "delivery_decision": {
+      "category": "admin_operations",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "skipped_preference",
+        "enabled": false
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "owner_id": "student-686",
+     "privacy_generation": "4",
+     "question_id": "question-686",
+     "reason": "offensive",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "<event-id>",
+       "results": [
+        {
+         "connection_id": "connection-bd733f7558bb4586",
+         "status": "provider_acceptance_unknown"
+        }
+       ],
+       "target_channels": [
+        "role:admin"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "student-686",
+    "owner_target_id": "case-686",
+    "owner_target_type": "moderation_case",
+    "recipient_role": "admin",
+    "schema_version": "notification-event.v3",
+    "status": "created",
+    "summary": "A high-severity moderation case was reported.",
+    "sweep_bucket": "notification_inbox#role#admin",
+    "sweep_due_at": "<time>",
+    "target_id": "case-686",
+    "target_type": "moderation_case",
+    "title": "New moderation case"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "<event-id>"
+    ],
+    "operation_id": "<event-id>",
+    "outcome_status": "provider_acceptance_unknown",
+    "status": "provider_acceptance_unknown"
+   }
+  ],
+  "push": [],
+  "realtime": []
+ },
+ "moderation_case_updated": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [
+    {
+     "actorId": "admin-686",
+     "actorRole": "admin",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "admin_operations",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "<event-id>",
+     "eventType": "moderation_case_update",
+     "metadata": {
+      "delivery_decision": {
+       "category": "admin_operations",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "owner_id": "student-686",
+      "privacy_generation": "4",
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "<event-id>",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-5a2378eb6ea9"
+        ]
+       }
+      ],
+      "question_id": "question-686",
+      "status": "in_review",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "<event-id>",
+        "results": [
+         {
+          "connection_id": "connection-292269500a49549a",
+          "status": "provider_acceptance_unknown"
+         }
+        ],
+        "target_channels": [
+         "user:student-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": null,
+     "recipientId": "student-686",
+     "recipientRole": "student",
+     "status": "created",
+     "summary": "Der Status deiner Meldung ist in_review.",
+     "targetId": "case-686",
+     "targetType": "moderation_case",
+     "title": "Meldung aktualisiert"
+    }
+   ],
+   "teacher-686": []
+  },
+  "email": [],
+  "events": [
+   {
+    "PK": "NOTIFICATION#<event-id>",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_id": "admin-686",
+    "actor_role": "admin",
+    "category": "admin_operations",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "<event-id>",
+    "event_type": "moderation_case_update",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "delivery_decision": {
+      "category": "admin_operations",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "owner_id": "student-686",
+     "privacy_generation": "4",
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "<event-id>",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-5a2378eb6ea9"
+       ]
+      }
+     ],
+     "question_id": "question-686",
+     "status": "in_review",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "<event-id>",
+       "results": [
+        {
+         "connection_id": "connection-292269500a49549a",
+         "status": "provider_acceptance_unknown"
+        }
+       ],
+       "target_channels": [
+        "user:student-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "student-686",
+    "owner_target_id": "case-686",
+    "owner_target_type": "moderation_case",
+    "recipient_id": "student-686",
+    "recipient_role": "student",
+    "schema_version": "notification-event.v3",
+    "status": "created",
+    "summary": "Der Status deiner Meldung ist in_review.",
+    "sweep_bucket": "notification_inbox#user#student-686",
+    "sweep_due_at": "<time>",
+    "target_id": "case-686",
+    "target_type": "moderation_case",
+    "title": "Meldung aktualisiert"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "<event-id>"
+    ],
+    "operation_id": "<event-id>",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "<event-id>"
+    ],
+    "operation_id": "<event-id>",
+    "outcome_status": "provider_acceptance_unknown",
+    "status": "provider_acceptance_unknown"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Der Status deiner Meldung ist in_review.",
+     "data": {
+      "eventId": "<event-id>",
+      "eventType": "moderation_case_update",
+      "targetId": "case-686",
+      "targetType": "moderation_case"
+     },
+     "deliveryId": "<event-id>",
+     "template": "stoa-default",
+     "title": "Meldung aktualisiert",
+     "tokenReferences": [
+      "push-fa1b7e4380aaca34"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": []
+ },
+ "moderation_case_updated_by_admin_report": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [],
+   "teacher-686": []
+  },
+  "email": [],
+  "events": [],
+  "intents": [],
+  "push": [],
+  "realtime": []
+ },
+ "offer_closed_expired": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [],
+   "teacher-686": [
+    {
+     "actorId": null,
+     "actorRole": "system",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "teacher_responses",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "teacher-help-dispatched-dispatch-686",
+     "eventType": "teacher_help_dispatched",
+     "metadata": {
+      "deadline_at": "<time>",
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "dispatch_id": "dispatch-686",
+      "offer_closed_at": "<time>",
+      "offer_state": "expired",
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-5e59eb77b8d8"
+        ]
+       }
+      ],
+      "request_id": "req-686",
+      "subject": "math",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "websocket-a8181ba10e218c05387d2c1a7ae8f2e499094c65",
+        "results": [
+         {
+          "connection_id": "connection-b753825bb5aa0fc0",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "user:teacher-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": "<time>",
+     "recipientId": "teacher-686",
+     "recipientRole": "teacher",
+     "status": "read",
+     "summary": "Matière : Mathématiques. Cette demande a expiré.",
+     "targetId": "req-686",
+     "targetType": "question",
+     "title": "Demande d'aide plus disponible"
+    }
+   ]
+  },
+  "email": [
+   {
+    "Content": {
+     "Simple": {
+      "Body": {
+       "Html": {
+        "Charset": "UTF-8",
+        "Data": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"color-scheme\" content=\"light\">\n<title>STOA – Nouvelle demande d&#x27;aide : à accepter dans les 10 minutes</title>\n</head>\n<body style=\"margin:0;padding:0;background:#f4f2ef;\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f2ef;padding:24px 12px;\">\n<tr><td align=\"center\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e6e1da;\">\n<tr><td style=\"padding:28px 36px 8px;\">\n<img src=\"https://app.stoaedu.ch/email/stoa-logo.png\" width=\"132\" alt=\"STOA\" style=\"display:block;border:0;height:auto;\">\n</td></tr>\n<tr><td style=\"padding:16px 36px 0;font-family:Helvetica,Arial,sans-serif;color:#2b2523;\">\n<h1 style=\"margin:0 0 18px;font-size:22px;line-height:1.3;font-weight:700;color:#5c1620;\">Une nouvelle demande d&#x27;aide pour vous</h1>\n<p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Bonjour,</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Une nouvelle demande d&#x27;aide vous a été attribuée.</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Matière : Mathématiques</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Merci de l&#x27;accepter dans les 10 minutes ; passé ce délai, elle sera proposée à un autre enseignant.</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:6px 0 22px;\"><tr><td style=\"border-radius:8px;background:#7a1f2b;\"><a href=\"https://app.stoaedu.ch/teacher/requests/req-686\" style=\"display:inline-block;padding:13px 26px;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;\">Ouvrir la demande dans STOA</a></td></tr></table><p data-text-part=\"skip\" style=\"margin:0 0 22px;font-size:13px;line-height:1.6;color:#8a817c;\">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br><a href=\"https://app.stoaedu.ch/teacher/requests/req-686\" style=\"color:#7a1f2b;word-break:break-all;\">https://app.stoaedu.ch/teacher/requests/req-686</a></p><p style=\"margin:0 0 14px;font-size:14px;line-height:1.6;color:#6b625e;\">Vous pouvez désactiver ce rappel dans les paramètres de notification de STOA.</p><p style=\"margin:0 0 28px;font-size:16px;line-height:1.6;color:#2b2523;\">Cordialement<br>L&#x27;équipe STOA</p>\n</td></tr>\n<tr><td style=\"padding:18px 36px 24px;background:#faf8f5;border-top:1px solid #eee8e1;border-radius:0 0 12px 12px;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#8a817c;\">\n<strong style=\"color:#5c1620;\">STOA</strong> · Accompagnement scolaire pour les élèves<br>\nZürich · <a href=\"mailto:info@stoaedu.ch\" style=\"color:#8a817c;\">info@stoaedu.ch</a> · <a href=\"https://stoaedu.ch\" style=\"color:#8a817c;\">stoaedu.ch</a>\n<p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Vous recevez cet e-mail parce que STOA vous attribue des demandes d&#x27;aide. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODYifQ.Qil3eJBIuj3jICNVM5ubvIZUgGz1Nxjfhp2Btmfbvfw\" style=\"color:#8a817c;\">Se désabonner de ces e-mails</a></p><!--stoa:footer-end-->\n</td></tr>\n</table>\n</td></tr>\n</table>\n</body>\n</html>"
+       },
+       "Text": {
+        "Charset": "UTF-8",
+        "Data": "Une nouvelle demande d'aide pour vous\n\nBonjour,\n\nUne nouvelle demande d'aide vous a été attribuée.\n\nMatière : Mathématiques\n\nMerci de l'accepter dans les 10 minutes ; passé ce délai, elle sera proposée à un autre enseignant.\n\nOuvrir la demande dans STOA: https://app.stoaedu.ch/teacher/requests/req-686\n\nVous pouvez désactiver ce rappel dans les paramètres de notification de STOA.\n\nCordialement\nL'équipe STOA\n\nSTOA · Accompagnement scolaire pour les élèves\n\nZürich · info@stoaedu.ch · https://stoaedu.ch\n\nVous recevez cet e-mail parce que STOA vous attribue des demandes d'aide. Se désabonner de ces e-mails: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODYifQ.Qil3eJBIuj3jICNVM5ubvIZUgGz1Nxjfhp2Btmfbvfw\n"
+       }
+      },
+      "Headers": [
+       {
+        "Name": "List-Unsubscribe",
+        "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODYifQ.Qil3eJBIuj3jICNVM5ubvIZUgGz1Nxjfhp2Btmfbvfw>"
+       },
+       {
+        "Name": "List-Unsubscribe-Post",
+        "Value": "List-Unsubscribe=One-Click"
+       }
+      ],
+      "Subject": {
+       "Charset": "UTF-8",
+       "Data": "STOA – Nouvelle demande d'aide : à accepter dans les 10 minutes"
+      }
+     }
+    },
+    "Destination": {
+     "ToAddresses": [
+      "teacher-686@stoa.test"
+     ]
+    },
+    "FromEmailAddress": "STOA <noreply@stoa.test>",
+    "ReplyToAddresses": [
+     "info@stoaedu.ch"
+    ]
+   }
+  ],
+  "events": [
+   {
+    "PK": "NOTIFICATION#teacher-help-dispatched-dispatch-686",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_role": "system",
+    "category": "teacher_responses",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "teacher-help-dispatched-dispatch-686",
+    "event_type": "teacher_help_dispatched",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "deadline_at": "<time>",
+     "delivery_decision": {
+      "category": "teacher_responses",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "dispatch_id": "dispatch-686",
+     "offer_closed_at": "<time>",
+     "offer_state": "expired",
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-5e59eb77b8d8"
+       ]
+      }
+     ],
+     "request_id": "req-686",
+     "subject": "math",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "websocket-a8181ba10e218c05387d2c1a7ae8f2e499094c65",
+       "results": [
+        {
+         "connection_id": "connection-b753825bb5aa0fc0",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "user:teacher-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "student-686",
+    "owner_target_id": "req-686",
+    "owner_target_type": "question",
+    "read_at": "<time>",
+    "recipient_id": "teacher-686",
+    "recipient_role": "teacher",
+    "schema_version": "notification-event.v3",
+    "status": "read",
+    "summary": "Matière : Mathématiques. Cette demande a expiré.",
+    "sweep_bucket": "notification_inbox#user#teacher-686",
+    "sweep_due_at": "<time>",
+    "target_id": "req-686",
+    "target_type": "question",
+    "title": "Demande d'aide plus disponible"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "websocket-46ec49ab7c85af7267a92a323b2fed9f6cb12b99",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Matière : Mathématiques. Merci d'accepter la demande dans les 10 minutes.",
+     "data": {
+      "eventId": "teacher-help-dispatched-dispatch-686",
+      "eventType": "teacher_help_dispatched",
+      "targetId": "req-686",
+      "targetType": "question"
+     },
+     "deliveryId": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+     "template": "stoa-default",
+     "title": "Une nouvelle demande d'aide pour vous",
+     "tokenReferences": [
+      "push-10866c9185d91ede"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": [
+   {
+    "connection_id": "conn-teacher-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "websocket-46ec49ab7c85af7267a92a323b2fed9f6cb12b99",
+     "eventId": "teacher-help-dispatched-dispatch-686",
+     "eventType": "teacher_help_dispatched",
+     "metadata": {
+      "deadline_at": "<time>",
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "dispatch_id": "dispatch-686",
+      "request_id": "req-686",
+      "subject": "math"
+     },
+     "recipientId": "teacher-686",
+     "recipientRole": "teacher",
+     "summary": "Matière : Mathématiques. Merci d'accepter la demande dans les 10 minutes.",
+     "targetId": "req-686",
+     "targetType": "question",
+     "title": "Une nouvelle demande d'aide pour vous"
+    }
+   }
+  ]
+ },
+ "offer_closed_reassigned": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [],
+   "teacher-686": [
+    {
+     "actorId": null,
+     "actorRole": "system",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "teacher_responses",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "teacher-help-dispatched-dispatch-686",
+     "eventType": "teacher_help_dispatched",
+     "metadata": {
+      "deadline_at": "<time>",
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "dispatch_id": "dispatch-686",
+      "offer_closed_at": "<time>",
+      "offer_state": "reassigned",
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-5e59eb77b8d8"
+        ]
+       }
+      ],
+      "request_id": "req-686",
+      "subject": "math",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "websocket-a8181ba10e218c05387d2c1a7ae8f2e499094c65",
+        "results": [
+         {
+          "connection_id": "connection-b753825bb5aa0fc0",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "user:teacher-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": "<time>",
+     "recipientId": "teacher-686",
+     "recipientRole": "teacher",
+     "status": "read",
+     "summary": "Matière : Mathématiques. Cette demande a été transmise à un autre enseignant.",
+     "targetId": "req-686",
+     "targetType": "question",
+     "title": "Demande d'aide plus disponible"
+    }
+   ]
+  },
+  "email": [
+   {
+    "Content": {
+     "Simple": {
+      "Body": {
+       "Html": {
+        "Charset": "UTF-8",
+        "Data": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"color-scheme\" content=\"light\">\n<title>STOA – Nouvelle demande d&#x27;aide : à accepter dans les 10 minutes</title>\n</head>\n<body style=\"margin:0;padding:0;background:#f4f2ef;\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f2ef;padding:24px 12px;\">\n<tr><td align=\"center\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e6e1da;\">\n<tr><td style=\"padding:28px 36px 8px;\">\n<img src=\"https://app.stoaedu.ch/email/stoa-logo.png\" width=\"132\" alt=\"STOA\" style=\"display:block;border:0;height:auto;\">\n</td></tr>\n<tr><td style=\"padding:16px 36px 0;font-family:Helvetica,Arial,sans-serif;color:#2b2523;\">\n<h1 style=\"margin:0 0 18px;font-size:22px;line-height:1.3;font-weight:700;color:#5c1620;\">Une nouvelle demande d&#x27;aide pour vous</h1>\n<p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Bonjour,</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Une nouvelle demande d&#x27;aide vous a été attribuée.</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Matière : Mathématiques</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Merci de l&#x27;accepter dans les 10 minutes ; passé ce délai, elle sera proposée à un autre enseignant.</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:6px 0 22px;\"><tr><td style=\"border-radius:8px;background:#7a1f2b;\"><a href=\"https://app.stoaedu.ch/teacher/requests/req-686\" style=\"display:inline-block;padding:13px 26px;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;\">Ouvrir la demande dans STOA</a></td></tr></table><p data-text-part=\"skip\" style=\"margin:0 0 22px;font-size:13px;line-height:1.6;color:#8a817c;\">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br><a href=\"https://app.stoaedu.ch/teacher/requests/req-686\" style=\"color:#7a1f2b;word-break:break-all;\">https://app.stoaedu.ch/teacher/requests/req-686</a></p><p style=\"margin:0 0 14px;font-size:14px;line-height:1.6;color:#6b625e;\">Vous pouvez désactiver ce rappel dans les paramètres de notification de STOA.</p><p style=\"margin:0 0 28px;font-size:16px;line-height:1.6;color:#2b2523;\">Cordialement<br>L&#x27;équipe STOA</p>\n</td></tr>\n<tr><td style=\"padding:18px 36px 24px;background:#faf8f5;border-top:1px solid #eee8e1;border-radius:0 0 12px 12px;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#8a817c;\">\n<strong style=\"color:#5c1620;\">STOA</strong> · Accompagnement scolaire pour les élèves<br>\nZürich · <a href=\"mailto:info@stoaedu.ch\" style=\"color:#8a817c;\">info@stoaedu.ch</a> · <a href=\"https://stoaedu.ch\" style=\"color:#8a817c;\">stoaedu.ch</a>\n<p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Vous recevez cet e-mail parce que STOA vous attribue des demandes d&#x27;aide. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODYifQ.Qil3eJBIuj3jICNVM5ubvIZUgGz1Nxjfhp2Btmfbvfw\" style=\"color:#8a817c;\">Se désabonner de ces e-mails</a></p><!--stoa:footer-end-->\n</td></tr>\n</table>\n</td></tr>\n</table>\n</body>\n</html>"
+       },
+       "Text": {
+        "Charset": "UTF-8",
+        "Data": "Une nouvelle demande d'aide pour vous\n\nBonjour,\n\nUne nouvelle demande d'aide vous a été attribuée.\n\nMatière : Mathématiques\n\nMerci de l'accepter dans les 10 minutes ; passé ce délai, elle sera proposée à un autre enseignant.\n\nOuvrir la demande dans STOA: https://app.stoaedu.ch/teacher/requests/req-686\n\nVous pouvez désactiver ce rappel dans les paramètres de notification de STOA.\n\nCordialement\nL'équipe STOA\n\nSTOA · Accompagnement scolaire pour les élèves\n\nZürich · info@stoaedu.ch · https://stoaedu.ch\n\nVous recevez cet e-mail parce que STOA vous attribue des demandes d'aide. Se désabonner de ces e-mails: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODYifQ.Qil3eJBIuj3jICNVM5ubvIZUgGz1Nxjfhp2Btmfbvfw\n"
+       }
+      },
+      "Headers": [
+       {
+        "Name": "List-Unsubscribe",
+        "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODYifQ.Qil3eJBIuj3jICNVM5ubvIZUgGz1Nxjfhp2Btmfbvfw>"
+       },
+       {
+        "Name": "List-Unsubscribe-Post",
+        "Value": "List-Unsubscribe=One-Click"
+       }
+      ],
+      "Subject": {
+       "Charset": "UTF-8",
+       "Data": "STOA – Nouvelle demande d'aide : à accepter dans les 10 minutes"
+      }
+     }
+    },
+    "Destination": {
+     "ToAddresses": [
+      "teacher-686@stoa.test"
+     ]
+    },
+    "FromEmailAddress": "STOA <noreply@stoa.test>",
+    "ReplyToAddresses": [
+     "info@stoaedu.ch"
+    ]
+   }
+  ],
+  "events": [
+   {
+    "PK": "NOTIFICATION#teacher-help-dispatched-dispatch-686",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_role": "system",
+    "category": "teacher_responses",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "teacher-help-dispatched-dispatch-686",
+    "event_type": "teacher_help_dispatched",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "deadline_at": "<time>",
+     "delivery_decision": {
+      "category": "teacher_responses",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "dispatch_id": "dispatch-686",
+     "offer_closed_at": "<time>",
+     "offer_state": "reassigned",
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-5e59eb77b8d8"
+       ]
+      }
+     ],
+     "request_id": "req-686",
+     "subject": "math",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "websocket-a8181ba10e218c05387d2c1a7ae8f2e499094c65",
+       "results": [
+        {
+         "connection_id": "connection-b753825bb5aa0fc0",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "user:teacher-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "student-686",
+    "owner_target_id": "req-686",
+    "owner_target_type": "question",
+    "read_at": "<time>",
+    "recipient_id": "teacher-686",
+    "recipient_role": "teacher",
+    "schema_version": "notification-event.v3",
+    "status": "read",
+    "summary": "Matière : Mathématiques. Cette demande a été transmise à un autre enseignant.",
+    "sweep_bucket": "notification_inbox#user#teacher-686",
+    "sweep_due_at": "<time>",
+    "target_id": "req-686",
+    "target_type": "question",
+    "title": "Demande d'aide plus disponible"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "websocket-46ec49ab7c85af7267a92a323b2fed9f6cb12b99",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Matière : Mathématiques. Merci d'accepter la demande dans les 10 minutes.",
+     "data": {
+      "eventId": "teacher-help-dispatched-dispatch-686",
+      "eventType": "teacher_help_dispatched",
+      "targetId": "req-686",
+      "targetType": "question"
+     },
+     "deliveryId": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+     "template": "stoa-default",
+     "title": "Une nouvelle demande d'aide pour vous",
+     "tokenReferences": [
+      "push-10866c9185d91ede"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": [
+   {
+    "connection_id": "conn-teacher-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "websocket-46ec49ab7c85af7267a92a323b2fed9f6cb12b99",
+     "eventId": "teacher-help-dispatched-dispatch-686",
+     "eventType": "teacher_help_dispatched",
+     "metadata": {
+      "deadline_at": "<time>",
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "dispatch_id": "dispatch-686",
+      "request_id": "req-686",
+      "subject": "math"
+     },
+     "recipientId": "teacher-686",
+     "recipientRole": "teacher",
+     "summary": "Matière : Mathématiques. Merci d'accepter la demande dans les 10 minutes.",
+     "targetId": "req-686",
+     "targetType": "question",
+     "title": "Une nouvelle demande d'aide pour vous"
+    }
+   }
+  ]
+ },
+ "offer_closed_withdrawn": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [],
+   "teacher-686": [
+    {
+     "actorId": null,
+     "actorRole": "system",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "teacher_responses",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "teacher-help-dispatched-dispatch-686",
+     "eventType": "teacher_help_dispatched",
+     "metadata": {
+      "deadline_at": "<time>",
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "dispatch_id": "dispatch-686",
+      "offer_closed_at": "<time>",
+      "offer_state": "withdrawn",
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-5e59eb77b8d8"
+        ]
+       }
+      ],
+      "request_id": "req-686",
+      "subject": "math",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "websocket-a8181ba10e218c05387d2c1a7ae8f2e499094c65",
+        "results": [
+         {
+          "connection_id": "connection-b753825bb5aa0fc0",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "user:teacher-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": "<time>",
+     "recipientId": "teacher-686",
+     "recipientRole": "teacher",
+     "status": "read",
+     "summary": "Matière : Mathématiques. Cette demande a été retirée par l'élève.",
+     "targetId": "req-686",
+     "targetType": "question",
+     "title": "Demande d'aide plus disponible"
+    }
+   ]
+  },
+  "email": [
+   {
+    "Content": {
+     "Simple": {
+      "Body": {
+       "Html": {
+        "Charset": "UTF-8",
+        "Data": "<!doctype html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"color-scheme\" content=\"light\">\n<title>STOA – Nouvelle demande d&#x27;aide : à accepter dans les 10 minutes</title>\n</head>\n<body style=\"margin:0;padding:0;background:#f4f2ef;\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f2ef;padding:24px 12px;\">\n<tr><td align=\"center\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:12px;border:1px solid #e6e1da;\">\n<tr><td style=\"padding:28px 36px 8px;\">\n<img src=\"https://app.stoaedu.ch/email/stoa-logo.png\" width=\"132\" alt=\"STOA\" style=\"display:block;border:0;height:auto;\">\n</td></tr>\n<tr><td style=\"padding:16px 36px 0;font-family:Helvetica,Arial,sans-serif;color:#2b2523;\">\n<h1 style=\"margin:0 0 18px;font-size:22px;line-height:1.3;font-weight:700;color:#5c1620;\">Une nouvelle demande d&#x27;aide pour vous</h1>\n<p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Bonjour,</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Une nouvelle demande d&#x27;aide vous a été attribuée.</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Matière : Mathématiques</p><p style=\"margin:0 0 14px;font-size:16px;line-height:1.6;color:#2b2523;\">Merci de l&#x27;accepter dans les 10 minutes ; passé ce délai, elle sera proposée à un autre enseignant.</p><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:6px 0 22px;\"><tr><td style=\"border-radius:8px;background:#7a1f2b;\"><a href=\"https://app.stoaedu.ch/teacher/requests/req-686\" style=\"display:inline-block;padding:13px 26px;font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;\">Ouvrir la demande dans STOA</a></td></tr></table><p data-text-part=\"skip\" style=\"margin:0 0 22px;font-size:13px;line-height:1.6;color:#8a817c;\">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br><a href=\"https://app.stoaedu.ch/teacher/requests/req-686\" style=\"color:#7a1f2b;word-break:break-all;\">https://app.stoaedu.ch/teacher/requests/req-686</a></p><p style=\"margin:0 0 14px;font-size:14px;line-height:1.6;color:#6b625e;\">Vous pouvez désactiver ce rappel dans les paramètres de notification de STOA.</p><p style=\"margin:0 0 28px;font-size:16px;line-height:1.6;color:#2b2523;\">Cordialement<br>L&#x27;équipe STOA</p>\n</td></tr>\n<tr><td style=\"padding:18px 36px 24px;background:#faf8f5;border-top:1px solid #eee8e1;border-radius:0 0 12px 12px;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#8a817c;\">\n<strong style=\"color:#5c1620;\">STOA</strong> · Accompagnement scolaire pour les élèves<br>\nZürich · <a href=\"mailto:info@stoaedu.ch\" style=\"color:#8a817c;\">info@stoaedu.ch</a> · <a href=\"https://stoaedu.ch\" style=\"color:#8a817c;\">stoaedu.ch</a>\n<p style=\"margin:8px 0 0;font-size:12px;line-height:1.6;color:#8a817c;\">Vous recevez cet e-mail parce que STOA vous attribue des demandes d&#x27;aide. <a href=\"https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODYifQ.Qil3eJBIuj3jICNVM5ubvIZUgGz1Nxjfhp2Btmfbvfw\" style=\"color:#8a817c;\">Se désabonner de ces e-mails</a></p><!--stoa:footer-end-->\n</td></tr>\n</table>\n</td></tr>\n</table>\n</body>\n</html>"
+       },
+       "Text": {
+        "Charset": "UTF-8",
+        "Data": "Une nouvelle demande d'aide pour vous\n\nBonjour,\n\nUne nouvelle demande d'aide vous a été attribuée.\n\nMatière : Mathématiques\n\nMerci de l'accepter dans les 10 minutes ; passé ce délai, elle sera proposée à un autre enseignant.\n\nOuvrir la demande dans STOA: https://app.stoaedu.ch/teacher/requests/req-686\n\nVous pouvez désactiver ce rappel dans les paramètres de notification de STOA.\n\nCordialement\nL'équipe STOA\n\nSTOA · Accompagnement scolaire pour les élèves\n\nZürich · info@stoaedu.ch · https://stoaedu.ch\n\nVous recevez cet e-mail parce que STOA vous attribue des demandes d'aide. Se désabonner de ces e-mails: https://app.stoaedu.ch/unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODYifQ.Qil3eJBIuj3jICNVM5ubvIZUgGz1Nxjfhp2Btmfbvfw\n"
+       }
+      },
+      "Headers": [
+       {
+        "Name": "List-Unsubscribe",
+        "Value": "<https://api.stoaedu.ch/notifications/email-unsubscribe?token=eyJjIjoiZGlzcGF0Y2hfcmVtaW5kZXIiLCJrIjoiZGV2ZWxvcG1lbnQtdjEiLCJ1IjoidGVhY2hlci02ODYifQ.Qil3eJBIuj3jICNVM5ubvIZUgGz1Nxjfhp2Btmfbvfw>"
+       },
+       {
+        "Name": "List-Unsubscribe-Post",
+        "Value": "List-Unsubscribe=One-Click"
+       }
+      ],
+      "Subject": {
+       "Charset": "UTF-8",
+       "Data": "STOA – Nouvelle demande d'aide : à accepter dans les 10 minutes"
+      }
+     }
+    },
+    "Destination": {
+     "ToAddresses": [
+      "teacher-686@stoa.test"
+     ]
+    },
+    "FromEmailAddress": "STOA <noreply@stoa.test>",
+    "ReplyToAddresses": [
+     "info@stoaedu.ch"
+    ]
+   }
+  ],
+  "events": [
+   {
+    "PK": "NOTIFICATION#teacher-help-dispatched-dispatch-686",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_role": "system",
+    "category": "teacher_responses",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "teacher-help-dispatched-dispatch-686",
+    "event_type": "teacher_help_dispatched",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "deadline_at": "<time>",
+     "delivery_decision": {
+      "category": "teacher_responses",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "dispatch_id": "dispatch-686",
+     "offer_closed_at": "<time>",
+     "offer_state": "withdrawn",
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-5e59eb77b8d8"
+       ]
+      }
+     ],
+     "request_id": "req-686",
+     "subject": "math",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "websocket-a8181ba10e218c05387d2c1a7ae8f2e499094c65",
+       "results": [
+        {
+         "connection_id": "connection-b753825bb5aa0fc0",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "user:teacher-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "student-686",
+    "owner_target_id": "req-686",
+    "owner_target_type": "question",
+    "read_at": "<time>",
+    "recipient_id": "teacher-686",
+    "recipient_role": "teacher",
+    "schema_version": "notification-event.v3",
+    "status": "read",
+    "summary": "Matière : Mathématiques. Cette demande a été retirée par l'élève.",
+    "sweep_bucket": "notification_inbox#user#teacher-686",
+    "sweep_due_at": "<time>",
+    "target_id": "req-686",
+    "target_type": "question",
+    "title": "Demande d'aide plus disponible"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "teacher-help-dispatched-dispatch-686"
+    ],
+    "operation_id": "websocket-46ec49ab7c85af7267a92a323b2fed9f6cb12b99",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Matière : Mathématiques. Merci d'accepter la demande dans les 10 minutes.",
+     "data": {
+      "eventId": "teacher-help-dispatched-dispatch-686",
+      "eventType": "teacher_help_dispatched",
+      "targetId": "req-686",
+      "targetType": "question"
+     },
+     "deliveryId": "push-95779db3d8e50b428f416be9dff1a114e3186791",
+     "template": "stoa-default",
+     "title": "Une nouvelle demande d'aide pour vous",
+     "tokenReferences": [
+      "push-10866c9185d91ede"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": [
+   {
+    "connection_id": "conn-teacher-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "websocket-46ec49ab7c85af7267a92a323b2fed9f6cb12b99",
+     "eventId": "teacher-help-dispatched-dispatch-686",
+     "eventType": "teacher_help_dispatched",
+     "metadata": {
+      "deadline_at": "<time>",
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "dispatch_id": "dispatch-686",
+      "request_id": "req-686",
+      "subject": "math"
+     },
+     "recipientId": "teacher-686",
+     "recipientRole": "teacher",
+     "summary": "Matière : Mathématiques. Merci d'accepter la demande dans les 10 minutes.",
+     "targetId": "req-686",
+     "targetType": "question",
+     "title": "Une nouvelle demande d'aide pour vous"
+    }
+   }
+  ]
+ },
+ "request_expires_case_kept": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [
+    {
+     "actorId": null,
+     "actorRole": "system",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "teacher_responses",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "teacher-help-expired-req-686",
+     "eventType": "teacher_help_expired",
+     "metadata": {
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "push-a96a057f5a16f238557c768228928e3b78106032",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-5a2378eb6ea9"
+        ]
+       }
+      ],
+      "request_id": "req-686",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "websocket-9f249b1ff5b06e8d966eda00d1d93b32d547e997",
+        "results": [
+         {
+          "connection_id": "connection-292269500a49549a",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "user:student-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": null,
+     "recipientId": "student-686",
+     "recipientRole": "student",
+     "status": "created",
+     "summary": "Deine Anfrage an eine Lehrperson ist abgelaufen.",
+     "targetId": "conv-686",
+     "targetType": "conversation",
+     "title": "Es war keine Lehrperson verfügbar"
+    }
+   ],
+   "teacher-686": []
+  },
+  "email": [],
+  "events": [
+   {
+    "PK": "NOTIFICATION#teacher-help-expired-req-686",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_role": "system",
+    "category": "teacher_responses",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "teacher-help-expired-req-686",
+    "event_type": "teacher_help_expired",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "delivery_decision": {
+      "category": "teacher_responses",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "push-a96a057f5a16f238557c768228928e3b78106032",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-5a2378eb6ea9"
+       ]
+      }
+     ],
+     "request_id": "req-686",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "websocket-9f249b1ff5b06e8d966eda00d1d93b32d547e997",
+       "results": [
+        {
+         "connection_id": "connection-292269500a49549a",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "user:student-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "student-686",
+    "owner_target_id": "conv-686",
+    "owner_target_type": "conversation",
+    "recipient_id": "student-686",
+    "recipient_role": "student",
+    "schema_version": "notification-event.v3",
+    "status": "created",
+    "summary": "Deine Anfrage an eine Lehrperson ist abgelaufen.",
+    "sweep_bucket": "notification_inbox#user#student-686",
+    "sweep_due_at": "<time>",
+    "target_id": "conv-686",
+    "target_type": "conversation",
+    "title": "Es war keine Lehrperson verfügbar"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "teacher-help-expired-req-686"
+    ],
+    "operation_id": "push-a96a057f5a16f238557c768228928e3b78106032",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "teacher-help-expired-req-686"
+    ],
+    "operation_id": "websocket-8a07ed188e4ed1be94f6671515a1c13f33f1c4b0",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Deine Anfrage an eine Lehrperson ist abgelaufen.",
+     "data": {
+      "eventId": "teacher-help-expired-req-686",
+      "eventType": "teacher_help_expired",
+      "targetId": "conv-686",
+      "targetType": "conversation"
+     },
+     "deliveryId": "push-a96a057f5a16f238557c768228928e3b78106032",
+     "template": "stoa-default",
+     "title": "Es war keine Lehrperson verfügbar",
+     "tokenReferences": [
+      "push-fa1b7e4380aaca34"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": [
+   {
+    "connection_id": "conn-student-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "websocket-8a07ed188e4ed1be94f6671515a1c13f33f1c4b0",
+     "eventId": "teacher-help-expired-req-686",
+     "eventType": "teacher_help_expired",
+     "metadata": {
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "request_id": "req-686"
+     },
+     "recipientId": "student-686",
+     "recipientRole": "student",
+     "summary": "Deine Anfrage an eine Lehrperson ist abgelaufen.",
+     "targetId": "conv-686",
+     "targetType": "conversation",
+     "title": "Es war keine Lehrperson verfügbar"
+    }
+   }
+  ]
+ },
+ "request_expires_case_returned": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [
+    {
+     "actorId": null,
+     "actorRole": "system",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "teacher_responses",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "teacher-help-expired-req-686",
+     "eventType": "teacher_help_expired",
+     "metadata": {
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "push-a96a057f5a16f238557c768228928e3b78106032",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-5a2378eb6ea9"
+        ]
+       }
+      ],
+      "request_id": "req-686",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "websocket-9f249b1ff5b06e8d966eda00d1d93b32d547e997",
+        "results": [
+         {
+          "connection_id": "connection-292269500a49549a",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "user:student-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": null,
+     "recipientId": "student-686",
+     "recipientRole": "student",
+     "status": "created",
+     "summary": "Deine Anfrage an eine Lehrperson ist abgelaufen. Die Lehrpersonen-Hilfe dieser Woche wurde dir zurückgegeben.",
+     "targetId": "conv-686",
+     "targetType": "conversation",
+     "title": "Es war keine Lehrperson verfügbar"
+    }
+   ],
+   "teacher-686": []
+  },
+  "email": [],
+  "events": [
+   {
+    "PK": "NOTIFICATION#teacher-help-expired-req-686",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_role": "system",
+    "category": "teacher_responses",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "teacher-help-expired-req-686",
+    "event_type": "teacher_help_expired",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "delivery_decision": {
+      "category": "teacher_responses",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "push-a96a057f5a16f238557c768228928e3b78106032",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-5a2378eb6ea9"
+       ]
+      }
+     ],
+     "request_id": "req-686",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "websocket-9f249b1ff5b06e8d966eda00d1d93b32d547e997",
+       "results": [
+        {
+         "connection_id": "connection-292269500a49549a",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "user:student-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "student-686",
+    "owner_target_id": "conv-686",
+    "owner_target_type": "conversation",
+    "recipient_id": "student-686",
+    "recipient_role": "student",
+    "schema_version": "notification-event.v3",
+    "status": "created",
+    "summary": "Deine Anfrage an eine Lehrperson ist abgelaufen. Die Lehrpersonen-Hilfe dieser Woche wurde dir zurückgegeben.",
+    "sweep_bucket": "notification_inbox#user#student-686",
+    "sweep_due_at": "<time>",
+    "target_id": "conv-686",
+    "target_type": "conversation",
+    "title": "Es war keine Lehrperson verfügbar"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "teacher-help-expired-req-686"
+    ],
+    "operation_id": "push-a96a057f5a16f238557c768228928e3b78106032",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "teacher-help-expired-req-686"
+    ],
+    "operation_id": "websocket-8a07ed188e4ed1be94f6671515a1c13f33f1c4b0",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Deine Anfrage an eine Lehrperson ist abgelaufen. Die Lehrpersonen-Hilfe dieser Woche wurde dir zurückgegeben.",
+     "data": {
+      "eventId": "teacher-help-expired-req-686",
+      "eventType": "teacher_help_expired",
+      "targetId": "conv-686",
+      "targetType": "conversation"
+     },
+     "deliveryId": "push-a96a057f5a16f238557c768228928e3b78106032",
+     "template": "stoa-default",
+     "title": "Es war keine Lehrperson verfügbar",
+     "tokenReferences": [
+      "push-fa1b7e4380aaca34"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": [
+   {
+    "connection_id": "conn-student-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "websocket-8a07ed188e4ed1be94f6671515a1c13f33f1c4b0",
+     "eventId": "teacher-help-expired-req-686",
+     "eventType": "teacher_help_expired",
+     "metadata": {
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "request_id": "req-686"
+     },
+     "recipientId": "student-686",
+     "recipientRole": "student",
+     "summary": "Deine Anfrage an eine Lehrperson ist abgelaufen. Die Lehrpersonen-Hilfe dieser Woche wurde dir zurückgegeben.",
+     "targetId": "conv-686",
+     "targetType": "conversation",
+     "title": "Es war keine Lehrperson verfügbar"
+    }
+   }
+  ]
+ },
+ "subscription_request_approved": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [
+    {
+     "actorId": "admin-686",
+     "actorRole": "admin",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "admin_operations",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "<event-id>",
+     "eventType": "subscription_request_update",
+     "metadata": {
+      "delivery_decision": {
+       "category": "admin_operations",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "<event-id>",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-7c19c9680dc9"
+        ]
+       }
+      ],
+      "request_type": "upgrade",
+      "requested_tier": "family",
+      "status": "approved",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "<event-id>",
+        "results": [
+         {
+          "connection_id": "connection-b359b01491639e8a",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "user:parent-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": null,
+     "recipientId": "parent-686",
+     "recipientRole": "parent",
+     "status": "created",
+     "summary": "Lo stato della richiesta di abbonamento è approved.",
+     "targetId": "subreq-686",
+     "targetType": "subscription_request",
+     "title": "Richiesta di abbonamento aggiornata"
+    }
+   ],
+   "student-686": [],
+   "teacher-686": []
+  },
+  "email": [],
+  "events": [
+   {
+    "PK": "NOTIFICATION#<event-id>",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_id": "admin-686",
+    "actor_role": "admin",
+    "category": "admin_operations",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "<event-id>",
+    "event_type": "subscription_request_update",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "delivery_decision": {
+      "category": "admin_operations",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "<event-id>",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-7c19c9680dc9"
+       ]
+      }
+     ],
+     "request_type": "upgrade",
+     "requested_tier": "family",
+     "status": "approved",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "<event-id>",
+       "results": [
+        {
+         "connection_id": "connection-b359b01491639e8a",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "user:parent-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "parent-686",
+    "owner_target_id": "subreq-686",
+    "owner_target_type": "subscription_request",
+    "recipient_id": "parent-686",
+    "recipient_role": "parent",
+    "schema_version": "notification-event.v3",
+    "status": "created",
+    "summary": "Lo stato della richiesta di abbonamento è approved.",
+    "sweep_bucket": "notification_inbox#user#parent-686",
+    "sweep_due_at": "<time>",
+    "target_id": "subreq-686",
+    "target_type": "subscription_request",
+    "title": "Richiesta di abbonamento aggiornata"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "<event-id>"
+    ],
+    "operation_id": "<event-id>",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "<event-id>"
+    ],
+    "operation_id": "<event-id>",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Lo stato della richiesta di abbonamento è approved.",
+     "data": {
+      "eventId": "<event-id>",
+      "eventType": "subscription_request_update",
+      "targetId": "subreq-686",
+      "targetType": "subscription_request"
+     },
+     "deliveryId": "<event-id>",
+     "template": "stoa-default",
+     "title": "Richiesta di abbonamento aggiornata",
+     "tokenReferences": [
+      "push-c8349a05e204f21b"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": [
+   {
+    "connection_id": "conn-parent-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "<event-id>",
+     "eventId": "<event-id>",
+     "eventType": "subscription_request_update",
+     "metadata": {
+      "delivery_decision": {
+       "category": "admin_operations",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "request_type": "upgrade",
+      "requested_tier": "family",
+      "status": "approved"
+     },
+     "recipientId": "parent-686",
+     "recipientRole": "parent",
+     "summary": "Lo stato della richiesta di abbonamento è approved.",
+     "targetId": "subreq-686",
+     "targetType": "subscription_request",
+     "title": "Richiesta di abbonamento aggiornata"
+    }
+   }
+  ]
+ },
+ "subscription_requested": {
+  "bells": {
+   "admin-686": [
+    {
+     "actorId": "parent-686",
+     "actorRole": "parent",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "admin_operations",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "skipped_preference",
+       "enabled": false
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "<event-id>",
+     "eventType": "subscription_request_update",
+     "metadata": {
+      "delivery_decision": {
+       "category": "admin_operations",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "skipped_preference",
+         "enabled": false
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "request_type": "upgrade",
+      "requested_tier": "family",
+      "status": "requested",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "<event-id>",
+        "results": [
+         {
+          "connection_id": "connection-bd733f7558bb4586",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "role:admin"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": null,
+     "recipientId": null,
+     "recipientRole": "admin",
+     "status": "created",
+     "summary": "Der Status der Abo-Anfrage ist requested.",
+     "targetId": "subreq-686",
+     "targetType": "subscription_request",
+     "title": "Abo-Anfrage aktualisiert"
+    }
+   ],
+   "parent-686": [],
+   "student-686": [],
+   "teacher-686": []
+  },
+  "email": [],
+  "events": [
+   {
+    "PK": "NOTIFICATION#<event-id>",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_id": "parent-686",
+    "actor_role": "parent",
+    "category": "admin_operations",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "<event-id>",
+    "event_type": "subscription_request_update",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "delivery_decision": {
+      "category": "admin_operations",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "skipped_preference",
+        "enabled": false
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "request_type": "upgrade",
+     "requested_tier": "family",
+     "status": "requested",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "<event-id>",
+       "results": [
+        {
+         "connection_id": "connection-bd733f7558bb4586",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "role:admin"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "parent-686",
+    "owner_target_id": "subreq-686",
+    "owner_target_type": "subscription_request",
+    "recipient_role": "admin",
+    "schema_version": "notification-event.v3",
+    "status": "created",
+    "summary": "Der Status der Abo-Anfrage ist requested.",
+    "sweep_bucket": "notification_inbox#role#admin",
+    "sweep_due_at": "<time>",
+    "target_id": "subreq-686",
+    "target_type": "subscription_request",
+    "title": "Abo-Anfrage aktualisiert"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "<event-id>"
+    ],
+    "operation_id": "<event-id>",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [],
+  "realtime": [
+   {
+    "connection_id": "conn-admin-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "<event-id>",
+     "eventId": "<event-id>",
+     "eventType": "subscription_request_update",
+     "metadata": {
+      "delivery_decision": {
+       "category": "admin_operations",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "skipped_preference",
+         "enabled": false
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "request_type": "upgrade",
+      "requested_tier": "family",
+      "status": "requested"
+     },
+     "recipientId": null,
+     "recipientRole": "admin",
+     "summary": "Der Status der Abo-Anfrage ist requested.",
+     "targetId": "subreq-686",
+     "targetType": "subscription_request",
+     "title": "Abo-Anfrage aktualisiert"
+    }
+   }
+  ]
+ },
+ "teacher_paused": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [],
+   "teacher-686": [
+    {
+     "actorId": null,
+     "actorRole": "system",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "teacher_responses",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "teacher-dispatch-paused-dispatch-686",
+     "eventType": "teacher_dispatch_paused",
+     "metadata": {
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "dispatch_id": "dispatch-686",
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "push-f199948276a6a2912acb30cf2af5372b32794368",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-5e59eb77b8d8"
+        ]
+       }
+      ],
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "websocket-41c0fe00bc07650ac8f53a1445439da574793d94",
+        "results": [
+         {
+          "connection_id": "connection-b753825bb5aa0fc0",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "user:teacher-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": null,
+     "recipientId": "teacher-686",
+     "recipientRole": "teacher",
+     "status": "created",
+     "summary": "Une demande d'aide qui vous était proposée n'a pas été acceptée dans les 10 minutes : vous êtes donc en pause. Repassez en disponible dès que vous pouvez accepter des demandes.",
+     "targetId": "teacher-686",
+     "targetType": "teacher_availability",
+     "title": "Vous ne recevez plus de nouvelles demandes"
+    }
+   ]
+  },
+  "email": [],
+  "events": [
+   {
+    "PK": "NOTIFICATION#teacher-dispatch-paused-dispatch-686",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_role": "system",
+    "category": "teacher_responses",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "teacher-dispatch-paused-dispatch-686",
+    "event_type": "teacher_dispatch_paused",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "delivery_decision": {
+      "category": "teacher_responses",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "dispatch_id": "dispatch-686",
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "push-f199948276a6a2912acb30cf2af5372b32794368",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-5e59eb77b8d8"
+       ]
+      }
+     ],
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "websocket-41c0fe00bc07650ac8f53a1445439da574793d94",
+       "results": [
+        {
+         "connection_id": "connection-b753825bb5aa0fc0",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "user:teacher-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "teacher-686",
+    "owner_target_id": "teacher-686",
+    "owner_target_type": "teacher_availability",
+    "recipient_id": "teacher-686",
+    "recipient_role": "teacher",
+    "schema_version": "notification-event.v3",
+    "status": "created",
+    "summary": "Une demande d'aide qui vous était proposée n'a pas été acceptée dans les 10 minutes : vous êtes donc en pause. Repassez en disponible dès que vous pouvez accepter des demandes.",
+    "sweep_bucket": "notification_inbox#user#teacher-686",
+    "sweep_due_at": "<time>",
+    "target_id": "teacher-686",
+    "target_type": "teacher_availability",
+    "title": "Vous ne recevez plus de nouvelles demandes"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "teacher-dispatch-paused-dispatch-686"
+    ],
+    "operation_id": "push-f199948276a6a2912acb30cf2af5372b32794368",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "teacher-dispatch-paused-dispatch-686"
+    ],
+    "operation_id": "websocket-701a917f087ffdd534d02ccbf0cdd1c78a9fa1cd",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Une demande d'aide qui vous était proposée n'a pas été acceptée dans les 10 minutes : vous êtes donc en pause. Repassez en disponible dès que vous pouvez accepter des demandes.",
+     "data": {
+      "eventId": "teacher-dispatch-paused-dispatch-686",
+      "eventType": "teacher_dispatch_paused",
+      "targetId": "teacher-686",
+      "targetType": "teacher_availability"
+     },
+     "deliveryId": "push-f199948276a6a2912acb30cf2af5372b32794368",
+     "template": "stoa-default",
+     "title": "Vous ne recevez plus de nouvelles demandes",
+     "tokenReferences": [
+      "push-10866c9185d91ede"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": [
+   {
+    "connection_id": "conn-teacher-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "websocket-701a917f087ffdd534d02ccbf0cdd1c78a9fa1cd",
+     "eventId": "teacher-dispatch-paused-dispatch-686",
+     "eventType": "teacher_dispatch_paused",
+     "metadata": {
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "dispatch_id": "dispatch-686"
+     },
+     "recipientId": "teacher-686",
+     "recipientRole": "teacher",
+     "summary": "Une demande d'aide qui vous était proposée n'a pas été acceptée dans les 10 minutes : vous êtes donc en pause. Repassez en disponible dès que vous pouvez accepter des demandes.",
+     "targetId": "teacher-686",
+     "targetType": "teacher_availability",
+     "title": "Vous ne recevez plus de nouvelles demandes"
+    }
+   }
+  ]
+ },
+ "teacher_replies": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [
+    {
+     "actorId": "teacher-686",
+     "actorRole": "teacher",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "teacher_responses",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "teacher-help-reply-reply-686",
+     "eventType": "teacher_reply",
+     "metadata": {
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "push-0c2e8efe0d5462782689a95b241adcfe9ed69da0",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-5a2378eb6ea9"
+        ]
+       }
+      ],
+      "request_id": "req-686",
+      "teacher_id": "teacher-686",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "websocket-b54ba625558d0643b443e398080c2085a24a8165",
+        "results": [
+         {
+          "connection_id": "connection-292269500a49549a",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "user:student-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": null,
+     "recipientId": "student-686",
+     "recipientRole": "student",
+     "status": "created",
+     "summary": "Deine Lehrperson hat in deiner Unterhaltung geantwortet.",
+     "targetId": "conv-686",
+     "targetType": "conversation",
+     "title": "Deine Lehrperson hat geantwortet"
+    }
+   ],
+   "teacher-686": []
+  },
+  "email": [],
+  "events": [
+   {
+    "PK": "NOTIFICATION#teacher-help-reply-reply-686",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_id": "teacher-686",
+    "actor_role": "teacher",
+    "category": "teacher_responses",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "teacher-help-reply-reply-686",
+    "event_type": "teacher_reply",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "delivery_decision": {
+      "category": "teacher_responses",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "push-0c2e8efe0d5462782689a95b241adcfe9ed69da0",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-5a2378eb6ea9"
+       ]
+      }
+     ],
+     "request_id": "req-686",
+     "teacher_id": "teacher-686",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "websocket-b54ba625558d0643b443e398080c2085a24a8165",
+       "results": [
+        {
+         "connection_id": "connection-292269500a49549a",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "user:student-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "student-686",
+    "owner_target_id": "conv-686",
+    "owner_target_type": "conversation",
+    "recipient_id": "student-686",
+    "recipient_role": "student",
+    "schema_version": "notification-event.v3",
+    "status": "created",
+    "summary": "Deine Lehrperson hat in deiner Unterhaltung geantwortet.",
+    "sweep_bucket": "notification_inbox#user#student-686",
+    "sweep_due_at": "<time>",
+    "target_id": "conv-686",
+    "target_type": "conversation",
+    "title": "Deine Lehrperson hat geantwortet"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "teacher-help-reply-reply-686"
+    ],
+    "operation_id": "push-0c2e8efe0d5462782689a95b241adcfe9ed69da0",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "teacher-help-reply-reply-686"
+    ],
+    "operation_id": "websocket-d88de91ecc5d161eac10ccb3a36a916ddf7a9b1f",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Deine Lehrperson hat in deiner Unterhaltung geantwortet.",
+     "data": {
+      "eventId": "teacher-help-reply-reply-686",
+      "eventType": "teacher_reply",
+      "targetId": "conv-686",
+      "targetType": "conversation"
+     },
+     "deliveryId": "push-0c2e8efe0d5462782689a95b241adcfe9ed69da0",
+     "template": "stoa-default",
+     "title": "Deine Lehrperson hat geantwortet",
+     "tokenReferences": [
+      "push-fa1b7e4380aaca34"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": [
+   {
+    "connection_id": "conn-student-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "websocket-d88de91ecc5d161eac10ccb3a36a916ddf7a9b1f",
+     "eventId": "teacher-help-reply-reply-686",
+     "eventType": "teacher_reply",
+     "metadata": {
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "request_id": "req-686",
+      "teacher_id": "teacher-686"
+     },
+     "recipientId": "student-686",
+     "recipientRole": "student",
+     "summary": "Deine Lehrperson hat in deiner Unterhaltung geantwortet.",
+     "targetId": "conv-686",
+     "targetType": "conversation",
+     "title": "Deine Lehrperson hat geantwortet"
+    }
+   }
+  ]
+ },
+ "teacher_takes_classroom": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [
+    {
+     "actorId": "teacher-686",
+     "actorRole": "teacher",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "teacher_responses",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "teacher-help-takeover-req-686-teacher-686",
+     "eventType": "teacher_takeover",
+     "metadata": {
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "mode": "classroom",
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "push-2954166cfe121484f36dbccf19ef98c059b3d966",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-5a2378eb6ea9"
+        ]
+       }
+      ],
+      "request_id": "req-686",
+      "teacher_id": "teacher-686",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "websocket-373816f2127db0c0fe8aa14acbd10f0a4207d44d",
+        "results": [
+         {
+          "connection_id": "connection-292269500a49549a",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "user:student-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": null,
+     "recipientId": "student-686",
+     "recipientRole": "student",
+     "status": "created",
+     "summary": "Eine Lehrperson hat deine Anfrage angenommen. Komm jetzt ins Klassenzimmer.",
+     "targetId": "conv-686",
+     "targetType": "conversation",
+     "title": "Eine Lehrperson ist deiner Unterhaltung beigetreten"
+    }
+   ],
+   "teacher-686": []
+  },
+  "email": [],
+  "events": [
+   {
+    "PK": "NOTIFICATION#teacher-help-takeover-req-686-teacher-686",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_id": "teacher-686",
+    "actor_role": "teacher",
+    "category": "teacher_responses",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "teacher-help-takeover-req-686-teacher-686",
+    "event_type": "teacher_takeover",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "delivery_decision": {
+      "category": "teacher_responses",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "mode": "classroom",
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "push-2954166cfe121484f36dbccf19ef98c059b3d966",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-5a2378eb6ea9"
+       ]
+      }
+     ],
+     "request_id": "req-686",
+     "teacher_id": "teacher-686",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "websocket-373816f2127db0c0fe8aa14acbd10f0a4207d44d",
+       "results": [
+        {
+         "connection_id": "connection-292269500a49549a",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "user:student-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "student-686",
+    "owner_target_id": "conv-686",
+    "owner_target_type": "conversation",
+    "recipient_id": "student-686",
+    "recipient_role": "student",
+    "schema_version": "notification-event.v3",
+    "status": "created",
+    "summary": "Eine Lehrperson hat deine Anfrage angenommen. Komm jetzt ins Klassenzimmer.",
+    "sweep_bucket": "notification_inbox#user#student-686",
+    "sweep_due_at": "<time>",
+    "target_id": "conv-686",
+    "target_type": "conversation",
+    "title": "Eine Lehrperson ist deiner Unterhaltung beigetreten"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "teacher-help-takeover-req-686-teacher-686"
+    ],
+    "operation_id": "push-2954166cfe121484f36dbccf19ef98c059b3d966",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "teacher-help-takeover-req-686-teacher-686"
+    ],
+    "operation_id": "websocket-7e5d89798432f70fea102d6870fb0f5d391cacd5",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Eine Lehrperson hat deine Anfrage angenommen. Komm jetzt ins Klassenzimmer.",
+     "data": {
+      "eventId": "teacher-help-takeover-req-686-teacher-686",
+      "eventType": "teacher_takeover",
+      "targetId": "conv-686",
+      "targetType": "conversation"
+     },
+     "deliveryId": "push-2954166cfe121484f36dbccf19ef98c059b3d966",
+     "template": "stoa-default",
+     "title": "Eine Lehrperson ist deiner Unterhaltung beigetreten",
+     "tokenReferences": [
+      "push-fa1b7e4380aaca34"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": [
+   {
+    "connection_id": "conn-student-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "websocket-7e5d89798432f70fea102d6870fb0f5d391cacd5",
+     "eventId": "teacher-help-takeover-req-686-teacher-686",
+     "eventType": "teacher_takeover",
+     "metadata": {
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "mode": "classroom",
+      "request_id": "req-686",
+      "teacher_id": "teacher-686"
+     },
+     "recipientId": "student-686",
+     "recipientRole": "student",
+     "summary": "Eine Lehrperson hat deine Anfrage angenommen. Komm jetzt ins Klassenzimmer.",
+     "targetId": "conv-686",
+     "targetType": "conversation",
+     "title": "Eine Lehrperson ist deiner Unterhaltung beigetreten"
+    }
+   }
+  ]
+ },
+ "teacher_takes_text": {
+  "bells": {
+   "admin-686": [],
+   "parent-686": [],
+   "student-686": [
+    {
+     "actorId": "teacher-686",
+     "actorRole": "teacher",
+     "archivedAt": null,
+     "createdAt": "<time>",
+     "deliveryCategory": "teacher_responses",
+     "deliveryChannels": {
+      "in_app": {
+       "decision": "stored",
+       "enabled": true
+      },
+      "push": {
+       "decision": "deferred_push",
+       "enabled": true
+      },
+      "realtime": {
+       "configured": true,
+       "decision": "attempted",
+       "enabled": true
+      }
+     },
+     "eventId": "teacher-help-takeover-req-686-teacher-686",
+     "eventType": "teacher_takeover",
+     "metadata": {
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "mode": "text",
+      "push_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "channel": "push",
+        "delivery_id": "push-2954166cfe121484f36dbccf19ef98c059b3d966",
+        "provider": "fcm",
+        "provider_mode": "provider_ready",
+        "provider_result": {},
+        "status": "sent",
+        "template": "stoa-default",
+        "token_count": "1",
+        "token_references": [
+         "ref-5a2378eb6ea9"
+        ]
+       }
+      ],
+      "request_id": "req-686",
+      "teacher_id": "teacher-686",
+      "websocket_delivery_attempts": [
+       {
+        "attempted_at": "<time>",
+        "delivery_id": "websocket-373816f2127db0c0fe8aa14acbd10f0a4207d44d",
+        "results": [
+         {
+          "connection_id": "connection-292269500a49549a",
+          "status": "delivered"
+         }
+        ],
+        "target_channels": [
+         "user:student-686"
+        ],
+        "target_count": "1"
+       }
+      ]
+     },
+     "readAt": null,
+     "recipientId": "student-686",
+     "recipientRole": "student",
+     "status": "created",
+     "summary": "Eine Lehrperson bearbeitet jetzt deine Anfrage.",
+     "targetId": "conv-686",
+     "targetType": "conversation",
+     "title": "Eine Lehrperson ist deiner Unterhaltung beigetreten"
+    }
+   ],
+   "teacher-686": []
+  },
+  "email": [],
+  "events": [
+   {
+    "PK": "NOTIFICATION#teacher-help-takeover-req-686-teacher-686",
+    "SK": "META",
+    "account_fence_generation": "4",
+    "actor_id": "teacher-686",
+    "actor_role": "teacher",
+    "category": "teacher_responses",
+    "created_at": "<time>",
+    "entity_type": "notification_event",
+    "event_id": "teacher-help-takeover-req-686-teacher-686",
+    "event_type": "teacher_takeover",
+    "event_version": "1",
+    "listed_at": "<time>",
+    "listing": "notification_event",
+    "metadata": {
+     "delivery_decision": {
+      "category": "teacher_responses",
+      "channels": {
+       "in_app": {
+        "decision": "stored",
+        "enabled": true
+       },
+       "push": {
+        "decision": "deferred_push",
+        "enabled": true
+       },
+       "realtime": {
+        "configured": true,
+        "decision": "attempted",
+        "enabled": true
+       }
+      }
+     },
+     "mode": "text",
+     "push_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "channel": "push",
+       "delivery_id": "push-2954166cfe121484f36dbccf19ef98c059b3d966",
+       "provider": "fcm",
+       "provider_mode": "provider_ready",
+       "provider_result": {},
+       "status": "sent",
+       "template": "stoa-default",
+       "token_count": "1",
+       "token_references": [
+        "ref-5a2378eb6ea9"
+       ]
+      }
+     ],
+     "request_id": "req-686",
+     "teacher_id": "teacher-686",
+     "websocket_delivery_attempts": [
+      {
+       "attempted_at": "<time>",
+       "delivery_id": "websocket-373816f2127db0c0fe8aa14acbd10f0a4207d44d",
+       "results": [
+        {
+         "connection_id": "connection-292269500a49549a",
+         "status": "delivered"
+        }
+       ],
+       "target_channels": [
+        "user:student-686"
+       ],
+       "target_count": "1"
+      }
+     ]
+    },
+    "owner_classification": "private_owner",
+    "owner_id": "student-686",
+    "owner_target_id": "conv-686",
+    "owner_target_type": "conversation",
+    "recipient_id": "student-686",
+    "recipient_role": "student",
+    "schema_version": "notification-event.v3",
+    "status": "created",
+    "summary": "Eine Lehrperson bearbeitet jetzt deine Anfrage.",
+    "sweep_bucket": "notification_inbox#user#student-686",
+    "sweep_due_at": "<time>",
+    "target_id": "conv-686",
+    "target_type": "conversation",
+    "title": "Eine Lehrperson ist deiner Unterhaltung beigetreten"
+   }
+  ],
+  "intents": [
+   {
+    "channel": "push",
+    "event_ids": [
+     "teacher-help-takeover-req-686-teacher-686"
+    ],
+    "operation_id": "push-2954166cfe121484f36dbccf19ef98c059b3d966",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   },
+   {
+    "channel": "websocket",
+    "event_ids": [
+     "teacher-help-takeover-req-686-teacher-686"
+    ],
+    "operation_id": "websocket-7e5d89798432f70fea102d6870fb0f5d391cacd5",
+    "outcome_status": "accepted",
+    "status": "accepted"
+   }
+  ],
+  "push": [
+   {
+    "body": {
+     "body": "Eine Lehrperson bearbeitet jetzt deine Anfrage.",
+     "data": {
+      "eventId": "teacher-help-takeover-req-686-teacher-686",
+      "eventType": "teacher_takeover",
+      "targetId": "conv-686",
+      "targetType": "conversation"
+     },
+     "deliveryId": "push-2954166cfe121484f36dbccf19ef98c059b3d966",
+     "template": "stoa-default",
+     "title": "Eine Lehrperson ist deiner Unterhaltung beigetreten",
+     "tokenReferences": [
+      "push-fa1b7e4380aaca34"
+     ]
+    },
+    "headers": {
+     "Authorization": "Bearer push-key",
+     "Content-type": "application/json"
+    },
+    "url": "https://push.stoa.test/send"
+   }
+  ],
+  "realtime": [
+   {
+    "connection_id": "conn-student-686",
+    "data": {
+     "createdAt": "<time>",
+     "deliveryAttempt": 1,
+     "deliveryId": "websocket-7e5d89798432f70fea102d6870fb0f5d391cacd5",
+     "eventId": "teacher-help-takeover-req-686-teacher-686",
+     "eventType": "teacher_takeover",
+     "metadata": {
+      "delivery_decision": {
+       "category": "teacher_responses",
+       "channels": {
+        "in_app": {
+         "decision": "stored",
+         "enabled": true
+        },
+        "push": {
+         "decision": "deferred_push",
+         "enabled": true
+        },
+        "realtime": {
+         "configured": true,
+         "decision": "attempted",
+         "enabled": true
+        }
+       }
+      },
+      "mode": "text",
+      "request_id": "req-686",
+      "teacher_id": "teacher-686"
+     },
+     "recipientId": "student-686",
+     "recipientRole": "student",
+     "summary": "Eine Lehrperson bearbeitet jetzt deine Anfrage.",
+     "targetId": "conv-686",
+     "targetType": "conversation",
+     "title": "Eine Lehrperson ist deiner Unterhaltung beigetreten"
+    }
+   }
+  ]
+ }
+}

@@ -19,7 +19,7 @@ from stoa.rule_violation import render_message
 from stoa.services import (
     current_relationship,
     locale_service,
-    notification_service,
+    notifications,
     notify_service,
     report_artifact_service,
     report_service,
@@ -113,7 +113,7 @@ def resend_report_email(
         )
 
     parent_id = str(report.get("parent_id") or "")
-    if not notification_service.weekly_report_email_enabled(parent_id):
+    if not notifications.weekly_report_email_enabled(parent_id):
         raise _refused(
             report,
             "resend_email",

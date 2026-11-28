@@ -384,6 +384,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         fake="src/stoa/db/repositories/notification_repo.py:table.get_item.ConsistentRead",
         selector="tests/test_notification_delivery_fencing.py::test_private_push_rejects_missing_malformed_or_stale_persisted_generation",
         decisions=("D-10", "D-16", "D-17"),
+        successor=("src/stoa/services/notifications/_ledger.py", "resolve_delivery_ownership"),
     )
     + _flows(
         file="src/stoa/db/repositories/notification_repo.py",
@@ -538,7 +539,8 @@ def validate_taint_semantics(root: Path | str) -> None:
             raise BoundaryViolation(
                 "unsafe authority-bearing read: deletion command version"
             )
-    notification = root / "src/stoa/services/notification_service.py"
+    # `notification_service.py` until the notification package (#686).
+    notification = root / "src/stoa/services/notifications/_ledger.py"
     if notification.exists():
         source = notification.read_text()
         functions = _symbol_nodes(ast.parse(source, filename=notification.as_posix()))

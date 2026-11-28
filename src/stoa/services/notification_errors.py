@@ -1,6 +1,6 @@
 """Notification refusals, from the inbox to the WebSocket channel (#211).
 
-Raised by `stoa.services.notification_service` and
+Raised by the notification package (`stoa.services.notifications`) and
 `stoa.services.websocket_service`. A caller who is not signed in, or who asks
 for something that is not theirs, is refused with the security codes
 (`authentication_required`, `action_not_allowed`), as everywhere else.

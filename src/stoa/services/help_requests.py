@@ -18,7 +18,7 @@ What lives elsewhere, and is called from here:
 - which teacher to offer a request to: `teacher_dispatch_service.plan_dispatch`;
 - the weekly case allowance: `teacher_support_allowance_service`;
 - whether the student's usage period still lets them ask: `usage_period`;
-- telling people: `notification_service`.
+- telling people: `notifications` (one happening each; it never raises).
 
 The lifecycle (`escalation_status`): `pending` until a teacher takes it, then
 `in_progress`, then `resolved`; a request nobody took ends `withdrawn` (the
@@ -52,7 +52,7 @@ from stoa.security.private_telemetry import emit_private_event
 from stoa.services import (
     attachment_service,
     learning_session,
-    notification_service,
+    notifications,
     teacher_dispatch_service,
     teacher_reply_service,
     teacher_support_allowance_service,
@@ -1129,13 +1129,16 @@ def _pause_lapsed_teacher(record: Mapping[str, Any], now: str) -> None:
     try:
         if not teacher_dispatch_service.pause_after_lapse(teacher_id, dispatch_id=dispatch_id, now=now):
             return
-        notification_service.emit_teacher_dispatch_paused(
+    except Exception as exc:  # noqa: BLE001 - best effort by contract
+        logger.warning("dispatch_lapse_pause_failed error=%s", type(exc).__name__)
+        return
+    notifications.happened(
+        notifications.TeacherPausedAfterLapse(
             teacher_id=teacher_id,
             dispatch_id=dispatch_id,
             accept_minutes=teacher_dispatch_service.DISPATCH_ACCEPT_TIMEOUT_SECONDS // 60,
         )
-    except Exception as exc:  # noqa: BLE001 - best effort by contract
-        logger.warning("dispatch_lapse_pause_failed error=%s", type(exc).__name__)
+    )
 
 
 def _offer(
@@ -1180,8 +1183,8 @@ def _offer(
     replaced = str(record.get("dispatched_teacher_id") or "")
     _close_offer(record, "expired" if replaced == teacher_id else "reassigned", now=now)
     # Only after the offer is written, so a refused offer tells nobody (#141).
-    try:
-        notification_service.emit_teacher_help_dispatched(
+    notifications.happened(
+        notifications.HelpOffered(
             conversation=written,
             teacher_id=teacher_id,
             dispatch_id=dispatch_id,
@@ -1189,8 +1192,7 @@ def _offer(
             accept_minutes=teacher_dispatch_service.DISPATCH_ACCEPT_TIMEOUT_SECONDS // 60,
             standing=standing,
         )
-    except Exception as exc:  # noqa: BLE001 - best effort by contract
-        logger.warning("dispatch_teacher_alert_failed error=%s", type(exc).__name__)
+    )
     return written
 
 
@@ -1199,10 +1201,7 @@ def _close_offer(record: Mapping[str, Any], state: str, *, now: str) -> None:
     dispatch_id = str(record.get("dispatch_id") or "")
     if not dispatch_id or record.get("dispatch_status") != "dispatched":
         return
-    try:
-        notification_service.close_teacher_help_offer(dispatch_id=dispatch_id, state=state, now=now)
-    except Exception as exc:  # noqa: BLE001 - best effort by contract
-        logger.warning("dispatch_offer_close_failed error=%s", type(exc).__name__)
+    notifications.happened(notifications.HelpOfferClosed(dispatch_id=dispatch_id, state=state, now=now))
 
 
 def _standing_deadline(record: Mapping[str, Any], now: str) -> str:
@@ -1316,12 +1315,14 @@ def expire(
     if ending.before is not None:
         _close_offer(ending.before, EXPIRED, now=timestamp)
     observed =_parse(timestamp) or datetime.now(timezone.utc)
-    notification_service.emit_teacher_help_expired(
-        conversation=ending.record,
-        case_returned=(
-            ending.refund is teacher_support_allowance_service.TeacherSupportRefundDisposition.REFUNDED
-            and ending.refund_week == teacher_support_allowance_service.current_week_identity(observed)
-        ),
+    notifications.happened(
+        notifications.HelpRequestExpired(
+            conversation=ending.record,
+            case_returned=(
+                ending.refund is teacher_support_allowance_service.TeacherSupportRefundDisposition.REFUNDED
+                and ending.refund_week == teacher_support_allowance_service.current_week_identity(observed)
+            ),
+        )
     )
     return ending.record
 
@@ -1467,12 +1468,11 @@ def take_or_finish(
         table=table,
     )
     if not record.get("teacher_id"):
-        try:
-            notification_service.emit_teacher_help_takeover(
+        notifications.happened(
+            notifications.TeacherTookHelpRequest(
                 conversation=written, teacher_id=teacher_id, mode=mode(written)
             )
-        except Exception as exc:  # noqa: BLE001 - best effort by contract
-            logger.warning("teacher_help_takeover_alert_failed error=%s", type(exc).__name__)
+        )
     return written
 
 
@@ -1671,12 +1671,9 @@ def reply(
         fence=True,
         table=store,
     )
-    try:
-        notification_service.emit_teacher_help_reply(
-            conversation=written, teacher_id=teacher_id, reply_id=note_id
-        )
-    except Exception as exc:  # noqa: BLE001 - best effort by contract
-        logger.warning("teacher_help_reply_alert_failed error=%s", type(exc).__name__)
+    notifications.happened(
+        notifications.TeacherReplied(conversation=written, teacher_id=teacher_id, reply_id=note_id)
+    )
     return Reply(
         id=note_id,
         content=content,

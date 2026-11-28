@@ -21,7 +21,8 @@ from fakes.dynamodb import FakeTable
 import pytest
 
 from stoa import config
-from stoa.services import help_requests, message_catalog, notification_service
+from stoa.services import help_requests, message_catalog
+from stoa.services.notifications import _bell
 
 import test_chat_help_request_lifecycle as lifecycle
 from test_chat_help_request_lifecycle import CONV, CREATED, TEACHER, _dispatch_to, _help
@@ -54,7 +55,7 @@ def table(monkeypatch) -> FakeTable:
 def notices(monkeypatch) -> list[dict[str, Any]]:
     sent: list[dict[str, Any]] = []
     monkeypatch.setattr(
-        notification_service, "create_event_safe", lambda **kwargs: sent.append(kwargs)
+        _bell, "create_event_safe", lambda **kwargs: sent.append(kwargs)
     )
     return sent
 
@@ -107,7 +108,7 @@ def test_a_second_notice_for_the_same_request_is_refused_by_the_store(
         row for row in table.rows.values() if row.get("event_type") == "teacher_help_expired"
     ]
     assert len(first) == 1
-    notification_service.create_event_safe(
+    _bell.create_event_safe(
         recipient_id=lifecycle.STUDENT,
         recipient_role="student",
         event_type="teacher_help_expired",

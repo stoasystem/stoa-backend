@@ -28,7 +28,7 @@ from stoa.models.moderation import (
     ModerationSurface,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
-from stoa.services import help_requests, learning_session, notification_service
+from stoa.services import help_requests, learning_session, notifications
 from stoa.services.moderation_errors import ModerationErrorCode as _M, ModerationViolation
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
 
@@ -124,12 +124,14 @@ def create_case(
     )
     item["history"] = [event]
     moderation_repo.put_case(item, event)
-    notification_service.emit_moderation_created(
-        case_item=item,
-        actor_id=reporter_id,
-        actor_role=reporter_role,
-        owner_id=student_id,
-        privacy_generation=privacy_generation,
+    notifications.happened(
+        notifications.ModerationCaseOpened(
+            case=item,
+            actor_id=reporter_id,
+            actor_role=reporter_role,
+            owner_id=student_id,
+            privacy_generation=privacy_generation,
+        )
     )
     return item
 
@@ -255,12 +257,14 @@ def open_image_case(
         if orphaned:
             _delete_image_version(s3, settings, image_key, image_version, quiet=True)
         raise
-    notification_service.emit_moderation_created(
-        case_item=item,
-        actor_id=IMAGE_MODERATION_ACTOR,
-        actor_role="system",
-        owner_id=owner_id,
-        privacy_generation=privacy_generation,
+    notifications.happened(
+        notifications.ModerationCaseOpened(
+            case=item,
+            actor_id=IMAGE_MODERATION_ACTOR,
+            actor_role="system",
+            owner_id=owner_id,
+            privacy_generation=privacy_generation,
+        )
     )
     return item
 
@@ -546,12 +550,15 @@ def update_case(case_id: str, body: ModerationCaseUpdateRequest, user: dict[str,
     moderation_repo.put_event(case_id, event)
     updated = dict(updated)
     updated["history"] = moderation_repo.list_case_events(case_id) or [event]
-    notification_service.emit_moderation_update(
-        case_item=updated,
-        actor_id=actor_id,
-        actor_role=str(user.get("role") or "admin"),
-        owner_id=str(existing["student_id"]),
-        privacy_generation=int(existing["privacy_generation"]),
+    notifications.happened(
+        notifications.ModerationCaseUpdated(
+            case=updated,
+            actor_id=actor_id,
+            actor_role=str(user.get("role") or "admin"),
+            owner_id=str(existing["student_id"]),
+            privacy_generation=int(existing["privacy_generation"]),
+            change_id=str(event["event_id"]),
+        )
     )
     return updated
 
@@ -576,12 +583,15 @@ def add_note(case_id: str, body: ModerationCaseNoteRequest, user: dict[str, Any]
     updated = dict(existing)
     updated["updated_at"] = now
     updated["history"] = moderation_repo.list_case_events(case_id) or [event]
-    notification_service.emit_moderation_update(
-        case_item=updated,
-        actor_id=actor_id,
-        actor_role=str(user.get("role") or "admin"),
-        owner_id=str(existing["student_id"]),
-        privacy_generation=int(existing["privacy_generation"]),
+    notifications.happened(
+        notifications.ModerationCaseUpdated(
+            case=updated,
+            actor_id=actor_id,
+            actor_role=str(user.get("role") or "admin"),
+            owner_id=str(existing["student_id"]),
+            privacy_generation=int(existing["privacy_generation"]),
+            change_id=str(event["event_id"]),
+        )
     )
     return updated
 

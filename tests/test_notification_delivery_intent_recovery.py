@@ -7,14 +7,14 @@ import pytest
 
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, notification_repo
-from stoa.services import notification_service
+from stoa.services.notifications import _ledger
 
 
 OWNER = "student-delivery-owner"
 GENERATION = 7
 OPERATION = "delivery-operation-opaque"
 PAYLOAD = {"title": "private-canary", "endpoint": "must-not-persist"}
-PAYLOAD_DIGEST = notification_service._canonical_payload_digest(PAYLOAD)
+PAYLOAD_DIGEST = _ledger.canonical_payload_digest(PAYLOAD)
 
 
 def _scope() -> Any:
@@ -321,7 +321,7 @@ class _MemoryIntentStore:
 
 
 def _run(store: _MemoryIntentStore, *, now_epoch: int, provider: Any | None = None) -> dict[str, Any]:
-    return notification_service.run_delivery_intent(
+    return _ledger.run_delivery_intent(
         scope=_scope(),
         operation_id=OPERATION,
         channel="push",

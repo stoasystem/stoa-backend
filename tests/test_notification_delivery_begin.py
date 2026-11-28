@@ -8,7 +8,7 @@ from botocore.exceptions import ClientError
 
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, notification_repo
-from stoa.services import notification_service
+from stoa.services.notifications import _ledger
 from fakes.dynamodb import from_wire
 
 
@@ -16,7 +16,7 @@ OWNER = "student-delivery-begin"
 GENERATION = 11
 OPERATION = "opaque-delivery-begin-operation"
 PAYLOAD = {"title": "private payload must not escape"}
-PAYLOAD_DIGEST = notification_service._canonical_payload_digest(PAYLOAD)
+PAYLOAD_DIGEST = _ledger.canonical_payload_digest(PAYLOAD)
 
 
 def _scope() -> notification_repo.DeliveryIntentScope:
@@ -156,7 +156,7 @@ def _install_service_boundary(
 
 
 def _run(provider_calls: list[str]) -> dict[str, Any]:
-    return notification_service.run_delivery_intent(
+    return _ledger.run_delivery_intent(
         scope=_scope(),
         operation_id=OPERATION,
         channel="push",

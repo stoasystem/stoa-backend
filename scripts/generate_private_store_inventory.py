@@ -220,7 +220,10 @@ SEMANTIC_REQUIREMENTS: dict[str, dict[str, tuple[str | tuple[str, ...], ...]]] =
             "intent_version=:version",
         ),
     },
-    "src/stoa/services/notification_service.py": {
+    # `notification_service.py` and the fanout in `websocket_service.py` at the
+    # candidate; one notification package since #686, the same code moved: the
+    # only-once ledger, the push channel and the realtime channel.
+    "src/stoa/services/notifications/_ledger.py": {
         "resolve_delivery_ownership": (
             "classification = event.get(\"owner_classification\")",
             "return resolve_legacy_delivery_owner(event, table=table)",
@@ -230,12 +233,17 @@ SEMANTIC_REQUIREMENTS: dict[str, dict[str, tuple[str | tuple[str, ...], ...]]] =
             "begin_delivery_effect",
             "provider_call()",
         ),
+    },
+    "src/stoa/services/notifications/_push.py": {
         "attempt_push_delivery": ("load_authoritative_delivery_events", "run_authoritative_delivery"),
     },
-    "src/stoa/services/websocket_service.py": {
+    "src/stoa/services/notifications/_realtime.py": {
         "fanout_notification_event": (
-            "batch = notification_service.load_authoritative_delivery_events([event_id])",
-            "notification_service.run_authoritative_delivery",
+            (
+                "batch = notification_service.load_authoritative_delivery_events([event_id])",
+                "batch = _ledger.load_authoritative_delivery_events([event_id])",
+            ),
+            ("notification_service.run_authoritative_delivery", "_ledger.run_authoritative_delivery"),
         ),
     },
 }
@@ -493,7 +501,7 @@ def validate_private_store_semantics(root: Path | str) -> None:
                 raise ValueError(
                     f"reviewed private-store semantic missing: {relative}:{symbol}"
                 )
-        if relative.endswith("notification_service.py") and not (
+        if relative.endswith("notifications/_ledger.py") and not (
             _assigned_call(
                 functions["run_delivery_intent"],
                 target="inflight_claim",
@@ -506,7 +514,7 @@ def validate_private_store_semantics(root: Path | str) -> None:
             raise ValueError(
                 "reviewed private-store semantic missing: durable delivery begin"
             )
-        if relative.endswith("websocket_service.py") and not _assigned_call(
+        if relative.endswith("notifications/_realtime.py") and not _assigned_call(
             functions["fanout_notification_event"],
             target="batch",
             function="load_authoritative_delivery_events",
@@ -577,9 +585,9 @@ def _classification(sink: MutationSink) -> tuple[str, str | None, str | None]:
         branch = "practice_progress"
     elif any(part in path for part in ("notification_repo.py", "websocket_repo.py")):
         branch = "notification_device_realtime"
-    elif any(part in path for part in ("notification_service.py", "websocket_service.py", "notify_service.py")) and sink.method in {"send_email", "send_message", "post_to_connection", "urlopen"}:
+    elif any(part in path for part in ("notification_service.py", "services/notifications/", "websocket_service.py", "notify_service.py")) and sink.method in {"send_email", "send_message", "post_to_connection", "urlopen"}:
         branch = "external_delivery_debt"
-    elif any(part in path for part in ("notification_service.py", "websocket_service.py")):
+    elif any(part in path for part in ("notification_service.py", "services/notifications/", "websocket_service.py")):
         branch = "notification_device_realtime"
     elif "report" in path:
         if sink.method in {"send_email", "send_message"}:

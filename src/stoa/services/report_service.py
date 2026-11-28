@@ -31,7 +31,7 @@ from stoa.services import (
     locale_service,
     message_catalog,
     model_call,
-    notification_service,
+    notifications,
     notify_service,
     report_artifact_service,
     student_evidence,
@@ -829,7 +829,7 @@ def store_and_send_weekly_report(
         )
     # A parent who unsubscribed still has the report in STOA; only the email
     # stops, and the report says so (#363).
-    if not notification_service.weekly_report_email_enabled(str(report_item["parent_id"])):
+    if not notifications.weekly_report_email_enabled(str(report_item["parent_id"])):
         return _mark_report_email_skipped(report_item)
     try:
         delivery_outcome = notify_service.send_fenced_weekly_report_email(

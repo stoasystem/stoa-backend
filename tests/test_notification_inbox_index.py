@@ -26,7 +26,7 @@ from fakes.dynamodb import DEFAULT_INDEXES, FakeTable, IndexSchema
 from scripts import backfill_notification_inbox_index as backfill
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, notification_repo
-from stoa.services import notification_service
+from stoa.services import notifications
 from stoa.services.ask_question import _store
 
 STUDENT = "student-1"
@@ -135,7 +135,7 @@ def _assert_every_inbox_holds_what_the_scan_finds(table: FakeTable) -> None:
         visible = [
             item
             for item in scanned
-            if notification_service._visible_to_user(item, user_id=user_id, role=role)
+            if notifications.visible_to_user(item, user_id=user_id, role=role)
         ]
         assert _ids(notification_repo.list_inbox(user_id=user_id, role=role, table=table)) == _ids(
             visible
@@ -428,10 +428,10 @@ def test_the_bell_shows_a_persons_own_among_more_than_a_hundred_and_scans_nothin
         scans = double.calls["scan"]
         teacher = {"sub": TEACHER, "role": "teacher"}
 
-        shown = notification_service.list_user_events(teacher)
-        unread = notification_service.list_user_events(teacher, status="created", limit=100)
-        archived = notification_service.list_user_events(teacher, status="archived")
-        student = notification_service.list_user_events({"sub": STUDENT, "role": "student"}, limit=100)
+        shown = notifications.list_user_events(teacher)
+        unread = notifications.list_user_events(teacher, status="created", limit=100)
+        archived = notifications.list_user_events(teacher, status="archived")
+        student = notifications.list_user_events({"sub": STUDENT, "role": "student"}, limit=100)
 
         assert [item["eventId"] for item in shown] == ["mine-new"]
         assert [item["eventId"] for item in unread] == ["mine-new"]
@@ -469,12 +469,12 @@ def test_the_administrators_list_reads_the_sites_newest_from_its_index_and_scans
         notification_repo.put_event(_global_event("for-admins", created_at="2026-11-24T12:00:00Z"))
         double.requests.clear()
 
-        listed = notification_service.list_admin_events(limit=100)
+        listed = notifications.list_admin_events(limit=100)
         # The ten oldest are the read ones: found past the first pages, not lost.
-        read = notification_service.list_admin_events(status="read", limit=100)
+        read = notifications.list_admin_events(status="read", limit=100)
         asked = list(double.requests)
         # The delivery status counts the same list; what else it reads is its own.
-        status = notification_service.delivery_status(limit=100)
+        status = notifications.delivery_status(limit=100)
 
         assert [item["eventId"] for item in listed[:3]] == ["for-admins", "e129", "e128"]
         assert len(listed) == 100

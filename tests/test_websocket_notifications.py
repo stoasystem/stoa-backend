@@ -7,7 +7,9 @@ from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa import config
 
 from stoa.config import Settings
-from stoa.services import notification_service, websocket_service
+from stoa.services import websocket_service
+from stoa.services.notifications import _bell, _ledger, _realtime
+from stoa.db.repositories import account_deletion_repo, notification_repo
 
 
 def _install_notification_repo(monkeypatch):
@@ -70,21 +72,21 @@ def _install_notification_repo(monkeypatch):
     def get_preferences(user_id):
         return preferences.get(user_id)
 
-    monkeypatch.setattr(notification_service.notification_repo, "put_event", put_event)
-    monkeypatch.setattr(notification_service.notification_repo, "get_event", get_event)
+    monkeypatch.setattr(notification_repo, "put_event", put_event)
+    monkeypatch.setattr(notification_repo, "get_event", get_event)
     monkeypatch.setattr(
-        notification_service.notification_repo,
+        notification_repo,
         "load_delivery_event_strong",
         load_delivery_event_strong,
     )
-    monkeypatch.setattr(notification_service.notification_repo, "list_inbox", list_inbox)
-    monkeypatch.setattr(notification_service.notification_repo, "list_site_events", list_site_events)
-    monkeypatch.setattr(notification_service.notification_repo, "update_event", update_event)
-    monkeypatch.setattr(notification_service.notification_repo, "put_preferences", put_preferences)
-    monkeypatch.setattr(notification_service.notification_repo, "get_preferences", get_preferences)
-    monkeypatch.setattr(websocket_service.notification_repo, "update_event", update_event)
+    monkeypatch.setattr(notification_repo, "list_inbox", list_inbox)
+    monkeypatch.setattr(notification_repo, "list_site_events", list_site_events)
+    monkeypatch.setattr(notification_repo, "update_event", update_event)
+    monkeypatch.setattr(notification_repo, "put_preferences", put_preferences)
+    monkeypatch.setattr(notification_repo, "get_preferences", get_preferences)
+    monkeypatch.setattr(notification_repo, "update_event", update_event)
     monkeypatch.setattr(
-        notification_service.account_deletion_repo,
+        account_deletion_repo,
         "require_active_account_fence",
         lambda _owner_id, generation=None, **_kwargs: {
             "status": "active",
@@ -100,7 +102,7 @@ def _install_notification_repo(monkeypatch):
         return {"status": "accepted"}
 
     monkeypatch.setattr(
-        notification_service,
+        _ledger,
         "run_authoritative_delivery",
         run_authoritative_delivery,
     )
@@ -212,7 +214,7 @@ def test_teacher_connection_receives_teacher_role_broadcast(monkeypatch):
     }
     events[event["event_id"]] = dict(event)
 
-    result = websocket_service.fanout_notification_event(
+    result = _realtime.fanout_notification_event(
         event,
         post_func=lambda connection, envelope: sent.append((connection, envelope)),
     )
@@ -246,7 +248,7 @@ def test_direct_user_fanout_records_delivery_attempt_metadata(monkeypatch):
     }
     events[event["event_id"]] = dict(event)
 
-    websocket_service.fanout_notification_event(event, post_func=lambda connection, envelope: None)
+    _realtime.fanout_notification_event(event, post_func=lambda connection, envelope: None)
 
     attempts = events["notif-2"]["metadata"]["websocket_delivery_attempts"]
     # The person's channel only: not every student's (#624).
@@ -281,7 +283,7 @@ def test_fanout_skips_malformed_persisted_channel_records(monkeypatch):
     events[event["event_id"]] = dict(event)
     sent: list[dict] = []
 
-    result = websocket_service.fanout_notification_event(
+    result = _realtime.fanout_notification_event(
         event,
         post_func=lambda connection, _envelope: sent.append(connection),
     )
@@ -298,7 +300,8 @@ def test_delivery_failure_does_not_break_durable_notification(monkeypatch):
         user={"sub": "student-1", "role": "student"},
     )
 
-    event = notification_service.create_event(
+    event = _bell.create_event(
+        event_id="evt-303",
         recipient_id="student-1",
         recipient_role="student",
         event_type="teacher_reply",
@@ -397,7 +400,7 @@ def test_a_persons_notification_is_not_sent_to_others_of_their_role(monkeypatch)
     events[event["event_id"]] = dict(event)
     sent: list[str] = []
 
-    websocket_service.fanout_notification_event(
+    _realtime.fanout_notification_event(
         event, post_func=lambda connection, _envelope: sent.append(connection["connection_id"])
     )
 
@@ -430,7 +433,7 @@ def test_a_role_broadcast_reaches_every_connection_of_the_role_and_no_other(monk
     events[event["event_id"]] = dict(event)
     sent: list[str] = []
 
-    websocket_service.fanout_notification_event(
+    _realtime.fanout_notification_event(
         event, post_func=lambda connection, _envelope: sent.append(connection["connection_id"])
     )
 
@@ -477,7 +480,7 @@ def test_a_persons_notification_reaches_them_among_more_than_500_connections(mon
     sent: list[str] = []
     db_table.install(table)
     try:
-        result = websocket_service.fanout_notification_event(
+        result = _realtime.fanout_notification_event(
             event, post_func=lambda connection, _envelope: sent.append(connection["connection_id"])
         )
     finally:

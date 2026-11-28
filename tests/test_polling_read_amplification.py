@@ -22,9 +22,9 @@ from fakes.dynamodb import FakeTable
 from actor_helpers import install_actor_overrides
 from stoa.db import table as db_table
 from stoa.db.repositories import notification_repo
-from stoa.routers import conversations, notifications
+from stoa.routers import conversations, notifications as notifications_router
+from stoa.services import notifications
 from stoa.services import (
-    notification_service,
     teacher_dispatch_service,
     teacher_support_allowance_service as allowance,
 )
@@ -104,7 +104,7 @@ def _seed_history(table: FakeTable) -> list[dict[str, Any]]:
 
 def _bell(limit: int | None = None, status: str | None = None) -> list[str]:
     app = FastAPI()
-    app.include_router(notifications.router, prefix="/notifications")
+    app.include_router(notifications_router.router, prefix="/notifications")
     install_actor_overrides(app, {"sub": STUDENT, "role": "student"})
     params = {key: value for key, value in (("limit", limit), ("status", status)) if value}
     response = TestClient(app).get("/notifications", params=params)
@@ -117,7 +117,7 @@ def _expected(seeded: list[dict[str, Any]], *, limit: int, status: str | None = 
     shown = [
         item
         for item in seeded
-        if notification_service._visible_to_user(item, user_id=STUDENT, role="student")
+        if notifications.visible_to_user(item, user_id=STUDENT, role="student")
         and (status is None and item["status"] != "archived" or item["status"] == status)
     ]
     shown.sort(key=lambda item: item["created_at"], reverse=True)

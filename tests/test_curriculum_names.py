@@ -214,13 +214,13 @@ TITLE_READS: dict[tuple[str, str], str] = {
     ("services/knowledge_map_service.py", "build_map"): _CATALOG,
     ("services/knowledge_mastery_service.py", "judge_unit"): _CATALOG,
     ("services/lesson_sections.py", "localized"): _NOT_CONTENT,
-    ("services/notification_service.py", "_event_text"): _NOT_CONTENT,
-    ("services/notification_service.py", "attempt_push_delivery"): _NOT_CONTENT,
+    ("services/notifications/_bell.py", "_event_text"): _NOT_CONTENT,
+    ("services/notifications/_push.py", "attempt_push_delivery"): _NOT_CONTENT,
+    ("services/notifications/_realtime.py", "event_envelope"): _NOT_CONTENT,
     ("services/practice_context_service.py", "resolve"): _CATALOG,
     ("services/report_service.py", "_stars_lit"): _CATALOG,
     ("services/report_service.py", "build_bedrock_report_input"): _NOT_CONTENT,
     ("services/star_map_candidates.py", "from_catalog"): _CATALOG,
-    ("services/websocket_service.py", "event_envelope"): _NOT_CONTENT,
 }
 
 

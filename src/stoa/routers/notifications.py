@@ -15,7 +15,7 @@ from stoa.security.authorization import (
 from stoa.security.declared_authorization import SELF, TOKEN, authorized, path
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.security.route_inventory import explicit_route_classification
-from stoa.services import locale_service, notification_service, teacher_dispatch_service
+from stoa.services import locale_service, notifications, teacher_dispatch_service
 
 
 # Every role reads and changes its own notifications, and only its own.
@@ -134,7 +134,7 @@ async def list_notifications(
     # The bell polls this on every page while the tab is shown: for a teacher
     # it is also the heartbeat that keeps them online for dispatch (#472).
     teacher_dispatch_service.record_seen_if_teacher(actor)
-    items = notification_service.list_user_events(actor, status=status_filter, limit=limit)
+    items = notifications.list_user_events(actor, status=status_filter, limit=limit)
     return NotificationListResponse(
         items=[NotificationEventResponse.model_validate(item) for item in items],
         count=len(items),
@@ -145,7 +145,7 @@ async def list_notifications(
 async def get_notification_preferences(
     actor: Actor = Depends(_own(ResourceType.NOTIFICATION_PREFERENCE, AuthorizationAction.READ)),
 ):
-    return notification_service.preferences_response(actor.user_id)
+    return notifications.preferences_response(actor.user_id)
 
 
 @router.patch("/preferences", response_model=NotificationPreferenceResponse)
@@ -153,7 +153,7 @@ async def update_notification_preferences(
     body: NotificationPreferenceUpdate,
     actor: Actor = Depends(_own(ResourceType.NOTIFICATION_PREFERENCE, AuthorizationAction.UPDATE)),
 ):
-    return notification_service.update_preferences(
+    return notifications.update_preferences(
         actor.user_id,
         body.preferences,
         dispatch_email=body.dispatchEmail,
@@ -180,14 +180,14 @@ async def unsubscribe_from_email(token: str = Query(..., max_length=2048)):
     is broken, altered, for another kind or no longer signed by a key we hold is
     refused with `email_unsubscribe_link_invalid`.
     """
-    return notification_service.set_email_subscription(token, subscribed=False)
+    return notifications.set_email_subscription(token, subscribed=False)
 
 
 @router.post("/email-resubscribe", response_model=EmailSubscriptionResponse)
 @explicit_route_classification("public", "signed unsubscribe link from a notification email")
 async def resubscribe_to_email(token: str = Query(..., max_length=2048)):
     """Undo an unsubscribe from the same link (#363)."""
-    return notification_service.set_email_subscription(token, subscribed=True)
+    return notifications.set_email_subscription(token, subscribed=True)
 
 
 @router.post("/push-tokens", response_model=NotificationPushTokenResponse)
@@ -195,7 +195,7 @@ async def register_notification_push_token(
     body: NotificationPushTokenRegisterRequest,
     actor: Actor = Depends(_own(ResourceType.NOTIFICATION_PUSH_TOKEN, AuthorizationAction.CREATE)),
 ):
-    return notification_service.register_push_token(
+    return notifications.register_push_token(
         actor,
         platform=body.platform,
         token=body.token,
@@ -209,7 +209,7 @@ async def revoke_notification_push_token(
     token_reference: str,
     authorized: AuthorizedResource = Depends(_push_token_delete),
 ):
-    return notification_service.revoke_authorized_push_token(authorized.value)
+    return notifications.revoke_authorized_push_token(authorized.value)
 
 
 @router.post("/{event_id}/read", response_model=NotificationEventResponse, status_code=status.HTTP_200_OK)
@@ -217,7 +217,7 @@ async def mark_notification_read(
     event_id: str,
     authorized: AuthorizedResource = Depends(_event_update),
 ):
-    return notification_service.mark_authorized_event(authorized.value, "read")
+    return notifications.mark_authorized_event(authorized.value, "read")
 
 
 @router.post("/{event_id}/archive", response_model=NotificationEventResponse, status_code=status.HTTP_200_OK)
@@ -225,7 +225,7 @@ async def archive_notification(
     event_id: str,
     authorized: AuthorizedResource = Depends(_event_update),
 ):
-    return notification_service.mark_authorized_event(authorized.value, "archived")
+    return notifications.mark_authorized_event(authorized.value, "archived")
 
 
 admin_router = APIRouter()
@@ -238,7 +238,7 @@ async def list_admin_notifications(
     limit: int = Query(default=50, ge=1, le=100),
     actor: Actor = Depends(admin_operation),
 ):
-    items = notification_service.list_admin_events(
+    items = notifications.list_admin_events(
         status=status_filter,
         event_type=event_type,
         limit=limit,
@@ -256,4 +256,4 @@ async def get_notification_delivery_status(
     actor: Actor = Depends(admin_operation),
 ):
     del actor
-    return notification_service.delivery_status(limit=limit)
+    return notifications.delivery_status(limit=limit)

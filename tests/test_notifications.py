@@ -7,14 +7,16 @@ from fastapi.testclient import TestClient
 
 from stoa.config import Settings
 from stoa import config
-from stoa.routers import notifications
+from stoa.routers import notifications as notifications_router
 from stoa.db.repositories import question_repo, user_repo
 from stoa.services import (
     locale_service,
     message_catalog,
-    notification_service,
     websocket_service,
 )
+from stoa.services import notifications, notify_service
+from stoa.services.notifications import _bell, _ledger, _preferences, _push, _realtime
+from stoa.db.repositories import account_deletion_repo, notification_repo
 from actor_helpers import install_actor_overrides
 
 
@@ -68,20 +70,20 @@ def _install_notification_repo(monkeypatch):
     def get_preferences(user_id):
         return preferences.get(user_id)
 
-    monkeypatch.setattr(notification_service.notification_repo, "put_event", put_event)
-    monkeypatch.setattr(notification_service.notification_repo, "get_event", get_event)
+    monkeypatch.setattr(notification_repo, "put_event", put_event)
+    monkeypatch.setattr(notification_repo, "get_event", get_event)
     monkeypatch.setattr(
-        notification_service.notification_repo,
+        notification_repo,
         "load_delivery_event_strong",
         get_event,
     )
-    monkeypatch.setattr(notification_service.notification_repo, "list_inbox", list_inbox)
-    monkeypatch.setattr(notification_service.notification_repo, "list_site_events", list_site_events)
-    monkeypatch.setattr(notification_service.notification_repo, "update_event", update_event)
-    monkeypatch.setattr(notification_service.notification_repo, "put_preferences", put_preferences)
-    monkeypatch.setattr(notification_service.notification_repo, "get_preferences", get_preferences)
+    monkeypatch.setattr(notification_repo, "list_inbox", list_inbox)
+    monkeypatch.setattr(notification_repo, "list_site_events", list_site_events)
+    monkeypatch.setattr(notification_repo, "update_event", update_event)
+    monkeypatch.setattr(notification_repo, "put_preferences", put_preferences)
+    monkeypatch.setattr(notification_repo, "get_preferences", get_preferences)
     monkeypatch.setattr(
-        notification_service.account_deletion_repo,
+        account_deletion_repo,
         "require_active_account_fence",
         lambda _owner_id, generation=None, **_kwargs: {
             "status": "active",
@@ -100,7 +102,7 @@ def _install_notification_repo(monkeypatch):
         return {"status": "accepted", "delivery_id": "delivery-test"}
 
     monkeypatch.setattr(
-        notification_service,
+        _ledger,
         "run_authoritative_delivery",
         run_authoritative_delivery,
     )
@@ -128,7 +130,7 @@ def _install_push_token_repo(monkeypatch):
         return [
             token
             for token in tokens.values()
-            if notification_service.notification_repo.push_token_device_key(token) in device_keys
+            if notification_repo.push_token_device_key(token) in device_keys
         ]
 
     def update_push_token(user_id, token_reference, updates):
@@ -138,15 +140,15 @@ def _install_push_token_repo(monkeypatch):
         item.update(updates)
         return item
 
-    monkeypatch.setattr(notification_service.notification_repo, "put_push_token", put_push_token)
-    monkeypatch.setattr(notification_service.notification_repo, "get_push_token", get_push_token)
+    monkeypatch.setattr(notification_repo, "put_push_token", put_push_token)
+    monkeypatch.setattr(notification_repo, "get_push_token", get_push_token)
     monkeypatch.setattr(
-        notification_service.notification_repo, "list_user_push_tokens", list_user_push_tokens
+        notification_repo, "list_user_push_tokens", list_user_push_tokens
     )
     monkeypatch.setattr(
-        notification_service.notification_repo, "list_device_push_tokens", list_device_push_tokens
+        notification_repo, "list_device_push_tokens", list_device_push_tokens
     )
-    monkeypatch.setattr(notification_service.notification_repo, "update_push_token", update_push_token)
+    monkeypatch.setattr(notification_repo, "update_push_token", update_push_token)
     return tokens
 
 
@@ -163,7 +165,8 @@ def _notification_provider_settings(**overrides):
 
 def test_notifications_list_read_and_archive_visible_events(monkeypatch):
     _install_notification_repo(monkeypatch)
-    direct = notification_service.create_event(
+    direct = _bell.create_event(
+        event_id="evt-168",
         recipient_id="student-1",
         recipient_role="student",
         event_type="teacher_reply",
@@ -174,7 +177,8 @@ def test_notifications_list_read_and_archive_visible_events(monkeypatch):
         metadata={"subject": "math"},
         created_at="2026-06-08T10:00:00+00:00",
     )
-    notification_service.create_event(
+    _bell.create_event(
+        event_id="evt-179",
         recipient_id=None,
         recipient_role="admin",
         event_type="moderation_case_update",
@@ -186,7 +190,7 @@ def test_notifications_list_read_and_archive_visible_events(monkeypatch):
         created_at="2026-06-08T09:00:00+00:00",
     )
 
-    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+    client = _app(notifications_router.router, "/notifications", {"sub": "student-1", "role": "student"})
     listed = client.get("/notifications")
 
     assert listed.status_code == 200
@@ -208,7 +212,8 @@ def test_notifications_list_read_and_archive_visible_events(monkeypatch):
 
 def test_notification_mark_requires_visible_event(monkeypatch):
     _install_notification_repo(monkeypatch)
-    event = notification_service.create_event(
+    event = _bell.create_event(
+        event_id="evt-213",
         recipient_id="student-1",
         recipient_role="student",
         event_type="teacher_reply",
@@ -218,7 +223,7 @@ def test_notification_mark_requires_visible_event(monkeypatch):
         summary="Your teacher added a reply.",
     )
 
-    client = _app(notifications.router, "/notifications", {"sub": "student-2", "role": "student"})
+    client = _app(notifications_router.router, "/notifications", {"sub": "student-2", "role": "student"})
     response = client.post(f"/notifications/{event['eventId']}/read")
 
     assert response.status_code == 404
@@ -226,7 +231,8 @@ def test_notification_mark_requires_visible_event(monkeypatch):
 
 def test_admin_can_list_operational_notifications(monkeypatch):
     _install_notification_repo(monkeypatch)
-    notification_service.create_event(
+    _bell.create_event(
+        event_id="evt-231",
         recipient_id=None,
         recipient_role="admin",
         event_type="subscription_request_update",
@@ -237,7 +243,7 @@ def test_admin_can_list_operational_notifications(monkeypatch):
         owner_id="admin-1",
     )
 
-    client = _app(notifications.admin_router, "/admin", {"sub": "admin-1", "role": "admin"})
+    client = _app(notifications_router.admin_router, "/admin", {"sub": "admin-1", "role": "admin"})
     response = client.get("/admin/notifications?event_type=subscription_request_update")
 
     assert response.status_code == 200
@@ -247,7 +253,7 @@ def test_admin_can_list_operational_notifications(monkeypatch):
 
 def test_notification_preferences_default_and_update(monkeypatch):
     _, preferences = _install_notification_repo(monkeypatch)
-    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+    client = _app(notifications_router.router, "/notifications", {"sub": "student-1", "role": "student"})
 
     default_response = client.get("/notifications/preferences")
     assert default_response.status_code == 200
@@ -278,7 +284,7 @@ def test_an_old_settings_page_sending_the_retired_cells_saves_as_without_them(mo
     included (#684): taken, ignored, and stored exactly as the same matrix without them.
     """
     _, preferences = _install_notification_repo(monkeypatch)
-    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+    client = _app(notifications_router.router, "/notifications", {"sub": "student-1", "role": "student"})
     current = {
         "admin_operations": {"in_app": True, "realtime": False, "push": False},
         "teacher_responses": {"in_app": False, "realtime": True, "push": True},
@@ -305,7 +311,7 @@ def test_an_old_settings_page_sending_the_retired_cells_saves_as_without_them(mo
 
 def test_notification_preferences_reject_invalid_channel(monkeypatch):
     _install_notification_repo(monkeypatch)
-    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+    client = _app(notifications_router.router, "/notifications", {"sub": "student-1", "role": "student"})
 
     response = client.patch(
         "/notifications/preferences",
@@ -319,17 +325,18 @@ def test_delivery_decision_honors_realtime_preference(monkeypatch):
     events, preferences = _install_notification_repo(monkeypatch)
     sent = []
     monkeypatch.setattr(
-        notification_service.websocket_service,
+        _realtime,
         "fanout_notification_event_safe",
         lambda item: sent.append(item) or {"deliveryId": "ws-1"},
     )
     preferences["student-1"] = {
         "user_id": "student-1",
-        "preferences": notification_service.default_preferences(),
+        "preferences": _preferences.default_preferences(),
     }
     preferences["student-1"]["preferences"]["teacher_responses"]["realtime"] = False
 
-    event = notification_service.create_event(
+    event = _bell.create_event(
+        event_id="evt-334",
         recipient_id="student-1",
         recipient_role="student",
         event_type="teacher_reply",
@@ -357,7 +364,8 @@ def test_create_event_binds_a_generation_the_table_returned(monkeypatch):
     """
     events, _preferences = _install_notification_repo(monkeypatch)
 
-    event = notification_service.create_event(
+    event = _bell.create_event(
+        event_id="evt-362",
         recipient_id="student-1",
         recipient_role="student",
         event_type="teacher_reply",
@@ -375,7 +383,8 @@ def test_create_event_binds_a_generation_the_table_returned(monkeypatch):
 
     # Negative control: reading the stored shape is not reading anything.
     for malformed in ("7", True, Decimal("7.5"), 0):
-        other = notification_service.create_event(
+        other = _bell.create_event(
+            event_id=f"evt-380-{malformed}",
             recipient_id="student-1",
             recipient_role="student",
             event_type="teacher_reply",
@@ -391,7 +400,8 @@ def test_create_event_binds_a_generation_the_table_returned(monkeypatch):
 
 def test_admin_delivery_status_summarizes_recent_decisions(monkeypatch):
     _install_notification_repo(monkeypatch)
-    notification_service.create_event(
+    _bell.create_event(
+        event_id="evt-396",
         recipient_id=None,
         recipient_role="admin",
         event_type="moderation_case_update",
@@ -401,7 +411,7 @@ def test_admin_delivery_status_summarizes_recent_decisions(monkeypatch):
         summary="Case updated.",
         owner_id="admin-1",
     )
-    client = _app(notifications.admin_router, "/admin", {"sub": "admin-1", "role": "admin"})
+    client = _app(notifications_router.admin_router, "/admin", {"sub": "admin-1", "role": "admin"})
 
     response = client.get("/admin/notifications/delivery-status")
 
@@ -449,9 +459,9 @@ def test_admin_delivery_status_reports_live_ready_websocket_without_secrets(monk
         "status": "created",
         "created_at": "2026-06-14T10:00:00+00:00",
         "metadata": {
-            "delivery_decision": notification_service.delivery_decision(
+            "delivery_decision": _preferences.delivery_decision(
                 category="teacher_responses",
-                preferences=notification_service.default_preferences(),
+                preferences=_preferences.default_preferences(),
                 realtime_configured=True,
             ),
             "websocket_delivery_attempts": [
@@ -470,7 +480,7 @@ def test_admin_delivery_status_reports_live_ready_websocket_without_secrets(monk
         "category": "teacher_responses",
     }
 
-    client = _app(notifications.admin_router, "/admin", {"sub": "admin-1", "role": "admin"})
+    client = _app(notifications_router.admin_router, "/admin", {"sub": "admin-1", "role": "admin"})
     response = client.get("/admin/notifications/delivery-status")
 
     assert response.status_code == 200
@@ -494,7 +504,7 @@ def test_admin_delivery_status_reports_live_ready_websocket_without_secrets(monk
 
 def test_push_token_registration_and_revocation_redacts_raw_token(monkeypatch):
     _install_push_token_repo(monkeypatch)
-    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+    client = _app(notifications_router.router, "/notifications", {"sub": "student-1", "role": "student"})
 
     response = client.post(
         "/notifications/push-tokens",
@@ -519,12 +529,12 @@ def test_push_token_registration_and_revocation_redacts_raw_token(monkeypatch):
 
 def test_push_token_reference_is_hidden_from_unrelated_actor(monkeypatch):
     _install_push_token_repo(monkeypatch)
-    owner = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+    owner = _app(notifications_router.router, "/notifications", {"sub": "student-1", "role": "student"})
     created = owner.post(
         "/notifications/push-tokens",
         json={"platform": "ios", "providerTokenReference": "provider-owned-reference"},
     ).json()
-    other = _app(notifications.router, "/notifications", {"sub": "student-2", "role": "student"})
+    other = _app(notifications_router.router, "/notifications", {"sub": "student-2", "role": "student"})
 
     denied = other.delete(f"/notifications/push-tokens/{created['tokenReference']}")
     collision = other.post(
@@ -539,17 +549,17 @@ def test_push_token_reference_is_hidden_from_unrelated_actor(monkeypatch):
 
 def test_notification_event_missing_and_authorization_outage_fail_before_mutation(monkeypatch):
     events, _ = _install_notification_repo(monkeypatch)
-    client = _app(notifications.router, "/notifications", {"sub": "student-1", "role": "student"})
+    client = _app(notifications_router.router, "/notifications", {"sub": "student-1", "role": "student"})
     assert client.post("/notifications/missing/read").status_code == 404
 
     updates = []
     monkeypatch.setattr(
-        notification_service.notification_repo,
+        notification_repo,
         "get_event",
         lambda event_id: (_ for _ in ()).throw(RuntimeError("store unavailable")),
     )
     monkeypatch.setattr(
-        notification_service.notification_repo,
+        notification_repo,
         "update_event",
         lambda event_id, values: updates.append((event_id, values)),
     )
@@ -563,11 +573,12 @@ def test_push_delivery_records_missing_token_without_breaking_event(monkeypatch)
     events, preferences = _install_notification_repo(monkeypatch)
     _install_push_token_repo(monkeypatch)
     config.install(_notification_provider_settings())
-    prefs = notification_service.default_preferences()
+    prefs = _preferences.default_preferences()
     prefs["teacher_responses"]["push"] = True
     preferences["student-1"] = {"user_id": "student-1", "preferences": prefs}
 
-    event = notification_service.create_event(
+    event = _bell.create_event(
+        event_id="evt-572",
         recipient_id="student-1",
         recipient_role="student",
         event_type="teacher_reply",
@@ -586,20 +597,21 @@ def test_push_delivery_records_success_and_provider_failure_redacted(monkeypatch
     events, preferences = _install_notification_repo(monkeypatch)
     _install_push_token_repo(monkeypatch)
     config.install(_notification_provider_settings())
-    prefs = notification_service.default_preferences()
+    prefs = _preferences.default_preferences()
     prefs["teacher_responses"]["push"] = True
     preferences["student-1"] = {"user_id": "student-1", "preferences": prefs}
-    notification_service.register_push_token(
+    notifications.register_push_token(
         {"sub": "student-1", "role": "student"},
         platform="ios",
         provider_token_reference="provider-token-secret",
     )
     monkeypatch.setattr(
-        notification_service,
+        _push,
         "_send_push_provider",
         lambda payload: {"messageId": "push-token-secret"},
     )
-    success = notification_service.create_event(
+    success = _bell.create_event(
+        event_id="evt-604",
         recipient_id="student-1",
         recipient_role="student",
         event_type="teacher_reply",
@@ -616,8 +628,9 @@ def test_push_delivery_records_success_and_provider_failure_redacted(monkeypatch
     def fail_push(payload):
         raise RuntimeError("push failed with provider-token-secret")
 
-    monkeypatch.setattr(notification_service, "_send_push_provider", fail_push)
-    failed = notification_service.create_event(
+    monkeypatch.setattr(_push, "_send_push_provider", fail_push)
+    failed = _bell.create_event(
+        event_id="evt-622",
         recipient_id="student-1",
         recipient_role="student",
         event_type="teacher_reply",
@@ -709,7 +722,7 @@ def test_an_expired_teacher_request_is_written_in_the_student_s_language(monkeyp
     titles = {}
     for student_id, locale in locales.items():
         events.clear()
-        notification_service.emit_teacher_help_expired(
+        notifications.happened(notifications.HelpRequestExpired(
             conversation={
                 "student_id": student_id,
                 "conversation_id": f"conv-{locale}",
@@ -717,7 +730,7 @@ def test_an_expired_teacher_request_is_written_in_the_student_s_language(monkeyp
                 "account_fence_generation": 1,
             },
             case_returned=True,
-        )
+        ))
         stored = list(events.values())[0]
         titles[locale] = (stored["title"], stored["summary"])
 
@@ -741,7 +754,7 @@ def test_the_week_s_case_coming_back_is_said_only_when_it_did(monkeypatch):
     said = {}
     for case_returned in (True, False):
         events.clear()
-        notification_service.emit_teacher_help_expired(
+        notifications.happened(notifications.HelpRequestExpired(
             conversation={
                 "student_id": "student-1",
                 "conversation_id": "conv-1",
@@ -749,7 +762,7 @@ def test_the_week_s_case_coming_back_is_said_only_when_it_did(monkeypatch):
                 "account_fence_generation": 1,
             },
             case_returned=case_returned,
-        )
+        ))
         said[case_returned] = list(events.values())[0]["summary"]
 
     assert said[True] != said[False]
@@ -771,7 +784,7 @@ def test_the_reader_s_stored_language_wins_over_the_request_s(monkeypatch):
     _profiles(monkeypatch, {"student-1": "fr"})
     locale_service.set_request_locale("en")
     try:
-        notification_service.emit_teacher_help_reply(
+        notifications.happened(notifications.TeacherReplied(
             conversation={
                 "student_id": "student-1",
                 "conversation_id": "conv-1",
@@ -780,7 +793,7 @@ def test_the_reader_s_stored_language_wins_over_the_request_s(monkeypatch):
             },
             teacher_id="teacher-1",
             reply_id="reply-1",
-        )
+        ))
     finally:
         locale_service.set_request_locale(None)
 
@@ -804,7 +817,7 @@ def test_a_reader_with_no_stored_language_still_gets_a_notification(monkeypatch)
     )
     monkeypatch.setattr(user_repo, "get_user", refuse)
 
-    notification_service.emit_teacher_help_takeover(
+    notifications.happened(notifications.TeacherTookHelpRequest(
         conversation={
             "student_id": "student-1",
             "conversation_id": "conv-1",
@@ -812,7 +825,7 @@ def test_a_reader_with_no_stored_language_still_gets_a_notification(monkeypatch)
             "account_fence_generation": 1,
         },
         teacher_id="teacher-1",
-    )
+    ))
 
     stored = list(events.values())[0]
     assert stored["title"] == message_catalog.TEXT[
@@ -831,7 +844,7 @@ def test_notifications_already_written_are_left_as_they_were(monkeypatch):
         "summary": "Your request for a teacher expired.",
     }
 
-    assert notification_service.notification_repo.get_event("notif-old")["title"] == (
+    assert notification_repo.get_event("notif-old")["title"] == (
         "No teacher was available"
     )
 
@@ -847,16 +860,16 @@ def _words(text: str) -> set[str]:
 
 
 def _moderation_case_created(severity: str = "medium") -> None:
-    notification_service.emit_moderation_created(
-        case_item={"case_id": "case-1", "question_id": "question-1", "severity": severity},
+    notifications.happened(notifications.ModerationCaseOpened(
+        case={"case_id": "case-1", "question_id": "question-1", "severity": severity},
         actor_id="student-1",
         actor_role="student",
         owner_id="student-1",
         privacy_generation=1,
-    )
+    ))
 
 
-def _bell(monkeypatch, user_id: str, role: str, locale: str) -> list[dict]:
+def _bell_of(monkeypatch, user_id: str, role: str, locale: str) -> list[dict]:
     """The reader's bell, read with their stored language and nothing else."""
     reader = {"user_id": user_id, "role": role, "account_status": "active", "preferred_locale": locale}
     monkeypatch.setattr(
@@ -864,7 +877,7 @@ def _bell(monkeypatch, user_id: str, role: str, locale: str) -> list[dict]:
     )
     # A teacher's facts are looked up even for their own bell; they hold none here.
     monkeypatch.setattr(question_repo, "get_teacher_assignment", lambda *_a, **_k: None)
-    client = _app(notifications.router, "/notifications", {"sub": user_id, "role": role})
+    client = _app(notifications_router.router, "/notifications", {"sub": user_id, "role": role})
     response = client.get("/notifications")
     assert response.status_code == 200, response.text
     return response.json()["items"]
@@ -877,7 +890,7 @@ def test_a_new_moderation_case_reads_in_the_admin_s_language(monkeypatch, locale
     _profiles(monkeypatch, {})
     _moderation_case_created("medium")
 
-    [item] = _bell(monkeypatch, f"admin-{locale}", "admin", locale)
+    [item] = _bell_of(monkeypatch, f"admin-{locale}", "admin", locale)
 
     assert item["eventType"] == "moderation_case_update"
     assert (item["title"], item["summary"]) == (
@@ -894,8 +907,8 @@ def test_one_role_event_is_read_differently_by_two_readers(monkeypatch):
     _profiles(monkeypatch, {})
     _moderation_case_created("high")
 
-    [german] = _bell(monkeypatch, "admin-de", "admin", "de")
-    [french] = _bell(monkeypatch, "admin-fr", "admin", "fr")
+    [german] = _bell_of(monkeypatch, "admin-de", "admin", "de")
+    [french] = _bell_of(monkeypatch, "admin-fr", "admin", "fr")
 
     assert german["eventId"] == french["eventId"]
     assert german["summary"] == message_catalog.TEXT["moderation.created.summary.high"]["de"]
@@ -911,7 +924,7 @@ def test_each_severity_says_its_own_sentence(monkeypatch):
         for event_id in list(events):
             events[f"{severity}-{event_id}"] = {**events.pop(event_id), "event_id": f"{severity}-{event_id}"}
 
-    summaries = {item["summary"] for item in _bell(monkeypatch, "admin-it", "admin", "it")}
+    summaries = {item["summary"] for item in _bell_of(monkeypatch, "admin-it", "admin", "it")}
 
     assert summaries == {
         message_catalog.TEXT[f"moderation.created.summary.{severity}"]["it"]
@@ -924,7 +937,7 @@ def test_the_admin_operations_list_answers_in_the_admin_s_language(monkeypatch):
     _profiles(monkeypatch, {"admin-fr": "fr"})
     _moderation_case_created()
 
-    client = _app(notifications.admin_router, "/admin", {"sub": "admin-fr", "role": "admin"})
+    client = _app(notifications_router.admin_router, "/admin", {"sub": "admin-fr", "role": "admin"})
     response = client.get("/admin/notifications?event_type=moderation_case_update")
 
     assert response.status_code == 200
@@ -949,7 +962,7 @@ def test_a_role_row_written_before_message_keys_is_shown_as_stored(monkeypatch):
         "created_at": "2026-10-01T10:00:00+00:00",
     }
 
-    [item] = _bell(monkeypatch, "admin-de", "admin", "de")
+    [item] = _bell_of(monkeypatch, "admin-de", "admin", "de")
 
     assert (item["title"], item["summary"]) == (
         "New moderation case",
@@ -968,7 +981,7 @@ def test_a_role_event_cannot_be_marked_by_one_reader(monkeypatch):
     _moderation_case_created()
     [event_id] = events
 
-    client = _app(notifications.router, "/notifications", {"sub": "admin-de", "role": "admin"})
+    client = _app(notifications_router.router, "/notifications", {"sub": "admin-de", "role": "admin"})
 
     assert client.post(f"/notifications/{event_id}/read").status_code == 404
     assert client.post(f"/notifications/{event_id}/archive").status_code == 404
@@ -986,13 +999,13 @@ def _offer(monkeypatch, *, standing: bool, locale: str = "de") -> tuple[dict, li
         lambda user_id, **_kwargs: {"user_id": user_id, "preferred_locale": locale, "email": "t@example.test"},
     )
     emails: list = []
-    monkeypatch.setattr(notification_service, "dispatch_email_enabled", lambda _teacher: True)
+    monkeypatch.setattr(_preferences, "dispatch_email_enabled", lambda _teacher: True)
     monkeypatch.setattr(
-        notification_service.notify_service,
+        notify_service,
         "send_dispatch_reminder_email",
         lambda *args, **kwargs: emails.append((args, kwargs)),
     )
-    notification_service.emit_teacher_help_dispatched(
+    notifications.happened(notifications.HelpOffered(
         conversation={
             "student_id": "student-391",
             "escalation_request_id": "req-391",
@@ -1004,7 +1017,7 @@ def _offer(monkeypatch, *, standing: bool, locale: str = "de") -> tuple[dict, li
         deadline_at="2026-11-12T10:10:00+00:00",
         accept_minutes=10,
         standing=standing,
-    )
+    ))
     return events, emails
 
 
@@ -1030,7 +1043,7 @@ def test_an_ordinary_offer_still_sends_its_email(monkeypatch):
 def test_a_closed_offer_is_marked_with_what_became_of_it_and_read(monkeypatch):
     events, _ = _offer(monkeypatch, standing=False)
 
-    notification_service.close_teacher_help_offer(
+    _bell.close_teacher_help_offer(
         dispatch_id="offer-391", state="expired", now="2026-11-12T10:11:00+00:00"
     )
 
@@ -1040,15 +1053,15 @@ def test_a_closed_offer_is_marked_with_what_became_of_it_and_read(monkeypatch):
     assert stored["metadata"]["dispatch_id"] == "offer-391"
     assert stored["status"] == "read"
     assert stored["read_at"] == "2026-11-12T10:11:00+00:00"
-    shown = notification_service.event_response(stored)
+    shown = _bell.event_response(stored)
     assert shown["metadata"]["offer_state"] == "expired"
 
 
 def test_an_offer_closed_once_keeps_what_it_was_closed_as(monkeypatch):
     events, _ = _offer(monkeypatch, standing=False)
-    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="reassigned")
+    _bell.close_teacher_help_offer(dispatch_id="offer-391", state="reassigned")
 
-    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="expired")
+    _bell.close_teacher_help_offer(dispatch_id="offer-391", state="expired")
 
     assert events["teacher-help-dispatched-offer-391"]["metadata"]["offer_state"] == "reassigned"
 
@@ -1056,14 +1069,14 @@ def test_an_offer_closed_once_keeps_what_it_was_closed_as(monkeypatch):
 def test_closing_an_offer_with_no_notification_does_nothing(monkeypatch):
     events, _ = _offer(monkeypatch, standing=False)
 
-    notification_service.close_teacher_help_offer(dispatch_id="offer-missing", state="expired")
+    _bell.close_teacher_help_offer(dispatch_id="offer-missing", state="expired")
 
     assert list(events) == ["teacher-help-dispatched-offer-391"]
 
 
 def test_an_offer_is_closed_only_as_one_of_its_states():
     with pytest.raises(ValueError):
-        notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="gone")
+        _bell.close_teacher_help_offer(dispatch_id="offer-391", state="gone")
 
 
 # ── a closed offer says what became of it (#455) ─────────────────────────────
@@ -1081,7 +1094,7 @@ def _closed_text(locale: str, state: str) -> tuple[str, str]:
     )
 
 
-@pytest.mark.parametrize("state", sorted(notification_service.OFFER_STATES))
+@pytest.mark.parametrize("state", sorted(notifications.OFFER_STATES))
 @pytest.mark.parametrize("locale", ROLE_READER_LOCALES)
 def test_a_closed_offer_no_longer_asks_the_teacher_to_accept(monkeypatch, locale, state):
     events, _ = _offer(monkeypatch, standing=False, locale=locale)
@@ -1089,7 +1102,7 @@ def test_a_closed_offer_no_longer_asks_the_teacher_to_accept(monkeypatch, locale
     assert stored["metadata"]["subject"] == "math"
     asking = stored["summary"]
 
-    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state=state)
+    _bell.close_teacher_help_offer(dispatch_id="offer-391", state=state)
 
     assert (stored["title"], stored["summary"]) == _closed_text(locale, state)
     assert stored["summary"] != asking
@@ -1099,7 +1112,7 @@ def test_a_closed_offer_no_longer_asks_the_teacher_to_accept(monkeypatch, locale
 def test_a_closed_offer_reads_as_the_ticket_says_in_german(monkeypatch):
     events, _ = _offer(monkeypatch, standing=False)
 
-    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="reassigned")
+    _bell.close_teacher_help_offer(dispatch_id="offer-391", state="reassigned")
 
     stored = events["teacher-help-dispatched-offer-391"]
     assert stored["title"] == "Hilfeanfrage nicht mehr offen"
@@ -1111,8 +1124,8 @@ def test_a_closed_offer_reads_as_the_ticket_says_in_german(monkeypatch):
 def test_a_lapsed_offer_closes_while_its_standing_successor_keeps_its_text(monkeypatch):
     """The lapsed offer is rewritten; the standing one made in its place is open."""
     events, _ = _offer(monkeypatch, standing=False)
-    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="expired")
-    notification_service.emit_teacher_help_dispatched(
+    _bell.close_teacher_help_offer(dispatch_id="offer-391", state="expired")
+    notifications.happened(notifications.HelpOffered(
         conversation={
             "student_id": "student-391",
             "escalation_request_id": "req-391",
@@ -1124,7 +1137,7 @@ def test_a_lapsed_offer_closes_while_its_standing_successor_keeps_its_text(monke
         deadline_at="2026-11-12T11:00:00+00:00",
         accept_minutes=10,
         standing=True,
-    )
+    ))
 
     lapsed = events["teacher-help-dispatched-offer-391"]
     standing = events["teacher-help-dispatched-offer-392"]
@@ -1142,7 +1155,7 @@ def test_an_offer_sent_before_the_subject_was_kept_closes_without_naming_it(monk
     events, _ = _offer(monkeypatch, standing=False)
     del events["teacher-help-dispatched-offer-391"]["metadata"]["subject"]
 
-    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="withdrawn")
+    _bell.close_teacher_help_offer(dispatch_id="offer-391", state="withdrawn")
 
     assert events["teacher-help-dispatched-offer-391"]["summary"] == (
         "Diese Anfrage wurde von der lernenden Person zurückgezogen."
@@ -1151,9 +1164,9 @@ def test_an_offer_sent_before_the_subject_was_kept_closes_without_naming_it(monk
 
 def test_the_bell_shows_a_closed_offer_s_new_summary(monkeypatch):
     _offer(monkeypatch, standing=False, locale="fr")
-    notification_service.close_teacher_help_offer(dispatch_id="offer-391", state="expired")
+    _bell.close_teacher_help_offer(dispatch_id="offer-391", state="expired")
 
-    [item] = _bell(monkeypatch, "teacher-391", "teacher", "fr")
+    [item] = _bell_of(monkeypatch, "teacher-391", "teacher", "fr")
 
     assert (item["title"], item["summary"]) == (
         "Demande d'aide plus disponible",

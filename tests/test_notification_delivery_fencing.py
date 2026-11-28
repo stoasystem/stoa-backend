@@ -12,7 +12,8 @@ from fakes.dynamodb import as_stored as _as_stored
 from stoa.config import Settings
 from stoa import config
 from stoa.db.repositories import account_deletion_repo, notification_repo
-from stoa.services import notification_service, websocket_service
+from stoa.services import websocket_service
+from stoa.services.notifications import _ledger, _push, _realtime
 
 
 OWNER = "student-private-delivery"
@@ -118,7 +119,7 @@ def test_private_push_rejects_missing_malformed_or_stale_persisted_generation(
         lambda *_args, **_kwargs: {"status": "active", "generation": GENERATION},
     )
 
-    result = notification_service.attempt_push_delivery(
+    result = _push.attempt_push_delivery(
         {**persisted, "account_fence_generation": GENERATION},
         send_func=lambda payload: calls.append(payload),
     )
@@ -144,7 +145,7 @@ def test_private_owner_scope_resolves_in_the_shape_the_table_returns(
     assert isinstance(event["account_fence_generation"], Decimal)
     assert isinstance(event["event_version"], Decimal)
 
-    ownership = notification_service.resolve_delivery_ownership(event)
+    ownership = _ledger.resolve_delivery_ownership(event)
 
     assert ownership.kind == "private_owner"
     assert ownership.owner_id == OWNER
@@ -152,13 +153,13 @@ def test_private_owner_scope_resolves_in_the_shape_the_table_returns(
 
     # Negative control: reading the stored shape is not reading anything.
     for malformed in ("7", True, Decimal("7.5"), 0, None):
-        with pytest.raises(notification_service.DeliveryOwnershipError) as caught:
-            notification_service.resolve_delivery_ownership(
+        with pytest.raises(_ledger.DeliveryOwnershipError) as caught:
+            _ledger.resolve_delivery_ownership(
                 _private_event(account_fence_generation=malformed)
             )
         assert caught.value.status == "delivery_scope_mismatch"
-        with pytest.raises(notification_service.DeliveryOwnershipError) as caught:
-            notification_service.resolve_delivery_ownership(
+        with pytest.raises(_ledger.DeliveryOwnershipError) as caught:
+            _ledger.resolve_delivery_ownership(
                 _private_event(event_version=malformed)
             )
         assert caught.value.status == "delivery_scope_mismatch"
@@ -199,12 +200,12 @@ def test_legacy_question_owner_resolution_uses_closed_strong_target_join(
         },
     )
 
-    ownership = notification_service.resolve_delivery_ownership(legacy, table=table)
+    ownership = _ledger.resolve_delivery_ownership(legacy, table=table)
 
     assert ownership.kind == "private_owner"
     assert ownership.owner_id == OWNER
     assert ownership.generation == GENERATION
-    assert set(notification_service.LEGACY_NOTIFICATION_OWNER_RESOLVERS) >= {
+    assert set(_ledger.LEGACY_NOTIFICATION_OWNER_RESOLVERS) >= {
         "question",
         "moderation_case",
         "report",
@@ -232,8 +233,8 @@ def test_legacy_metadata_only_owner_fails_closed_without_target() -> None:
     )
     table = _StrongTable({})
 
-    with pytest.raises(notification_service.DeliveryOwnershipError) as caught:
-        notification_service.resolve_delivery_ownership(legacy, table=table)
+    with pytest.raises(_ledger.DeliveryOwnershipError) as caught:
+        _ledger.resolve_delivery_ownership(legacy, table=table)
 
     assert caught.value.status == "delivery_owner_unresolved"
     assert OWNER not in str(caught.value)
@@ -259,7 +260,7 @@ def test_global_nonprivate_requires_exact_persisted_contract_digest() -> None:
         metadata={},
     )
     sealed = notification_repo.seal_global_nonprivate_event(raw)
-    ownership = notification_service.resolve_delivery_ownership(sealed)
+    ownership = _ledger.resolve_delivery_ownership(sealed)
 
     assert ownership.kind == "global_nonprivate"
     assert ownership.classification_seal == sealed["classification_digest"]
@@ -270,8 +271,8 @@ def test_global_nonprivate_requires_exact_persisted_contract_digest() -> None:
         {**sealed, "owner_id": OWNER},
         {**raw, "global_nonprivate": True},
     ):
-        with pytest.raises(notification_service.DeliveryOwnershipError) as caught:
-            notification_service.resolve_delivery_ownership(forged)
+        with pytest.raises(_ledger.DeliveryOwnershipError) as caught:
+            _ledger.resolve_delivery_ownership(forged)
         assert caught.value.status == "delivery_classification_invalid"
 
 
@@ -295,7 +296,7 @@ def test_websocket_invalid_persisted_scope_lists_no_connections_and_posts_nothin
     for reader in ("list_user_connections", "list_role_connections"):
         monkeypatch.setattr(websocket_service.websocket_repo, reader, list_connections)
 
-    result = websocket_service.fanout_notification_event(
+    result = _realtime.fanout_notification_event(
         {**persisted, "account_fence_generation": GENERATION},
         post_func=lambda connection, envelope: posted.append((connection, envelope)),
     )

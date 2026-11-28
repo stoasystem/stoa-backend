@@ -924,7 +924,7 @@ _ENTRIES: tuple[DataType, ...] = (
     # -- notifications and realtime -----------------------------------------------------
     DataType(
         "notification_event",
-        "stoa.services.notification_service",
+        "stoa.services.notifications._bell",
         (
             *_owner("owner_id"),
             *_reference("actor_id"),
@@ -943,12 +943,12 @@ _ENTRIES: tuple[DataType, ...] = (
     ),
     DataType(
         "notification_preference",
-        "stoa.services.notification_service",
+        "stoa.services.notifications._preferences",
         _owner("owner_id", "user_id"),
     ),
     DataType(
         "notification_push_token",
-        "stoa.services.notification_service",
+        "stoa.services.notifications._push",
         _owner("owner_id", "user_id"),
     ),
     DataType("notification_delivery_intent", _repo("notification_repo"), _owner("owner_id")),
