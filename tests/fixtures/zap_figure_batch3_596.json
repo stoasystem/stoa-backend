@@ -1,0 +1,1512 @@
+{
+ "source": {
+  "sourceId": "zap1-figure-tasks-batch-3",
+  "sourceVersion": "2026-11-28",
+  "sourceType": "manifest"
+ },
+ "operatorNote": "ZAP1 figure tasks, batch 3 (#596): 17 originals of Form und Raum adapted as 18 choose-several exercises with hotspots in the figure; new figures and numbers, keys computed by scripts/zap_figure_batch3.py. Drafts for review: every lesson is publish false.",
+ "lessons": [
+  {
+   "publicLessonId": "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen--zap-1",
+   "publish": false,
+   "lesson": {
+    "title": "Darstellen und Zerlegen · ZAP · Teil 1",
+    "titles": {
+     "de": "Darstellen und Zerlegen · ZAP · Teil 1",
+     "en": "Representing and decomposing · ZAP · Part 1",
+     "fr": "Représenter et décomposer · ZAP · Partie 1",
+     "it": "Rappresentare e scomporre · ZAP · Parte 1"
+    },
+    "objective": "Strecke, Gerade und Strahl unterscheiden, Senkrechte und Parallelen erkennen und zeichnen und Abstände bestimmen.",
+    "description": "Strecke, Gerade und Strahl unterscheiden, Senkrechte und Parallelen erkennen und zeichnen und Abstände bestimmen.",
+    "subjectId": "mathematics",
+    "topicId": "geometrie",
+    "unitId": "geometrie-strecken-geraden-senkrechte-und-parallelen",
+    "gradeLevel": "grade_6_primary",
+    "difficulty": "practice",
+    "estimatedMinutes": 18,
+    "language": "de",
+    "order": 531,
+    "extension": true,
+    "requiresPoints": [],
+    "tags": [
+     "zap"
+    ]
+   },
+   "exercises": [
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2023-5a-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 1,
+     "prompt": "Die Karte zeigt die Burg $B$, den Hafen $H$, die Kirche $K$ und den Weg $w$. Ein Häuschen ist 100 m breit. Am Weg sind die Rastplätze $P$ bis $U$ markiert. Welche Rastplätze liegen näher bei der Burg als beim Hafen und höchstens 450 m von der Kirche entfernt? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 368 284\"><g id=\"grid\" stroke=\"#c4c4c4\" stroke-width=\"0.6\"><line x1=\"16\" y1=\"268\" x2=\"16\" y2=\"16\"/><line x1=\"44\" y1=\"268\" x2=\"44\" y2=\"16\"/><line x1=\"72\" y1=\"268\" x2=\"72\" y2=\"16\"/><line x1=\"100\" y1=\"268\" x2=\"100\" y2=\"16\"/><line x1=\"128\" y1=\"268\" x2=\"128\" y2=\"16\"/><line x1=\"156\" y1=\"268\" x2=\"156\" y2=\"16\"/><line x1=\"184\" y1=\"268\" x2=\"184\" y2=\"16\"/><line x1=\"212\" y1=\"268\" x2=\"212\" y2=\"16\"/><line x1=\"240\" y1=\"268\" x2=\"240\" y2=\"16\"/><line x1=\"268\" y1=\"268\" x2=\"268\" y2=\"16\"/><line x1=\"296\" y1=\"268\" x2=\"296\" y2=\"16\"/><line x1=\"324\" y1=\"268\" x2=\"324\" y2=\"16\"/><line x1=\"352\" y1=\"268\" x2=\"352\" y2=\"16\"/><line x1=\"16\" y1=\"268\" x2=\"352\" y2=\"268\"/><line x1=\"16\" y1=\"240\" x2=\"352\" y2=\"240\"/><line x1=\"16\" y1=\"212\" x2=\"352\" y2=\"212\"/><line x1=\"16\" y1=\"184\" x2=\"352\" y2=\"184\"/><line x1=\"16\" y1=\"156\" x2=\"352\" y2=\"156\"/><line x1=\"16\" y1=\"128\" x2=\"352\" y2=\"128\"/><line x1=\"16\" y1=\"100\" x2=\"352\" y2=\"100\"/><line x1=\"16\" y1=\"72\" x2=\"352\" y2=\"72\"/><line x1=\"16\" y1=\"44\" x2=\"352\" y2=\"44\"/><line x1=\"16\" y1=\"16\" x2=\"352\" y2=\"16\"/></g><rect id=\"frame\" x=\"16\" y=\"16\" width=\"336\" height=\"252\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\"/><line id=\"ln-w\" x1=\"16\" y1=\"254\" x2=\"352\" y2=\"86\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"79\" y=\"240\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">w</text><circle id=\"pt-B\" cx=\"268\" cy=\"44\" r=\"3.5\" fill=\"currentColor\"/><text x=\"277\" y=\"48\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">B</text><circle id=\"pt-H\" cx=\"44\" cy=\"100\" r=\"3.5\" fill=\"currentColor\"/><text x=\"44\" y=\"91\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">H</text><circle id=\"pt-K\" cx=\"240\" cy=\"212\" r=\"3.5\" fill=\"currentColor\"/><text x=\"249\" y=\"216\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">K</text><g data-choice=\"A\"><circle cx=\"44\" cy=\"240\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"37\" y=\"234\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">P</text></g><g data-choice=\"B\"><circle cx=\"100\" cy=\"212\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"93\" y=\"206\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">Q</text></g><g data-choice=\"C\"><circle cx=\"156\" cy=\"184\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"149\" y=\"178\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">R</text></g><g data-choice=\"D\"><circle cx=\"212\" cy=\"156\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"205\" y=\"150\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">S</text></g><g data-choice=\"E\"><circle cx=\"268\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"261\" y=\"122\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">T</text></g><g data-choice=\"F\"><circle cx=\"324\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"317\" y=\"94\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">U</text></g></svg>",
+     "options": [
+      "$P$",
+      "$Q$",
+      "$R$",
+      "$S$",
+      "$T$",
+      "$U$"
+     ],
+     "correctOptions": [
+      3,
+      4
+     ],
+     "explanation": "Näher bei $B$ als bei $H$ liegt ein Punkt, wenn er auf der Seite von $B$ der Mittelsenkrechten von $BH$ liegt. Das gilt für $S$, $T$ und $U$.\nHöchstens 450 m von $K$ entfernt heisst: im Kreis um $K$ mit Radius 4.5 Häuschen. Das gilt für $R$, $S$ und $T$.\nBeide Bedingungen erfüllen nur $S$ und $T$.",
+     "skills": [
+      "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2023 · 5a"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "The map shows the castle $B$, the harbour $H$, the church $K$ and the path $w$. One square is 100 m wide. The rest areas $P$ to $U$ are marked on the path. Which rest areas are closer to the castle than to the harbour and at most 450 m from the church? Select all of them.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$"
+       ],
+       "explanation": "A point is closer to $B$ than to $H$ when it lies on $B$'s side of the perpendicular bisector of $BH$. This is true for $S$, $T$ and $U$.\nAt most 450 m from $K$ means inside the circle around $K$ with a radius of 4.5 squares. This is true for $R$, $S$ and $T$.\nOnly $S$ and $T$ meet both conditions."
+      },
+      "fr": {
+       "prompt": "La carte montre le château $B$, le port $H$, l'église $K$ et le chemin $w$. Un carreau mesure 100 m de côté. Les aires de repos $P$ à $U$ sont marquées sur le chemin. Quelles aires de repos sont plus proches du château que du port et à 450 m au plus de l'église ? Sélectionne-les toutes.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$"
+       ],
+       "explanation": "Un point est plus proche de $B$ que de $H$ s'il se trouve du côté de $B$ par rapport à la médiatrice du segment $BH$. C'est le cas de $S$, $T$ et $U$.\nÀ 450 m au plus de $K$ signifie : dans le cercle de centre $K$ et de rayon 4.5 carreaux. C'est le cas de $R$, $S$ et $T$.\nSeuls $S$ et $T$ remplissent les deux conditions."
+      },
+      "it": {
+       "prompt": "La mappa mostra il castello $B$, il porto $H$, la chiesa $K$ e il sentiero $w$. Un quadretto è largo 100 m. Sul sentiero sono segnate le aree di sosta da $P$ a $U$. Quali aree di sosta sono più vicine al castello che al porto e distano al massimo 450 m dalla chiesa? Selezionale tutte.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$"
+       ],
+       "explanation": "Un punto è più vicino a $B$ che a $H$ se si trova dalla parte di $B$ rispetto all'asse del segmento $BH$. Vale per $S$, $T$ e $U$.\nAl massimo 450 m da $K$ significa: dentro il cerchio di centro $K$ e raggio 4.5 quadretti. Vale per $R$, $S$ e $T$.\nSolo $S$ e $T$ soddisfano entrambe le condizioni."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2008-9-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 2,
+     "prompt": "Gegeben sind die Geraden $g$ und $h$ und die Punkte $A$ und $B$. Welche der markierten Punkte $P$ bis $W$ liegen näher bei $A$ als bei $B$ und zugleich näher bei $g$ als bei $h$? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 368 284\"><g id=\"grid\" stroke=\"#c4c4c4\" stroke-width=\"0.6\"><line x1=\"16\" y1=\"268\" x2=\"16\" y2=\"16\"/><line x1=\"44\" y1=\"268\" x2=\"44\" y2=\"16\"/><line x1=\"72\" y1=\"268\" x2=\"72\" y2=\"16\"/><line x1=\"100\" y1=\"268\" x2=\"100\" y2=\"16\"/><line x1=\"128\" y1=\"268\" x2=\"128\" y2=\"16\"/><line x1=\"156\" y1=\"268\" x2=\"156\" y2=\"16\"/><line x1=\"184\" y1=\"268\" x2=\"184\" y2=\"16\"/><line x1=\"212\" y1=\"268\" x2=\"212\" y2=\"16\"/><line x1=\"240\" y1=\"268\" x2=\"240\" y2=\"16\"/><line x1=\"268\" y1=\"268\" x2=\"268\" y2=\"16\"/><line x1=\"296\" y1=\"268\" x2=\"296\" y2=\"16\"/><line x1=\"324\" y1=\"268\" x2=\"324\" y2=\"16\"/><line x1=\"352\" y1=\"268\" x2=\"352\" y2=\"16\"/><line x1=\"16\" y1=\"268\" x2=\"352\" y2=\"268\"/><line x1=\"16\" y1=\"240\" x2=\"352\" y2=\"240\"/><line x1=\"16\" y1=\"212\" x2=\"352\" y2=\"212\"/><line x1=\"16\" y1=\"184\" x2=\"352\" y2=\"184\"/><line x1=\"16\" y1=\"156\" x2=\"352\" y2=\"156\"/><line x1=\"16\" y1=\"128\" x2=\"352\" y2=\"128\"/><line x1=\"16\" y1=\"100\" x2=\"352\" y2=\"100\"/><line x1=\"16\" y1=\"72\" x2=\"352\" y2=\"72\"/><line x1=\"16\" y1=\"44\" x2=\"352\" y2=\"44\"/><line x1=\"16\" y1=\"16\" x2=\"352\" y2=\"16\"/></g><rect id=\"frame\" x=\"16\" y=\"16\" width=\"336\" height=\"252\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\"/><line id=\"ln-g\" x1=\"16\" y1=\"212\" x2=\"352\" y2=\"212\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"324\" y=\"203\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">g</text><line id=\"ln-h\" x1=\"100\" y1=\"268\" x2=\"289\" y2=\"16\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"277\" y=\"48\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">h</text><circle id=\"pt-A\" cx=\"100\" cy=\"72\" r=\"3.5\" fill=\"currentColor\"/><text x=\"93\" y=\"66\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">A</text><circle id=\"pt-B\" cx=\"268\" cy=\"128\" r=\"3.5\" fill=\"currentColor\"/><text x=\"277\" y=\"132\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">B</text><g data-choice=\"A\"><circle cx=\"44\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"51\" y=\"94\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">P</text></g><g data-choice=\"B\"><circle cx=\"44\" cy=\"156\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"51\" y=\"150\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">Q</text></g><g data-choice=\"C\"><circle cx=\"100\" cy=\"184\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"93\" y=\"178\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">R</text></g><g data-choice=\"D\"><circle cx=\"156\" cy=\"44\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"163\" y=\"38\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">S</text></g><g data-choice=\"E\"><circle cx=\"156\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"149\" y=\"122\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">T</text></g><g data-choice=\"F\"><circle cx=\"296\" cy=\"184\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"303\" y=\"178\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">U</text></g><g data-choice=\"G\"><circle cx=\"240\" cy=\"240\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"247\" y=\"254\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">V</text></g><g data-choice=\"H\"><circle cx=\"212\" cy=\"72\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"205\" y=\"66\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">W</text></g></svg>",
+     "options": [
+      "$P$",
+      "$Q$",
+      "$R$",
+      "$S$",
+      "$T$",
+      "$U$",
+      "$V$",
+      "$W$"
+     ],
+     "correctOptions": [
+      0,
+      1,
+      2
+     ],
+     "explanation": "Näher bei $A$ als bei $B$: auf der Seite von $A$ der Mittelsenkrechten von $AB$. Das gilt für $P$, $Q$, $R$, $S$ und $T$.\nNäher bei $g$ als bei $h$: Der Abstand zu einer Geraden wird senkrecht zu ihr gemessen. Die Grenze bilden die beiden Winkelhalbierenden von $g$ und $h$. Näher bei $g$ liegen $P$, $Q$, $R$, $U$ und $V$.\nBeide Bedingungen erfüllen $P$, $Q$ und $R$.",
+     "skills": [
+      "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2008 · 9"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "The lines $g$ and $h$ and the points $A$ and $B$ are given. Which of the marked points $P$ to $W$ are closer to $A$ than to $B$ and also closer to $g$ than to $h$? Select all of them.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Closer to $A$ than to $B$: on $A$'s side of the perpendicular bisector of $AB$. This is true for $P$, $Q$, $R$, $S$ and $T$.\nCloser to $g$ than to $h$: the distance to a line is measured at right angles to it. The boundary is formed by the two angle bisectors of $g$ and $h$. Closer to $g$ are $P$, $Q$, $R$, $U$ and $V$.\n$P$, $Q$ and $R$ meet both conditions."
+      },
+      "fr": {
+       "prompt": "On donne les droites $g$ et $h$ et les points $A$ et $B$. Lesquels des points marqués $P$ à $W$ sont plus proches de $A$ que de $B$ et en même temps plus proches de $g$ que de $h$ ? Sélectionne-les tous.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Plus proche de $A$ que de $B$ : du côté de $A$ par rapport à la médiatrice du segment $AB$. C'est le cas de $P$, $Q$, $R$, $S$ et $T$.\nPlus proche de $g$ que de $h$ : la distance à une droite se mesure perpendiculairement à elle. La limite est formée par les deux bissectrices de $g$ et $h$. Sont plus proches de $g$ : $P$, $Q$, $R$, $U$ et $V$.\n$P$, $Q$ et $R$ remplissent les deux conditions."
+      },
+      "it": {
+       "prompt": "Sono date le rette $g$ e $h$ e i punti $A$ e $B$. Quali dei punti segnati da $P$ a $W$ sono più vicini ad $A$ che a $B$ e allo stesso tempo più vicini a $g$ che a $h$? Selezionali tutti.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Più vicino ad $A$ che a $B$: dalla parte di $A$ rispetto all'asse del segmento $AB$. Vale per $P$, $Q$, $R$, $S$ e $T$.\nPiù vicino a $g$ che a $h$: la distanza da una retta si misura perpendicolarmente ad essa. Il confine è formato dalle due bisettrici di $g$ e $h$. Sono più vicini a $g$: $P$, $Q$, $R$, $U$ e $V$.\n$P$, $Q$ e $R$ soddisfano entrambe le condizioni."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2010-9-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 3,
+     "prompt": "Die Geraden $g$ und $h$ schneiden sich; der Punkt $M$ liegt auf $g$. Welche der markierten Punkte $P$ bis $W$ sind weniger als 5 Häuschen von $M$ entfernt und liegen näher bei $h$ als bei $g$? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 368 312\"><g id=\"grid\" stroke=\"#c4c4c4\" stroke-width=\"0.6\"><line x1=\"16\" y1=\"296\" x2=\"16\" y2=\"16\"/><line x1=\"44\" y1=\"296\" x2=\"44\" y2=\"16\"/><line x1=\"72\" y1=\"296\" x2=\"72\" y2=\"16\"/><line x1=\"100\" y1=\"296\" x2=\"100\" y2=\"16\"/><line x1=\"128\" y1=\"296\" x2=\"128\" y2=\"16\"/><line x1=\"156\" y1=\"296\" x2=\"156\" y2=\"16\"/><line x1=\"184\" y1=\"296\" x2=\"184\" y2=\"16\"/><line x1=\"212\" y1=\"296\" x2=\"212\" y2=\"16\"/><line x1=\"240\" y1=\"296\" x2=\"240\" y2=\"16\"/><line x1=\"268\" y1=\"296\" x2=\"268\" y2=\"16\"/><line x1=\"296\" y1=\"296\" x2=\"296\" y2=\"16\"/><line x1=\"324\" y1=\"296\" x2=\"324\" y2=\"16\"/><line x1=\"352\" y1=\"296\" x2=\"352\" y2=\"16\"/><line x1=\"16\" y1=\"296\" x2=\"352\" y2=\"296\"/><line x1=\"16\" y1=\"268\" x2=\"352\" y2=\"268\"/><line x1=\"16\" y1=\"240\" x2=\"352\" y2=\"240\"/><line x1=\"16\" y1=\"212\" x2=\"352\" y2=\"212\"/><line x1=\"16\" y1=\"184\" x2=\"352\" y2=\"184\"/><line x1=\"16\" y1=\"156\" x2=\"352\" y2=\"156\"/><line x1=\"16\" y1=\"128\" x2=\"352\" y2=\"128\"/><line x1=\"16\" y1=\"100\" x2=\"352\" y2=\"100\"/><line x1=\"16\" y1=\"72\" x2=\"352\" y2=\"72\"/><line x1=\"16\" y1=\"44\" x2=\"352\" y2=\"44\"/><line x1=\"16\" y1=\"16\" x2=\"352\" y2=\"16\"/></g><rect id=\"frame\" x=\"16\" y=\"16\" width=\"336\" height=\"280\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\"/><line id=\"ln-g\" x1=\"16\" y1=\"240\" x2=\"352\" y2=\"240\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"324\" y=\"257\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">g</text><line id=\"ln-h\" x1=\"30\" y1=\"296\" x2=\"240\" y2=\"16\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"203\" y=\"62\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">h</text><circle id=\"pt-M\" cx=\"212\" cy=\"240\" r=\"3.5\" fill=\"currentColor\"/><text x=\"212\" y=\"257\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">M</text><g data-choice=\"A\"><circle cx=\"128\" cy=\"184\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"135\" y=\"198\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">P</text></g><g data-choice=\"B\"><circle cx=\"184\" cy=\"156\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"191\" y=\"170\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">Q</text></g><g data-choice=\"C\"><circle cx=\"240\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"247\" y=\"142\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">R</text></g><g data-choice=\"D\"><circle cx=\"296\" cy=\"156\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"303\" y=\"150\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">S</text></g><g data-choice=\"E\"><circle cx=\"268\" cy=\"212\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"275\" y=\"206\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">T</text></g><g data-choice=\"F\"><circle cx=\"128\" cy=\"72\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"121\" y=\"66\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">U</text></g><g data-choice=\"G\"><circle cx=\"296\" cy=\"72\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"303\" y=\"66\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">V</text></g><g data-choice=\"H\"><circle cx=\"44\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"51\" y=\"122\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">W</text></g></svg>",
+     "options": [
+      "$P$",
+      "$Q$",
+      "$R$",
+      "$S$",
+      "$T$",
+      "$U$",
+      "$V$",
+      "$W$"
+     ],
+     "correctOptions": [
+      0,
+      1,
+      2
+     ],
+     "explanation": "Weniger als 5 Häuschen von $M$ entfernt: im Kreis um $M$ mit Radius 5 Häuschen. Das gilt für $P$, $Q$, $R$, $S$ und $T$.\nNäher bei $h$ als bei $g$: Der Abstand zu einer Geraden wird senkrecht zu ihr gemessen. Die Grenze bilden die beiden Winkelhalbierenden von $g$ und $h$. Näher bei $h$ liegen $P$, $Q$, $R$, $U$, $V$ und $W$.\nBeide Bedingungen erfüllen $P$, $Q$ und $R$.",
+     "skills": [
+      "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2010 · 9"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "The lines $g$ and $h$ intersect; the point $M$ lies on $g$. Which of the marked points $P$ to $W$ are less than 5 squares from $M$ and closer to $h$ than to $g$? Select all of them.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Less than 5 squares from $M$: inside the circle around $M$ with a radius of 5 squares. This is true for $P$, $Q$, $R$, $S$ and $T$.\nCloser to $h$ than to $g$: the distance to a line is measured at right angles to it. The boundary is formed by the two angle bisectors of $g$ and $h$. Closer to $h$ are $P$, $Q$, $R$, $U$, $V$ and $W$.\n$P$, $Q$ and $R$ meet both conditions."
+      },
+      "fr": {
+       "prompt": "Les droites $g$ et $h$ se coupent ; le point $M$ est sur $g$. Lesquels des points marqués $P$ à $W$ sont à moins de 5 carreaux de $M$ et plus proches de $h$ que de $g$ ? Sélectionne-les tous.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "À moins de 5 carreaux de $M$ : dans le cercle de centre $M$ et de rayon 5 carreaux. C'est le cas de $P$, $Q$, $R$, $S$ et $T$.\nPlus proche de $h$ que de $g$ : la distance à une droite se mesure perpendiculairement à elle. La limite est formée par les deux bissectrices de $g$ et $h$. Sont plus proches de $h$ : $P$, $Q$, $R$, $U$, $V$ et $W$.\n$P$, $Q$ et $R$ remplissent les deux conditions."
+      },
+      "it": {
+       "prompt": "Le rette $g$ e $h$ si intersecano; il punto $M$ sta su $g$. Quali dei punti segnati da $P$ a $W$ distano meno di 5 quadretti da $M$ e sono più vicini a $h$ che a $g$? Selezionali tutti.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Meno di 5 quadretti da $M$: dentro il cerchio di centro $M$ e raggio 5 quadretti. Vale per $P$, $Q$, $R$, $S$ e $T$.\nPiù vicino a $h$ che a $g$: la distanza da una retta si misura perpendicolarmente ad essa. Il confine è formato dalle due bisettrici di $g$ e $h$. Sono più vicini a $h$: $P$, $Q$, $R$, $U$, $V$ e $W$.\n$P$, $Q$ e $R$ soddisfano entrambe le condizioni."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2020-9-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 4,
+     "prompt": "Im Koordinatensystem sind die Punkte $A(3/2)$, $B(9/2)$ und $C(5/7)$ eingezeichnet. Gesucht sind Punkte, die näher bei $B$ als bei $A$ liegen, von $C$ höchstens 5 Einheiten entfernt sind und von $B$ mindestens halb so weit entfernt sind, wie die Strecke $AB$ lang ist. Welche der markierten Punkte $P$ bis $W$ erfüllen alle drei Bedingungen? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 382 328\"><g id=\"grid\" stroke=\"#c4c4c4\" stroke-width=\"0.6\"><line x1=\"30\" y1=\"296\" x2=\"30\" y2=\"16\"/><line x1=\"58\" y1=\"296\" x2=\"58\" y2=\"16\"/><line x1=\"86\" y1=\"296\" x2=\"86\" y2=\"16\"/><line x1=\"114\" y1=\"296\" x2=\"114\" y2=\"16\"/><line x1=\"142\" y1=\"296\" x2=\"142\" y2=\"16\"/><line x1=\"170\" y1=\"296\" x2=\"170\" y2=\"16\"/><line x1=\"198\" y1=\"296\" x2=\"198\" y2=\"16\"/><line x1=\"226\" y1=\"296\" x2=\"226\" y2=\"16\"/><line x1=\"254\" y1=\"296\" x2=\"254\" y2=\"16\"/><line x1=\"282\" y1=\"296\" x2=\"282\" y2=\"16\"/><line x1=\"310\" y1=\"296\" x2=\"310\" y2=\"16\"/><line x1=\"338\" y1=\"296\" x2=\"338\" y2=\"16\"/><line x1=\"366\" y1=\"296\" x2=\"366\" y2=\"16\"/><line x1=\"30\" y1=\"296\" x2=\"366\" y2=\"296\"/><line x1=\"30\" y1=\"268\" x2=\"366\" y2=\"268\"/><line x1=\"30\" y1=\"240\" x2=\"366\" y2=\"240\"/><line x1=\"30\" y1=\"212\" x2=\"366\" y2=\"212\"/><line x1=\"30\" y1=\"184\" x2=\"366\" y2=\"184\"/><line x1=\"30\" y1=\"156\" x2=\"366\" y2=\"156\"/><line x1=\"30\" y1=\"128\" x2=\"366\" y2=\"128\"/><line x1=\"30\" y1=\"100\" x2=\"366\" y2=\"100\"/><line x1=\"30\" y1=\"72\" x2=\"366\" y2=\"72\"/><line x1=\"30\" y1=\"44\" x2=\"366\" y2=\"44\"/><line x1=\"30\" y1=\"16\" x2=\"366\" y2=\"16\"/></g><rect id=\"frame\" x=\"30\" y=\"16\" width=\"336\" height=\"280\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\"/><text x=\"30\" y=\"311\" font-size=\"11\" text-anchor=\"middle\" fill=\"currentColor\">0</text><text x=\"86\" y=\"311\" font-size=\"11\" text-anchor=\"middle\" fill=\"currentColor\">2</text><text x=\"142\" y=\"311\" font-size=\"11\" text-anchor=\"middle\" fill=\"currentColor\">4</text><text x=\"198\" y=\"311\" font-size=\"11\" text-anchor=\"middle\" fill=\"currentColor\">6</text><text x=\"254\" y=\"311\" font-size=\"11\" text-anchor=\"middle\" fill=\"currentColor\">8</text><text x=\"310\" y=\"311\" font-size=\"11\" text-anchor=\"middle\" fill=\"currentColor\">10</text><text x=\"366\" y=\"311\" font-size=\"11\" text-anchor=\"middle\" fill=\"currentColor\">12</text><text x=\"24\" y=\"300\" font-size=\"11\" text-anchor=\"end\" fill=\"currentColor\">0</text><text x=\"24\" y=\"244\" font-size=\"11\" text-anchor=\"end\" fill=\"currentColor\">2</text><text x=\"24\" y=\"188\" font-size=\"11\" text-anchor=\"end\" fill=\"currentColor\">4</text><text x=\"24\" y=\"132\" font-size=\"11\" text-anchor=\"end\" fill=\"currentColor\">6</text><text x=\"24\" y=\"76\" font-size=\"11\" text-anchor=\"end\" fill=\"currentColor\">8</text><text x=\"24\" y=\"20\" font-size=\"11\" text-anchor=\"end\" fill=\"currentColor\">10</text><circle id=\"pt-A\" cx=\"114\" cy=\"240\" r=\"3.5\" fill=\"currentColor\"/><text x=\"107\" y=\"254\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">A</text><circle id=\"pt-B\" cx=\"282\" cy=\"240\" r=\"3.5\" fill=\"currentColor\"/><text x=\"289\" y=\"254\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">B</text><circle id=\"pt-C\" cx=\"170\" cy=\"100\" r=\"3.5\" fill=\"currentColor\"/><text x=\"163\" y=\"94\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">C</text><g data-choice=\"A\"><circle cx=\"282\" cy=\"44\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"289\" y=\"38\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">P</text></g><g data-choice=\"B\"><circle cx=\"142\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"149\" y=\"122\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">Q</text></g><g data-choice=\"C\"><circle cx=\"338\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"345\" y=\"94\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">R</text></g><g data-choice=\"D\"><circle cx=\"254\" cy=\"184\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"261\" y=\"178\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">S</text></g><g data-choice=\"E\"><circle cx=\"226\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"233\" y=\"94\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">T</text></g><g data-choice=\"F\"><circle cx=\"170\" cy=\"212\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"177\" y=\"206\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">U</text></g><g data-choice=\"G\"><circle cx=\"338\" cy=\"44\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"345\" y=\"38\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">V</text></g><g data-choice=\"H\"><circle cx=\"282\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"289\" y=\"122\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">W</text></g></svg>",
+     "options": [
+      "$P$",
+      "$Q$",
+      "$R$",
+      "$S$",
+      "$T$",
+      "$U$",
+      "$V$",
+      "$W$"
+     ],
+     "correctOptions": [
+      0,
+      4,
+      7
+     ],
+     "explanation": "Näher bei $B$ als bei $A$: rechts der Mittelsenkrechten von $AB$, also rechts von $x = 6$. Das gilt für $P$, $R$, $S$, $T$, $V$ und $W$.\nHöchstens 5 Einheiten von $C$ entfernt: im Kreis um $C$ mit Radius 5. Das gilt für $P$, $Q$, $S$, $T$, $U$ und $W$.\n$AB$ ist 6 Einheiten lang, die Hälfte ist 3. Mindestens 3 Einheiten von $B$ entfernt sind $P$, $Q$, $R$, $T$, $U$, $V$ und $W$.\nAlle drei Bedingungen erfüllen $P$, $T$ und $W$.",
+     "skills": [
+      "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2020 · 9"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "The points $A(3/2)$, $B(9/2)$ and $C(5/7)$ are drawn in the coordinate system. We are looking for points that are closer to $B$ than to $A$, at most 5 units from $C$, and at least half as far from $B$ as the segment $AB$ is long. Which of the marked points $P$ to $W$ meet all three conditions? Select all of them.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Closer to $B$ than to $A$: to the right of the perpendicular bisector of $AB$, that is, to the right of $x = 6$. This is true for $P$, $R$, $S$, $T$, $V$ and $W$.\nAt most 5 units from $C$: inside the circle around $C$ with radius 5. This is true for $P$, $Q$, $S$, $T$, $U$ and $W$.\n$AB$ is 6 units long, half of it is 3. At least 3 units from $B$ are $P$, $Q$, $R$, $T$, $U$, $V$ and $W$.\n$P$, $T$ and $W$ meet all three conditions."
+      },
+      "fr": {
+       "prompt": "Les points $A(3/2)$, $B(9/2)$ et $C(5/7)$ sont placés dans le repère. On cherche des points plus proches de $B$ que de $A$, à 5 unités au plus de $C$ et dont la distance à $B$ vaut au moins la moitié de la longueur du segment $AB$. Lesquels des points marqués $P$ à $W$ remplissent les trois conditions ? Sélectionne-les tous.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Plus proche de $B$ que de $A$ : à droite de la médiatrice du segment $AB$, donc à droite de $x = 6$. C'est le cas de $P$, $R$, $S$, $T$, $V$ et $W$.\nÀ 5 unités au plus de $C$ : dans le cercle de centre $C$ et de rayon 5. C'est le cas de $P$, $Q$, $S$, $T$, $U$ et $W$.\n$AB$ mesure 6 unités, la moitié vaut 3. Sont à 3 unités au moins de $B$ : $P$, $Q$, $R$, $T$, $U$, $V$ et $W$.\n$P$, $T$ et $W$ remplissent les trois conditions."
+      },
+      "it": {
+       "prompt": "Nel piano cartesiano sono segnati i punti $A(3/2)$, $B(9/2)$ e $C(5/7)$. Si cercano punti più vicini a $B$ che ad $A$, distanti al massimo 5 unità da $C$ e la cui distanza da $B$ è almeno la metà della lunghezza del segmento $AB$. Quali dei punti segnati da $P$ a $W$ soddisfano tutte e tre le condizioni? Selezionali tutti.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Più vicino a $B$ che ad $A$: a destra dell'asse del segmento $AB$, cioè a destra di $x = 6$. Vale per $P$, $R$, $S$, $T$, $V$ e $W$.\nAl massimo 5 unità da $C$: dentro il cerchio di centro $C$ e raggio 5. Vale per $P$, $Q$, $S$, $T$, $U$ e $W$.\n$AB$ è lungo 6 unità, la metà è 3. Distano almeno 3 unità da $B$: $P$, $Q$, $R$, $T$, $U$, $V$ e $W$.\n$P$, $T$ e $W$ soddisfano tutte e tre le condizioni."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2025-7-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 5,
+     "prompt": "Auf der Karte ist ein Häuschen 10 m breit. Ein Zelt soll mindestens 25 m vom Bach $b$ entfernt stehen, höchstens 40 m von der Feuerstelle $F$ und näher beim Brunnen $A$ als beim Parkplatz $B$. Welche der markierten Plätze $P$ bis $W$ erfüllen alle drei Bedingungen? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 368 284\"><g id=\"grid\" stroke=\"#c4c4c4\" stroke-width=\"0.6\"><line x1=\"16\" y1=\"268\" x2=\"16\" y2=\"16\"/><line x1=\"44\" y1=\"268\" x2=\"44\" y2=\"16\"/><line x1=\"72\" y1=\"268\" x2=\"72\" y2=\"16\"/><line x1=\"100\" y1=\"268\" x2=\"100\" y2=\"16\"/><line x1=\"128\" y1=\"268\" x2=\"128\" y2=\"16\"/><line x1=\"156\" y1=\"268\" x2=\"156\" y2=\"16\"/><line x1=\"184\" y1=\"268\" x2=\"184\" y2=\"16\"/><line x1=\"212\" y1=\"268\" x2=\"212\" y2=\"16\"/><line x1=\"240\" y1=\"268\" x2=\"240\" y2=\"16\"/><line x1=\"268\" y1=\"268\" x2=\"268\" y2=\"16\"/><line x1=\"296\" y1=\"268\" x2=\"296\" y2=\"16\"/><line x1=\"324\" y1=\"268\" x2=\"324\" y2=\"16\"/><line x1=\"352\" y1=\"268\" x2=\"352\" y2=\"16\"/><line x1=\"16\" y1=\"268\" x2=\"352\" y2=\"268\"/><line x1=\"16\" y1=\"240\" x2=\"352\" y2=\"240\"/><line x1=\"16\" y1=\"212\" x2=\"352\" y2=\"212\"/><line x1=\"16\" y1=\"184\" x2=\"352\" y2=\"184\"/><line x1=\"16\" y1=\"156\" x2=\"352\" y2=\"156\"/><line x1=\"16\" y1=\"128\" x2=\"352\" y2=\"128\"/><line x1=\"16\" y1=\"100\" x2=\"352\" y2=\"100\"/><line x1=\"16\" y1=\"72\" x2=\"352\" y2=\"72\"/><line x1=\"16\" y1=\"44\" x2=\"352\" y2=\"44\"/><line x1=\"16\" y1=\"16\" x2=\"352\" y2=\"16\"/></g><rect id=\"frame\" x=\"16\" y=\"16\" width=\"336\" height=\"252\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\"/><line id=\"ln-b\" x1=\"16\" y1=\"240\" x2=\"352\" y2=\"240\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"324\" y=\"257\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">b</text><circle id=\"pt-F\" cx=\"184\" cy=\"128\" r=\"3.5\" fill=\"currentColor\"/><text x=\"191\" y=\"122\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">F</text><circle id=\"pt-A\" cx=\"72\" cy=\"44\" r=\"3.5\" fill=\"currentColor\"/><text x=\"65\" y=\"38\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">A</text><circle id=\"pt-B\" cx=\"296\" cy=\"100\" r=\"3.5\" fill=\"currentColor\"/><text x=\"303\" y=\"94\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">B</text><g data-choice=\"A\"><circle cx=\"128\" cy=\"72\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"135\" y=\"66\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">P</text></g><g data-choice=\"B\"><circle cx=\"100\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"93\" y=\"122\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">Q</text></g><g data-choice=\"C\"><circle cx=\"240\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"247\" y=\"94\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">R</text></g><g data-choice=\"D\"><circle cx=\"212\" cy=\"156\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"219\" y=\"170\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">S</text></g><g data-choice=\"E\"><circle cx=\"128\" cy=\"184\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"135\" y=\"198\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">T</text></g><g data-choice=\"F\"><circle cx=\"44\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"51\" y=\"94\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">U</text></g><g data-choice=\"G\"><circle cx=\"324\" cy=\"156\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"331\" y=\"150\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">V</text></g><g data-choice=\"H\"><circle cx=\"212\" cy=\"44\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"219\" y=\"38\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">W</text></g></svg>",
+     "options": [
+      "$P$",
+      "$Q$",
+      "$R$",
+      "$S$",
+      "$T$",
+      "$U$",
+      "$V$",
+      "$W$"
+     ],
+     "correctOptions": [
+      0,
+      1
+     ],
+     "explanation": "Mindestens 25 m vom Bach: oberhalb der Parallele zu $b$ im Abstand von 2.5 Häuschen. Das gilt für $P$, $Q$, $R$, $S$, $U$, $V$ und $W$.\nHöchstens 40 m von $F$: im Kreis um $F$ mit Radius 4 Häuschen. Das gilt für $P$, $Q$, $R$, $S$, $T$ und $W$.\nNäher bei $A$ als bei $B$: auf der Seite von $A$ der Mittelsenkrechten von $AB$. Das gilt für $P$, $Q$, $T$ und $U$.\nAlle drei Bedingungen erfüllen nur $P$ und $Q$.",
+     "skills": [
+      "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2025 · 7"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "On the map one square is 10 m wide. A tent is to stand at least 25 m from the brook $b$, at most 40 m from the fireplace $F$, and closer to the well $A$ than to the car park $B$. Which of the marked places $P$ to $W$ meet all three conditions? Select all of them.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "At least 25 m from the brook: above the parallel to $b$ at a distance of 2.5 squares. This is true for $P$, $Q$, $R$, $S$, $U$, $V$ and $W$.\nAt most 40 m from $F$: inside the circle around $F$ with a radius of 4 squares. This is true for $P$, $Q$, $R$, $S$, $T$ and $W$.\nCloser to $A$ than to $B$: on $A$'s side of the perpendicular bisector of $AB$. This is true for $P$, $Q$, $T$ and $U$.\nOnly $P$ and $Q$ meet all three conditions."
+      },
+      "fr": {
+       "prompt": "Sur la carte, un carreau mesure 10 m de côté. Une tente doit se trouver à 25 m au moins du ruisseau $b$, à 40 m au plus du foyer $F$ et plus près de la fontaine $A$ que du parking $B$. Lesquels des emplacements marqués $P$ à $W$ remplissent les trois conditions ? Sélectionne-les tous.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "À 25 m au moins du ruisseau : au-dessus de la parallèle à $b$ située à 2.5 carreaux. C'est le cas de $P$, $Q$, $R$, $S$, $U$, $V$ et $W$.\nÀ 40 m au plus de $F$ : dans le cercle de centre $F$ et de rayon 4 carreaux. C'est le cas de $P$, $Q$, $R$, $S$, $T$ et $W$.\nPlus près de $A$ que de $B$ : du côté de $A$ par rapport à la médiatrice du segment $AB$. C'est le cas de $P$, $Q$, $T$ et $U$.\nSeuls $P$ et $Q$ remplissent les trois conditions."
+      },
+      "it": {
+       "prompt": "Sulla mappa un quadretto è largo 10 m. Una tenda deve stare ad almeno 25 m dal ruscello $b$, al massimo a 40 m dal focolare $F$ e più vicino alla fontana $A$ che al parcheggio $B$. Quali dei posti segnati da $P$ a $W$ soddisfano tutte e tre le condizioni? Selezionali tutti.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Almeno 25 m dal ruscello: sopra la parallela a $b$ a distanza di 2.5 quadretti. Vale per $P$, $Q$, $R$, $S$, $U$, $V$ e $W$.\nAl massimo 40 m da $F$: dentro il cerchio di centro $F$ e raggio 4 quadretti. Vale per $P$, $Q$, $R$, $S$, $T$ e $W$.\nPiù vicino ad $A$ che a $B$: dalla parte di $A$ rispetto all'asse del segmento $AB$. Vale per $P$, $Q$, $T$ e $U$.\nSolo $P$ e $Q$ soddisfano tutte e tre le condizioni."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2009-8-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 6,
+     "prompt": "Auf dem Ortsplan ist ein Häuschen 100 m breit. Familie Keller sucht eine Wohnung, die mehr als 200 m von der Tramlinie $t$ entfernt ist und näher bei der Schule $A$ als beim Bahnhof $B$ liegt. Welche der markierten Wohnungen $P$ bis $W$ kommen in Frage? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 368 284\"><g id=\"grid\" stroke=\"#c4c4c4\" stroke-width=\"0.6\"><line x1=\"16\" y1=\"268\" x2=\"16\" y2=\"16\"/><line x1=\"44\" y1=\"268\" x2=\"44\" y2=\"16\"/><line x1=\"72\" y1=\"268\" x2=\"72\" y2=\"16\"/><line x1=\"100\" y1=\"268\" x2=\"100\" y2=\"16\"/><line x1=\"128\" y1=\"268\" x2=\"128\" y2=\"16\"/><line x1=\"156\" y1=\"268\" x2=\"156\" y2=\"16\"/><line x1=\"184\" y1=\"268\" x2=\"184\" y2=\"16\"/><line x1=\"212\" y1=\"268\" x2=\"212\" y2=\"16\"/><line x1=\"240\" y1=\"268\" x2=\"240\" y2=\"16\"/><line x1=\"268\" y1=\"268\" x2=\"268\" y2=\"16\"/><line x1=\"296\" y1=\"268\" x2=\"296\" y2=\"16\"/><line x1=\"324\" y1=\"268\" x2=\"324\" y2=\"16\"/><line x1=\"352\" y1=\"268\" x2=\"352\" y2=\"16\"/><line x1=\"16\" y1=\"268\" x2=\"352\" y2=\"268\"/><line x1=\"16\" y1=\"240\" x2=\"352\" y2=\"240\"/><line x1=\"16\" y1=\"212\" x2=\"352\" y2=\"212\"/><line x1=\"16\" y1=\"184\" x2=\"352\" y2=\"184\"/><line x1=\"16\" y1=\"156\" x2=\"352\" y2=\"156\"/><line x1=\"16\" y1=\"128\" x2=\"352\" y2=\"128\"/><line x1=\"16\" y1=\"100\" x2=\"352\" y2=\"100\"/><line x1=\"16\" y1=\"72\" x2=\"352\" y2=\"72\"/><line x1=\"16\" y1=\"44\" x2=\"352\" y2=\"44\"/><line x1=\"16\" y1=\"16\" x2=\"352\" y2=\"16\"/></g><rect id=\"frame\" x=\"16\" y=\"16\" width=\"336\" height=\"252\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\"/><line id=\"ln-t\" x1=\"16\" y1=\"268\" x2=\"352\" y2=\"16\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"205\" y=\"115\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">t</text><circle id=\"pt-A\" cx=\"268\" cy=\"212\" r=\"3.5\" fill=\"currentColor\"/><text x=\"275\" y=\"206\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">A</text><circle id=\"pt-B\" cx=\"100\" cy=\"184\" r=\"3.5\" fill=\"currentColor\"/><text x=\"93\" y=\"178\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">B</text><g data-choice=\"A\"><circle cx=\"324\" cy=\"156\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"331\" y=\"150\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">P</text></g><g data-choice=\"B\"><circle cx=\"212\" cy=\"240\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"205\" y=\"254\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">Q</text></g><g data-choice=\"C\"><circle cx=\"268\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"275\" y=\"142\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">R</text></g><g data-choice=\"D\"><circle cx=\"324\" cy=\"72\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"331\" y=\"86\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">S</text></g><g data-choice=\"E\"><circle cx=\"100\" cy=\"72\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"107\" y=\"66\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">T</text></g><g data-choice=\"F\"><circle cx=\"44\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"51\" y=\"122\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">U</text></g><g data-choice=\"G\"><circle cx=\"156\" cy=\"184\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"163\" y=\"198\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">V</text></g><g data-choice=\"H\"><circle cx=\"324\" cy=\"240\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"331\" y=\"234\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">W</text></g></svg>",
+     "options": [
+      "$P$",
+      "$Q$",
+      "$R$",
+      "$S$",
+      "$T$",
+      "$U$",
+      "$V$",
+      "$W$"
+     ],
+     "correctOptions": [
+      0,
+      1,
+      7
+     ],
+     "explanation": "Mehr als 200 m von $t$ entfernt: Der Abstand wird senkrecht zur Tramlinie gemessen. Die Grenze bilden die beiden Parallelen zu $t$ im Abstand von 2 Häuschen; weiter weg liegen $P$, $Q$, $T$, $U$ und $W$.\nNäher bei $A$ als bei $B$: auf der Seite von $A$ der Mittelsenkrechten von $AB$. Das gilt für $P$, $Q$, $R$, $S$ und $W$.\nBeide Bedingungen erfüllen $P$, $Q$ und $W$.",
+     "skills": [
+      "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2009 · 8"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "On the town map one square is 100 m wide. The Keller family is looking for a flat that is more than 200 m from the tram line $t$ and closer to the school $A$ than to the station $B$. Which of the marked flats $P$ to $W$ are possible? Select all of them.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "More than 200 m from $t$: the distance is measured at right angles to the tram line. The boundary is formed by the two parallels to $t$ at a distance of 2 squares; farther away are $P$, $Q$, $T$, $U$ and $W$.\nCloser to $A$ than to $B$: on $A$'s side of the perpendicular bisector of $AB$. This is true for $P$, $Q$, $R$, $S$ and $W$.\n$P$, $Q$ and $W$ meet both conditions."
+      },
+      "fr": {
+       "prompt": "Sur le plan de la ville, un carreau mesure 100 m de côté. La famille Keller cherche un appartement situé à plus de 200 m de la ligne de tram $t$ et plus près de l'école $A$ que de la gare $B$. Lesquels des appartements marqués $P$ à $W$ conviennent ? Sélectionne-les tous.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "À plus de 200 m de $t$ : la distance se mesure perpendiculairement à la ligne de tram. La limite est formée par les deux parallèles à $t$ situées à 2 carreaux ; sont plus loin : $P$, $Q$, $T$, $U$ et $W$.\nPlus près de $A$ que de $B$ : du côté de $A$ par rapport à la médiatrice du segment $AB$. C'est le cas de $P$, $Q$, $R$, $S$ et $W$.\n$P$, $Q$ et $W$ remplissent les deux conditions."
+      },
+      "it": {
+       "prompt": "Sulla pianta della città un quadretto è largo 100 m. La famiglia Keller cerca un appartamento che disti più di 200 m dalla linea del tram $t$ e sia più vicino alla scuola $A$ che alla stazione $B$. Quali degli appartamenti segnati da $P$ a $W$ vanno bene? Selezionali tutti.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Più di 200 m da $t$: la distanza si misura perpendicolarmente alla linea del tram. Il confine è formato dalle due parallele a $t$ a distanza di 2 quadretti; più lontani sono $P$, $Q$, $T$, $U$ e $W$.\nPiù vicino ad $A$ che a $B$: dalla parte di $A$ rispetto all'asse del segmento $AB$. Vale per $P$, $Q$, $R$, $S$ e $W$.\n$P$, $Q$ e $W$ soddisfano entrambe le condizioni."
+      }
+     }
+    }
+   ]
+  },
+  {
+   "publicLessonId": "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen--zap-2",
+   "publish": false,
+   "lesson": {
+    "title": "Darstellen und Zerlegen · ZAP · Teil 2",
+    "titles": {
+     "de": "Darstellen und Zerlegen · ZAP · Teil 2",
+     "en": "Representing and decomposing · ZAP · Part 2",
+     "fr": "Représenter et décomposer · ZAP · Partie 2",
+     "it": "Rappresentare e scomporre · ZAP · Parte 2"
+    },
+    "objective": "Strecke, Gerade und Strahl unterscheiden, Senkrechte und Parallelen erkennen und zeichnen und Abstände bestimmen.",
+    "description": "Strecke, Gerade und Strahl unterscheiden, Senkrechte und Parallelen erkennen und zeichnen und Abstände bestimmen.",
+    "subjectId": "mathematics",
+    "topicId": "geometrie",
+    "unitId": "geometrie-strecken-geraden-senkrechte-und-parallelen",
+    "gradeLevel": "grade_6_primary",
+    "difficulty": "practice",
+    "estimatedMinutes": 15,
+    "language": "de",
+    "order": 532,
+    "extension": true,
+    "requiresPoints": [],
+    "tags": [
+     "zap"
+    ]
+   },
+   "exercises": [
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2018-9-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 1,
+     "prompt": "Gegeben sind der Kreis $k$ mit Mittelpunkt $M$, die Gerade $g$ und die Punkte $A$ und $B$. Welche der markierten Punkte $P$ bis $W$ sind höchstens 1.5 Häuschen von der Kreislinie $k$ entfernt, mindestens 3.5 Häuschen von $g$ entfernt und liegen näher bei $A$ als bei $B$? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 396 312\"><g id=\"grid\" stroke=\"#c4c4c4\" stroke-width=\"0.6\"><line x1=\"16\" y1=\"296\" x2=\"16\" y2=\"16\"/><line x1=\"44\" y1=\"296\" x2=\"44\" y2=\"16\"/><line x1=\"72\" y1=\"296\" x2=\"72\" y2=\"16\"/><line x1=\"100\" y1=\"296\" x2=\"100\" y2=\"16\"/><line x1=\"128\" y1=\"296\" x2=\"128\" y2=\"16\"/><line x1=\"156\" y1=\"296\" x2=\"156\" y2=\"16\"/><line x1=\"184\" y1=\"296\" x2=\"184\" y2=\"16\"/><line x1=\"212\" y1=\"296\" x2=\"212\" y2=\"16\"/><line x1=\"240\" y1=\"296\" x2=\"240\" y2=\"16\"/><line x1=\"268\" y1=\"296\" x2=\"268\" y2=\"16\"/><line x1=\"296\" y1=\"296\" x2=\"296\" y2=\"16\"/><line x1=\"324\" y1=\"296\" x2=\"324\" y2=\"16\"/><line x1=\"352\" y1=\"296\" x2=\"352\" y2=\"16\"/><line x1=\"380\" y1=\"296\" x2=\"380\" y2=\"16\"/><line x1=\"16\" y1=\"296\" x2=\"380\" y2=\"296\"/><line x1=\"16\" y1=\"268\" x2=\"380\" y2=\"268\"/><line x1=\"16\" y1=\"240\" x2=\"380\" y2=\"240\"/><line x1=\"16\" y1=\"212\" x2=\"380\" y2=\"212\"/><line x1=\"16\" y1=\"184\" x2=\"380\" y2=\"184\"/><line x1=\"16\" y1=\"156\" x2=\"380\" y2=\"156\"/><line x1=\"16\" y1=\"128\" x2=\"380\" y2=\"128\"/><line x1=\"16\" y1=\"100\" x2=\"380\" y2=\"100\"/><line x1=\"16\" y1=\"72\" x2=\"380\" y2=\"72\"/><line x1=\"16\" y1=\"44\" x2=\"380\" y2=\"44\"/><line x1=\"16\" y1=\"16\" x2=\"380\" y2=\"16\"/></g><rect id=\"frame\" x=\"16\" y=\"16\" width=\"364\" height=\"280\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\"/><circle id=\"ci-k\" cx=\"184\" cy=\"156\" r=\"84\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"121\" y=\"226\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">k</text><line id=\"ln-g\" x1=\"44\" y1=\"296\" x2=\"44\" y2=\"16\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"53\" y=\"48\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">g</text><circle id=\"pt-M\" cx=\"184\" cy=\"156\" r=\"3.5\" fill=\"currentColor\"/><text x=\"184\" y=\"173\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">M</text><circle id=\"pt-A\" cx=\"296\" cy=\"44\" r=\"3.5\" fill=\"currentColor\"/><text x=\"303\" y=\"38\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">A</text><circle id=\"pt-B\" cx=\"128\" cy=\"268\" r=\"3.5\" fill=\"currentColor\"/><text x=\"121\" y=\"282\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">B</text><g data-choice=\"A\"><circle cx=\"184\" cy=\"72\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"184\" y=\"63\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">P</text></g><g data-choice=\"B\"><circle cx=\"240\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"247\" y=\"122\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">Q</text></g><g data-choice=\"C\"><circle cx=\"296\" cy=\"156\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"303\" y=\"150\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">R</text></g><g data-choice=\"D\"><circle cx=\"240\" cy=\"212\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"247\" y=\"226\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">S</text></g><g data-choice=\"E\"><circle cx=\"184\" cy=\"240\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"184\" y=\"257\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">T</text></g><g data-choice=\"F\"><circle cx=\"128\" cy=\"72\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"121\" y=\"66\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">U</text></g><g data-choice=\"G\"><circle cx=\"352\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"345\" y=\"94\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">V</text></g><g data-choice=\"H\"><circle cx=\"100\" cy=\"156\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"91\" y=\"160\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">W</text></g></svg>",
+     "options": [
+      "$P$",
+      "$Q$",
+      "$R$",
+      "$S$",
+      "$T$",
+      "$U$",
+      "$V$",
+      "$W$"
+     ],
+     "correctOptions": [
+      0,
+      1,
+      2
+     ],
+     "explanation": "Der Kreis $k$ hat den Radius 3 Häuschen. Höchstens 1.5 Häuschen von der Kreislinie entfernt ist ein Punkt, der zwischen 1.5 und 4.5 Häuschen von $M$ entfernt ist (ein Kreisring). Das gilt für $P$, $Q$, $R$, $S$, $T$, $U$ und $W$.\nMindestens 3.5 Häuschen von $g$ entfernt: rechts der Parallele zu $g$ in diesem Abstand. Das gilt für $P$, $Q$, $R$, $S$, $T$ und $V$.\nNäher bei $A$ als bei $B$: auf der Seite von $A$ der Mittelsenkrechten von $AB$. Das gilt für $P$, $Q$, $R$, $U$ und $V$.\nAlle drei Bedingungen erfüllen $P$, $Q$ und $R$.",
+     "skills": [
+      "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2018 · 9"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "The circle $k$ with centre $M$, the line $g$ and the points $A$ and $B$ are given. Which of the marked points $P$ to $W$ are at most 1.5 squares from the circle line $k$, at least 3.5 squares from $g$, and closer to $A$ than to $B$? Select all of them.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "The circle $k$ has a radius of 3 squares. A point is at most 1.5 squares from the circle line when it is between 1.5 and 4.5 squares from $M$ (a ring). This is true for $P$, $Q$, $R$, $S$, $T$, $U$ and $W$.\nAt least 3.5 squares from $g$: to the right of the parallel to $g$ at that distance. This is true for $P$, $Q$, $R$, $S$, $T$ and $V$.\nCloser to $A$ than to $B$: on $A$'s side of the perpendicular bisector of $AB$. This is true for $P$, $Q$, $R$, $U$ and $V$.\n$P$, $Q$ and $R$ meet all three conditions."
+      },
+      "fr": {
+       "prompt": "On donne le cercle $k$ de centre $M$, la droite $g$ et les points $A$ et $B$. Lesquels des points marqués $P$ à $W$ sont à 1.5 carreau au plus du cercle $k$, à 3.5 carreaux au moins de $g$ et plus proches de $A$ que de $B$ ? Sélectionne-les tous.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Le cercle $k$ a un rayon de 3 carreaux. Un point est à 1.5 carreau au plus du cercle s'il est situé entre 1.5 et 4.5 carreaux de $M$ (une couronne). C'est le cas de $P$, $Q$, $R$, $S$, $T$, $U$ et $W$.\nÀ 3.5 carreaux au moins de $g$ : à droite de la parallèle à $g$ située à cette distance. C'est le cas de $P$, $Q$, $R$, $S$, $T$ et $V$.\nPlus proche de $A$ que de $B$ : du côté de $A$ par rapport à la médiatrice du segment $AB$. C'est le cas de $P$, $Q$, $R$, $U$ et $V$.\n$P$, $Q$ et $R$ remplissent les trois conditions."
+      },
+      "it": {
+       "prompt": "Sono dati la circonferenza $k$ di centro $M$, la retta $g$ e i punti $A$ e $B$. Quali dei punti segnati da $P$ a $W$ distano al massimo 1.5 quadretti dalla circonferenza $k$, almeno 3.5 quadretti da $g$ e sono più vicini ad $A$ che a $B$? Selezionali tutti.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "La circonferenza $k$ ha raggio 3 quadretti. Un punto dista al massimo 1.5 quadretti dalla circonferenza se si trova tra 1.5 e 4.5 quadretti da $M$ (una corona circolare). Vale per $P$, $Q$, $R$, $S$, $T$, $U$ e $W$.\nAlmeno 3.5 quadretti da $g$: a destra della parallela a $g$ a quella distanza. Vale per $P$, $Q$, $R$, $S$, $T$ e $V$.\nPiù vicino ad $A$ che a $B$: dalla parte di $A$ rispetto all'asse del segmento $AB$. Vale per $P$, $Q$, $R$, $U$ e $V$.\n$P$, $Q$ e $R$ soddisfano tutte e tre le condizioni."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2011-9-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 2,
+     "prompt": "Auf einer Schatzkarte ist ein Häuschen 10 m breit. Der Schatz liegt genau 20 m vom Weg $s$ entfernt, mindestens 25 m und höchstens 55 m vom Turm $Z$ entfernt und näher bei der Eiche $A$ als beim Brunnen $B$. An welchen der markierten Stellen $P$ bis $W$ kann der Schatz liegen? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 368 284\"><g id=\"grid\" stroke=\"#c4c4c4\" stroke-width=\"0.6\"><line x1=\"16\" y1=\"268\" x2=\"16\" y2=\"16\"/><line x1=\"44\" y1=\"268\" x2=\"44\" y2=\"16\"/><line x1=\"72\" y1=\"268\" x2=\"72\" y2=\"16\"/><line x1=\"100\" y1=\"268\" x2=\"100\" y2=\"16\"/><line x1=\"128\" y1=\"268\" x2=\"128\" y2=\"16\"/><line x1=\"156\" y1=\"268\" x2=\"156\" y2=\"16\"/><line x1=\"184\" y1=\"268\" x2=\"184\" y2=\"16\"/><line x1=\"212\" y1=\"268\" x2=\"212\" y2=\"16\"/><line x1=\"240\" y1=\"268\" x2=\"240\" y2=\"16\"/><line x1=\"268\" y1=\"268\" x2=\"268\" y2=\"16\"/><line x1=\"296\" y1=\"268\" x2=\"296\" y2=\"16\"/><line x1=\"324\" y1=\"268\" x2=\"324\" y2=\"16\"/><line x1=\"352\" y1=\"268\" x2=\"352\" y2=\"16\"/><line x1=\"16\" y1=\"268\" x2=\"352\" y2=\"268\"/><line x1=\"16\" y1=\"240\" x2=\"352\" y2=\"240\"/><line x1=\"16\" y1=\"212\" x2=\"352\" y2=\"212\"/><line x1=\"16\" y1=\"184\" x2=\"352\" y2=\"184\"/><line x1=\"16\" y1=\"156\" x2=\"352\" y2=\"156\"/><line x1=\"16\" y1=\"128\" x2=\"352\" y2=\"128\"/><line x1=\"16\" y1=\"100\" x2=\"352\" y2=\"100\"/><line x1=\"16\" y1=\"72\" x2=\"352\" y2=\"72\"/><line x1=\"16\" y1=\"44\" x2=\"352\" y2=\"44\"/><line x1=\"16\" y1=\"16\" x2=\"352\" y2=\"16\"/></g><rect id=\"frame\" x=\"16\" y=\"16\" width=\"336\" height=\"252\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\"/><line id=\"ln-s\" x1=\"16\" y1=\"156\" x2=\"352\" y2=\"156\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"324\" y=\"147\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">s</text><circle id=\"pt-Z\" cx=\"184\" cy=\"184\" r=\"3.5\" fill=\"currentColor\"/><text x=\"191\" y=\"198\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">Z</text><circle id=\"pt-A\" cx=\"100\" cy=\"44\" r=\"3.5\" fill=\"currentColor\"/><text x=\"93\" y=\"38\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">A</text><circle id=\"pt-B\" cx=\"296\" cy=\"184\" r=\"3.5\" fill=\"currentColor\"/><text x=\"303\" y=\"178\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"start\" fill=\"currentColor\">B</text><g data-choice=\"A\"><circle cx=\"72\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"65\" y=\"114\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">P</text></g><g data-choice=\"B\"><circle cx=\"128\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"135\" y=\"114\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">Q</text></g><g data-choice=\"C\"><circle cx=\"184\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"191\" y=\"94\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">R</text></g><g data-choice=\"D\"><circle cx=\"240\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"247\" y=\"94\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">S</text></g><g data-choice=\"E\"><circle cx=\"184\" cy=\"44\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"191\" y=\"38\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">T</text></g><g data-choice=\"F\"><circle cx=\"72\" cy=\"212\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"79\" y=\"206\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">U</text></g><g data-choice=\"G\"><circle cx=\"296\" cy=\"212\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"303\" y=\"226\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">V</text></g><g data-choice=\"H\"><circle cx=\"156\" cy=\"212\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"149\" y=\"226\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">W</text></g></svg>",
+     "options": [
+      "$P$",
+      "$Q$",
+      "$R$",
+      "$S$",
+      "$T$",
+      "$U$",
+      "$V$",
+      "$W$"
+     ],
+     "correctOptions": [
+      0,
+      1,
+      2,
+      5
+     ],
+     "explanation": "Genau 20 m vom Weg entfernt: auf einer der beiden Parallelen zu $s$ im Abstand von 2 Häuschen. Dort liegen $P$, $Q$, $R$, $S$, $U$, $V$ und $W$.\nZwischen 25 m und 55 m von $Z$ entfernt: im Kreisring um $Z$ mit den Radien 2.5 und 5.5 Häuschen. Das gilt für $P$, $Q$, $R$, $S$, $T$, $U$ und $V$.\nNäher bei $A$ als bei $B$: auf der Seite von $A$ der Mittelsenkrechten von $AB$. Das gilt für $P$, $Q$, $R$, $T$ und $U$.\nAlle drei Bedingungen erfüllen $P$, $Q$, $R$ und $U$.",
+     "skills": [
+      "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2011 · 9"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "On a treasure map one square is 10 m wide. The treasure lies exactly 20 m from the path $s$, at least 25 m and at most 55 m from the tower $Z$, and closer to the oak $A$ than to the well $B$. At which of the marked spots $P$ to $W$ can the treasure lie? Select all of them.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Exactly 20 m from the path: on one of the two parallels to $s$ at a distance of 2 squares. On them lie $P$, $Q$, $R$, $S$, $U$, $V$ and $W$.\nBetween 25 m and 55 m from $Z$: in the ring around $Z$ with radii of 2.5 and 5.5 squares. This is true for $P$, $Q$, $R$, $S$, $T$, $U$ and $V$.\nCloser to $A$ than to $B$: on $A$'s side of the perpendicular bisector of $AB$. This is true for $P$, $Q$, $R$, $T$ and $U$.\n$P$, $Q$, $R$ and $U$ meet all three conditions."
+      },
+      "fr": {
+       "prompt": "Sur une carte au trésor, un carreau mesure 10 m de côté. Le trésor se trouve exactement à 20 m du chemin $s$, à 25 m au moins et à 55 m au plus de la tour $Z$, et plus près du chêne $A$ que de la fontaine $B$. À quels endroits marqués $P$ à $W$ le trésor peut-il se trouver ? Sélectionne-les tous.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Exactement à 20 m du chemin : sur l'une des deux parallèles à $s$ situées à 2 carreaux. S'y trouvent : $P$, $Q$, $R$, $S$, $U$, $V$ et $W$.\nEntre 25 m et 55 m de $Z$ : dans la couronne de centre $Z$ et de rayons 2.5 et 5.5 carreaux. C'est le cas de $P$, $Q$, $R$, $S$, $T$, $U$ et $V$.\nPlus près de $A$ que de $B$ : du côté de $A$ par rapport à la médiatrice du segment $AB$. C'est le cas de $P$, $Q$, $R$, $T$ et $U$.\n$P$, $Q$, $R$ et $U$ remplissent les trois conditions."
+      },
+      "it": {
+       "prompt": "Su una mappa del tesoro un quadretto è largo 10 m. Il tesoro si trova esattamente a 20 m dal sentiero $s$, ad almeno 25 m e al massimo a 55 m dalla torre $Z$, e più vicino alla quercia $A$ che alla fontana $B$. In quali dei punti segnati da $P$ a $W$ può trovarsi il tesoro? Selezionali tutti.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Esattamente a 20 m dal sentiero: su una delle due parallele a $s$ a distanza di 2 quadretti. Vi si trovano $P$, $Q$, $R$, $S$, $U$, $V$ e $W$.\nTra 25 m e 55 m da $Z$: nella corona circolare di centro $Z$ con raggi 2.5 e 5.5 quadretti. Vale per $P$, $Q$, $R$, $S$, $T$, $U$ e $V$.\nPiù vicino ad $A$ che a $B$: dalla parte di $A$ rispetto all'asse del segmento $AB$. Vale per $P$, $Q$, $R$, $T$ e $U$.\n$P$, $Q$, $R$ e $U$ soddisfano tutte e tre le condizioni."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2013-9-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 3,
+     "prompt": "Mia steht bei $M$ und Noé bei $N$ am Ufer $u$ eines Sees. Ein Häuschen ist 1 m breit. Mia kann ihre Angel höchstens 6 m weit auswerfen. Näher als 2.5 m am Ufer und in der gestrichelten Badezone darf nicht geangelt werden. Ausserdem soll die Stelle näher bei Mia als bei Noé liegen. An welchen der markierten Stellen $P$ bis $W$ darf Mia angeln? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 368 284\"><g id=\"grid\" stroke=\"#c4c4c4\" stroke-width=\"0.6\"><line x1=\"16\" y1=\"268\" x2=\"16\" y2=\"16\"/><line x1=\"44\" y1=\"268\" x2=\"44\" y2=\"16\"/><line x1=\"72\" y1=\"268\" x2=\"72\" y2=\"16\"/><line x1=\"100\" y1=\"268\" x2=\"100\" y2=\"16\"/><line x1=\"128\" y1=\"268\" x2=\"128\" y2=\"16\"/><line x1=\"156\" y1=\"268\" x2=\"156\" y2=\"16\"/><line x1=\"184\" y1=\"268\" x2=\"184\" y2=\"16\"/><line x1=\"212\" y1=\"268\" x2=\"212\" y2=\"16\"/><line x1=\"240\" y1=\"268\" x2=\"240\" y2=\"16\"/><line x1=\"268\" y1=\"268\" x2=\"268\" y2=\"16\"/><line x1=\"296\" y1=\"268\" x2=\"296\" y2=\"16\"/><line x1=\"324\" y1=\"268\" x2=\"324\" y2=\"16\"/><line x1=\"352\" y1=\"268\" x2=\"352\" y2=\"16\"/><line x1=\"16\" y1=\"268\" x2=\"352\" y2=\"268\"/><line x1=\"16\" y1=\"240\" x2=\"352\" y2=\"240\"/><line x1=\"16\" y1=\"212\" x2=\"352\" y2=\"212\"/><line x1=\"16\" y1=\"184\" x2=\"352\" y2=\"184\"/><line x1=\"16\" y1=\"156\" x2=\"352\" y2=\"156\"/><line x1=\"16\" y1=\"128\" x2=\"352\" y2=\"128\"/><line x1=\"16\" y1=\"100\" x2=\"352\" y2=\"100\"/><line x1=\"16\" y1=\"72\" x2=\"352\" y2=\"72\"/><line x1=\"16\" y1=\"44\" x2=\"352\" y2=\"44\"/><line x1=\"16\" y1=\"16\" x2=\"352\" y2=\"16\"/></g><rect id=\"frame\" x=\"16\" y=\"16\" width=\"336\" height=\"252\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\"/><rect id=\"re-zone\" x=\"128\" y=\"100\" width=\"56\" height=\"56\" fill=\"#e9e9e9\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-dasharray=\"5 3\"/><line id=\"ln-u\" x1=\"16\" y1=\"240\" x2=\"352\" y2=\"240\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"44\" y=\"257\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">u</text><circle id=\"pt-M\" cx=\"156\" cy=\"240\" r=\"3.5\" fill=\"currentColor\"/><text x=\"156\" y=\"257\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">M</text><circle id=\"pt-N\" cx=\"324\" cy=\"240\" r=\"3.5\" fill=\"currentColor\"/><text x=\"324\" y=\"257\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">N</text><g data-choice=\"A\"><circle cx=\"44\" cy=\"156\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"51\" y=\"150\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">P</text></g><g data-choice=\"B\"><circle cx=\"100\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"107\" y=\"94\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">Q</text></g><g data-choice=\"C\"><circle cx=\"156\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"163\" y=\"122\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">R</text></g><g data-choice=\"D\"><circle cx=\"212\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"219\" y=\"122\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">S</text></g><g data-choice=\"E\"><circle cx=\"268\" cy=\"156\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"275\" y=\"150\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">T</text></g><g data-choice=\"F\"><circle cx=\"100\" cy=\"44\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"107\" y=\"38\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">U</text></g><g data-choice=\"G\"><circle cx=\"212\" cy=\"184\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"219\" y=\"178\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">V</text></g><g data-choice=\"H\"><circle cx=\"324\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"331\" y=\"94\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">W</text></g></svg>",
+     "options": [
+      "$P$",
+      "$Q$",
+      "$R$",
+      "$S$",
+      "$T$",
+      "$U$",
+      "$V$",
+      "$W$"
+     ],
+     "correctOptions": [
+      0,
+      1,
+      3
+     ],
+     "explanation": "Höchstens 6 m von $M$ entfernt: im Kreis um $M$ mit Radius 6 Häuschen. Das gilt für $P$, $Q$, $R$, $S$, $T$ und $V$.\nMindestens 2.5 m vom Ufer entfernt: oberhalb der Parallele zu $u$ in diesem Abstand. Das gilt für $P$, $Q$, $R$, $S$, $T$, $U$ und $W$.\nAusserhalb der Badezone liegen $P$, $Q$, $S$, $T$, $U$, $V$ und $W$.\nNäher bei $M$ als bei $N$: links der Mittelsenkrechten von $MN$. Das gilt für $P$, $Q$, $R$, $S$, $U$ und $V$.\nAlle vier Bedingungen erfüllen $P$, $Q$ und $S$.",
+     "skills": [
+      "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2013 · 9"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "Mia stands at $M$ and Noé at $N$ on the shore $u$ of a lake. One square is 1 m wide. Mia can cast her line at most 6 m. Fishing is not allowed closer than 2.5 m to the shore or in the dashed bathing zone. The spot should also be closer to Mia than to Noé. At which of the marked spots $P$ to $W$ may Mia fish? Select all of them.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "At most 6 m from $M$: inside the circle around $M$ with a radius of 6 squares. This is true for $P$, $Q$, $R$, $S$, $T$ and $V$.\nAt least 2.5 m from the shore: above the parallel to $u$ at that distance. This is true for $P$, $Q$, $R$, $S$, $T$, $U$ and $W$.\nOutside the bathing zone are $P$, $Q$, $S$, $T$, $U$, $V$ and $W$.\nCloser to $M$ than to $N$: to the left of the perpendicular bisector of $MN$. This is true for $P$, $Q$, $R$, $S$, $U$ and $V$.\n$P$, $Q$ and $S$ meet all four conditions."
+      },
+      "fr": {
+       "prompt": "Mia se tient en $M$ et Noé en $N$, au bord $u$ d'un lac. Un carreau mesure 1 m de côté. Mia peut lancer sa ligne à 6 m au plus. Il est interdit de pêcher à moins de 2.5 m du bord et dans la zone de baignade en pointillé. De plus, l'endroit doit être plus proche de Mia que de Noé. À quels endroits marqués $P$ à $W$ Mia peut-elle pêcher ? Sélectionne-les tous.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "À 6 m au plus de $M$ : dans le cercle de centre $M$ et de rayon 6 carreaux. C'est le cas de $P$, $Q$, $R$, $S$, $T$ et $V$.\nÀ 2.5 m au moins du bord : au-dessus de la parallèle à $u$ située à cette distance. C'est le cas de $P$, $Q$, $R$, $S$, $T$, $U$ et $W$.\nSont en dehors de la zone de baignade : $P$, $Q$, $S$, $T$, $U$, $V$ et $W$.\nPlus proche de $M$ que de $N$ : à gauche de la médiatrice du segment $MN$. C'est le cas de $P$, $Q$, $R$, $S$, $U$ et $V$.\n$P$, $Q$ et $S$ remplissent les quatre conditions."
+      },
+      "it": {
+       "prompt": "Mia si trova in $M$ e Noé in $N$, sulla riva $u$ di un lago. Un quadretto è largo 1 m. Mia può lanciare la lenza al massimo a 6 m. Non si può pescare a meno di 2.5 m dalla riva né nella zona balneare tratteggiata. Inoltre il punto deve essere più vicino a Mia che a Noé. In quali dei punti segnati da $P$ a $W$ Mia può pescare? Selezionali tutti.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Al massimo 6 m da $M$: dentro il cerchio di centro $M$ e raggio 6 quadretti. Vale per $P$, $Q$, $R$, $S$, $T$ e $V$.\nAlmeno 2.5 m dalla riva: sopra la parallela a $u$ a quella distanza. Vale per $P$, $Q$, $R$, $S$, $T$, $U$ e $W$.\nFuori dalla zona balneare si trovano $P$, $Q$, $S$, $T$, $U$, $V$ e $W$.\nPiù vicino a $M$ che a $N$: a sinistra dell'asse del segmento $MN$. Vale per $P$, $Q$, $R$, $S$, $U$ e $V$.\n$P$, $Q$ e $S$ soddisfano tutte e quattro le condizioni."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2023-5b-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 4,
+     "prompt": "Ein Mähroboter hängt an einem 9 m langen Kabel, das am Pfosten $A$ befestigt ist. Das Haus $H$ steht im Weg: Das Kabel kann nicht durch das Haus, es legt sich um die Hausecken. Ein Häuschen ist 1 m breit. Welche der markierten Stellen $P$ bis $W$ kann der Roboter erreichen? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 396 284\"><g id=\"grid\" stroke=\"#c4c4c4\" stroke-width=\"0.6\"><line x1=\"16\" y1=\"268\" x2=\"16\" y2=\"16\"/><line x1=\"44\" y1=\"268\" x2=\"44\" y2=\"16\"/><line x1=\"72\" y1=\"268\" x2=\"72\" y2=\"16\"/><line x1=\"100\" y1=\"268\" x2=\"100\" y2=\"16\"/><line x1=\"128\" y1=\"268\" x2=\"128\" y2=\"16\"/><line x1=\"156\" y1=\"268\" x2=\"156\" y2=\"16\"/><line x1=\"184\" y1=\"268\" x2=\"184\" y2=\"16\"/><line x1=\"212\" y1=\"268\" x2=\"212\" y2=\"16\"/><line x1=\"240\" y1=\"268\" x2=\"240\" y2=\"16\"/><line x1=\"268\" y1=\"268\" x2=\"268\" y2=\"16\"/><line x1=\"296\" y1=\"268\" x2=\"296\" y2=\"16\"/><line x1=\"324\" y1=\"268\" x2=\"324\" y2=\"16\"/><line x1=\"352\" y1=\"268\" x2=\"352\" y2=\"16\"/><line x1=\"380\" y1=\"268\" x2=\"380\" y2=\"16\"/><line x1=\"16\" y1=\"268\" x2=\"380\" y2=\"268\"/><line x1=\"16\" y1=\"240\" x2=\"380\" y2=\"240\"/><line x1=\"16\" y1=\"212\" x2=\"380\" y2=\"212\"/><line x1=\"16\" y1=\"184\" x2=\"380\" y2=\"184\"/><line x1=\"16\" y1=\"156\" x2=\"380\" y2=\"156\"/><line x1=\"16\" y1=\"128\" x2=\"380\" y2=\"128\"/><line x1=\"16\" y1=\"100\" x2=\"380\" y2=\"100\"/><line x1=\"16\" y1=\"72\" x2=\"380\" y2=\"72\"/><line x1=\"16\" y1=\"44\" x2=\"380\" y2=\"44\"/><line x1=\"16\" y1=\"16\" x2=\"380\" y2=\"16\"/></g><rect id=\"frame\" x=\"16\" y=\"16\" width=\"364\" height=\"252\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\"/><rect id=\"re-H\" x=\"156\" y=\"100\" width=\"112\" height=\"84\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"212\" y=\"147\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">H</text><circle id=\"pt-A\" cx=\"72\" cy=\"72\" r=\"3.5\" fill=\"currentColor\"/><text x=\"65\" y=\"66\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">A</text><g data-choice=\"A\"><circle cx=\"44\" cy=\"184\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"51\" y=\"178\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">P</text></g><g data-choice=\"B\"><circle cx=\"184\" cy=\"240\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"191\" y=\"234\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">Q</text></g><g data-choice=\"C\"><circle cx=\"296\" cy=\"240\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"303\" y=\"234\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">R</text></g><g data-choice=\"D\"><circle cx=\"296\" cy=\"184\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"303\" y=\"178\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">S</text></g><g data-choice=\"E\"><circle cx=\"296\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"303\" y=\"122\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">T</text></g><g data-choice=\"F\"><circle cx=\"240\" cy=\"44\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"247\" y=\"38\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">U</text></g><g data-choice=\"G\"><circle cx=\"352\" cy=\"44\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"345\" y=\"38\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">V</text></g><g data-choice=\"H\"><circle cx=\"352\" cy=\"100\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"345\" y=\"94\" font-size=\"13\" font-style=\"italic\" text-anchor=\"end\" fill=\"currentColor\">W</text></g></svg>",
+     "options": [
+      "$P$",
+      "$Q$",
+      "$R$",
+      "$S$",
+      "$T$",
+      "$U$",
+      "$V$",
+      "$W$"
+     ],
+     "correctOptions": [
+      0,
+      1,
+      4,
+      5
+     ],
+     "explanation": "Wo das Kabel gerade vom Pfosten zur Stelle laufen kann, zählt der Abstand zu $A$: höchstens 9 Häuschen.\nHinter dem Haus muss das Kabel um eine Hausecke. Bis zur Ecke oben rechts braucht es schon gut 7 m, von dort bleiben knapp 2 m; um die Ecke unten links und weiter um das Haus reicht es noch weniger weit.\nErreichbar sind $P$, $Q$, $T$ und $U$. Zu $R$, $S$, $V$ und $W$ reicht das Kabel nicht.",
+     "skills": [
+      "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2023 · 5b"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "A robot mower is attached to a 9 m cable fixed to the post $A$. The house $H$ is in the way: the cable cannot pass through the house, it bends round the corners of the house. One square is 1 m wide. Which of the marked spots $P$ to $W$ can the robot reach? Select all of them.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Where the cable can run straight from the post to the spot, the distance to $A$ counts: at most 9 squares.\nBehind the house the cable has to go round a corner of the house. Up to the top right corner it already needs a good 7 m, leaving just under 2 m from there; round the bottom left corner and on round the house it reaches even less far.\nThe robot can reach $P$, $Q$, $T$ and $U$. The cable is too short for $R$, $S$, $V$ and $W$."
+      },
+      "fr": {
+       "prompt": "Un robot tondeuse est relié à un câble de 9 m fixé au piquet $A$. La maison $H$ fait obstacle : le câble ne peut pas traverser la maison, il contourne ses angles. Un carreau mesure 1 m de côté. Lesquels des endroits marqués $P$ à $W$ le robot peut-il atteindre ? Sélectionne-les tous.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Là où le câble peut aller tout droit du piquet à l'endroit, c'est la distance à $A$ qui compte : 9 carreaux au plus.\nDerrière la maison, le câble doit contourner un angle de la maison. Jusqu'à l'angle en haut à droite, il faut déjà un peu plus de 7 m, il en reste un peu moins de 2 à partir de là ; par l'angle en bas à gauche, puis le long de la maison, il va encore moins loin.\nLe robot peut atteindre $P$, $Q$, $T$ et $U$. Le câble est trop court pour $R$, $S$, $V$ et $W$."
+      },
+      "it": {
+       "prompt": "Un robot tagliaerba è attaccato a un cavo di 9 m fissato al palo $A$. La casa $H$ fa da ostacolo: il cavo non può attraversare la casa, gira attorno ai suoi spigoli. Un quadretto è largo 1 m. Quali dei punti segnati da $P$ a $W$ può raggiungere il robot? Selezionali tutti.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Dove il cavo può andare dritto dal palo al punto, conta la distanza da $A$: al massimo 9 quadretti.\nDietro la casa il cavo deve girare attorno a uno spigolo della casa. Fino allo spigolo in alto a destra servono già poco più di 7 m, da lì ne restano poco meno di 2; attorno allo spigolo in basso a sinistra e poi lungo la casa arriva ancora meno lontano.\nIl robot può raggiungere $P$, $Q$, $T$ e $U$. Il cavo è troppo corto per $R$, $S$, $V$ e $W$."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2014-9-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 5,
+     "prompt": "Ein Pony ist mit einem 7 m langen Seil am Pfosten $A$ angebunden. Die Mauer $m$ kann es nicht überqueren; das Seil kann sich aber um die beiden Mauerenden legen. Ein Häuschen ist 1 m breit. Welche der markierten Stellen $P$ bis $W$ kann das Pony erreichen? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 368 284\"><g id=\"grid\" stroke=\"#c4c4c4\" stroke-width=\"0.6\"><line x1=\"16\" y1=\"268\" x2=\"16\" y2=\"16\"/><line x1=\"44\" y1=\"268\" x2=\"44\" y2=\"16\"/><line x1=\"72\" y1=\"268\" x2=\"72\" y2=\"16\"/><line x1=\"100\" y1=\"268\" x2=\"100\" y2=\"16\"/><line x1=\"128\" y1=\"268\" x2=\"128\" y2=\"16\"/><line x1=\"156\" y1=\"268\" x2=\"156\" y2=\"16\"/><line x1=\"184\" y1=\"268\" x2=\"184\" y2=\"16\"/><line x1=\"212\" y1=\"268\" x2=\"212\" y2=\"16\"/><line x1=\"240\" y1=\"268\" x2=\"240\" y2=\"16\"/><line x1=\"268\" y1=\"268\" x2=\"268\" y2=\"16\"/><line x1=\"296\" y1=\"268\" x2=\"296\" y2=\"16\"/><line x1=\"324\" y1=\"268\" x2=\"324\" y2=\"16\"/><line x1=\"352\" y1=\"268\" x2=\"352\" y2=\"16\"/><line x1=\"16\" y1=\"268\" x2=\"352\" y2=\"268\"/><line x1=\"16\" y1=\"240\" x2=\"352\" y2=\"240\"/><line x1=\"16\" y1=\"212\" x2=\"352\" y2=\"212\"/><line x1=\"16\" y1=\"184\" x2=\"352\" y2=\"184\"/><line x1=\"16\" y1=\"156\" x2=\"352\" y2=\"156\"/><line x1=\"16\" y1=\"128\" x2=\"352\" y2=\"128\"/><line x1=\"16\" y1=\"100\" x2=\"352\" y2=\"100\"/><line x1=\"16\" y1=\"72\" x2=\"352\" y2=\"72\"/><line x1=\"16\" y1=\"44\" x2=\"352\" y2=\"44\"/><line x1=\"16\" y1=\"16\" x2=\"352\" y2=\"16\"/></g><rect id=\"frame\" x=\"16\" y=\"16\" width=\"336\" height=\"252\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\"/><line id=\"wa-m\" x1=\"212\" y1=\"212\" x2=\"212\" y2=\"72\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"butt\"/><text x=\"203\" y=\"146\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">m</text><circle id=\"pt-A\" cx=\"100\" cy=\"156\" r=\"3.5\" fill=\"currentColor\"/><text x=\"93\" y=\"150\" font-size=\"13\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">A</text><g data-choice=\"A\"><circle cx=\"240\" cy=\"72\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"247\" y=\"66\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">P</text></g><g data-choice=\"B\"><circle cx=\"268\" cy=\"128\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"275\" y=\"122\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">Q</text></g><g data-choice=\"C\"><circle cx=\"268\" cy=\"212\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"275\" y=\"206\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">R</text></g><g data-choice=\"D\"><circle cx=\"324\" cy=\"184\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"331\" y=\"178\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">S</text></g><g data-choice=\"E\"><circle cx=\"156\" cy=\"44\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"163\" y=\"38\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">T</text></g><g data-choice=\"F\"><circle cx=\"296\" cy=\"44\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"303\" y=\"38\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">U</text></g><g data-choice=\"G\"><circle cx=\"44\" cy=\"212\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"51\" y=\"206\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">V</text></g><g data-choice=\"H\"><circle cx=\"324\" cy=\"240\" r=\"5\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"2\"/><text x=\"331\" y=\"234\" font-size=\"13\" font-style=\"italic\" text-anchor=\"start\" fill=\"currentColor\">W</text></g></svg>",
+     "options": [
+      "$P$",
+      "$Q$",
+      "$R$",
+      "$S$",
+      "$T$",
+      "$U$",
+      "$V$",
+      "$W$"
+     ],
+     "correctOptions": [
+      0,
+      2,
+      4,
+      6
+     ],
+     "explanation": "Wo das Seil gerade vom Pfosten zur Stelle laufen kann, zählt der Abstand zu $A$: höchstens 7 Häuschen.\nHinter der Mauer läuft das Seil um ein Mauerende. Bis zum oberen Ende braucht es 5 m, von dort bleiben 2 m; bis zum unteren Ende braucht es rund 4.5 m, von dort bleiben rund 2.5 m.\nErreichbar sind $P$, $R$, $T$ und $V$. Zu $Q$, $S$, $U$ und $W$ reicht das Seil nicht.",
+     "skills": [
+      "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2014 · 9"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "A pony is tied to the post $A$ with a 7 m rope. It cannot cross the wall $m$, but the rope can bend round the two ends of the wall. One square is 1 m wide. Which of the marked spots $P$ to $W$ can the pony reach? Select all of them.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Where the rope can run straight from the post to the spot, the distance to $A$ counts: at most 7 squares.\nBehind the wall the rope runs round an end of the wall. Up to the top end it needs 5 m, leaving 2 m from there; up to the bottom end it needs about 4.5 m, leaving about 2.5 m.\nThe pony can reach $P$, $R$, $T$ and $V$. The rope is too short for $Q$, $S$, $U$ and $W$."
+      },
+      "fr": {
+       "prompt": "Un poney est attaché au piquet $A$ par une corde de 7 m. Il ne peut pas franchir le mur $m$, mais la corde peut contourner les deux extrémités du mur. Un carreau mesure 1 m de côté. Lesquels des endroits marqués $P$ à $W$ le poney peut-il atteindre ? Sélectionne-les tous.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Là où la corde peut aller tout droit du piquet à l'endroit, c'est la distance à $A$ qui compte : 7 carreaux au plus.\nDerrière le mur, la corde contourne une extrémité du mur. Jusqu'à l'extrémité du haut, il faut 5 m, il en reste 2 à partir de là ; jusqu'à celle du bas, il faut environ 4.5 m, il en reste environ 2.5.\nLe poney peut atteindre $P$, $R$, $T$ et $V$. La corde est trop courte pour $Q$, $S$, $U$ et $W$."
+      },
+      "it": {
+       "prompt": "Un pony è legato al palo $A$ con una corda di 7 m. Non può superare il muro $m$, ma la corda può girare attorno alle due estremità del muro. Un quadretto è largo 1 m. Quali dei punti segnati da $P$ a $W$ può raggiungere il pony? Selezionali tutti.",
+       "options": [
+        "$P$",
+        "$Q$",
+        "$R$",
+        "$S$",
+        "$T$",
+        "$U$",
+        "$V$",
+        "$W$"
+       ],
+       "explanation": "Dove la corda può andare dritta dal palo al punto, conta la distanza da $A$: al massimo 7 quadretti.\nDietro il muro la corda gira attorno a un'estremità del muro. Fino all'estremità in alto servono 5 m, da lì ne restano 2; fino a quella in basso servono circa 4.5 m, da lì ne restano circa 2.5.\nIl pony può raggiungere $P$, $R$, $T$ e $V$. La corda è troppo corta per $Q$, $S$, $U$ e $W$."
+      }
+     }
+    }
+   ]
+  },
+  {
+   "publicLessonId": "geometrie-koerper-ansichten-und-netze--darstellen--zap-4",
+   "publish": false,
+   "lesson": {
+    "title": "Darstellen und Zerlegen · ZAP · Teil 4",
+    "titles": {
+     "de": "Darstellen und Zerlegen · ZAP · Teil 4",
+     "en": "Representing and decomposing · ZAP · Part 4",
+     "fr": "Représenter et décomposer · ZAP · Partie 4",
+     "it": "Rappresentare e scomporre · ZAP · Parte 4"
+    },
+    "objective": "Geometrische Körper erkennen, aus verschiedenen Ansichten betrachten und ihre Netze deuten.",
+    "description": "Geometrische Körper erkennen, aus verschiedenen Ansichten betrachten und ihre Netze deuten.",
+    "subjectId": "mathematics",
+    "topicId": "geometrie",
+    "unitId": "geometrie-koerper-ansichten-und-netze",
+    "gradeLevel": "grade_6_primary",
+    "difficulty": "practice",
+    "estimatedMinutes": 15,
+    "language": "de",
+    "order": 534,
+    "extension": true,
+    "requiresPoints": [],
+    "tags": [
+     "zap"
+    ]
+   },
+   "exercises": [
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2009-9-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 1,
+     "prompt": "Der Körper besteht aus zehn gleich grossen Würfeln $A$ bis $J$; jeder Würfel trägt seinen Buchstaben, keiner ist versteckt. Der ganze Körper wird in Farbe getaucht: Alle Aussenflächen werden farbig, auch die Unterseite. Welche Würfel haben genau vier farbige Flächen? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 298.2 262\"><polygon points=\"104.07,40 149.1,66 104.07,92 59.03,66\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"149.1,118 104.07,144 104.07,92 149.1,66\" fill=\"#d9d9d9\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"59.03,66 104.07,92 59.03,118 14,92\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"14,144 59.03,170 59.03,118 14,92\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"104.07,92 149.1,118 104.07,144 59.03,118\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"59.03,170 104.07,196 104.07,144 59.03,118\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"104.07,196 149.1,222 149.1,170 104.07,144\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"284.2,196 239.17,222 239.17,170 284.2,144\" fill=\"#d9d9d9\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"149.1,66 194.13,92 149.1,118 104.07,92\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"104.07,144 149.1,170 149.1,118 104.07,92\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"284.2,144 239.17,170 239.17,118 284.2,92\" fill=\"#d9d9d9\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"239.17,222 194.13,248 194.13,196 239.17,170\" fill=\"#d9d9d9\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"149.1,222 194.13,248 194.13,196 149.1,170\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"239.17,14 284.2,40 239.17,66 194.13,40\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"284.2,92 239.17,118 239.17,66 284.2,40\" fill=\"#d9d9d9\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"194.13,92 239.17,118 239.17,66 194.13,40\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"194.13,92 239.17,118 194.13,144 149.1,118\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"239.17,170 194.13,196 194.13,144 239.17,118\" fill=\"#d9d9d9\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><polygon points=\"149.1,170 194.13,196 194.13,144 149.1,118\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/><g data-choice=\"A\" id=\"cube-0-0-0\"><circle cx=\"104.07\" cy=\"66\" r=\"11\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"104.07\" y=\"70\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">A</text></g><g data-choice=\"B\" id=\"cube-0-1-0\"><circle cx=\"59.03\" cy=\"92\" r=\"11\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"59.03\" y=\"96\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">B</text></g><g data-choice=\"C\" id=\"cube-1-1-0\"><circle cx=\"81.55\" cy=\"157\" r=\"11\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"81.55\" y=\"161\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">C</text></g><g data-choice=\"D\" id=\"cube-2-1-0\"><circle cx=\"126.58\" cy=\"183\" r=\"11\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"126.58\" y=\"187\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">D</text></g><g data-choice=\"E\" id=\"cube-2-1-1\"><circle cx=\"149.1\" cy=\"92\" r=\"11\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"149.1\" y=\"96\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">E</text></g><g data-choice=\"F\" id=\"cube-3-0-0\"><circle cx=\"261.68\" cy=\"183\" r=\"11\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"261.68\" y=\"187\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">F</text></g><g data-choice=\"G\" id=\"cube-3-0-1\"><circle cx=\"261.68\" cy=\"131\" r=\"11\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"261.68\" y=\"135\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">G</text></g><g data-choice=\"H\" id=\"cube-3-0-2\"><circle cx=\"239.17\" cy=\"40\" r=\"11\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"239.17\" y=\"44\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">H</text></g><g data-choice=\"I\" id=\"cube-3-1-0\"><circle cx=\"216.65\" cy=\"209\" r=\"11\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"216.65\" y=\"213\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">I</text></g><g data-choice=\"J\" id=\"cube-3-1-1\"><circle cx=\"194.13\" cy=\"118\" r=\"11\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"194.13\" y=\"122\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">J</text></g></svg>",
+     "options": [
+      "$A$",
+      "$B$",
+      "$C$",
+      "$D$",
+      "$E$",
+      "$F$",
+      "$G$",
+      "$H$",
+      "$I$",
+      "$J$"
+     ],
+     "correctOptions": [
+      1,
+      2,
+      4,
+      5
+     ],
+     "explanation": "Eine Würfelfläche bleibt ohne Farbe, wenn sie an einem anderen Würfel anliegt. Zähle bei jedem Würfel, wie viele Würfel ihn berühren (daneben, davor, dahinter, darüber oder darunter).\nEin Würfel, der zwei Würfel berührt, hat $6 - 2 = 4$ farbige Flächen: $B$, $C$, $E$ und $F$.\n$D$, $G$, $I$ und $J$ berühren drei Würfel und haben drei farbige Flächen; $A$ und $H$ berühren nur einen Würfel und haben fünf.",
+     "skills": [
+      "geometrie-koerper-ansichten-und-netze--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2009 · 9"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "The solid is made of ten cubes of the same size, $A$ to $J$; each cube carries its letter and none is hidden. The whole solid is dipped in paint: every outer face is coloured, the underside too. Which cubes have exactly four coloured faces? Select all of them.",
+       "options": [
+        "$A$",
+        "$B$",
+        "$C$",
+        "$D$",
+        "$E$",
+        "$F$",
+        "$G$",
+        "$H$",
+        "$I$",
+        "$J$"
+       ],
+       "explanation": "A face of a cube stays unpainted when it lies against another cube. For each cube, count how many cubes touch it (beside, in front, behind, above or below).\nA cube that touches two cubes has $6 - 2 = 4$ coloured faces: $B$, $C$, $E$ and $F$.\n$D$, $G$, $I$ and $J$ touch three cubes and have three coloured faces; $A$ and $H$ touch only one cube and have five."
+      },
+      "fr": {
+       "prompt": "Le solide est formé de dix cubes de même taille, $A$ à $J$ ; chaque cube porte sa lettre et aucun n'est caché. On plonge le solide entier dans de la peinture : toutes les faces extérieures sont colorées, celles du dessous aussi. Quels cubes ont exactement quatre faces colorées ? Sélectionne-les tous.",
+       "options": [
+        "$A$",
+        "$B$",
+        "$C$",
+        "$D$",
+        "$E$",
+        "$F$",
+        "$G$",
+        "$H$",
+        "$I$",
+        "$J$"
+       ],
+       "explanation": "Une face d'un cube reste sans peinture si elle touche un autre cube. Pour chaque cube, compte combien de cubes le touchent (à côté, devant, derrière, au-dessus ou au-dessous).\nUn cube qui touche deux cubes a $6 - 2 = 4$ faces colorées : $B$, $C$, $E$ et $F$.\n$D$, $G$, $I$ et $J$ touchent trois cubes et ont trois faces colorées ; $A$ et $H$ ne touchent qu'un cube et en ont cinq."
+      },
+      "it": {
+       "prompt": "Il solido è formato da dieci cubetti uguali, da $A$ a $J$; ogni cubetto porta la sua lettera e nessuno è nascosto. Il solido intero viene immerso nella vernice: tutte le facce esterne si colorano, anche quelle di sotto. Quali cubetti hanno esattamente quattro facce colorate? Selezionali tutti.",
+       "options": [
+        "$A$",
+        "$B$",
+        "$C$",
+        "$D$",
+        "$E$",
+        "$F$",
+        "$G$",
+        "$H$",
+        "$I$",
+        "$J$"
+       ],
+       "explanation": "Una faccia di un cubetto resta senza vernice se è appoggiata a un altro cubetto. Per ogni cubetto conta quanti cubetti lo toccano (di fianco, davanti, dietro, sopra o sotto).\nUn cubetto che ne tocca due ha $6 - 2 = 4$ facce colorate: $B$, $C$, $E$ e $F$.\n$D$, $G$, $I$ e $J$ toccano tre cubetti e hanno tre facce colorate; $A$ e $H$ toccano un solo cubetto e ne hanno cinque."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2023-6b-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 2,
+     "prompt": "Aus dem Netz lässt sich ein Quader falten. Zwei Kanten sind dick gezeichnet und heissen $k$ und $m$. Welche beiden nummerierten Kanten treffen beim Falten auf $k$ und auf $m$? Wähle beide aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 376 279\"><polygon id=\"face-front\" points=\"18,261 99,261 99,153 18,153\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-right\" points=\"99,261 153,261 153,153 99,153\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-top\" points=\"99,72 99,153 153,153 153,72\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-back\" points=\"261,72 153,72 153,153 261,153\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-left\" points=\"261,18 153,18 153,72 261,72\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-bottom\" points=\"261,18 261,72 342,72 342,18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><line x1=\"261\" y1=\"18\" x2=\"153\" y2=\"18\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"342\" y1=\"18\" x2=\"261\" y2=\"18\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"342\" y1=\"72\" x2=\"342\" y2=\"18\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"261\" y1=\"72\" x2=\"342\" y2=\"72\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"261\" y1=\"153\" x2=\"261\" y2=\"72\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"153\" y1=\"153\" x2=\"261\" y2=\"153\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"153\" y1=\"261\" x2=\"153\" y2=\"153\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"99\" y1=\"261\" x2=\"153\" y2=\"261\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"18\" y1=\"261\" x2=\"99\" y2=\"261\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"18\" y1=\"153\" x2=\"18\" y2=\"261\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"99\" y1=\"153\" x2=\"18\" y2=\"153\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"99\" y1=\"72\" x2=\"99\" y2=\"153\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"153\" y1=\"72\" x2=\"99\" y2=\"72\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"153\" y1=\"18\" x2=\"153\" y2=\"72\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line id=\"mark-k\" x1=\"261\" y1=\"18\" x2=\"153\" y2=\"18\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"round\"/><text x=\"207\" y=\"10\" font-size=\"15\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">k</text><line id=\"mark-m\" x1=\"342\" y1=\"72\" x2=\"342\" y2=\"18\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"round\"/><text x=\"355\" y=\"50\" font-size=\"15\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">m</text><g data-choice=\"A\" id=\"net-edge-1\"><circle cx=\"301.5\" cy=\"18\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"301.5\" y=\"22\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">1</text></g><g data-choice=\"B\" id=\"net-edge-3\"><circle cx=\"301.5\" cy=\"72\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"301.5\" y=\"76\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">2</text></g><g data-choice=\"C\" id=\"net-edge-5\"><circle cx=\"207\" cy=\"153\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"207\" y=\"157\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">3</text></g><g data-choice=\"D\" id=\"net-edge-6\"><circle cx=\"153\" cy=\"207\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"153\" y=\"211\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">4</text></g><g data-choice=\"E\" id=\"net-edge-7\"><circle cx=\"126\" cy=\"261\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"126\" y=\"265\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">5</text></g><g data-choice=\"F\" id=\"net-edge-8\"><circle cx=\"58.5\" cy=\"261\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"58.5\" y=\"265\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">6</text></g><g data-choice=\"G\" id=\"net-edge-9\"><circle cx=\"18\" cy=\"207\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"18\" y=\"211\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">7</text></g><g data-choice=\"H\" id=\"net-edge-10\"><circle cx=\"58.5\" cy=\"153\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"58.5\" y=\"157\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">8</text></g><g data-choice=\"I\" id=\"net-edge-12\"><circle cx=\"126\" cy=\"72\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"126\" y=\"76\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">9</text></g></svg>",
+     "options": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+     ],
+     "correctOptions": [
+      4,
+      6
+     ],
+     "explanation": "Beim Falten treffen am Rand des Netzes immer zwei gleich lange Kanten aufeinander.\nBeginne dort, wo der Rand eine einspringende Ecke hat: Die beiden Kanten an dieser Ecke treffen aufeinander. Von dort schliesst sich der Rand wie ein Reissverschluss: Sobald an einer Ecke drei Flächen zusammenkommen, treffen auch die beiden nächsten Randkanten aufeinander.\nSo trifft $k$ auf die Kante 7 und $m$ auf die Kante 5.",
+     "skills": [
+      "geometrie-koerper-ansichten-und-netze--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2023 · 6b"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "The net can be folded into a cuboid. Two edges are drawn thick and are called $k$ and $m$. Which two numbered edges meet $k$ and $m$ when the net is folded? Select both.",
+       "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+       ],
+       "explanation": "When a net is folded, two edges of equal length on its outline always meet.\nStart where the outline has a corner pointing inwards: the two edges at that corner meet. From there the outline closes like a zip: as soon as three faces come together at a corner, the next two edges of the outline meet as well.\nIn this way $k$ meets edge 7 and $m$ meets edge 5."
+      },
+      "fr": {
+       "prompt": "Ce patron se plie en un pavé droit. Deux arêtes sont tracées en gras et s'appellent $k$ et $m$. Quelles sont les deux arêtes numérotées qui rejoignent $k$ et $m$ lors du pliage ? Sélectionne les deux.",
+       "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+       ],
+       "explanation": "Lors du pliage, deux arêtes de même longueur du bord du patron se rejoignent toujours.\nCommence là où le bord forme un angle rentrant : les deux arêtes de cet angle se rejoignent. À partir de là, le bord se ferme comme une fermeture éclair : dès que trois faces se rencontrent en un sommet, les deux arêtes suivantes du bord se rejoignent aussi.\nAinsi, $k$ rejoint l'arête 7 et $m$ l'arête 5."
+      },
+      "it": {
+       "prompt": "Lo sviluppo si può piegare in un parallelepipedo. Due spigoli sono disegnati spessi e si chiamano $k$ e $m$. Quali due spigoli numerati combaciano con $k$ e con $m$ quando si piega lo sviluppo? Selezionali entrambi.",
+       "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+       ],
+       "explanation": "Piegando uno sviluppo, sul suo contorno combaciano sempre due spigoli della stessa lunghezza.\nComincia dove il contorno ha un angolo rientrante: i due spigoli di quell'angolo combaciano. Da lì il contorno si chiude come una cerniera lampo: appena in un vertice si incontrano tre facce, combaciano anche i due spigoli successivi del contorno.\nCosì $k$ combacia con lo spigolo 7 e $m$ con lo spigolo 5."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2023-6c-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 3,
+     "prompt": "Aus dem Netz lässt sich ein Quader falten. Der Punkt $Z$ wird dabei zu einer Ecke des Quaders. Welche nummerierten Punkte fallen beim Falten auf dieselbe Ecke wie $Z$? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 330 348\"><polygon id=\"face-front\" points=\"130,278 208,278 208,174 130,174\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-top\" points=\"130,174 208,174 208,122 130,122\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-bottom\" points=\"130,278 130,330 208,330 208,278\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-back\" points=\"130,18 130,122 208,122 208,18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-left\" points=\"26,174 130,174 130,122 26,122\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-right\" points=\"208,278 208,330 312,330 312,278\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><line x1=\"208\" y1=\"18\" x2=\"130\" y2=\"18\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"208\" y1=\"122\" x2=\"208\" y2=\"18\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"208\" y1=\"174\" x2=\"208\" y2=\"122\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"208\" y1=\"278\" x2=\"208\" y2=\"174\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"312\" y1=\"278\" x2=\"208\" y2=\"278\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"312\" y1=\"330\" x2=\"312\" y2=\"278\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"208\" y1=\"330\" x2=\"312\" y2=\"330\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"130\" y1=\"330\" x2=\"208\" y2=\"330\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"130\" y1=\"278\" x2=\"130\" y2=\"330\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"130\" y1=\"174\" x2=\"130\" y2=\"278\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"26\" y1=\"174\" x2=\"130\" y2=\"174\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"26\" y1=\"122\" x2=\"26\" y2=\"174\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"130\" y1=\"122\" x2=\"26\" y2=\"122\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"130\" y1=\"18\" x2=\"130\" y2=\"122\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><circle id=\"mark-Z\" cx=\"26\" cy=\"122\" r=\"5\" fill=\"currentColor\"/><text x=\"17\" y=\"115\" font-size=\"15\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">Z</text><g data-choice=\"A\" id=\"net-point-0\"><circle cx=\"130\" cy=\"18\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"130\" y=\"22\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">1</text></g><g data-choice=\"B\" id=\"net-point-1\"><circle cx=\"208\" cy=\"18\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"208\" y=\"22\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">2</text></g><g data-choice=\"C\" id=\"net-point-2\"><circle cx=\"208\" cy=\"122\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"208\" y=\"126\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">3</text></g><g data-choice=\"D\" id=\"net-point-3\"><circle cx=\"208\" cy=\"174\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"208\" y=\"178\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">4</text></g><g data-choice=\"E\" id=\"net-point-4\"><circle cx=\"208\" cy=\"278\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"208\" y=\"282\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">5</text></g><g data-choice=\"F\" id=\"net-point-5\"><circle cx=\"312\" cy=\"278\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"312\" y=\"282\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">6</text></g><g data-choice=\"G\" id=\"net-point-6\"><circle cx=\"312\" cy=\"330\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"312\" y=\"334\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">7</text></g><g data-choice=\"H\" id=\"net-point-7\"><circle cx=\"208\" cy=\"330\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"208\" y=\"334\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">8</text></g><g data-choice=\"I\" id=\"net-point-8\"><circle cx=\"130\" cy=\"330\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"130\" y=\"334\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">9</text></g><g data-choice=\"J\" id=\"net-point-9\"><circle cx=\"130\" cy=\"278\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"130\" y=\"282\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">10</text></g><g data-choice=\"K\" id=\"net-point-10\"><circle cx=\"130\" cy=\"174\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"130\" y=\"178\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">11</text></g><g data-choice=\"L\" id=\"net-point-11\"><circle cx=\"26\" cy=\"174\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"26\" y=\"178\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">12</text></g></svg>",
+     "options": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12"
+     ],
+     "correctOptions": [
+      0,
+      8
+     ],
+     "explanation": "In jeder Ecke eines Quaders stossen drei Flächen zusammen. Im Netz kann dieselbe Ecke deshalb an mehreren Stellen des Randes liegen.\nVerfolge von $Z$ aus die Randkanten, die beim Falten aufeinandertreffen: Ihre Endpunkte fallen zusammen. Die beiden Kanten an einer einspringenden Ecke treffen aufeinander, und von dort schliesst sich der Rand wie ein Reissverschluss.\nAuf dieselbe Ecke wie $Z$ fallen die Punkte 1 und 9.",
+     "skills": [
+      "geometrie-koerper-ansichten-und-netze--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2023 · 6c"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "The net can be folded into a cuboid. The point $Z$ then becomes a corner of the cuboid. Which numbered points land on the same corner as $Z$ when the net is folded? Select all of them.",
+       "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12"
+       ],
+       "explanation": "Three faces meet at every corner of a cuboid. So in the net the same corner can lie at several places on the outline.\nStarting from $Z$, follow the edges of the outline that meet when the net is folded: their end points land on each other. The two edges at a corner pointing inwards meet, and from there the outline closes like a zip.\nThe points 1 and 9 land on the same corner as $Z$."
+      },
+      "fr": {
+       "prompt": "Ce patron se plie en un pavé droit. Le point $Z$ devient alors un sommet du pavé. Quels points numérotés arrivent sur le même sommet que $Z$ lors du pliage ? Sélectionne-les tous.",
+       "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12"
+       ],
+       "explanation": "En chaque sommet d'un pavé droit, trois faces se rencontrent. Dans le patron, un même sommet peut donc se trouver à plusieurs endroits du bord.\nÀ partir de $Z$, suis les arêtes du bord qui se rejoignent lors du pliage : leurs extrémités se superposent. Les deux arêtes d'un angle rentrant se rejoignent, et de là le bord se ferme comme une fermeture éclair.\nLes points 1 et 9 arrivent sur le même sommet que $Z$."
+      },
+      "it": {
+       "prompt": "Lo sviluppo si può piegare in un parallelepipedo. Il punto $Z$ diventa così un vertice del parallelepipedo. Quali punti numerati finiscono sullo stesso vertice di $Z$ quando si piega lo sviluppo? Selezionali tutti.",
+       "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12"
+       ],
+       "explanation": "In ogni vertice di un parallelepipedo si incontrano tre facce. Nello sviluppo lo stesso vertice può quindi trovarsi in più punti del contorno.\nPartendo da $Z$, segui gli spigoli del contorno che combaciano nella piegatura: i loro estremi si sovrappongono. I due spigoli di un angolo rientrante combaciano, e da lì il contorno si chiude come una cerniera lampo.\nI punti 1 e 9 finiscono sullo stesso vertice di $Z$."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2017-9a-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 4,
+     "prompt": "Oben siehst du einen Keil (ein Prisma mit dreieckiger Grundfläche), unten sein Netz. Die schräge Fläche ist in beiden Bildern grau. Im Netz sind zwei Kanten dick gezeichnet und heissen $k$ und $m$. Welche nummerierten Kanten des Keils sind das? Wähle beide aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 354 488.8\"><polygon points=\"40,218.8 248,218.8 40,62.8\" fill=\"#f4f4f4\" stroke=\"none\"/><polygon points=\"248,218.8 320.8,172 112.8,16 40,62.8\" fill=\"#bdbdbd\" stroke=\"none\"/><line x1=\"40\" y1=\"218.8\" x2=\"248\" y2=\"218.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"248\" y1=\"218.8\" x2=\"40\" y2=\"62.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"40\" y1=\"218.8\" x2=\"40\" y2=\"62.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"112.8\" y1=\"172\" x2=\"112.8\" y2=\"16\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-dasharray=\"5 4\" stroke-linecap=\"round\"/><line x1=\"320.8\" y1=\"172\" x2=\"112.8\" y2=\"16\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"112.8\" y1=\"172\" x2=\"320.8\" y2=\"172\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-dasharray=\"5 4\" stroke-linecap=\"round\"/><line x1=\"40\" y1=\"218.8\" x2=\"112.8\" y2=\"172\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-dasharray=\"5 4\" stroke-linecap=\"round\"/><line x1=\"248\" y1=\"218.8\" x2=\"320.8\" y2=\"172\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"40\" y1=\"62.8\" x2=\"112.8\" y2=\"16\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><polygon id=\"face-slope\" points=\"228,398.8 228,350.8 108,350.8 108,398.8\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-bottom\" points=\"324,398.8 324,350.8 228,350.8 228,398.8\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-upright\" points=\"36,398.8 108,398.8 108,350.8 36,350.8\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-front\" points=\"324,398.8 228,398.8 324,470.8\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-back\" points=\"36,350.8 108,350.8 36,254.8\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><line x1=\"36\" y1=\"350.8\" x2=\"36\" y2=\"398.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"36\" y1=\"254.8\" x2=\"36\" y2=\"350.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"108\" y1=\"350.8\" x2=\"36\" y2=\"254.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"228\" y1=\"350.8\" x2=\"108\" y2=\"350.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"324\" y1=\"350.8\" x2=\"228\" y2=\"350.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"324\" y1=\"398.8\" x2=\"324\" y2=\"350.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"324\" y1=\"470.8\" x2=\"324\" y2=\"398.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"228\" y1=\"398.8\" x2=\"324\" y2=\"470.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"108\" y1=\"398.8\" x2=\"228\" y2=\"398.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"36\" y1=\"398.8\" x2=\"108\" y2=\"398.8\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line id=\"mark-k\" x1=\"36\" y1=\"350.8\" x2=\"36\" y2=\"398.8\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"round\"/><text x=\"23\" y=\"379.8\" font-size=\"15\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">k</text><line id=\"mark-m\" x1=\"324\" y1=\"470.8\" x2=\"324\" y2=\"398.8\" stroke=\"currentColor\" stroke-width=\"5\" stroke-linecap=\"round\"/><text x=\"337\" y=\"439.8\" font-size=\"15\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"middle\" fill=\"currentColor\">m</text><g data-choice=\"A\" id=\"solid-edge-A-B\"><circle cx=\"144\" cy=\"218.8\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"144\" y=\"222.8\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">1</text></g><g data-choice=\"B\" id=\"solid-edge-B-C\"><circle cx=\"144\" cy=\"140.8\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"144\" y=\"144.8\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">2</text></g><g data-choice=\"C\" id=\"solid-edge-A-C\"><circle cx=\"40\" cy=\"140.8\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"40\" y=\"144.8\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">3</text></g><g data-choice=\"D\" id=\"solid-edge-A2-C2\"><circle cx=\"112.8\" cy=\"94\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"112.8\" y=\"98\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">4</text></g><g data-choice=\"E\" id=\"solid-edge-B2-C2\"><circle cx=\"216.8\" cy=\"94\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"216.8\" y=\"98\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">5</text></g><g data-choice=\"F\" id=\"solid-edge-A2-B2\"><circle cx=\"216.8\" cy=\"172\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"216.8\" y=\"176\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">6</text></g><g data-choice=\"G\" id=\"solid-edge-A-A2\"><circle cx=\"76.4\" cy=\"195.4\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"76.4\" y=\"199.4\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">7</text></g><g data-choice=\"H\" id=\"solid-edge-B-B2\"><circle cx=\"284.4\" cy=\"195.4\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"284.4\" y=\"199.4\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">8</text></g><g data-choice=\"I\" id=\"solid-edge-C-C2\"><circle cx=\"76.4\" cy=\"39.4\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"76.4\" y=\"43.4\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">9</text></g></svg>",
+     "options": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+     ],
+     "correctOptions": [
+      2,
+      6
+     ],
+     "explanation": "Das Netz zeigt die Aussenseite des Keils. An der grauen schrägen Fläche hängen zwei Rechtecke: der Boden (das längere) und die senkrechte Wand (das kürzere).\n$k$ ist die Kante der Wand, die der grauen Fläche gegenüberliegt. Am Keil steht die Wand mit dieser Kante auf dem Boden: Das ist die Kante 7.\n$m$ ist die kurze Seite des Dreiecks, das am Boden hängt. Drehe das Netz in Gedanken so, dass der Boden vor dir liegt und die graue Fläche dahinter ansteigt: Das Dreieck liegt dann links. Am Keil ist das das vordere Dreieck, und seine kurze Seite ist die senkrechte Kante 3.",
+     "skills": [
+      "geometrie-koerper-ansichten-und-netze--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2017 · 9a"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "Above you see a wedge (a prism with a triangular base), below it its net. The sloping face is grey in both drawings. In the net two edges are drawn thick and are called $k$ and $m$. Which numbered edges of the wedge are they? Select both.",
+       "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+       ],
+       "explanation": "The net shows the outside of the wedge. Two rectangles hang on the grey sloping face: the floor (the longer one) and the upright wall (the shorter one).\n$k$ is the edge of the wall opposite the grey face. On the wedge the wall stands on the floor with this edge: it is edge 7.\n$m$ is the short side of the triangle that hangs on the floor. Turn the net in your mind so that the floor lies in front of you and the grey face rises behind it: the triangle is then on the left. On the wedge this is the front triangle, and its short side is the upright edge 3."
+      },
+      "fr": {
+       "prompt": "En haut, tu vois une cale (un prisme droit à base triangulaire), en bas son patron. La face oblique est grise dans les deux dessins. Dans le patron, deux arêtes sont tracées en gras et s'appellent $k$ et $m$. De quelles arêtes numérotées de la cale s'agit-il ? Sélectionne les deux.",
+       "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+       ],
+       "explanation": "Le patron montre l'extérieur de la cale. Deux rectangles sont attachés à la face oblique grise : le sol (le plus long) et la paroi verticale (le plus court).\n$k$ est l'arête de la paroi opposée à la face grise. Sur la cale, la paroi repose sur le sol par cette arête : c'est l'arête 7.\n$m$ est le petit côté du triangle attaché au sol. Tourne le patron en pensée pour que le sol soit devant toi et que la face grise monte derrière lui : le triangle se trouve alors à gauche. Sur la cale, c'est le triangle de devant, et son petit côté est l'arête verticale 3."
+      },
+      "it": {
+       "prompt": "In alto vedi un cuneo (un prisma a base triangolare), in basso il suo sviluppo. La faccia obliqua è grigia in entrambi i disegni. Nello sviluppo due spigoli sono disegnati spessi e si chiamano $k$ e $m$. Quali spigoli numerati del cuneo sono? Selezionali entrambi.",
+       "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+       ],
+       "explanation": "Lo sviluppo mostra l'esterno del cuneo. Alla faccia obliqua grigia sono attaccati due rettangoli: il pavimento (il più lungo) e la parete verticale (il più corto).\n$k$ è lo spigolo della parete opposto alla faccia grigia. Nel cuneo la parete poggia sul pavimento con questo spigolo: è lo spigolo 7.\n$m$ è il lato corto del triangolo attaccato al pavimento. Gira mentalmente lo sviluppo in modo che il pavimento sia davanti a te e la faccia grigia salga dietro: il triangolo si trova allora a sinistra. Nel cuneo è il triangolo davanti, e il suo lato corto è lo spigolo verticale 3."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2017-9b-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 5,
+     "prompt": "Oben siehst du einen Keil (ein Prisma mit dreieckiger Grundfläche), unten sein Netz. Die schräge Fläche ist in beiden Bildern grau. Am Keil ist die Ecke $Z$ markiert. Welche nummerierten Punkte des Netzes werden beim Falten zur Ecke $Z$? Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 364 395\"><polygon id=\"face-bottom\" points=\"265,296 265,242 157,242 157,296\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-slope\" points=\"157,296 157,242 22,242 22,296\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-upright\" points=\"265,296 346,296 346,242 265,242\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-front\" points=\"265,296 157,296 265,377\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><polygon id=\"face-back\" points=\"265,242 265,161 157,242\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"0.8\" stroke-dasharray=\"4 3\"/><line x1=\"22\" y1=\"242\" x2=\"22\" y2=\"296\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"157\" y1=\"242\" x2=\"22\" y2=\"242\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"265\" y1=\"161\" x2=\"157\" y2=\"242\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"265\" y1=\"242\" x2=\"265\" y2=\"161\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"346\" y1=\"242\" x2=\"265\" y2=\"242\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"346\" y1=\"296\" x2=\"346\" y2=\"242\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"265\" y1=\"296\" x2=\"346\" y2=\"296\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"265\" y1=\"377\" x2=\"265\" y2=\"296\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"157\" y1=\"296\" x2=\"265\" y2=\"377\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"22\" y1=\"296\" x2=\"157\" y2=\"296\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><polygon points=\"110,131 230,131 110,41\" fill=\"#f4f4f4\" stroke=\"none\"/><polygon points=\"230,131 272,104 152,14 110,41\" fill=\"#bdbdbd\" stroke=\"none\"/><line x1=\"110\" y1=\"131\" x2=\"230\" y2=\"131\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"230\" y1=\"131\" x2=\"110\" y2=\"41\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"110\" y1=\"131\" x2=\"110\" y2=\"41\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"152\" y1=\"104\" x2=\"152\" y2=\"14\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-dasharray=\"5 4\" stroke-linecap=\"round\"/><line x1=\"272\" y1=\"104\" x2=\"152\" y2=\"14\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"152\" y1=\"104\" x2=\"272\" y2=\"104\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-dasharray=\"5 4\" stroke-linecap=\"round\"/><line x1=\"110\" y1=\"131\" x2=\"152\" y2=\"104\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-dasharray=\"5 4\" stroke-linecap=\"round\"/><line x1=\"230\" y1=\"131\" x2=\"272\" y2=\"104\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><line x1=\"110\" y1=\"41\" x2=\"152\" y2=\"14\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><circle cx=\"110\" cy=\"41\" r=\"5\" fill=\"currentColor\"/><text x=\"101\" y=\"43\" font-size=\"15\" font-style=\"italic\" font-weight=\"bold\" text-anchor=\"end\" fill=\"currentColor\">Z</text><g data-choice=\"A\" id=\"net-point-0\"><circle cx=\"22\" cy=\"296\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"22\" y=\"300\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">1</text></g><g data-choice=\"B\" id=\"net-point-1\"><circle cx=\"22\" cy=\"242\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"22\" y=\"246\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">2</text></g><g data-choice=\"C\" id=\"net-point-2\"><circle cx=\"157\" cy=\"242\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"157\" y=\"246\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">3</text></g><g data-choice=\"D\" id=\"net-point-3\"><circle cx=\"265\" cy=\"161\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"265\" y=\"165\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">4</text></g><g data-choice=\"E\" id=\"net-point-4\"><circle cx=\"265\" cy=\"242\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"265\" y=\"246\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">5</text></g><g data-choice=\"F\" id=\"net-point-5\"><circle cx=\"346\" cy=\"242\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"346\" y=\"246\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">6</text></g><g data-choice=\"G\" id=\"net-point-6\"><circle cx=\"346\" cy=\"296\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"346\" y=\"300\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">7</text></g><g data-choice=\"H\" id=\"net-point-7\"><circle cx=\"265\" cy=\"296\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"265\" y=\"300\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">8</text></g><g data-choice=\"I\" id=\"net-point-8\"><circle cx=\"265\" cy=\"377\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"265\" y=\"381\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">9</text></g><g data-choice=\"J\" id=\"net-point-9\"><circle cx=\"157\" cy=\"296\" r=\"10\" fill=\"#ffffff\" stroke=\"currentColor\" stroke-width=\"1.5\"/><text x=\"157\" y=\"300\" font-size=\"12\" text-anchor=\"middle\" fill=\"currentColor\">10</text></g></svg>",
+     "options": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10"
+     ],
+     "correctOptions": [
+      0,
+      6,
+      8
+     ],
+     "explanation": "In der Ecke $Z$ stossen drei Flächen zusammen: das vordere Dreieck, die graue schräge Fläche und die senkrechte Wand. Im Netz gehört $Z$ deshalb zu jeder dieser drei Flächen einmal.\nDas Netz zeigt die Aussenseite. In der Mitte liegt der Boden; an ihm hängen die graue Fläche, die Wand und die beiden Dreiecke. Drehe das Netz in Gedanken so, dass der Boden vor dir liegt und die graue Fläche dahinter ansteigt: Das vordere Dreieck liegt dann links. Auf jeder der drei Flächen ist $Z$ die Ecke, die am weitesten vom Boden entfernt ist, auf der Seite des vorderen Dreiecks.\nDas sind die Punkte 1, 7 und 9.",
+     "skills": [
+      "geometrie-koerper-ansichten-und-netze--darstellen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2017 · 9b"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "Above you see a wedge (a prism with a triangular base), below it its net. The sloping face is grey in both drawings. The corner $Z$ is marked on the wedge. Which numbered points of the net become the corner $Z$ when the net is folded? Select all of them.",
+       "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10"
+       ],
+       "explanation": "Three faces meet at the corner $Z$: the front triangle, the grey sloping face and the upright wall. So in the net $Z$ belongs to each of these three faces once.\nThe net shows the outside. The floor is in the middle; the grey face, the wall and the two triangles hang on it. Turn the net in your mind so that the floor lies in front of you and the grey face rises behind it: the front triangle is then on the left. On each of the three faces, $Z$ is the corner farthest from the floor, on the side of the front triangle.\nThese are the points 1, 7 and 9."
+      },
+      "fr": {
+       "prompt": "En haut, tu vois une cale (un prisme droit à base triangulaire), en bas son patron. La face oblique est grise dans les deux dessins. Le sommet $Z$ est marqué sur la cale. Quels points numérotés du patron deviennent le sommet $Z$ lors du pliage ? Sélectionne-les tous.",
+       "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10"
+       ],
+       "explanation": "Trois faces se rencontrent au sommet $Z$ : le triangle de devant, la face oblique grise et la paroi verticale. Dans le patron, $Z$ appartient donc une fois à chacune de ces trois faces.\nLe patron montre l'extérieur. Le sol est au milieu ; la face grise, la paroi et les deux triangles y sont attachés. Tourne le patron en pensée pour que le sol soit devant toi et que la face grise monte derrière lui : le triangle de devant se trouve alors à gauche. Sur chacune des trois faces, $Z$ est le sommet le plus éloigné du sol, du côté du triangle de devant.\nCe sont les points 1, 7 et 9."
+      },
+      "it": {
+       "prompt": "In alto vedi un cuneo (un prisma a base triangolare), in basso il suo sviluppo. La faccia obliqua è grigia in entrambi i disegni. Sul cuneo è segnato il vertice $Z$. Quali punti numerati dello sviluppo diventano il vertice $Z$ quando lo si piega? Selezionali tutti.",
+       "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10"
+       ],
+       "explanation": "Nel vertice $Z$ si incontrano tre facce: il triangolo davanti, la faccia obliqua grigia e la parete verticale. Nello sviluppo $Z$ appartiene quindi una volta a ciascuna di queste tre facce.\nLo sviluppo mostra l'esterno. Il pavimento è al centro; vi sono attaccati la faccia grigia, la parete e i due triangoli. Gira mentalmente lo sviluppo in modo che il pavimento sia davanti a te e la faccia grigia salga dietro: il triangolo davanti si trova allora a sinistra. Su ciascuna delle tre facce, $Z$ è il vertice più lontano dal pavimento, dalla parte del triangolo davanti.\nSono i punti 1, 7 e 9."
+      }
+     }
+    }
+   ]
+  },
+  {
+   "publicLessonId": "geometrie-ebene-figuren-und-vielecke--schliessen--zap",
+   "publish": false,
+   "lesson": {
+    "title": "Formeln und Schlussfolgern · ZAP",
+    "titles": {
+     "de": "Formeln und Schlussfolgern · ZAP",
+     "en": "Formulas and reasoning · ZAP",
+     "fr": "Formules et raisonnement · ZAP",
+     "it": "Formule e ragionamento · ZAP"
+    },
+    "objective": "Ebene Figuren und Vielecke erkennen, unterscheiden, zusammensetzen und zu Parkettierungen legen.",
+    "description": "Ebene Figuren und Vielecke erkennen, unterscheiden, zusammensetzen und zu Parkettierungen legen.",
+    "subjectId": "mathematics",
+    "topicId": "geometrie",
+    "unitId": "geometrie-ebene-figuren-und-vielecke",
+    "gradeLevel": "grade_6_primary",
+    "difficulty": "practice",
+    "estimatedMinutes": 6,
+    "language": "de",
+    "order": 561,
+    "extension": true,
+    "requiresPoints": [],
+    "tags": [
+     "zap"
+    ]
+   },
+   "exercises": [
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2026-5-v1",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 1,
+     "prompt": "Oben sind zwei gleiche Winkelstücke aus je drei Quadraten gezeichnet. Welche der Figuren $A$ bis $H$ lassen sich aus genau diesen beiden Stücken legen? Die Stücke dürfen gedreht und gewendet werden. Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 368 286\"><g id=\"piece-1\"><rect x=\"16\" y=\"12\" width=\"18\" height=\"18\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"34\" y=\"12\" width=\"18\" height=\"18\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"16\" y=\"30\" width=\"18\" height=\"18\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.2\"/></g><g id=\"piece-2\"><rect x=\"70\" y=\"12\" width=\"18\" height=\"18\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"88\" y=\"12\" width=\"18\" height=\"18\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"70\" y=\"30\" width=\"18\" height=\"18\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.2\"/></g><line x1=\"8\" y1=\"64\" x2=\"360\" y2=\"64\" stroke=\"currentColor\" stroke-width=\"0.8\"/><g data-choice=\"A\" id=\"shape-A\"><rect x=\"25\" y=\"87\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"43\" y=\"87\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"61\" y=\"87\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"25\" y=\"105\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"25\" y=\"123\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"43\" y=\"123\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"52\" y=\"166\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">A</text></g><g data-choice=\"B\" id=\"shape-B\"><rect x=\"113\" y=\"96\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"131\" y=\"96\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"149\" y=\"96\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"113\" y=\"114\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"131\" y=\"114\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"149\" y=\"114\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"140\" y=\"166\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">B</text></g><g data-choice=\"C\" id=\"shape-C\"><rect x=\"219\" y=\"78\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"201\" y=\"96\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"219\" y=\"96\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"237\" y=\"96\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"219\" y=\"114\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"219\" y=\"132\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"228\" y=\"166\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">C</text></g><g data-choice=\"D\" id=\"shape-D\"><rect x=\"280\" y=\"87\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"298\" y=\"87\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"298\" y=\"105\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"316\" y=\"105\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"334\" y=\"105\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"316\" y=\"123\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"316\" y=\"166\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">D</text></g><g data-choice=\"E\" id=\"shape-E\"><rect x=\"25\" y=\"191\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"43\" y=\"191\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"25\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"43\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"61\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"25\" y=\"227\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"52\" y=\"270\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">E</text></g><g data-choice=\"F\" id=\"shape-F\"><rect x=\"104\" y=\"191\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"104\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"122\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"140\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"158\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"104\" y=\"227\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"140\" y=\"270\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">F</text></g><g data-choice=\"G\" id=\"shape-G\"><rect x=\"210\" y=\"200\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"228\" y=\"200\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"192\" y=\"218\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"210\" y=\"218\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"228\" y=\"218\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"246\" y=\"218\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"228\" y=\"270\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">G</text></g><g data-choice=\"H\" id=\"shape-H\"><rect x=\"289\" y=\"191\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"325\" y=\"191\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"289\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"307\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"325\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"289\" y=\"227\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"316\" y=\"270\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">H</text></g></svg>",
+     "options": [
+      "$A$",
+      "$B$",
+      "$C$",
+      "$D$",
+      "$E$",
+      "$F$",
+      "$G$",
+      "$H$"
+     ],
+     "correctOptions": [
+      1,
+      3,
+      6
+     ],
+     "explanation": "Jede Figur besteht aus sechs Quadraten, die beiden Stücke zusammen auch. Suche in einer Figur einen Platz für das erste Stück und prüfe, ob der Rest genau das zweite Stück ist.\nDas gelingt bei $B$, $D$ und $G$.\nBei $A$, $C$, $E$, $F$ und $H$ bleibt bei jedem Versuch ein Rest, der kein Winkelstück ist.",
+     "skills": [
+      "geometrie-ebene-figuren-und-vielecke--schliessen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2026 · 5"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "At the top there are two identical corner pieces of three squares each. Which of the shapes $A$ to $H$ can be made from exactly these two pieces? The pieces may be turned and flipped. Select all of them.",
+       "options": [
+        "$A$",
+        "$B$",
+        "$C$",
+        "$D$",
+        "$E$",
+        "$F$",
+        "$G$",
+        "$H$"
+       ],
+       "explanation": "Each shape consists of six squares, and so do the two pieces together. In a shape, look for a place for the first piece and check whether the rest is exactly the second piece.\nThis works for $B$, $D$ and $G$.\nFor $A$, $C$, $E$, $F$ and $H$, every attempt leaves a rest that is not a corner piece."
+      },
+      "fr": {
+       "prompt": "En haut sont dessinées deux pièces identiques en forme d'équerre, de trois carrés chacune. Lesquelles des figures $A$ à $H$ peut-on former avec exactement ces deux pièces ? On peut tourner et retourner les pièces. Sélectionne-les toutes.",
+       "options": [
+        "$A$",
+        "$B$",
+        "$C$",
+        "$D$",
+        "$E$",
+        "$F$",
+        "$G$",
+        "$H$"
+       ],
+       "explanation": "Chaque figure est formée de six carrés, les deux pièces ensemble aussi. Dans une figure, cherche une place pour la première pièce et vérifie si le reste est exactement la seconde.\nCela réussit pour $B$, $D$ et $G$.\nPour $A$, $C$, $E$, $F$ et $H$, il reste à chaque essai une partie qui n'est pas une équerre."
+      },
+      "it": {
+       "prompt": "In alto sono disegnati due pezzi uguali a forma di angolo, di tre quadrati ciascuno. Quali delle figure da $A$ a $H$ si possono comporre esattamente con questi due pezzi? I pezzi si possono ruotare e ribaltare. Selezionale tutte.",
+       "options": [
+        "$A$",
+        "$B$",
+        "$C$",
+        "$D$",
+        "$E$",
+        "$F$",
+        "$G$",
+        "$H$"
+       ],
+       "explanation": "Ogni figura è formata da sei quadrati, e così anche i due pezzi insieme. In una figura cerca un posto per il primo pezzo e controlla se il resto è esattamente il secondo.\nCi si riesce con $B$, $D$ e $G$.\nCon $A$, $C$, $E$, $F$ e $H$, a ogni tentativo resta una parte che non è un angolo."
+      }
+     }
+    },
+    {
+     "exerciseId": "kb-zap-stoa-zap1-2026-5-v2",
+     "type": "multi_select",
+     "difficulty": "zap",
+     "order": 2,
+     "prompt": "Oben sind ein T-Stück aus vier Quadraten und ein Zweierstück gezeichnet. Welche der Figuren $A$ bis $H$ lassen sich aus genau diesen beiden Stücken legen? Die Stücke dürfen gedreht und gewendet werden. Wähle alle aus.",
+     "figure": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 368 286\"><g id=\"piece-1\"><rect x=\"16\" y=\"12\" width=\"18\" height=\"18\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"34\" y=\"12\" width=\"18\" height=\"18\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"52\" y=\"12\" width=\"18\" height=\"18\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"34\" y=\"30\" width=\"18\" height=\"18\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.2\"/></g><g id=\"piece-2\"><rect x=\"88\" y=\"12\" width=\"18\" height=\"18\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"106\" y=\"12\" width=\"18\" height=\"18\" fill=\"#bdbdbd\" stroke=\"currentColor\" stroke-width=\"1.2\"/></g><line x1=\"8\" y1=\"64\" x2=\"360\" y2=\"64\" stroke=\"currentColor\" stroke-width=\"0.8\"/><g data-choice=\"A\" id=\"shape-A\"><rect x=\"25\" y=\"87\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"43\" y=\"87\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"61\" y=\"87\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"25\" y=\"105\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"25\" y=\"123\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"43\" y=\"123\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"52\" y=\"166\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">A</text></g><g data-choice=\"B\" id=\"shape-B\"><rect x=\"113\" y=\"96\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"131\" y=\"96\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"149\" y=\"96\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"113\" y=\"114\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"131\" y=\"114\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"149\" y=\"114\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"140\" y=\"166\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">B</text></g><g data-choice=\"C\" id=\"shape-C\"><rect x=\"219\" y=\"78\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"201\" y=\"96\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"219\" y=\"96\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"237\" y=\"96\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"219\" y=\"114\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"219\" y=\"132\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"228\" y=\"166\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">C</text></g><g data-choice=\"D\" id=\"shape-D\"><rect x=\"280\" y=\"87\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"298\" y=\"87\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"298\" y=\"105\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"316\" y=\"105\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"334\" y=\"105\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"316\" y=\"123\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"316\" y=\"166\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">D</text></g><g data-choice=\"E\" id=\"shape-E\"><rect x=\"25\" y=\"191\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"43\" y=\"191\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"25\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"43\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"61\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"25\" y=\"227\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"52\" y=\"270\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">E</text></g><g data-choice=\"F\" id=\"shape-F\"><rect x=\"104\" y=\"191\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"104\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"122\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"140\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"158\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"104\" y=\"227\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"140\" y=\"270\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">F</text></g><g data-choice=\"G\" id=\"shape-G\"><rect x=\"210\" y=\"200\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"228\" y=\"200\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"192\" y=\"218\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"210\" y=\"218\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"228\" y=\"218\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"246\" y=\"218\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"228\" y=\"270\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">G</text></g><g data-choice=\"H\" id=\"shape-H\"><rect x=\"289\" y=\"191\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"325\" y=\"191\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"289\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"307\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"325\" y=\"209\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"289\" y=\"227\" width=\"18\" height=\"18\" fill=\"#f4f4f4\" stroke=\"currentColor\" stroke-width=\"1.2\"/><text x=\"316\" y=\"270\" font-size=\"13\" font-style=\"italic\" text-anchor=\"middle\" fill=\"currentColor\">H</text></g></svg>",
+     "options": [
+      "$A$",
+      "$B$",
+      "$C$",
+      "$D$",
+      "$E$",
+      "$F$",
+      "$G$",
+      "$H$"
+     ],
+     "correctOptions": [
+      2,
+      3,
+      5,
+      7
+     ],
+     "explanation": "Jede Figur besteht aus sechs Quadraten, die beiden Stücke zusammen auch. Suche in einer Figur einen Platz für das T-Stück und prüfe, ob die zwei übrigen Quadrate nebeneinanderliegen.\nDas gelingt bei $C$, $D$, $F$ und $H$.\nBei $A$, $B$, $E$ und $G$ passt das T-Stück gar nicht hinein, oder die zwei übrigen Quadrate liegen nicht nebeneinander.",
+     "skills": [
+      "geometrie-ebene-figuren-und-vielecke--schliessen"
+     ],
+     "tags": [
+      "zap",
+      "ZAP1 2026 · 5"
+     ],
+     "translations": {
+      "en": {
+       "prompt": "At the top there are a T-piece of four squares and a piece of two squares. Which of the shapes $A$ to $H$ can be made from exactly these two pieces? The pieces may be turned and flipped. Select all of them.",
+       "options": [
+        "$A$",
+        "$B$",
+        "$C$",
+        "$D$",
+        "$E$",
+        "$F$",
+        "$G$",
+        "$H$"
+       ],
+       "explanation": "Each shape consists of six squares, and so do the two pieces together. In a shape, look for a place for the T-piece and check whether the two remaining squares lie side by side.\nThis works for $C$, $D$, $F$ and $H$.\nFor $A$, $B$, $E$ and $G$, the T-piece does not fit at all, or the two remaining squares do not lie side by side."
+      },
+      "fr": {
+       "prompt": "En haut sont dessinées une pièce en T de quatre carrés et une pièce de deux carrés. Lesquelles des figures $A$ à $H$ peut-on former avec exactement ces deux pièces ? On peut tourner et retourner les pièces. Sélectionne-les toutes.",
+       "options": [
+        "$A$",
+        "$B$",
+        "$C$",
+        "$D$",
+        "$E$",
+        "$F$",
+        "$G$",
+        "$H$"
+       ],
+       "explanation": "Chaque figure est formée de six carrés, les deux pièces ensemble aussi. Dans une figure, cherche une place pour la pièce en T et vérifie si les deux carrés restants sont côte à côte.\nCela réussit pour $C$, $D$, $F$ et $H$.\nPour $A$, $B$, $E$ et $G$, la pièce en T n'entre pas du tout, ou les deux carrés restants ne sont pas côte à côte."
+      },
+      "it": {
+       "prompt": "In alto sono disegnati un pezzo a T di quattro quadrati e un pezzo di due quadrati. Quali delle figure da $A$ a $H$ si possono comporre esattamente con questi due pezzi? I pezzi si possono ruotare e ribaltare. Selezionale tutte.",
+       "options": [
+        "$A$",
+        "$B$",
+        "$C$",
+        "$D$",
+        "$E$",
+        "$F$",
+        "$G$",
+        "$H$"
+       ],
+       "explanation": "Ogni figura è formata da sei quadrati, e così anche i due pezzi insieme. In una figura cerca un posto per il pezzo a T e controlla se i due quadrati rimasti sono uno accanto all'altro.\nCi si riesce con $C$, $D$, $F$ e $H$.\nCon $A$, $B$, $E$ e $G$ il pezzo a T non ci sta affatto, oppure i due quadrati rimasti non sono uno accanto all'altro."
+      }
+     }
+    }
+   ]
+  }
+ ]
+}

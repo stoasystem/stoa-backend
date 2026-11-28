@@ -15327,6 +15327,12 @@
    "fr": "Formules et raisonnement",
    "it": "Formule e ragionamento"
   },
+  "geometrie-ebene-figuren-und-vielecke--schliessen--zap": {
+   "de": "Formeln und Schlussfolgern · ZAP",
+   "en": "Formulas and reasoning · ZAP",
+   "fr": "Formules et raisonnement · ZAP",
+   "it": "Formule e ragionamento · ZAP"
+  },
   "geometrie-ellipse--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1–2",
    "en": "Understanding concepts · Level 1–2",
@@ -15572,6 +15578,12 @@
    "en": "Representing and decomposing · ZAP · Part 3",
    "fr": "Représenter et décomposer · ZAP · Partie 3",
    "it": "Rappresentare e scomporre · ZAP · Parte 3"
+  },
+  "geometrie-koerper-ansichten-und-netze--darstellen--zap-4": {
+   "de": "Darstellen und Zerlegen · ZAP · Teil 4",
+   "en": "Representing and decomposing · ZAP · Part 4",
+   "fr": "Représenter et décomposer · ZAP · Partie 4",
+   "it": "Rappresentare e scomporre · ZAP · Parte 4"
   },
   "geometrie-koerper-ansichten-und-netze--kopfrechnen--1": {
    "de": "Kopfrechnen",
@@ -16118,6 +16130,18 @@
    "en": "Representing and decomposing",
    "fr": "Représenter et décomposer",
    "it": "Rappresentare e scomporre"
+  },
+  "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen--zap-1": {
+   "de": "Darstellen und Zerlegen · ZAP · Teil 1",
+   "en": "Representing and decomposing · ZAP · Part 1",
+   "fr": "Représenter et décomposer · ZAP · Partie 1",
+   "it": "Rappresentare e scomporre · ZAP · Parte 1"
+  },
+  "geometrie-strecken-geraden-senkrechte-und-parallelen--darstellen--zap-2": {
+   "de": "Darstellen und Zerlegen · ZAP · Teil 2",
+   "en": "Representing and decomposing · ZAP · Part 2",
+   "fr": "Représenter et décomposer · ZAP · Partie 2",
+   "it": "Rappresentare e scomporre · ZAP · Parte 2"
   },
   "geometrie-strecken-geraden-senkrechte-und-parallelen--kopfrechnen--1": {
    "de": "Kopfrechnen",
