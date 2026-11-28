@@ -291,18 +291,19 @@ def build_learning_profile(
     named (`asked_knowledge_repo`, #143). The weak topics are
     `weak_topics.for_student`'s first ten, named in `locale`; nothing here
     counts them (#673). A caller that already has them from the same evidence
-    passes them as `weak`.
+    passes them as `weak`. A subject's `label` is the message catalog's
+    `subject.<id>` in `locale` (#662).
     """
     activity: dict[str, dict[str, Any]] = {}
     feedback_totals: dict[str, list[int]] = defaultdict(list)
 
     for subject_id in curriculum_service.SUPPORTED_SUBJECTS:
-        activity[subject_id] = _empty_subject_activity(subject_id)
+        activity[subject_id] = _empty_subject_activity(subject_id, locale)
 
     period = student_activity.last_days(weak_topics.WINDOW.days, evidence.now)
     counted = student_activity.counts(student_id, period, evidence=evidence)
     for subject_id, numbers in counted.by_subject.items():
-        item = activity.setdefault(subject_id, _empty_subject_activity(subject_id))
+        item = activity.setdefault(subject_id, _empty_subject_activity(subject_id, locale))
         item["questionCount"] = numbers.new_questions
         item["aiResolvedCount"] = numbers.ai_resolved
         item["teacherEscalationCount"] = numbers.teacher_help
@@ -313,7 +314,7 @@ def build_learning_profile(
             feedback_totals[_safe_subject(question.get("subject"))].append(feedback)
 
     for subject_id, values in feedback_totals.items():
-        activity.setdefault(subject_id, _empty_subject_activity(subject_id))["feedbackAverage"] = round(
+        activity.setdefault(subject_id, _empty_subject_activity(subject_id, locale))["feedbackAverage"] = round(
             sum(values) / len(values), 2
         )
 
@@ -325,7 +326,7 @@ def build_learning_profile(
         "subjects": [
             {
                 "id": subject_id,
-                "label": meta["label"],
+                "label": subject_name(subject_id, locale),
                 "rolloutState": meta["rollout_state"],
             }
             for subject_id, meta in curriculum_service.SUPPORTED_SUBJECTS.items()
@@ -350,11 +351,13 @@ def weak_topic_response(topic: weak_topics.WeakTopic) -> dict[str, object]:
     }
 
 
-def _empty_subject_activity(subject_id: str) -> dict[str, Any]:
+def _empty_subject_activity(subject_id: str, locale: str) -> dict[str, Any]:
     meta = subject_metadata(subject_id)
     return {
         "subject": subject_id,
-        "label": meta["label"],
+        # The subject as the reader says it (`subject.<id>`), not the prompt's
+        # English label (#662).
+        "label": subject_name(subject_id, locale),
         "rolloutState": meta["rollout_state"],
         "questionCount": 0,
         "aiResolvedCount": 0,

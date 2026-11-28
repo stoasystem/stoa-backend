@@ -25,8 +25,11 @@ copy of anything: it puts together what the modules that own each piece read.
   now) are no source.
 
 The numbers of a stretch read all of it, without a cap. Entries carry titles
-from the message catalog in the language the caller passes, and a knowledge
-point by the name `curriculum_names` gives it, or none - never its stored id.
+from the message catalog in the language the caller passes, and a lesson or a
+knowledge point by the name `curriculum_names` gives it in that language, or
+none - never its stored id. An entry's subject is the canonical id
+(`curriculum_service.subject_id`), or none for a subject the platform does not
+teach (#662); the client names it.
 """
 
 from __future__ import annotations
@@ -103,6 +106,7 @@ class Activity:
     type: str
     title: str
     summary: str
+    #: The canonical subject id, or None.
     subject: str | None
     #: When it happened, as stored.
     created_at: str
@@ -228,7 +232,7 @@ def _entries(
         entry for session in sessions if (entry := _session(session, requests, locale)) is not None
     ]
     entries.extend(
-        entry for lesson in completions if (entry := _lesson(lesson, locale)) is not None
+        entry for lesson in completions if (entry := _lesson(lesson, names, locale)) is not None
     )
     entries.extend(
         entry for mistake in mistakes if (entry := _mistake(mistake, names, locale)) is not None
@@ -254,20 +258,26 @@ def _session(
         # A session's title and preview are the child's own words; a parent
         # reads that there was a conversation, never what was asked (#143).
         summary="",
-        subject=_text(session.get("subject")) or None,
+        subject=curriculum_service.subject_id(session.get("subject")),
         created_at=created_at,
     )
 
 
-def _lesson(lesson: student_evidence.Completion, locale: str) -> Activity | None:
+def _lesson(
+    lesson: student_evidence.Completion, names: curriculum_names.Names, locale: str
+) -> Activity | None:
     if _moment(lesson.completed_at) is None:
         return None
+    # The lesson as the curriculum names it in the reader's language; for one
+    # it no longer has, its unit, then its topic; then the title the progress
+    # row kept; else nothing - never a stored id (#637).
+    named = (names.name(content_id) for content_id in (lesson.lesson_id, lesson.unit_id, lesson.topic_id))
     return Activity(
         id=lesson.lesson_id,
         type="practice",
         title=message_catalog.text("activity.practice_lesson_completed", locale),
-        summary=lesson.title or lesson.topic_id or lesson.subject_id,
-        subject=lesson.subject_id or None,
+        summary=next((name for name in named if name), None) or lesson.title,
+        subject=curriculum_service.subject_id(lesson.subject_id),
         created_at=lesson.completed_at,
     )
 
@@ -293,7 +303,7 @@ def _mistake(
             )
         )
         or "",
-        subject=_text(mistake.get("subject_id")) or None,
+        subject=curriculum_service.subject_id(mistake.get("subject_id")),
         created_at=created_at,
     )
 

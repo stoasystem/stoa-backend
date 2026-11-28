@@ -40,9 +40,9 @@ METRICS = {
 ACTIVITIES = {
     "lena": [
         ("lena-l1", "practice", "Lektion lena-l1", "math", "2026-11-25T17:00:00+00:00"),
-        ("brueche-l3", "practice_mistake", "Brüche rechnen", "mathematics", "2026-11-25T16:30:00+00:00"),
+        ("brueche-l3", "practice_mistake", "Brüche rechnen", "math", "2026-11-25T16:30:00+00:00"),
         # A knowledge point the curriculum does not know is named by nothing.
-        ("lena-e2", "practice_mistake", "", "mathematics", "2026-11-25T16:20:00+00:00"),
+        ("lena-e2", "practice_mistake", "", "math", "2026-11-25T16:20:00+00:00"),
         ("lena-c1", "conversation", "", "math", "2026-11-24T16:00:00+00:00"),
     ],
     # Last week's session, with this week's new question in it, is no entry

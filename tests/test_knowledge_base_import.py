@@ -26,11 +26,13 @@ from stoa.services import (
     curriculum_migration_service,
     curriculum_names,
     curriculum_ops_service,
+    curriculum_service,
     curriculum_translations,
     exercise_localization,
     knowledge_base_catalog,
     knowledge_map_service,
     knowledge_mastery_service,
+    message_catalog,
     practice_projection_service,
     student_evidence,
 )
@@ -1145,7 +1147,12 @@ def test_the_coarse_stars_lie_in_an_existing_or_new_nebula() -> None:
         assert unit["topic_id"] in topics | zap_topics
         assert set(unit["titles"]) == set(knowledge_base_catalog.LOCALES)
     assert knowledge_base_catalog.topic_of_group("brueche-u2") == "brueche"
-    assert curriculum_translations.SUBJECT_TRANSLATIONS["physics"]["fr"] == "Physique"
+    # A reader is shown the message catalog's name of a subject (#662); the
+    # names the import writes onto the subject rows say the same.
+    for subject in knowledge_base_catalog.SUBJECTS:
+        canonical = curriculum_service.subject_id(subject["subject_id"])
+        for locale in knowledge_base_catalog.LOCALES:
+            assert message_catalog.text(f"subject.{canonical}", locale) == subject["titles"][locale]
 
 
 def test_every_subject_has_question_types_in_four_languages() -> None:

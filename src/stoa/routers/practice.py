@@ -947,11 +947,24 @@ async def get_attempt_result(
 
 @router.get("/mistakes", response_model=PracticeMistakesResponse)
 async def get_mistakes(actor: Actor = Depends(_practice_read)):
+    evidence = student_evidence.for_student(actor.user_id, locale=_actor_locale(actor))
+    attempts = evidence.mistakes[:MISTAKES_PAGE]
+    # Each mistake's knowledge point by its name in the student's language
+    # (#662); the curriculum is read only when there is a mistake to name.
+    names = (
+        curriculum_names.for_reader(
+            evidence.content.locale,
+            catalog=evidence.content.catalog,
+            rows=evidence.content.named_rows,
+        )
+        if attempts
+        else None
+    )
     mistakes = []
-    for attempt in student_evidence.for_student(actor.user_id).mistakes[:MISTAKES_PAGE]:
+    for attempt in attempts:
         try:
             mistakes.append(
-                practice_projection_service.build_mistake_projection(attempt)
+                practice_projection_service.build_mistake_projection(attempt, names=names)
             )
         except (KeyError, TypeError, ValueError):
             continue

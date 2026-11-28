@@ -240,12 +240,13 @@ DASHBOARD = {
 }
 
 #: The dashboard's five most recent entries: (id, type, summary, subject, when).
+#: The subject is the canonical id, though the practice rows store `mathematics` (#662).
 RECENT = {
     "lena": [
         ("lena-l1", "practice", "Lektion lena-l1", "math", "2026-11-25T17:00:00+00:00"),
-        ("brueche-l3", "practice_mistake", "Brüche rechnen", "mathematics", "2026-11-25T16:30:00+00:00"),
+        ("brueche-l3", "practice_mistake", "Brüche rechnen", "math", "2026-11-25T16:30:00+00:00"),
         # A knowledge point the curriculum does not know is named by nothing.
-        ("lena-e2", "practice_mistake", "", "mathematics", "2026-11-25T16:20:00+00:00"),
+        ("lena-e2", "practice_mistake", "", "math", "2026-11-25T16:20:00+00:00"),
         ("lena-c1", "conversation", "", "math", "2026-11-24T16:00:00+00:00"),
     ],
     "jonas": [
@@ -263,7 +264,7 @@ RECENT = {
     "noah": [
         ("report-noah-2026-11-16", "report", "Eine ruhige Woche.", None, "2026-11-23T06:00:00+00:00"),
         ("noah-l1", "practice", "Lektion noah-l1", "math", "2026-11-19T10:00:00+00:00"),
-        ("brueche-l3", "practice_mistake", "Brüche rechnen", "mathematics", "2026-11-19T09:30:00+00:00"),
+        ("brueche-l3", "practice_mistake", "Brüche rechnen", "math", "2026-11-19T09:30:00+00:00"),
         ("noah-c1", "teacher_help", "", "math", "2026-11-18T10:00:00+00:00"),
     ],
     "sara": [

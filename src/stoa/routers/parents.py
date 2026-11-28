@@ -1334,7 +1334,7 @@ async def get_child_summary(
     child = dict(authorized_child.value)
     child_id = authorized_child.ref.student_id
 
-    locale = locale_service.resolve_locale(None)
+    locale = locale_service.reader_locale(actor.user_id)
     evidence = student_evidence.for_student(child_id, locale=locale)
     # "This week" is the Zurich week, turning over when the allowance does (#693).
     week = student_activity.counts(
@@ -1383,6 +1383,7 @@ async def get_child_summary(
 @router.get("/me/children/{child_id}/learning-profile", response_model=LearningProfileResponse)
 async def get_child_learning_profile(
     child_id: str,
+    actor: Actor = Depends(get_actor),
     authorized_child: AuthorizedResource = Depends(_parent_child_read),
 ):
     """Return subject-level profile seeds for an authorized child."""
@@ -1393,7 +1394,9 @@ async def get_child_learning_profile(
         for row in _response_items(question_repo.list_questions_by_student(child_id, limit=500))
         if question_repo.is_question_record(row)
     ]
-    evidence = student_evidence.for_student(child_id, locale=locale_service.resolve_locale(None))
+    evidence = student_evidence.for_student(
+        child_id, locale=locale_service.reader_locale(actor.user_id)
+    )
     return learning_profile_service.build_learning_profile(
         student_id=child_id,
         questions=questions,
@@ -1496,7 +1499,7 @@ async def get_child_history(
 ):
     child_id = authorized_child.ref.student_id
 
-    locale = locale_service.resolve_locale(None)
+    locale = locale_service.reader_locale(actor.user_id)
     evidence = student_evidence.for_student(child_id, locale=locale)
     # The child's most recent `limit` entries, with the parent's weekly reports
     # mixed in; the newest `limit` of them all (#693).

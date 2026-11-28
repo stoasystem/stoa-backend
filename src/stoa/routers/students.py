@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
 from stoa.db import table as db_table
+from stoa.deps import get_actor
 from stoa.db.repositories import (
     asked_knowledge_repo,
     parent_link_repo,
@@ -519,6 +520,7 @@ class LearningProfileResponse(BaseModel):
 @router.get("/{student_id}/learning-profile", response_model=LearningProfileResponse)
 async def get_learning_profile(
     authorized: AuthorizedResource = Depends(_student_content_read),
+    actor: Actor = Depends(get_actor),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Return subject-level activity and topic seeds for a student."""
@@ -528,7 +530,10 @@ async def get_learning_profile(
         question_repo.list_questions_by_student(student_id, limit=500).get("Items", []),
         correlation_id,
     )
-    evidence = student_evidence.for_student(student_id, locale=locale_service.resolve_locale(None))
+    # In the language of whoever reads it: the student, a parent or a teacher.
+    evidence = student_evidence.for_student(
+        student_id, locale=locale_service.reader_locale(actor.user_id)
+    )
     return learning_profile_service.build_learning_profile(
         student_id=student_id,
         questions=questions,

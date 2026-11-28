@@ -215,7 +215,9 @@ class TeacherHelpRequestSummary(BaseModel):
     # The student the request is from: what the teacher assigns practice to (#495).
     studentId: str
     studentName: str
-    subject: str
+    # The canonical subject id; null when the request has none the platform
+    # teaches (#662). The client names it.
+    subject: str | None
     grade: str
     status: str
     # How the student asked to be helped (#480); the teacher cannot change it.
@@ -312,7 +314,8 @@ class TeacherHelpRequestDetail(BaseModel):
     requestId: str
     conversationId: str
     student: dict
-    subject: str
+    # As in the summary: the canonical id or null.
+    subject: str | None
     status: str
     mode: help_requests.HelpMode = help_requests.TEXT
     requestMessage: str | None = None

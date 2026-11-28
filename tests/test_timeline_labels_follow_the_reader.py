@@ -29,6 +29,7 @@ def _session(locale: str, *, asked_teacher: bool = False) -> str:
 def _cases(locale: str) -> dict[str, str]:
     lesson = student_activity._lesson(
         student_evidence.Completion(lesson_id="l1", unit_id="", subject_id="", completed_at=MOMENT),
+        curriculum_names.for_reader(locale),
         locale,
     )
     mistake = student_activity._mistake(
